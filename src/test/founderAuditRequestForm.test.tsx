@@ -1,0 +1,75 @@
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { Landing } from '@/components/agentready/Landing';
+
+describe('Founder-reviewed audit request form', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('opens from the CTA and does not use mailto links', () => {
+    const { container } = render(<Landing onSampleReport={vi.fn()} onScrollScan={vi.fn()} />);
+
+    expect(container.querySelector('a[href^="mailto:"]')).toBeNull();
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Request founder-reviewed audit/i })[0]);
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Request founder-reviewed audit' })).toBeInTheDocument();
+    expect(within(dialog).getByText(/ShipSeal will use your contact details only to respond to this audit request/i)).toBeInTheDocument();
+  });
+
+  it('validates contact, email, message, and consent before submitting', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<Landing onSampleReport={vi.fn()} onScrollScan={vi.fn()} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /Request founder-reviewed audit/i })[0]);
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /Send audit request/i }));
+
+    expect(screen.getAllByText(/Enter an email or another contact method/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Add a short project summary or message/i)).toBeInTheDocument();
+    expect(screen.getByText(/Consent is required before sending/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(within(dialog).getByLabelText('Email'), { target: { value: 'not-an-email' } });
+    fireEvent.change(within(dialog).getByLabelText('Message'), { target: { value: 'Please review this AI handoff.' } });
+    fireEvent.click(within(dialog).getByLabelText(/I agree to be contacted/i));
+    fireEvent.click(within(dialog).getByRole('button', { name: /Send audit request/i }));
+
+    expect(screen.getByText(/Enter a valid email address/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('posts valid requests and shows not configured message on API 503', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: 'Audit request form is not configured yet.' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<Landing onSampleReport={vi.fn()} onScrollScan={vi.fn()} />);
+    fireEvent.click(screen.getAllByRole('button', { name: /Request founder-reviewed audit/i })[0]);
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Ada' } });
+    fireEvent.change(within(dialog).getByLabelText('Email'), { target: { value: 'ada@example.com' } });
+    fireEvent.change(within(dialog).getByLabelText('Message'), { target: { value: 'Review this customer support RAG handoff.' } });
+    fireEvent.click(within(dialog).getByLabelText(/I agree to be contacted/i));
+    fireEvent.click(within(dialog).getByRole('button', { name: /Send audit request/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/audit-request', expect.objectContaining({ method: 'POST' })));
+    expect(await screen.findByText(/Audit request sending is not configured in this demo environment/i)).toBeInTheDocument();
+
+    const [, request] = fetchMock.mock.calls[0];
+    expect(JSON.parse(request.body)).toMatchObject({
+      name: 'Ada',
+      email: 'ada@example.com',
+      message: 'Review this customer support RAG handoff.',
+      consent: true,
+      source: 'shipseal-founder-reviewed-audit',
+    });
+  });
+});

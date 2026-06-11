@@ -1,0 +1,283 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 240 18% 5%;
+    --foreground: 240 10% 96%;
+
+    --card: 240 18% 7%;
+    --card-foreground: 240 10% 96%;
+
+    --popover: 240 18% 7%;
+    --popover-foreground: 240 10% 96%;
+
+    --primary: 258 90% 66%;
+    --primary-foreground: 240 10% 98%;
+    --primary-glow: 270 95% 75%;
+
+    --secondary: 240 12% 12%;
+    --secondary-foreground: 240 10% 96%;
+
+    --muted: 240 12% 11%;
+    --muted-foreground: 240 5% 60%;
+
+    --accent: 190 95% 55%;
+    --accent-foreground: 240 18% 5%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 240 10% 98%;
+
+    --success: 150 80% 50%;
+    --success-foreground: 240 18% 5%;
+
+    --warning: 38 95% 58%;
+    --warning-foreground: 240 18% 5%;
+
+    --border: 240 14% 14%;
+    --input: 240 14% 14%;
+    --ring: 258 90% 66%;
+
+    --radius: 0.875rem;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(258 90% 66%), hsl(190 95% 55%));
+    --gradient-hero: radial-gradient(ellipse at top, hsl(258 90% 66% / 0.25), transparent 60%),
+                     radial-gradient(ellipse at bottom right, hsl(190 95% 55% / 0.18), transparent 55%),
+                     hsl(240 18% 5%);
+    --gradient-glow: radial-gradient(circle at 50% 50%, hsl(258 90% 66% / 0.35), transparent 70%);
+    --gradient-card: linear-gradient(135deg, hsl(240 14% 9% / 0.8), hsl(240 14% 6% / 0.6));
+    --gradient-text: linear-gradient(135deg, hsl(240 10% 98%), hsl(270 95% 80%) 50%, hsl(190 95% 70%));
+
+    /* Shadows */
+    --shadow-glow: 0 0 60px hsl(258 90% 66% / 0.35);
+    --shadow-elegant: 0 20px 60px -20px hsl(258 90% 30% / 0.5);
+    --shadow-card: 0 8px 32px -8px hsl(240 18% 0% / 0.6);
+
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+    background-image:
+      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(258 90% 66% / 0.15), transparent),
+      radial-gradient(ellipse 60% 40% at 90% 20%, hsl(190 95% 55% / 0.08), transparent);
+    background-attachment: fixed;
+  }
+
+  /* Subtle grid background */
+  .bg-grid {
+    background-image:
+      linear-gradient(hsl(240 14% 14% / 0.4) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(240 14% 14% / 0.4) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);
+  }
+
+  .bg-noise {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' /%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.4'/%3E%3C/svg%3E");
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-card/40 backdrop-blur-xl border border-border/60;
+  }
+
+  .glass-strong {
+    @apply bg-card/70 backdrop-blur-2xl border border-border/80;
+  }
+
+  .text-gradient {
+    background: var(--gradient-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .text-gradient-primary {
+    background: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .glow-primary {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .ring-pulse::before {
+    content: "";
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: var(--gradient-primary);
+    opacity: 0.5;
+    filter: blur(12px);
+    z-index: -1;
+  }
+}
+
+@layer utilities {
+  .font-display {
+    font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.02em;
+  }
+  .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+}
+
+.dashboard-print-warning {
+  display: none;
+}
+
+@media print {
+  .dashboard-print-warning {
+    display: block;
+    margin: 0 0 16px;
+    padding: 12px 14px;
+    border: 1px solid #d0d5dd;
+    border-radius: 8px;
+    color: #344054;
+    background: #f9fafb;
+    font: 13px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+}
+
+/* ============================================================
+   ShipSeal landing — Seal Chamber animation system
+   Pure CSS, transform/opacity only. Respects reduced motion.
+   ============================================================ */
+
+@keyframes ss-chip-travel {
+  0%   { transform: translateX(0) rotate(var(--chip-rot, 0deg)) scale(1); opacity: 0; }
+  6%   { opacity: 1; }
+  62%  { opacity: 1; transform: translateX(calc(var(--chip-dist, 220px) * 0.82)) rotate(calc(var(--chip-rot, 0deg) * 0.3)) scale(1); }
+  74%  { transform: translateX(var(--chip-dist, 220px)) rotate(0deg) scale(0.6); opacity: 0; }
+  100% { transform: translateX(var(--chip-dist, 220px)) rotate(0deg) scale(0.6); opacity: 0; }
+}
+
+@keyframes ss-beam-sweep {
+  0%, 100% { transform: translateY(-46%); opacity: 0.25; }
+  50%      { transform: translateY(46%); opacity: 0.9; }
+}
+
+@keyframes ss-row-in {
+  0%   { opacity: 0; transform: translateX(18px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ss-stamp {
+  0%   { opacity: 0; transform: scale(1.7) rotate(-14deg); }
+  55%  { opacity: 1; transform: scale(0.94) rotate(-7deg); }
+  75%  { transform: scale(1.04) rotate(-8deg); }
+  100% { opacity: 1; transform: scale(1) rotate(-8deg); }
+}
+
+@keyframes ss-rotate-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes ss-tick-in {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.ss-chip {
+  animation: ss-chip-travel var(--chip-dur, 7s) cubic-bezier(0.35, 0, 0.4, 1) infinite;
+  animation-delay: var(--chip-delay, 0s);
+  will-change: transform, opacity;
+}
+
+.ss-beam-sweep {
+  animation: ss-beam-sweep 3.2s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.ss-row {
+  opacity: 0;
+  animation: ss-row-in 0.6s cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
+  animation-delay: var(--row-delay, 0s);
+}
+
+.ss-stamp {
+  opacity: 0;
+  animation: ss-stamp 0.9s cubic-bezier(0.2, 0.9, 0.25, 1.2) forwards;
+  animation-delay: var(--stamp-delay, 2.4s);
+  will-change: transform, opacity;
+}
+
+.ss-rotate-slow {
+  animation: ss-rotate-slow 36s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.ss-tick {
+  opacity: 0;
+  animation: ss-tick-in 0.5s ease-out forwards;
+  animation-delay: var(--tick-delay, 0s);
+}
+
+/* Scroll-triggered reveal */
+.ss-reveal {
+  opacity: 0;
+  transform: translateY(26px);
+  transition: opacity 0.7s cubic-bezier(0.2, 0.7, 0.3, 1), transform 0.7s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition-delay: var(--reveal-delay, 0s);
+}
+.ss-reveal.ss-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Animated level bars */
+.ss-bar {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition-delay: var(--bar-delay, 0s);
+}
+.ss-visible .ss-bar,
+.ss-bar.ss-visible {
+  transform: scaleX(1);
+}
+
+/* Scan-line divider motif */
+.ss-scanline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(190 95% 55% / 0.55), hsl(258 90% 66% / 0.55), transparent);
+}
+
+/* Risk layer cards sliding out from under the demo card */
+.ss-risk {
+  opacity: 0;
+  transform: translateY(-14px) scale(0.97);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.2, 0.7, 0.3, 1);
+  transition-delay: var(--risk-delay, 0s);
+}
+.ss-visible .ss-risk {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ss-chip, .ss-beam-sweep, .ss-rotate-slow { animation: none !important; opacity: 1; }
+  .ss-row, .ss-stamp, .ss-tick { animation: none !important; opacity: 1; transform: none; }
+  .ss-reveal, .ss-risk { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .ss-bar { transform: scaleX(1) !important; transition: none !important; }
+}

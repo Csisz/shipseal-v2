@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ShipSeal">
+  <defs>
+    <linearGradient id="shipseal-bg" x1="10" y1="8" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563eb"/>
+      <stop offset="0.55" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#shipseal-bg)"/>
+  <path d="M22 19h12c6.2 0 10.5 3.3 10.5 8.6 0 3.6-2 6.1-5.4 7.3l7.2 10.1h-8.1l-6.3-9.1h-5v9.1H22V19Zm11.6 13.1c3.2 0 5.1-1.5 5.1-4 0-2.6-1.9-4-5.1-4h-6.7v8h6.7Z" fill="white"/>
+  <path d="M16 17.5 10.5 32 16 46.5" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
+  <path d="M48 17.5 53.5 32 48 46.5" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
+</svg>

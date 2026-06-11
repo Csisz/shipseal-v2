@@ -1,0 +1,14 @@
+# ShipSeal ownership map
+
+* @Csisz
+
+src/lib/scanner.ts @Csisz
+src/lib/scannerLimits.ts @Csisz
+src/lib/exports.ts @Csisz
+src/lib/deliveryPack/ @Csisz
+src/lib/report/ @Csisz
+api/github-archive.ts @Csisz
+vercel.json @Csisz
+package.json @Csisz
+package-lock.json @Csisz
+.github/workflows/ @Csisz
