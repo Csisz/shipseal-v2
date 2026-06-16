@@ -51,7 +51,55 @@ describe('GitHub App Connect plan', () => {
       expect(location).toContain('https://github.com/login/oauth/authorize?');
       expect(location).toContain('client_id=client-id');
       expect(location).toContain('redirect_uri=https%3A%2F%2Fshipseal.test%2Fapi%2Fgithub-app%2Foauth-callback');
+      expect(location).toContain('state=');
       expect(location).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
+  it('/api/github-app/login returns safe JSON when OAuth env is missing', async () => {
+    const originalEnv = process.env;
+    process.env = {};
+    const res = createResponse();
+
+    try {
+      await startHandler({ method: 'GET', headers: { host: 'shipseal.test' } } as never, res as never);
+
+      expect(res.statusCode).toBe(501);
+      expect(res.json()).toEqual({
+        status: 'error',
+        code: 'missing_client_id',
+        message: 'GitHub App OAuth client ID is missing.',
+      });
+      expect(res.body).not.toContain('client-secret');
+      expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
+      expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
+  it('/api/github-app/login validates configured callback URL safely', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'client-id',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+      GITHUB_APP_CALLBACK_URL: 'https://shipseal-v2.vercel.app/not-the-callback',
+    };
+    const res = createResponse();
+
+    try {
+      await startHandler({ method: 'GET', headers: { host: 'shipseal-v2.vercel.app' } } as never, res as never);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.json()).toEqual({
+        status: 'error',
+        code: 'invalid_callback_url',
+        message: 'GitHub App callback URL must point to /api/github-app/oauth-callback.',
+      });
+      expect(res.body).not.toContain('client-secret');
     } finally {
       process.env = originalEnv;
     }
