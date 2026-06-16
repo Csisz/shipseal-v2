@@ -38,7 +38,7 @@ describe('GitHub App Connect plan', () => {
     const originalEnv = process.env;
     process.env = {
       ...originalEnv,
-      GITHUB_APP_CLIENT_ID: 'client-id',
+      GITHUB_APP_CLIENT_ID: 'Iv1.0123456789abcdef',
       GITHUB_APP_CLIENT_SECRET: 'client-secret',
     };
     const res = createResponse();
@@ -49,7 +49,7 @@ describe('GitHub App Connect plan', () => {
       expect(res.statusCode).toBe(302);
       const location = (res.setHeader as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0] === 'Location')?.[1] as string;
       expect(location).toContain('https://github.com/login/oauth/authorize?');
-      expect(location).toContain('client_id=client-id');
+      expect(location).toContain('client_id=Iv1.0123456789abcdef');
       expect(location).toContain('redirect_uri=https%3A%2F%2Fshipseal.test%2Fapi%2Fgithub-app%2Foauth-callback');
       expect(location).toContain('state=');
       expect(location).not.toContain('client-secret');
@@ -58,7 +58,7 @@ describe('GitHub App Connect plan', () => {
     }
   });
 
-  it('/api/github-app/login returns safe JSON when OAuth env is missing', async () => {
+  it('/api/github-app/login returns a friendly popup error when OAuth env is missing', async () => {
     const originalEnv = process.env;
     process.env = {};
     const res = createResponse();
@@ -66,14 +66,14 @@ describe('GitHub App Connect plan', () => {
     try {
       await startHandler({ method: 'GET', headers: { host: 'shipseal.test' } } as never, res as never);
 
-      expect(res.statusCode).toBe(501);
-      expect(res.json()).toEqual({
-        status: 'error',
-        code: 'missing_client_id',
-        message: 'GitHub App OAuth client ID is missing.',
-      });
+      expect(res.statusCode).toBe(500);
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8');
+      expect(res.body).toContain('GitHub connection needs configuration');
+      expect(res.body).toContain('missing_client_id');
+      expect(res.body).toContain('GITHUB_APP_CLIENT_ID');
+      expect(res.body).toContain('Close and retry');
+      expect(res.body).toContain('Use public GitHub URL instead');
       expect(res.body).not.toContain('client-secret');
-      expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
       expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
     } finally {
       process.env = originalEnv;
@@ -94,12 +94,112 @@ describe('GitHub App Connect plan', () => {
       await startHandler({ method: 'GET', headers: { host: 'shipseal-v2.vercel.app' } } as never, res as never);
 
       expect(res.statusCode).toBe(500);
-      expect(res.json()).toEqual({
-        status: 'error',
-        code: 'invalid_callback_url',
-        message: 'GitHub App callback URL must point to /api/github-app/oauth-callback.',
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8');
+      expect(res.body).toContain('invalid_callback_url');
+      expect(res.body).toContain('GitHub App callback URL must point to /api/github-app/oauth-callback.');
+      expect(res.body).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
+  it('/api/github-app/login?debug=1 returns safe OAuth diagnostics', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'Iv1.0123456789abcdef',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+      GITHUB_APP_CALLBACK_URL: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
+    };
+    const res = createResponse();
+
+    try {
+      await startHandler({
+        method: 'GET',
+        url: '/api/github-app/login?debug=1',
+        headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
+      } as never, res as never);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/json; charset=utf-8');
+      expect(res.json()).toMatchObject({
+        ok: true,
+        flow: 'oauth_authorize',
+        authorizeUrlHost: 'github.com',
+        authorizeUrlPath: '/login/oauth/authorize',
+        clientIdPresent: true,
+        clientIdLooksValid: true,
+        redirectUri: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
+        redirectUriOrigin: 'https://shipseal-v2.vercel.app',
+        redirectUriPathname: '/api/github-app/oauth-callback',
+        requiredCallbackUrl: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
+        callbackUrlConfigured: true,
+        missingEnv: [],
       });
       expect(res.body).not.toContain('client-secret');
+      expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
+  it('/api/github-app/login falls back to GitHub App install when the OAuth client ID is known-bad', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: '123456',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+      GITHUB_APP_SLUG: 'shipseal-demo',
+      GITHUB_APP_CALLBACK_URL: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
+    };
+    const res = createResponse();
+
+    try {
+      await startHandler({
+        method: 'GET',
+        url: '/api/github-app/login',
+        headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
+      } as never, res as never);
+
+      expect(res.statusCode).toBe(302);
+      expect(res.setHeader).toHaveBeenCalledWith('Location', 'https://github.com/apps/shipseal-demo/installations/new');
+      expect(res.body).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
+  it('/api/github-app/login?debug=1 reports install fallback without exposing secrets', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: '123456',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+      GITHUB_APP_SLUG: 'shipseal-demo',
+      GITHUB_APP_CALLBACK_URL: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
+    };
+    const res = createResponse();
+
+    try {
+      await startHandler({
+        method: 'GET',
+        url: '/api/github-app/login?debug=1',
+        headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
+      } as never, res as never);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        ok: true,
+        flow: 'app_install',
+        authorizeUrlHost: 'github.com',
+        authorizeUrlPath: '/apps/shipseal-demo/installations/new',
+        clientIdPresent: true,
+        clientIdLooksValid: false,
+        redirectUri: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
+        errorCode: 'invalid_client_id',
+      });
+      expect(res.body).not.toContain('client-secret');
+      expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
     } finally {
       process.env = originalEnv;
     }
@@ -279,6 +379,24 @@ describe('GitHub App Connect plan', () => {
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('user_authorization_failed');
     expect(res.body).toContain('Return to ShipSeal');
+    expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
+    expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+  });
+
+  it('/api/github-app/oauth-callback returns a structured error page for GitHub error params', async () => {
+    const res = createResponse();
+
+    await oauthCallbackHandler({
+      method: 'GET',
+      url: '/api/github-app/oauth-callback?error=access_denied&error_description=The+user+cancelled+authorization',
+    } as never, res as never);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('window.opener.postMessage');
+    expect(res.body).toContain('"source":"shipseal-github-connect"');
+    expect(res.body).toContain('"status":"error"');
+    expect(res.body).toContain('"code":"user_authorization_failed"');
+    expect(res.body).toContain('The user cancelled authorization');
     expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
     expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
   });

@@ -73,13 +73,14 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
 
   const query = queryFromRequest(req);
   const error = (firstValue(query.error) || '').trim();
+  const errorDescription = (firstValue(query.error_description) || '').trim();
   const code = (firstValue(query.code) || '').trim();
 
   if (error || !code) {
     sendHtml(
       res,
       400,
-      errorPayload('user_authorization_failed', error || 'GitHub authorization did not return a code.'),
+      errorPayload('user_authorization_failed', errorDescription || error || 'GitHub authorization did not return a code.'),
       'GitHub authorization was not completed.'
     );
     return;
