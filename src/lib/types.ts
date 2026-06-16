@@ -9,6 +9,25 @@ export interface RepoFileSummary {
 }
 
 export interface ScanSummary {
+  scanMode: 'full' | 'limited-fallback';
+  limited: boolean;
+  limitationReason?: string;
+  archiveDiagnostics?: {
+    inputKind: 'user-uploaded-zip' | 'github-zipball' | 'invalid-zip' | 'html-error-response' | 'unsupported-archive' | 'unknown';
+    fileName: string;
+    fileSizeBytes: number;
+    mimeType?: string;
+    requestedUrl?: string;
+    finalUrl?: string;
+    responseStatus?: number;
+    contentType?: string;
+    startsWithZipMagic?: boolean;
+    contentKind?: 'zip' | 'html' | 'json' | 'text' | 'gzip' | 'unknown';
+    signature: string;
+    parseError?: string;
+    zipEntryCount?: number;
+    topLevelFolders?: string[];
+  };
   totalFilesFound: number;
   filesAnalyzed: number;
   filesIgnored: number;
@@ -114,6 +133,7 @@ export interface ScanSourceMetadata {
   githubDefaultBranch?: string;
   githubInstallationId?: string;
   sourceUrl?: string;
+  archiveDiagnostics?: Partial<ScanSummary['archiveDiagnostics']>;
 }
 
 export interface ScoreItem {
@@ -155,7 +175,7 @@ export interface AgentPackFile {
 
 export type MCPRiskLevel = 'Low' | 'Medium' | 'High';
 export type MCPRiskSeverity = 'Low' | 'Medium' | 'High' | 'Critical';
-export type MCPReadinessStatus = 'Not MCP Ready' | 'Basic MCP Ready' | 'MCP Ready' | 'Enterprise MCP Ready';
+export type MCPReadinessStatus = 'Not MCP Ready' | 'Basic MCP Ready' | 'MCP Ready' | 'Enterprise MCP Ready' | 'Provisional MCP Readiness';
 
 export type MCPToolCategory =
   | 'GitHub / repository operations'

@@ -82,6 +82,8 @@ export function isBinaryLikePath(path: string): boolean {
 
 export function createEmptyScanSummary(): ScanSummary {
   return {
+    scanMode: 'full',
+    limited: false,
     totalFilesFound: 0,
     filesAnalyzed: 0,
     filesIgnored: 0,

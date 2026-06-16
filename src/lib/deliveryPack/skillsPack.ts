@@ -29,7 +29,7 @@ export function generateSkillsPackFiles(intake: ProjectIntake): SkillsPackFiles 
 
 function skillSpecs(intake: ProjectIntake): SkillSpec[] {
   const app = valueOrFallback(intake.appDescription, 'the scanned application');
-  const useCase = valueOrFallback(intake.aiUseCase, 'the AI-assisted workflow');
+  const useCase = valueOrFallback(intake.aiUseCase, 'the selected workflow');
 
   return [
     {
@@ -138,7 +138,7 @@ function renderSkill(spec: SkillSpec, intake: ProjectIntake) {
 }
 
 function yesNo(value: boolean) {
-  return value ? 'yes' : 'no';
+  return value ? 'yes' : 'Needs confirmation';
 }
 
 function valueOrFallback(value: string | undefined, fallback: string) {

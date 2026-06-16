@@ -1,5 +1,6 @@
 import type { AgentPackFile, MCPPolicyFile, ReadinessReport, ScoreJsonExport } from './types';
 import { buildDeliveryPackFiles } from './deliveryPack';
+import { getDeliveryPackRequiredPaths } from './deliveryPack/manifest';
 import { normalizeProjectIntake } from './intake';
 import type { PartialProjectIntake } from './intake';
 
@@ -75,7 +76,7 @@ export function buildScoreJson(report: ReadinessReport): ScoreJsonExport {
       mcpStatus: report.repoContextPack.mcpSummary.status,
       rawFileContentsIncluded: false,
     },
-    generatedFiles: report.agentPack.map(file => file.name),
+    generatedFiles: getDeliveryPackRequiredPaths(),
     mcpReadiness: {
       score: report.mcpReadiness.score,
       status: report.mcpReadiness.status,

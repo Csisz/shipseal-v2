@@ -44,13 +44,35 @@ export const GITHUB_CORS_FALLBACK_MESSAGE = 'Browser restrictions blocked the Gi
 export class GitHubImportError extends Error {
   category: GitHubImportErrorCategory;
   fallbackMessage: string;
+  diagnostics?: Partial<NonNullable<ScanSourceMetadata['archiveDiagnostics']>>;
 
-  constructor(message = GITHUB_ZIP_FALLBACK_MESSAGE, category: GitHubImportErrorCategory = 'unknown-import-error') {
+  constructor(
+    message = GITHUB_ZIP_FALLBACK_MESSAGE,
+    category: GitHubImportErrorCategory = 'unknown-import-error',
+    diagnostics?: Partial<NonNullable<ScanSourceMetadata['archiveDiagnostics']>>
+  ) {
     super(message);
     this.name = 'GitHubImportError';
     this.category = category;
     this.fallbackMessage = GITHUB_ZIP_FALLBACK_MESSAGE;
+    this.diagnostics = diagnostics;
   }
+}
+
+type ArchiveBlob = Blob & {
+  __shipsealArchiveDiagnostics?: Partial<NonNullable<ScanSourceMetadata['archiveDiagnostics']>>;
+  __shipsealArchiveBuffer?: ArrayBuffer;
+};
+
+function createArchiveFile(blob: Blob, fileName: string) {
+  const archiveBuffer = (blob as ArchiveBlob).__shipsealArchiveBuffer;
+  const file = new File([archiveBuffer || blob], fileName, { type: 'application/zip' });
+  try {
+    Object.defineProperty(file, 'arrayBuffer', { value: () => archiveBuffer ? Promise.resolve(archiveBuffer.slice(0)) : blob.arrayBuffer() });
+  } catch {
+    // Native browser File implementations already expose arrayBuffer().
+  }
+  return file;
 }
 
 function encodeBranch(branch: string) {
@@ -129,20 +151,32 @@ async function fetchGitHubArchiveBlob(zipUrl: string, input: DirectBrowserCodelo
     );
   }
 
-  let blob: Blob;
+  let archiveBuffer: ArrayBuffer;
   try {
-    blob = await response.blob();
+    archiveBuffer = await response.arrayBuffer();
   } catch {
     throw new GitHubImportError(`GitHub ZIP download could not be read. ${GITHUB_ZIP_FALLBACK_MESSAGE}`, 'unknown-import-error');
   }
 
-  if (blob.size > SCANNER_LIMITS.maxZipSizeBytes) {
+  if (archiveBuffer.byteLength > SCANNER_LIMITS.maxZipSizeBytes) {
     throw new GitHubImportError(
       'GitHub repository ZIP is too large for local scanning. Download a smaller repository ZIP or remove generated folders before uploading manually.',
       'zip-too-large'
     );
   }
 
+  const blob = new Blob([archiveBuffer], { type: response.headers.get('content-type') || 'application/zip' });
+  const diagnostics = inspectArchiveResponse(zipUrl, response, blob, archiveBuffer);
+  if (!diagnostics.startsWithZipMagic) {
+    throw new GitHubImportError(
+      `GitHub archive download did not return a ZIP file. ${GITHUB_ZIP_FALLBACK_MESSAGE}`,
+      'unknown-import-error',
+      diagnostics
+    );
+  }
+
+  (blob as ArchiveBlob).__shipsealArchiveDiagnostics = diagnostics;
+  (blob as ArchiveBlob).__shipsealArchiveBuffer = archiveBuffer;
   return blob;
 }
 
@@ -194,14 +228,16 @@ export async function importPublicGitHubRepo(input: GitHubImportInput, callbacks
   step(callbacks, 1, 28, true);
 
   const fileName = `${parsed.owner}-${parsed.repo}${branch ? `-${branch.replace(/[^A-Za-z0-9_.-]+/g, '-')}` : ''}.zip`;
+  const archiveDiagnostics = (blob as ArchiveBlob).__shipsealArchiveDiagnostics;
   return {
-    file: new File([blob], fileName, { type: 'application/zip' }),
+    file: createArchiveFile(blob, fileName),
     source: {
       sourceType: 'github-url',
       githubOwner: parsed.owner,
       githubRepo: parsed.repo,
       githubBranch: branch,
       sourceUrl: branch ? `https://github.com/${parsed.owner}/${parsed.repo}/tree/${branch}` : parsed.normalizedUrl,
+      archiveDiagnostics,
     },
   };
 }
@@ -219,9 +255,10 @@ export async function importGitHubAppRepoArchive(input: GitHubAppArchiveImportIn
     branch: input.ref,
   });
   const fileName = `${input.owner}-${input.repo}${input.ref ? `-${input.ref.replace(/[^A-Za-z0-9_.-]+/g, '-')}` : ''}.zip`;
+  const archiveDiagnostics = (blob as ArchiveBlob).__shipsealArchiveDiagnostics;
 
   return {
-    file: new File([blob], fileName, { type: 'application/zip' }),
+    file: createArchiveFile(blob, fileName),
     source: {
       sourceType: 'github-url',
       githubOwner: input.owner,
@@ -230,6 +267,48 @@ export async function importGitHubAppRepoArchive(input: GitHubAppArchiveImportIn
       githubDefaultBranch: input.ref,
       githubInstallationId: input.installationId,
       sourceUrl: input.ref ? `https://github.com/${input.owner}/${input.repo}/tree/${input.ref}` : `https://github.com/${input.owner}/${input.repo}`,
+      archiveDiagnostics,
     },
+  };
+}
+
+function bytesToSignature(bytes: Uint8Array) {
+  return Array.from(bytes.slice(0, 8)).map(byte => byte.toString(16).padStart(2, '0')).join(' ');
+}
+
+function asciiPrefix(bytes: Uint8Array) {
+  return String.fromCharCode(...bytes.slice(0, 64)).trimStart().toLowerCase();
+}
+
+function startsWithZipMagic(bytes: Uint8Array) {
+  return bytes[0] === 0x50 && bytes[1] === 0x4b && [0x03, 0x05, 0x07].includes(bytes[2]) && [0x04, 0x06, 0x08].includes(bytes[3]);
+}
+
+function classifyContent(bytes: Uint8Array): NonNullable<NonNullable<ScanSourceMetadata['archiveDiagnostics']>['contentKind']> {
+  const prefix = asciiPrefix(bytes);
+  if (startsWithZipMagic(bytes)) return 'zip';
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return 'gzip';
+  if (prefix.startsWith('<!doctype html') || prefix.startsWith('<html') || prefix.includes('<html')) return 'html';
+  if (prefix.startsWith('{') || prefix.startsWith('[')) return 'json';
+  if (prefix.length > 0) return 'text';
+  return 'unknown';
+}
+
+function inspectArchiveResponse(
+  requestedUrl: string,
+  response: Response,
+  blob: Blob,
+  raw: ArrayBuffer
+): Partial<NonNullable<ScanSourceMetadata['archiveDiagnostics']>> {
+  const bytes = new Uint8Array(raw).slice(0, 64);
+  return {
+    requestedUrl,
+    finalUrl: response.url || requestedUrl,
+    responseStatus: response.status,
+    contentType: response.headers.get('content-type') || undefined,
+    startsWithZipMagic: startsWithZipMagic(bytes),
+    contentKind: classifyContent(bytes),
+    signature: bytesToSignature(bytes),
+    fileSizeBytes: blob.size,
   };
 }

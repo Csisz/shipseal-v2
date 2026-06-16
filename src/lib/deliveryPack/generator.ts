@@ -97,10 +97,13 @@ function resolveSourceContent(
   }
 
   if (path.startsWith('03-mcp-governance/')) {
-    return input.mcpFileByName.get(filename)?.content || markdownPlaceholder(filename, projectName, [
+    const mcpContent = input.mcpFileByName.get(filename)?.content || markdownPlaceholder(filename, projectName, [
       'This v1 MCP governance file is included to keep the ShipSeal Delivery Pack complete.',
       'Use read-only defaults, least-privilege access, and human approval for high-risk tool access.',
     ]);
+    return path === '03-mcp-governance/MCP_READINESS.md'
+      ? appendMcpIntakeContext(mcpContent, input.intake)
+      : mcpContent;
   }
 
   if (path === '04-testing/TESTING_STRATEGY.md') {
@@ -222,4 +225,30 @@ function ciPlaceholder(projectName: string) {
     '      - run: echo "Run project-specific ShipSeal verification commands here"',
     '',
   ].join('\n');
+}
+
+function appendMcpIntakeContext(content: string, intake: ProjectIntake) {
+  return [
+    content.trim(),
+    '',
+    '## Project intake context',
+    `- Client: ${valueOrNotProvided(intake.clientName)}`,
+    `- Agency: ${valueOrNotProvided(intake.agencyName)}`,
+    `- App description: ${valueOrNotProvided(intake.appDescription)}`,
+    `- AI use case: ${valueOrNotProvided(intake.aiUseCase)}`,
+    `- AI provider/model: ${valueOrNotProvided(intake.aiProvider)} / ${valueOrNotProvided(intake.modelName)}`,
+    `- Target users: ${valueOrNotProvided(intake.targetUsers)}`,
+    `- EU users intended: ${intakeSignal(intake.usedInEU)}`,
+    `- Handles personal, sensitive or business-critical data: ${intakeSignal(intake.handlesPersonalData)}`,
+    `- Human review or approval: ${intakeSignal(intake.hasHumanApproval)}`,
+    '',
+  ].join('\n');
+}
+
+function valueOrNotProvided(value?: string) {
+  return value?.trim() || 'Not provided';
+}
+
+function intakeSignal(value: boolean) {
+  return value ? 'yes' : 'Needs confirmation';
 }

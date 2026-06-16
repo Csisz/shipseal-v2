@@ -15,6 +15,8 @@ interface HandoffScoreSummary {
   improvements: Array<{ title?: string; category?: string; detail?: string }>;
   categories: Array<{ name?: string; earned?: number; max?: number }>;
   generatedFiles: string[];
+  scanLimited: boolean;
+  scanWarnings: string[];
   mcpStatus: string;
   mcpScore: string;
   aiActSummary: string;
@@ -64,11 +66,19 @@ function renderClientHandoffReport(
     '',
     '## ShipSeal readiness snapshot',
     `- Repository scanned: ${summary.repositoryName}`,
+    `- Scan coverage: ${summary.scanLimited ? 'Limited scan' : 'Full scan'}`,
     `- Score: ${summary.score}`,
     `- Readiness status: ${summary.status}`,
     `- Critical delivery risks detected: ${summary.criticalBlockers.length}`,
     `- Recommended decision: ${goNoGo}`,
     '',
+    ...(summary.scanLimited ? [
+      '## Limited scan warning',
+      '- ShipSeal could not fully parse the repository ZIP, so this report is based on deterministic fallback data.',
+      '- Do not present this output as a complete client handoff audit. Re-run ShipSeal with a valid repository ZIP or GitHub import before relying on the score.',
+      ...asBullets(summary.scanWarnings),
+      '',
+    ] : []),
     '## What looks ready',
     ...asBullets(strengths),
     '',
@@ -157,6 +167,11 @@ function renderNextStepsRoadmap(
     DISCLAIMER,
     '',
     '## Roadmap basis',
+    `- Client: ${valueOrNotProvided(intake.clientName)}`,
+    `- Agency: ${valueOrNotProvided(intake.agencyName)}`,
+    `- App description: ${valueOrNotProvided(intake.appDescription)}`,
+    `- AI use case: ${valueOrNotProvided(intake.aiUseCase)}`,
+    `- Scan coverage: ${summary.scanLimited ? 'Limited scan' : 'Full scan'}`,
     `- ShipSeal score: ${summary.score}`,
     `- Status: ${summary.status}`,
     `- Main risk themes: ${risks.slice(0, 3).join('; ') || 'Not detected'}`,
@@ -199,6 +214,7 @@ function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): 
   const source = asRecord(scoreJson);
   const mcp = asRecord(source.mcpReadiness);
   const repoContext = asRecord(source.repoContextPack);
+  const scanSummary = asRecord(source.scanSummary);
 
   return {
     repositoryName: stringValue(source.repositoryName) || fallbackRepositoryName || 'Not provided',
@@ -209,6 +225,8 @@ function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): 
     improvements: arrayValue(source.improvements).map(asRecord),
     categories: arrayValue(source.categories).map(asRecord),
     generatedFiles: arrayValue(source.generatedFiles).map(value => String(value)),
+    scanLimited: scanSummary.limited === true || stringValue(scanSummary.scanMode) === 'limited-fallback',
+    scanWarnings: arrayValue(scanSummary.warnings).map(value => String(value)),
     mcpStatus: stringValue(mcp.status) || stringValue(repoContext.mcpStatus) || 'Not detected',
     mcpScore: typeof mcp.score === 'number' ? `${mcp.score}/100` : 'Not detected',
     aiActSummary: 'Pre-screen only. Review AI Act, transparency, privacy, and human oversight notes with qualified reviewers.',
@@ -221,7 +239,7 @@ function topStrengths(summary: HandoffScoreSummary) {
     .slice(0, 4)
     .map(category => `${stringValue(category.name) || 'Readiness area'} has a strong signal in the scan (${category.earned}/${category.max}).`);
 
-  if (summary.generatedFiles.length) strengths.push(`The Delivery Pack includes ${summary.generatedFiles.length} generated files for review and handoff.`);
+  if (summary.generatedFiles.length) strengths.push(`The ShipSeal Delivery Pack includes ${summary.generatedFiles.length} manifest outputs for review and handoff.`);
   if (summary.isReady === true) strengths.push('The scan did not report critical handoff blockers.');
 
   return strengths.length ? strengths : ['Not detected'];
@@ -231,6 +249,7 @@ function topRisks(summary: HandoffScoreSummary, intake: ProjectIntake) {
   const risks = summary.criticalBlockers.slice(0, 5).map(blocker => `${stringValue(blocker.title) || 'Critical delivery risk'}: ${stringValue(blocker.detail) || 'Details not provided'}.`);
 
   if (summary.isReady === false && !risks.length) risks.push('The project is not currently marked ready for client handoff by the ShipSeal readiness rule.');
+  if (summary.scanLimited) risks.push('Limited scan warning: ZIP parsing failed, so this output is not a complete client handoff audit.');
   if (intake.handlesPersonalData) risks.push('Personal data handling was indicated. Ask the client owner to confirm privacy/GDPR review before production use.');
   if (intake.usedInEU && intake.generatesUserFacingContent) risks.push('EU use with user-facing AI output was indicated. Review and adapt the transparency notice before client delivery.');
   if (!intake.hasHumanApproval) risks.push('Human approval status was not provided in the intake. Confirm reviewer ownership before relying on AI output for important decisions.');

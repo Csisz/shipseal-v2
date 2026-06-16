@@ -17,6 +17,7 @@ import { formatFileSize } from '@/lib/uploadValidation';
 import { criticalBlockersEmptyStateText, displayReadinessLevel } from '@/lib/uiCopy';
 import type { ProjectIntake } from '@/lib/intake';
 import { createDefaultProjectIntake, normalizeProjectIntake } from '@/lib/intake';
+import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages } from '@/lib/packages';
 
 interface Props {
   report: ReadinessReport;
@@ -25,15 +26,20 @@ interface Props {
   onClearHistory: () => void;
   initialIntake?: ProjectIntake;
   intakeSkipped?: boolean;
+  /** Package options the user picked before the scan; defaults to the full package. */
+  selectedPackages?: string[];
 }
 
-export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false }: Props) {
+export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false, selectedPackages }: Props) {
+  const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
+  const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
   const [contextCopied, setContextCopied] = useState(false);
   const [appliedIntake, setAppliedIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [draftIntake, setDraftIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [wasIntakeSkipped, setWasIntakeSkipped] = useState(intakeSkipped);
   const readiness = evaluateReadiness(report.score, report.blockers);
   const ready = readiness.isReady;
+  const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const readinessReport = report.agentPack.find(file => file.name === 'AGENT_READINESS_REPORT.md');
   const repoContextJson = buildRepoContextPackJson(report);
   const scoreJson = buildScoreJson(report);
@@ -75,7 +81,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         <div className="relative flex flex-col lg:flex-row lg:items-center gap-8">
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-3 mb-3">
-              <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository</span>
+              <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Project</span>
               <ReadinessBadge level={readiness.level} size="md" />
             </div>
             <h1 className="font-display text-3xl md:text-4xl font-bold mb-2 truncate">{report.repoName}</h1>
@@ -91,11 +97,33 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <SummaryTile label="Score" value={`${report.score}/100`} />
               <SummaryTile label="Status" value={displayReadinessLevel(readiness.level)} />
               <SummaryTile label="Blockers" value={String(report.blockers.length)} />
-              <SummaryTile label="Delivery Pack" value="Full pack - 27 outputs" />
+              <SummaryTile label="Project package" value="Full pack - 27 outputs" />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Agent instructions, skills, MCP governance, tests, AI Act readiness and client handoff report.
+              Handoff, AI guidance, tests, risk notes and product notes — prepared together.
             </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Selected packages</span>
+              {fullPackageSelected ? (
+                <Badge variant="outline" className="border-primary/50 bg-primary/10 text-foreground">Full ShipSeal package</Badge>
+              ) : (
+                resolvedPackages.map(id => {
+                  const pack = getShipSealPackage(id);
+                  if (!pack) return null;
+                  return (
+                    <Badge key={id} variant="outline" className="border-primary/40 bg-primary/10 text-foreground">
+                      {pack.title}
+                    </Badge>
+                  );
+                })
+              )}
+              {!fullPackageSelected && (
+                <span className="text-[11px] text-muted-foreground">
+                  The full pack is generated below — your selected packages are the place to start.
+                </span>
+              )}
+            </div>
 
             <div className={`mt-6 rounded-2xl p-5 border ${ready ? 'bg-success/10 border-success/30' : report.blockers.length ? 'bg-destructive/10 border-destructive/30' : 'bg-warning/10 border-warning/30'}`}>
               <div className="flex items-start gap-3">
@@ -110,6 +138,14 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
                 </div>
               </div>
             </div>
+            {limitedScan && (
+              <div className="mt-4 rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
+                <div className="font-semibold">Limited scan</div>
+                <div className="mt-1 text-warning/90">
+                  ShipSeal could not fully parse this repository ZIP, so the report is based on deterministic fallback data. Do not treat it as a complete client handoff audit.
+                </div>
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-center gap-3">
             <ScoreGauge score={report.score} size={220} />
@@ -132,14 +168,19 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               </Button>
             </div>
             <Button variant="outline" size="sm" onClick={onReset} className="border-border/60">
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another repo
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6 mb-8">
+      <div className="mb-8">
         <DecisionSummary report={report} ready={ready} nextActions={report.aiNarrative.nextBestActions.slice(0, 3)} />
+      </div>
+
+      <DeliveryPackPreview report={report} intake={appliedIntake} intakeSkipped={wasIntakeSkipped} />
+
+      <Disclosure title="Project context used for this report" defaultOpen={wasIntakeSkipped || intakeDirty}>
         <ProjectContextPanel
           appliedIntake={appliedIntake}
           draftIntake={draftIntake}
@@ -149,13 +190,13 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
           onRegenerate={regenerateReport}
           onClear={clearIntake}
         />
-      </div>
+      </Disclosure>
 
-      <DeliveryPackPreview report={report} intake={appliedIntake} intakeSkipped={wasIntakeSkipped} />
+      <Disclosure title="Improve your score — optional fixes you can add back">
+        <SuggestedReadinessFixPack report={report} />
+      </Disclosure>
 
-      <SuggestedReadinessFixPack report={report} />
-
-      <Disclosure title="Detailed scan results, governance and generated file previews">
+      <Disclosure title="Advanced details — full scan results and generated files">
       <div className="glass rounded-2xl p-6 mb-8">
         <div className="flex flex-wrap items-start gap-3 mb-5">
           <Sparkles className={ready ? 'h-4 w-4 text-success mt-1' : 'h-4 w-4 text-accent mt-1'} />
@@ -413,9 +454,9 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Disclosure({ title, children }: { title: string; children: React.ReactNode }) {
+function Disclosure({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {
   return (
-    <details className="mb-8 rounded-2xl border border-border/60 bg-secondary/15 p-4">
+    <details open={defaultOpen || undefined} className="mb-8 rounded-2xl border border-border/60 bg-secondary/15 p-4">
       <summary className="cursor-pointer select-none font-display font-semibold text-foreground">
         {title}
       </summary>
@@ -444,11 +485,10 @@ function ProjectContextPanel({
   onClear: () => void;
 }) {
   return (
-    <div className="glass rounded-2xl p-6">
+    <div className="rounded-2xl p-2">
       <div className="flex flex-wrap items-center gap-2 mb-3">
         <FileArchive className="h-4 w-4 text-primary-glow" />
-        <h3 className="font-display font-semibold">Project context used for this report</h3>
-        <Badge variant="outline" className={skipped ? 'ml-auto border-warning/60 text-warning' : 'ml-auto border-success/40 text-success'}>
+        <Badge variant="outline" className={skipped ? 'border-warning/60 text-warning' : 'border-success/40 text-success'}>
           {skipped ? 'Intake skipped' : 'Context applied'}
         </Badge>
       </div>

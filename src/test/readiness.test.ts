@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import JSZip from 'jszip';
 import { buildReport, buildSampleReport } from '@/lib/readiness';
-import { scanZipFile } from '@/lib/scanner';
+import { LIMITED_SCAN_WARNING, scanZipFile } from '@/lib/scanner';
 import { SCANNER_LIMITS, getUnsafeZipPathReason } from '@/lib/scannerLimits';
 import { LocalScanEngine, ScanCancelledError } from '@/lib/scanEngine';
 import type { CreateScanRequest, ScanJobResult } from '@/lib/api/contracts';
@@ -19,6 +19,7 @@ import {
   REQUIRED_AGENT_PACK_FILES,
 } from '@/lib/exports';
 import { REQUIRED_MCP_POLICY_FILES } from '@/lib/mcpReadiness';
+import { getDeliveryPackRequiredPaths } from '@/lib/deliveryPack/manifest';
 import { saveScanHistory, scanHistoryStorageKey } from '@/lib/scanHistory';
 import { validateZipUpload } from '@/lib/uploadValidation';
 import type { CriticalBlocker, RepoScanInput } from '@/lib/types';
@@ -27,6 +28,8 @@ import { buildGitHubZipUrl, GitHubImportError, importPublicGitHubRepo } from '@/
 import { parseGitHubUrl } from '@/lib/github/githubUrl';
 import { criticalBlockersEmptyStateText } from '@/lib/uiCopy';
 import { SHIPSEAL_VERSION } from '@/lib/version';
+import { generateClientReportHtml } from '@/lib/report';
+import { normalizeProjectIntake } from '@/lib/intake';
 
 function scanInput(files: string[], textContents: Record<string, string> = {}): RepoScanInput {
   return {
@@ -221,6 +224,45 @@ describe('Sprint 8 demo readiness polish', () => {
       rawFileContentsIncluded: false,
     });
   });
+
+  it('marks ZIP parse fallback reports as limited in score.json and client report HTML', async () => {
+    const engine = new LocalScanEngine();
+    const report = await engine.scan({
+      file: new File(['not a real zip'], 'broken-repo.zip', { type: 'application/zip' }),
+      mode: 'local',
+      source: { sourceType: 'zip-upload' },
+    });
+    const scoreJson = buildScoreJson(report);
+    const html = generateClientReportHtml({
+      intake: normalizeProjectIntake({ projectName: 'Broken Repo' }, 'Broken Repo'),
+      scoreJson,
+    });
+
+    expect(scoreJson.scanSummary.scanMode).toBe('limited-fallback');
+    expect(scoreJson.scanSummary.limited).toBe(true);
+    expect(scoreJson.isReady).toBe(false);
+    expect(scoreJson.status).toBe('Not Ready');
+    expect(scoreJson.criticalBlockers.map(blocker => blocker.id)).toContain('limited-scan');
+    expect(scoreJson.scanSummary.warnings.join('\n')).toContain(LIMITED_SCAN_WARNING);
+    expect(scoreJson.mcpReadiness.status).toBe('Provisional MCP Readiness');
+    expect(scoreJson.mcpReadiness.summary).toContain('Provisional MCP Readiness');
+    expect(scoreJson.scanSummary.archiveDiagnostics?.inputKind).toBe('invalid-zip');
+    expect(html).toContain('Limited scan');
+    expect(html).toContain('complete client handoff audit');
+  });
+
+  it('classifies HTML error responses saved as ZIPs in limited scan diagnostics', async () => {
+    const engine = new LocalScanEngine();
+    const report = await engine.scan({
+      file: new File(['<!doctype html><html><body>GitHub error</body></html>'], 'github-error.zip', { type: 'application/zip' }),
+      mode: 'github-public',
+      source: { sourceType: 'github-url', githubOwner: 'Csisz', githubRepo: 'shipseal' },
+    });
+
+    expect(report.scanSummary.limited).toBe(true);
+    expect(report.scanSummary.archiveDiagnostics?.inputKind).toBe('html-error-response');
+    expect(report.mcpReadiness.status).toBe('Provisional MCP Readiness');
+  });
 });
 
 describe('Sprint 2 exports', () => {
@@ -240,6 +282,13 @@ describe('Sprint 2 exports', () => {
     }
   });
 
+  it('does not duplicate the Repository-specific AI guidance heading in AGENTS.md', () => {
+    const report = buildSampleReport();
+    const agents = report.agentPack.find(file => file.name === 'AGENTS.md')?.content || '';
+
+    expect(agents.match(/Repository-specific AI guidance/g) || []).toHaveLength(1);
+  });
+
   it('builds a valid score.json export shape', () => {
     const report = buildSampleReport();
     const scoreJson = buildScoreJson(report);
@@ -255,9 +304,9 @@ describe('Sprint 2 exports', () => {
       categories: report.categories,
       detectedStack: report.stack,
       scanSummary: report.scanSummary,
-      generatedFiles: report.agentPack.map(file => file.name),
+      generatedFiles: getDeliveryPackRequiredPaths(),
     });
-    expect(scoreJson.generatedFiles).toEqual([...REQUIRED_AGENT_PACK_FILES]);
+    expect(scoreJson.generatedFiles).toEqual(getDeliveryPackRequiredPaths());
     expect(scoreJson.mcpReadiness).toMatchObject({
       score: report.mcpReadiness.score,
       status: report.mcpReadiness.status,
@@ -275,6 +324,65 @@ describe('Sprint 2 exports', () => {
 });
 
 describe('scan engine boundary', () => {
+  it('parses a GitHub-style ZIP with a top-level folder and detects real project files', async () => {
+    const file = await zipFile('shipseal-main.zip', {
+      'shipseal-main/package.json': JSON.stringify({
+        scripts: { test: 'vitest', build: 'vite build' },
+        dependencies: { '@vitejs/plugin-react': '^4.0.0', vite: '^5.0.0', react: '^18.0.0' },
+        devDependencies: { typescript: '^5.0.0', vitest: '^1.0.0' },
+      }),
+      'shipseal-main/src/main.tsx': 'import React from "react";',
+      'shipseal-main/src/App.test.tsx': 'import { describe } from "vitest";',
+      'shipseal-main/README.md': '# ShipSeal\n\n## Setup\nnpm install\n',
+      'shipseal-main/vite.config.ts': 'import { defineConfig } from "vite";',
+      'shipseal-main/tsconfig.json': JSON.stringify({ compilerOptions: {} }),
+    });
+
+    const input = await scanZipFile(file, { sourceType: 'github-url', githubOwner: 'Csisz', githubRepo: 'shipseal', githubBranch: 'main' });
+
+    expect(input.scanSummary?.limited).toBe(false);
+    expect(input.scanSummary?.archiveDiagnostics?.inputKind).toBe('github-zipball');
+    expect(input.files.map(file => file.path)).toEqual(expect.arrayContaining([
+      'package.json',
+      'src/main.tsx',
+      'src/App.test.tsx',
+      'README.md',
+      'vite.config.ts',
+      'tsconfig.json',
+    ]));
+    expect(input.textContents['package.json']).toContain('vite');
+    expect(input.textContents['vite.config.ts']).toContain('defineConfig');
+  });
+
+  it('does not use fallback for a valid GitHub-style Vite ZIP', async () => {
+    const engine = new LocalScanEngine();
+    const file = await zipFile('shipseal-main.zip', {
+      'shipseal-main/package.json': JSON.stringify({
+        scripts: { test: 'vitest', build: 'vite build' },
+        dependencies: { '@vitejs/plugin-react': '^4.0.0', vite: '^5.0.0', react: '^18.0.0' },
+        devDependencies: { typescript: '^5.0.0', vitest: '^1.0.0' },
+      }),
+      'shipseal-main/src/main.tsx': 'import React from "react";',
+      'shipseal-main/src/App.test.tsx': 'import { describe } from "vitest";',
+      'shipseal-main/README.md': '# ShipSeal\n\n## Setup\nnpm install\n',
+      'shipseal-main/vite.config.ts': 'import { defineConfig } from "vite";',
+      'shipseal-main/tsconfig.json': JSON.stringify({ compilerOptions: {} }),
+    });
+
+    const report = await engine.scan({
+      file,
+      mode: 'github-public',
+      source: { sourceType: 'github-url', githubOwner: 'Csisz', githubRepo: 'shipseal', githubBranch: 'main' },
+    });
+
+    expect(report.scanSummary.scanMode).toBe('full');
+    expect(report.scanSummary.limited).toBe(false);
+    expect(report.scanSummary.warnings.join('\n')).not.toContain('fallback scan');
+    expect(report.stack.primary).toContain('Vite');
+    expect(report.summary.keyFolders).toContain('src');
+    expect(report.stack.testFrameworks).toContain('Vitest');
+  });
+
   it('LocalScanEngine returns a valid ReadinessReport for a mock ZIP', async () => {
     const engine = new LocalScanEngine();
     const file = await zipFile('engine-repo.zip', {
@@ -347,6 +455,7 @@ describe('scan engine boundary', () => {
     expect((result as ScanJobResult).status).toBe('completed');
     expect((result as ScanJobResult).report.repoName).toBe('adapter-repo');
     expect((result as ScanJobResult).scoreJson.mcpReadiness).toBeDefined();
+    expect((result as ScanJobResult).generatedFiles.deliveryPack).toEqual(getDeliveryPackRequiredPaths());
     clearLocalScanJobs();
   });
 });

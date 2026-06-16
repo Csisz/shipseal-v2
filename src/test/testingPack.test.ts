@@ -64,6 +64,20 @@ describe('ShipSeal testing pack generator', () => {
 
     expect(files.testingStrategy).toContain('AI workspace for project delivery teams.');
     expect(files.testingStrategy).toContain('Generates client-ready delivery summaries.');
+    expect(files.evalTestCases).toContain('Delivery managers');
+    expect(files.evalTestCases).toContain('Generates client-ready delivery summaries.');
+    expect(files.redTeamPrompts).toContain('Generates client-ready delivery summaries.');
+  });
+
+  it('uses clean fallback wording for missing intake fields', () => {
+    const files = generateTestingPackFiles(normalizeProjectIntake({ projectName: 'Fallback Testing Project' }));
+    const combined = Object.values(files).join('\n');
+
+    expect(files.evalTestCases).toContain('the AI application');
+    expect(files.evalTestCases).toContain('the selected workflow');
+    expect(files.evalTestCases).toContain('the intended users');
+    expect(combined).not.toMatch(/\bthe the\b/i);
+    expect(combined).not.toContain('the selected workflow workflow');
   });
 
   it('exports testing files under the 04-testing folder in the Delivery Pack ZIP', async () => {

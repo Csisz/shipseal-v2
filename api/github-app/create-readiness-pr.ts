@@ -60,7 +60,7 @@ function isSafeRepoPath(value: string) {
     !value.includes('..') &&
     !value.startsWith('/') &&
     !value.includes('\\') &&
-    /^[A-Za-z0-9._\/-]+$/.test(value);
+    /^[A-Za-z0-9._/-]+$/.test(value);
 }
 
 function encodeBranch(branch: string) {

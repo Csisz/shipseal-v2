@@ -33,6 +33,16 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
   const scannedAt = new Date().toISOString();
   const stack = detectStack(input);
   const scoring = scoreRepo(input, stack);
+  if (input.scanSummary?.limited) {
+    scoring.score = Math.min(scoring.score, 20);
+    if (!scoring.blockers.some(blocker => blocker.id === 'limited-scan')) {
+      scoring.blockers.push({
+        id: 'limited-scan',
+        title: 'Limited scan',
+        detail: input.scanSummary.limitationReason || 'Repository parsing failed, so ShipSeal used deterministic fallback data instead of a complete repository scan.',
+      });
+    }
+  }
   const readiness = evaluateReadiness(scoring.score, scoring.blockers);
   const summary = buildRepositorySummary(input, stack);
   const fileCount = input.files.filter(f => !f.isDir).length;

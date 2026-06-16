@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const links = [
-  { label: 'Generates', href: '#generates' },
-  { label: 'For whom', href: '#who' },
+  { label: 'Packages', href: '#packages' },
+  { label: 'How it works', href: '#how' },
+  { label: 'What you get', href: '#preview' },
   { label: 'Pricing', href: '#pricing' },
-  { label: 'Disclaimer', href: '#disclaimer' },
 ];
 
 interface Props {
@@ -54,7 +54,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
         </nav>
         <div className="hidden md:flex items-center gap-2">
           <Button asChild variant="default" className="bg-gradient-primary hover:opacity-90 border-0 shadow-glow">
-            <a href="#scan" onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan your repo</a>
+            <a href="#scan" onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my project</a>
           </Button>
         </div>
         <button onClick={() => setOpen(!open)} className="md:hidden p-2">
@@ -69,7 +69,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
                 {l.label}
               </a>
             ))}
-            <Button asChild className="bg-gradient-primary border-0 mt-2"><a href="#scan" onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan your repo</a></Button>
+            <Button asChild className="bg-gradient-primary border-0 mt-2"><a href="#scan" onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my project</a></Button>
           </div>
         </div>
       )}

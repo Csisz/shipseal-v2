@@ -1,4 +1,5 @@
 import { buildScoreJson } from '../exports';
+import { getDeliveryPackRequiredPaths } from '../deliveryPack/manifest';
 import { localScanEngine, ScanCancelledError } from '../scanEngine';
 import type { ReadinessReport } from '../types';
 import type { CreateScanResponse, ScanErrorResponse, ScanJobProgress, ScanJobResult, ScanJobStatus } from './contracts';
@@ -89,6 +90,7 @@ export function getLocalScanJobResult(id: string): ScanJobResult | ScanErrorResp
     report: job.report,
     scoreJson: buildScoreJson(job.report),
     generatedFiles: {
+      deliveryPack: getDeliveryPackRequiredPaths(),
       coreAgentPack: job.report.agentPack.map(file => file.name),
       mcpGovernancePack: job.report.mcpReadiness.generatedFiles.map(file => file.filename),
       repoContextPack: ['REPO_CONTEXT_PACK.md', 'repo-context-pack.json'],

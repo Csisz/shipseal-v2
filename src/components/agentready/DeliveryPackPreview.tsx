@@ -19,6 +19,7 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false }: P
   const normalizedIntake = normalizeProjectIntake(intake, report.repoName);
   const requiredPaths = getDeliveryPackRequiredPaths();
   const scoreJson = buildScoreJson(report);
+  const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const risks = previewRisks(report, normalizedIntake);
   const goNoGo = goNoGoCategory(report, normalizedIntake);
   const aiActStatus = aiActStatusText(normalizedIntake);
@@ -80,6 +81,12 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false }: P
       {intakeSkipped && (
         <div className="mb-5 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning">
           Client report quality is limited because project intake was skipped.
+        </div>
+      )}
+
+      {limitedScan && (
+        <div className="mb-5 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning">
+          Limited scan: ZIP parsing failed, so this Delivery Pack should not be presented as a complete client handoff audit.
         </div>
       )}
 

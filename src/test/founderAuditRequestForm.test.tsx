@@ -1,19 +1,31 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { FounderAuditRequestDialog } from '@/components/agentready/FounderAuditRequestForm';
 import { Landing } from '@/components/agentready/Landing';
+
+function renderDialog() {
+  return render(<FounderAuditRequestDialog open onOpenChange={vi.fn()} />);
+}
 
 describe('Founder-reviewed audit request form', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('opens from the CTA and does not use mailto links', () => {
-    const { container } = render(<Landing onSampleReport={vi.fn()} onScrollScan={vi.fn()} />);
+  it('is no longer offered on the landing page', () => {
+    const { container } = render(
+      <Landing onSampleReport={vi.fn()} onScrollScan={vi.fn()} onPickPackage={vi.fn()} scanSlot={null} />
+    );
 
     expect(container.querySelector('a[href^="mailto:"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: /founder-reviewed audit/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/founder/i)).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getAllByRole('button', { name: /Request founder-reviewed audit/i })[0]);
+  it('renders the dialog without mailto links', () => {
+    const { container } = renderDialog();
 
+    expect(container.querySelector('a[href^="mailto:"]')).toBeNull();
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: 'Request founder-reviewed audit' })).toBeInTheDocument();
@@ -24,8 +36,7 @@ describe('Founder-reviewed audit request form', () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<Landing onSampleReport={vi.fn()} onScrollScan={vi.fn()} />);
-    fireEvent.click(screen.getAllByRole('button', { name: /Request founder-reviewed audit/i })[0]);
+    renderDialog();
     const dialog = screen.getByRole('dialog');
     fireEvent.click(within(dialog).getByRole('button', { name: /Send audit request/i }));
 
@@ -51,8 +62,7 @@ describe('Founder-reviewed audit request form', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<Landing onSampleReport={vi.fn()} onScrollScan={vi.fn()} />);
-    fireEvent.click(screen.getAllByRole('button', { name: /Request founder-reviewed audit/i })[0]);
+    renderDialog();
     const dialog = screen.getByRole('dialog');
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Ada' } });
     fireEvent.change(within(dialog).getByLabelText('Email'), { target: { value: 'ada@example.com' } });

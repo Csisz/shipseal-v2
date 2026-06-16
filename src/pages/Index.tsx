@@ -13,8 +13,12 @@ import type { ProjectIntake } from '@/lib/intake';
 import { createDefaultProjectIntake, hasMeaningfulProjectContext } from '@/lib/intake';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import { Button } from '@/components/ui/button';
+import { PackageCards } from '@/components/agentready/PackageCards';
+import { FULL_PACKAGE_ID, type ShipSealPackageId } from '@/lib/packages';
 import type { GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
+import { ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
+import { getDeliveryPackRequiredPaths } from '@/lib/deliveryPack/manifest';
 
 type PendingSource =
   | { type: 'zip'; file: File; projectName: string }
@@ -48,6 +52,7 @@ const Index = () => {
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
   const [pendingSource, setPendingSource] = useState<PendingSource | null>(null);
   const [pendingIntake, setPendingIntake] = useState<ProjectIntake>(() => createDefaultProjectIntake());
+  const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
   const [submittedIntake, setSubmittedIntake] = useState<ProjectIntake | undefined>();
   const [submittedIntakeSkipped, setSubmittedIntakeSkipped] = useState(false);
   const [githubInstallationId, setGithubInstallationId] = useState('');
@@ -125,10 +130,25 @@ const Index = () => {
     scanSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
+  const handlePickPackage = useCallback((id: string) => {
+    setSelectedPackages([id]);
+    scanSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
+  const togglePackage = useCallback((id: string) => {
+    setSelectedPackages(current => {
+      if (current.includes(id)) return current.filter(item => item !== id);
+      // Choosing the full package clears individual picks; picking an individual pack clears "full".
+      if (id === FULL_PACKAGE_ID) return [FULL_PACKAGE_ID];
+      return [...current.filter(item => item !== FULL_PACKAGE_ID), id];
+    });
+  }, []);
+
   const handleNavAnchor = useCallback((href: string) => {
     scan.resetScan();
     setSampleReport(null);
     setPendingSource(null);
+    setSelectedPackages([]);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
     savedReportKey.current = null;
@@ -145,6 +165,7 @@ const Index = () => {
     scan.resetScan();
     setSampleReport(null);
     setPendingSource(null);
+    setSelectedPackages([]);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
     savedReportKey.current = null;
@@ -225,6 +246,7 @@ const Index = () => {
   const handleSample = useCallback(() => {
     scan.resetScan();
     setPendingSource(null);
+    setSelectedPackages([]);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
     const report = buildSampleReport();
@@ -263,60 +285,62 @@ const Index = () => {
               onClearHistory={handleClearHistory}
               initialIntake={submittedIntake}
               intakeSkipped={submittedIntakeSkipped}
+              selectedPackages={selectedPackages}
             />
           </Suspense>
         </main>
       ) : (
         <main>
-          <Landing onSampleReport={handleSample} onScrollScan={scrollScan} />
-
-          <section id="scan" ref={scanSectionRef} className="container py-20 scroll-mt-20">
-            <div className="max-w-3xl mx-auto text-center mb-10">
-              <div className="text-xs font-mono uppercase tracking-wider text-primary-glow mb-3">Scan</div>
-              <h2 className="font-display text-3xl md:text-4xl font-bold">Scan a repository</h2>
-              <p className="text-muted-foreground mt-3">
-                Connect GitHub, import a public repository URL, or upload a ZIP. Strip <span className="font-mono text-foreground/80">node_modules</span>, <span className="font-mono text-foreground/80">dist</span>, and <span className="font-mono text-foreground/80">build</span> folders for the smallest, cleanest scan.
-              </p>
-            </div>
-
-            <div className="max-w-2xl mx-auto">
-              {isScanning ? (
-                <ScanProgress
-                  steps={scan.steps}
-                  currentStepIndex={scan.currentStepIndex}
-                  progress={scan.progress}
-                  warnings={scan.warnings}
-                  onCancel={scan.cancelScan}
-                />
-              ) : pendingSource ? (
-                <ProjectContextStep
-                  sourceLabel={pendingSource.type === 'zip' ? pendingSource.file.name : pendingSource.url}
-                  intake={pendingIntake}
-                  onChange={setPendingIntake}
-                  onBack={() => setPendingSource(null)}
-                  onContinue={startPendingScan}
-                />
-              ) : (
-                <>
-                  <div className="mb-5">
-                    <FlowSteps activeStep={1} />
-                  </div>
-                  <UploadDropzone
-                    onFile={handleFile}
-                    onGitHubImport={handleGitHubImport}
-                    githubInstallationId={githubInstallationId}
-                    repositoryListStatus={repositoryListStatus}
-                    repositories={githubRepositories}
-                    repositoryListMessage={repositoryListMessage || (githubSetupAction ? `GitHub setup action: ${githubSetupAction}` : '')}
-                    onGitHubAppRepositorySelect={handleGitHubAppRepository}
+          <Landing
+            onSampleReport={handleSample}
+            onScrollScan={scrollScan}
+            onPickPackage={handlePickPackage}
+            scanSlot={
+              <div id="scan" ref={scanSectionRef} className="scroll-mt-28">
+                {isScanning ? (
+                  <ScanProgress
+                    steps={scan.steps}
+                    currentStepIndex={scan.currentStepIndex}
+                    progress={scan.progress}
+                    warnings={scan.warnings}
+                    onCancel={scan.cancelScan}
                   />
-                  {scan.status === 'cancelled' && (
-                    <div className="mt-4 text-center text-sm text-muted-foreground">Scan cancelled.</div>
-                  )}
-                </>
-              )}
-            </div>
-          </section>
+                ) : pendingSource ? (
+                  <ProjectContextStep
+                    sourceType={pendingSource.type === 'zip' ? 'ZIP upload' : pendingSource.type === 'github-app' ? 'Connected GitHub repository' : 'Public GitHub repository'}
+                    sourceLabel={pendingSource.type === 'zip' ? pendingSource.file.name : pendingSource.url}
+                    intake={pendingIntake}
+                    onChange={setPendingIntake}
+                    selectedPackages={selectedPackages}
+                    onTogglePackage={togglePackage}
+                    onBack={() => setPendingSource(null)}
+                    onContinue={startPendingScan}
+                  />
+                ) : (
+                  <>
+                    <div className="mb-5">
+                      <FlowSteps activeStep={1} />
+                    </div>
+                    <UploadDropzone
+                      onFile={handleFile}
+                      onGitHubImport={handleGitHubImport}
+                      githubInstallationId={githubInstallationId}
+                      repositoryListStatus={repositoryListStatus}
+                      repositories={githubRepositories}
+                      repositoryListMessage={repositoryListMessage || (githubSetupAction ? `GitHub setup action: ${githubSetupAction}` : '')}
+                      onGitHubAppRepositorySelect={handleGitHubAppRepository}
+                    />
+                    <p className="mt-3 text-center text-xs text-muted-foreground">
+                      Tip: leave out <span className="font-mono text-foreground/80">node_modules</span>, <span className="font-mono text-foreground/80">dist</span> and <span className="font-mono text-foreground/80">build</span> folders for the fastest scan.
+                    </p>
+                    {scan.status === 'cancelled' && (
+                      <div className="mt-2 text-center text-sm text-muted-foreground">Scan cancelled.</div>
+                    )}
+                  </>
+                )}
+              </div>
+            }
+          />
         </main>
       )}
     </div>
@@ -333,32 +357,69 @@ function githubProjectName(url: string) {
 }
 
 function ProjectContextStep({
+  sourceType,
   sourceLabel,
   intake,
   onChange,
+  selectedPackages,
+  onTogglePackage,
   onBack,
   onContinue,
 }: {
+  sourceType: string;
   sourceLabel: string;
   intake: ProjectIntake;
   onChange: (value: ProjectIntake) => void;
+  selectedPackages: string[];
+  onTogglePackage: (id: string) => void;
   onBack: () => void;
   onContinue: () => void;
 }) {
+  const hasGoalSelection = selectedPackages.length > 0;
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <FlowSteps activeStep={2} />
-      <div className="rounded-2xl border border-border/60 bg-secondary/25 px-4 py-3 text-sm text-muted-foreground">
-        Repository selected: <span className="text-foreground/90 font-medium break-all">{sourceLabel}</span>
+
+      <div className="glass rounded-2xl p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Project Source</div>
+            <div className="mt-2 text-sm text-muted-foreground">{sourceType}</div>
+            <div className="mt-1 break-all font-medium text-foreground/90">{sourceLabel}</div>
+          </div>
+          <Button type="button" variant="outline" onClick={onBack} className="border-border/60 sm:shrink-0">
+            Change project
+          </Button>
+        </div>
       </div>
-      <ProjectIntakeForm value={intake} onChange={onChange} />
-      <div className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-muted-foreground">
-        You can continue without project context, but the client report will be more generic.
+
+      <div className="glass rounded-2xl p-6">
+        <div className="max-w-2xl">
+          <h2 className="font-display text-2xl font-semibold">What do you want ShipSeal to help with?</h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            Choose the outcome you need. ShipSeal will scan your project and prepare review notes, improvement suggestions and delivery-ready files.
+          </p>
+        </div>
+        <div className="mt-6">
+        <PackageCards variant="select" selected={selectedPackages} onToggle={onTogglePackage} />
+        </div>
       </div>
+
+      {hasGoalSelection && (
+        <>
+          <ProjectIntakeForm value={intake} onChange={onChange} />
+          <OutputPreview selectedPackages={selectedPackages} />
+          <div className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-muted-foreground">
+            You can continue without project context, but the client report will be more generic.
+          </div>
+        </>
+      )}
+
       <div className="flex flex-col sm:flex-row gap-3 justify-end">
         <Button type="button" variant="ghost" onClick={onBack}>Back</Button>
-        <Button type="button" className="bg-gradient-primary border-0 shadow-glow hover:opacity-90" onClick={onContinue}>
-          Continue
+        <Button type="button" className="bg-gradient-primary border-0 shadow-glow hover:opacity-90" onClick={onContinue} disabled={!hasGoalSelection}>
+          Scan project
         </Button>
       </div>
     </div>
@@ -367,14 +428,13 @@ function ProjectContextStep({
 
 function FlowSteps({ activeStep }: { activeStep: number }) {
   const steps = [
-    'Step 1: Add repository',
-    'Step 2: Add project context',
-    'Step 3: Generate Delivery Pack',
-    'Step 4: Review and export',
+    'Step 1: Upload your project',
+    'Step 2: Choose your goal',
+    'Step 3: Download your ShipSeal pack',
   ];
 
   return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+    <div className="grid sm:grid-cols-3 gap-2">
       {steps.map((step, index) => (
         <div
           key={step}
@@ -383,6 +443,108 @@ function FlowSteps({ activeStep }: { activeStep: number }) {
           {step}
         </div>
       ))}
+    </div>
+  );
+}
+
+const OUTPUT_CATEGORIES = [
+  {
+    id: 'client-handoff',
+    title: 'Client handoff',
+    description: 'Report, executive summary and next steps.',
+    goalIds: ['client-handoff', 'launch-readiness', 'sales-present', 'full-package'],
+  },
+  {
+    id: 'agent-pack',
+    title: 'AI agent development pack',
+    description: 'Agent rules, repo context and safe edit prompts.',
+    goalIds: ['agent-readiness', 'rescue-refactor', 'full-package'],
+  },
+  {
+    id: 'safety',
+    title: 'Safety and data risk notes',
+    description: 'Secrets, data handling, auth and tool-boundary notes.',
+    goalIds: ['safety-risk', 'launch-readiness', 'mcp-readiness', 'full-package'],
+  },
+  {
+    id: 'testing',
+    title: 'Test and red-team pack',
+    description: 'Eval tests, prompt-injection checks and QA prompts.',
+    goalIds: ['testing-red-team', 'launch-readiness', 'safety-risk', 'full-package'],
+  },
+  {
+    id: 'mcp',
+    title: 'MCP readiness',
+    description: 'Server recommendations, allowlist and governance notes.',
+    goalIds: ['mcp-readiness', 'safety-risk', 'full-package'],
+  },
+  {
+    id: 'ai-act',
+    title: 'AI Act / transparency readiness',
+    description: 'Transparency notice draft and legal review questions.',
+    goalIds: ['launch-readiness', 'safety-risk', 'full-package'],
+  },
+  {
+    id: 'roadmap',
+    title: 'Improvement roadmap',
+    description: 'Prioritized fixes and cleanup suggestions.',
+    goalIds: ['rescue-refactor', 'client-handoff', 'launch-readiness', 'sales-present', 'full-package'],
+  },
+] satisfies Array<{
+  id: string;
+  title: string;
+  description: string;
+  goalIds: ShipSealPackageId[];
+}>;
+
+function OutputPreview({ selectedPackages }: { selectedPackages: string[] }) {
+  const effectiveSelection = selectedPackages.includes(FULL_PACKAGE_ID) ? [FULL_PACKAGE_ID] : selectedPackages;
+  const activeIds = new Set(effectiveSelection);
+  const filePaths = getDeliveryPackRequiredPaths();
+
+  return (
+    <div className="glass rounded-2xl p-6">
+      <div className="mb-5 flex items-start gap-3">
+        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary/45">
+          <FolderArchive className="h-4 w-4 text-primary-glow" />
+        </span>
+        <div>
+          <h3 className="font-display text-xl font-semibold">What ShipSeal will prepare</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Grouped preview first. Exact files stay tucked away until you want them.</p>
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3">
+        {OUTPUT_CATEGORIES.map(category => {
+          const active = category.goalIds.some(id => activeIds.has(id));
+          return (
+            <div
+              key={category.id}
+              className={`rounded-xl border px-4 py-3 ${active ? 'border-primary/45 bg-primary/10' : 'border-border/60 bg-secondary/20'}`}
+            >
+              <div className="flex items-center gap-2">
+                {active ? <Sparkles className="h-3.5 w-3.5 text-primary-glow" /> : <FileText className="h-3.5 w-3.5 text-muted-foreground" />}
+                <div className="text-sm font-medium">{category.title}</div>
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{category.description}</p>
+            </div>
+          );
+        })}
+      </div>
+
+      <details className="group mt-5 rounded-xl border border-border/60 bg-secondary/15">
+        <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors [&::-webkit-details-marker]:hidden">
+          <span>View generated file list</span>
+          <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="grid gap-2 border-t border-border/50 px-4 py-4 sm:grid-cols-2">
+          {filePaths.map(path => (
+            <div key={path} className="rounded-lg border border-border/50 bg-background/30 px-3 py-2 font-mono text-[11px] text-foreground/80">
+              {path}
+            </div>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

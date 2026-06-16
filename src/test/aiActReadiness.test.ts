@@ -59,4 +59,28 @@ describe('AI Act readiness output v1', () => {
     expect(files.transparencyNotice).toContain('Magyar');
     expect(files.legalReviewQuestions).toContain('Questions for legal or compliance reviewer');
   });
+
+  it('uses intake values in AI Act readiness outputs', () => {
+    const files = generateAiActReadinessFiles(highSignalIntake());
+
+    expect(files.checklist).toContain('AI use case: Generates customer-facing project status summaries.');
+    expect(files.checklist).toContain('Target users: EU customers');
+    expect(files.checklist).toContain('AI provider: OpenAI');
+    expect(files.checklist).toContain('Model: gpt-4.1');
+    expect(files.transparencyNotice).toContain('service for ClientCo');
+    expect(files.transparencyNotice).toContain('Generates customer-facing project status summaries.');
+  });
+
+  it('uses clean fallback wording when intake values are missing', () => {
+    const files = generateAiActReadinessFiles(normalizeProjectIntake({ projectName: 'Fallback AI App' }));
+    const combined = Object.values(files).join('\n');
+
+    expect(files.checklist).toContain('AI use case: Not provided');
+    expect(files.checklist).toContain('Target users: Not provided');
+    expect(files.checklist).toContain('Used in the EU: Needs confirmation');
+    expect(files.checklist).toContain('Handles personal data: Needs confirmation');
+    expect(files.checklist).toContain('Human approval before action/publication: Needs confirmation');
+    expect(files.transparencyNotice).toContain('the selected workflow');
+    expect(combined).not.toMatch(/\bthe the\b/i);
+  });
 });

@@ -5,30 +5,29 @@ import { createDefaultProjectIntake } from '@/lib/intake';
 import { SAMPLE_PROJECT_INTAKE } from '@/lib/demo/sampleProject';
 
 describe('ProjectIntakeForm', () => {
-  it('explains how intake improves ShipSeal outputs', () => {
+  it('keeps essential intake fields visible and advanced details collapsed', () => {
     render(<ProjectIntakeForm value={createDefaultProjectIntake('demo-repo')} onChange={vi.fn()} />);
 
-    expect(screen.getByText(/Repository scan tells ShipSeal what the code looks like/i)).toBeInTheDocument();
+    expect(screen.getByText('Tell ShipSeal what this AI app does')).toBeInTheDocument();
     expect(screen.getByText(/Optional, but recommended for client-ready reports/i)).toBeInTheDocument();
-    expect(screen.getByText('Client handoff report')).toBeInTheDocument();
-    expect(screen.getByText('AI Act readiness pre-screen')).toBeInTheDocument();
-    expect(screen.getByText('Transparency notice draft')).toBeInTheDocument();
-    expect(screen.getByText('Eval and red-team test context')).toBeInTheDocument();
-    expect(screen.getByText('Go/no-go risk notes')).toBeInTheDocument();
-    expect(screen.getByText(/Client report quality improves when these fields are completed/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Project name')).toHaveValue('demo-repo');
+    expect(screen.getByLabelText('Client name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Agency name')).toBeInTheDocument();
+    expect(screen.getByLabelText('AI provider')).toBeInTheDocument();
+    expect(screen.getByLabelText('Model name')).toBeInTheDocument();
+    expect(screen.getByLabelText('Target users')).toBeInTheDocument();
+    expect(screen.getByLabelText('What does this AI app do?')).toBeInTheDocument();
+    expect(screen.getByLabelText('What does the AI generate or decide?')).toBeInTheDocument();
+    expect(screen.getByText('Advanced details')).toBeInTheDocument();
   });
 
   it('renders full readable toggle labels with helper text', () => {
     render(<ProjectIntakeForm value={createDefaultProjectIntake('demo-repo')} onChange={vi.fn()} />);
 
-    expect(screen.getByText('Used in EU')).toBeInTheDocument();
-    expect(screen.getByText('Personal data')).toBeInTheDocument();
-    expect(screen.getByText('User-facing content')).toBeInTheDocument();
-    expect(screen.getByText('Human approval')).toBeInTheDocument();
-    expect(screen.queryByText('Used')).not.toBeInTheDocument();
-    expect(screen.queryByText('Personal')).not.toBeInTheDocument();
-    expect(screen.queryByText('User-facing')).not.toBeInTheDocument();
-    expect(screen.queryByText('Approval')).not.toBeInTheDocument();
+    expect(screen.getByText('Is it intended for EU users?')).toBeInTheDocument();
+    expect(screen.getByText('Does it handle personal, sensitive or business-critical data?')).toBeInTheDocument();
+    expect(screen.getByText('Does the AI output reach users?')).toBeInTheDocument();
+    expect(screen.getByText('Is there human review or approval?')).toBeInTheDocument();
     expect(screen.getByText(/people in the EU use/i)).toBeInTheDocument();
     expect(screen.getByText(/data that can identify/i)).toBeInTheDocument();
     expect(screen.getByText(/AI-generated answers/i)).toBeInTheDocument();
@@ -39,7 +38,7 @@ describe('ProjectIntakeForm', () => {
     const onChange = vi.fn();
     render(<ProjectIntakeForm value={createDefaultProjectIntake('demo-repo')} onChange={onChange} />);
 
-    fireEvent.click(screen.getByText('Used in EU'));
+    fireEvent.click(screen.getByText('Is it intended for EU users?'));
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ usedInEU: true }));
   });
@@ -51,6 +50,7 @@ describe('ProjectIntakeForm', () => {
     expect(screen.getByLabelText('Project name')).toHaveValue('real-repo');
     expect(screen.getByLabelText('Project name')).not.toHaveValue(SAMPLE_PROJECT_INTAKE.projectName);
 
+    fireEvent.click(screen.getByText('Advanced details'));
     fireEvent.click(screen.getByRole('button', { name: /load demo project/i }));
 
     expect(onChange).toHaveBeenCalledWith(SAMPLE_PROJECT_INTAKE);

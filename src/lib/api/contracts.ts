@@ -41,6 +41,7 @@ export interface ScanJobResult {
   report: ReadinessReport;
   scoreJson: ScoreJsonExport;
   generatedFiles: {
+    deliveryPack: string[];
     coreAgentPack: string[];
     mcpGovernancePack: string[];
     repoContextPack: string[];

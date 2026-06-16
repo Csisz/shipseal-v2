@@ -8,6 +8,7 @@ import {
   buildRepoContextPackJson,
   buildScoreJson,
 } from '@/lib/exports';
+import { getDeliveryPackRequiredPaths } from '@/lib/deliveryPack/manifest';
 
 describe('ShipSeal print-ready client report HTML', () => {
   it('generates a standalone print-ready HTML report with required sections', () => {
@@ -27,6 +28,8 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('30/60/90 day next steps roadmap');
     expect(html).toContain('ShipSeal does not provide legal advice');
     expect(html).toContain('MCP readiness is a separate governance dimension');
+    expect(html).toContain(`ShipSeal Delivery Pack manifest outputs detected: ${getDeliveryPackRequiredPaths().length}.`);
+    expect(html).not.toContain('8 generated files');
     expect(html).not.toContain('Human approval was not indicated');
     expect(html).not.toContain('Enterprise MCP Ready');
     expect(html).toContain('@page');
@@ -37,12 +40,17 @@ describe('ShipSeal print-ready client report HTML', () => {
     const html = generateClientReportHtml({
       intake: {
         ...SAMPLE_PROJECT_INTAKE,
+        usedInEU: false,
+        handlesPersonalData: false,
+        generatesUserFacingContent: false,
         hasHumanApproval: false,
       },
       scoreJson: buildScoreJson(report),
     });
 
     expect(html).toContain('Human approval status was not provided in the intake');
+    expect(html).toContain('EU use needs confirmation');
+    expect(html).toContain('personal data handling needs confirmation');
     expect(html).not.toContain('no human approval');
     expect(html).not.toContain('No human approval');
   });

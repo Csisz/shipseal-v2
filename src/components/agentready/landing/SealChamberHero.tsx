@@ -32,7 +32,7 @@ export function SealChamberHero() {
   const folders = SHIPSEAL_DELIVERY_PACK_MANIFEST.sections.map(s => s.folder);
 
   return (
-    <div className="relative glass-strong rounded-3xl p-5 md:p-7 shadow-elegant overflow-hidden" aria-label="Animation: unstructured AI project files are scanned and sealed into a structured Delivery Pack">
+    <div className="relative glass-strong rounded-3xl p-5 md:p-7 shadow-elegant overflow-hidden" aria-label="Animation: unstructured AI project files are scanned and sealed into a structured project package">
       <div className="absolute -inset-10 bg-gradient-primary opacity-15 blur-3xl rounded-full pointer-events-none" />
 
       {/* Chamber header */}
@@ -105,7 +105,7 @@ export function SealChamberHero() {
             </div>
           </div>
 
-          <div className="absolute bottom-0 right-0 translate-y-5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">delivery pack</div>
+          <div className="absolute bottom-0 right-0 translate-y-5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">project package</div>
         </div>
       </div>
 

@@ -183,6 +183,14 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
 
     .muted { color: var(--muted); }
     .small { font-size: 12px; }
+    .warning {
+      border: 1px solid #fedf89;
+      background: #fffaeb;
+      color: var(--warning);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-weight: 700;
+    }
 
     @page {
       size: A4;
@@ -249,6 +257,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
         <h2>Executive summary</h2>
         <p>${escapeHtml(summary.projectName)} was reviewed with ShipSeal to prepare an AI project handoff package. The report summarizes readiness score, client-facing risks, AI Act readiness signals, testing coverage, MCP governance, and next steps.</p>
         <p class="muted">${escapeHtml(summary.scanSummary)}</p>
+        ${summary.scanLimited ? `<p class="warning">${escapeHtml(summary.scanWarning)}</p>` : ''}
       </section>
 
       <section class="three-grid">
@@ -350,6 +359,8 @@ function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
     goNoGo,
     repositoryName: stringValue(score.repositoryName) || intake.projectName || 'Not detected',
     scanSummary: scanSummaryText(score.scanSummary),
+    scanLimited: isLimitedScan(score.scanSummary),
+    scanWarning: limitedScanWarning(score.scanSummary),
     strengths: strengthsFromScore(score),
     risks: risksFromScore(score, input.intake),
     aiActSummary: aiActSummary(input.intake),
@@ -372,7 +383,7 @@ function strengthsFromScore(score: Record<string, unknown>) {
     .map(category => `${stringValue(category.name) || 'Readiness area'} has a strong scan signal (${numeric(category.earned)}/${numeric(category.max)}).`);
 
   if (arrayValue(score.generatedFiles).length) {
-    strengths.push(`Delivery Pack source files detected: ${arrayValue(score.generatedFiles).length}.`);
+    strengths.push(`ShipSeal Delivery Pack manifest outputs detected: ${arrayValue(score.generatedFiles).length}.`);
   }
 
   return strengths.length ? strengths : ['No major strengths detected from available data.'];
@@ -381,6 +392,9 @@ function strengthsFromScore(score: Record<string, unknown>) {
 function risksFromScore(score: Record<string, unknown>, intake: ClientReportHtmlInput['intake']) {
   const blockers = arrayValue(score.criticalBlockers).map(asRecord);
   const risks = blockers.slice(0, 5).map(blocker => `${stringValue(blocker.title) || 'Critical blocker'}: ${stringValue(blocker.detail) || 'Details not provided'}.`);
+  if (isLimitedScan(score.scanSummary)) {
+    risks.push('Limited scan warning: ShipSeal could not fully parse the repository ZIP, so this is not a complete client handoff audit.');
+  }
 
   if (intake.usedInEU && intake.generatesUserFacingContent) {
     risks.push('EU use with user-facing AI output: transparency notice review is recommended.');
@@ -400,9 +414,9 @@ function risksFromScore(score: Record<string, unknown>, intake: ClientReportHtml
 
 function aiActSummary(intake: ClientReportHtmlInput['intake']) {
   const notes = [
-    intake.usedInEU ? 'EU use indicated' : 'EU use not indicated',
-    intake.generatesUserFacingContent ? 'user-facing AI output indicated' : 'user-facing AI output not indicated',
-    intake.handlesPersonalData ? 'personal data handling indicated' : 'personal data handling not indicated',
+    intake.usedInEU ? 'EU use indicated' : 'EU use needs confirmation',
+    intake.generatesUserFacingContent ? 'user-facing AI output indicated' : 'user-facing AI output needs confirmation',
+    intake.handlesPersonalData ? 'personal data handling indicated' : 'personal data handling needs confirmation',
   ];
 
   return `${notes.join('; ')}. This is a preliminary product-side pre-screen, not legal advice.`;
@@ -432,12 +446,24 @@ function scanSummaryText(scanSummaryValue: unknown) {
   const filesAnalyzed = typeof scan.filesAnalyzed === 'number' ? scan.filesAnalyzed : undefined;
   const totalFiles = typeof scan.totalFilesFound === 'number' ? scan.totalFilesFound : undefined;
   const warnings = arrayValue(scan.warnings).length;
+  const scanMode = isLimitedScan(scanSummaryValue) ? 'Limited scan' : 'Full scan';
 
   if (totalFiles || filesAnalyzed) {
-    return `Scan summary: ${filesAnalyzed ?? 'unknown'} files analyzed out of ${totalFiles ?? 'unknown'} discovered files. Warnings: ${warnings}.`;
+    return `${scanMode}: ${filesAnalyzed ?? 'unknown'} files analyzed out of ${totalFiles ?? 'unknown'} discovered files. Warnings: ${warnings}.`;
   }
 
   return 'Scan summary was not provided.';
+}
+
+function isLimitedScan(scanSummaryValue: unknown) {
+  const scan = asRecord(scanSummaryValue);
+  return scan.limited === true || stringValue(scan.scanMode) === 'limited-fallback';
+}
+
+function limitedScanWarning(scanSummaryValue: unknown) {
+  const scan = asRecord(scanSummaryValue);
+  const warning = arrayValue(scan.warnings).map(value => String(value)).find(value => /limited scan|fallback scan|ZIP parsing failed/i.test(value));
+  return warning || 'Limited scan: ShipSeal could not fully parse the repository. Do not treat this as a complete client handoff audit.';
 }
 
 function renderList(values: string[]) {

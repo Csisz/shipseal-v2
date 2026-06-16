@@ -1,5 +1,5 @@
 import { buildReport } from '../readiness';
-import { fallbackScan, scanZipFile } from '../scanner';
+import { ArchiveParseError, LIMITED_SCAN_WARNING, fallbackScan, scanZipFile } from '../scanner';
 import { ScannerValidationError } from '../scannerLimits';
 import { validateZipUpload } from '../uploadValidation';
 import type { ReadinessReport, RepoScanInput } from '../types';
@@ -52,7 +52,7 @@ export class LocalScanEngine implements ScanEngine {
     try {
       await runStep(0, async () => {
         try {
-          scanInput = await scanZipFile(input.file);
+          scanInput = await scanZipFile(input.file, input.source);
           scanInput.source = input.source || {
             sourceType: input.mode === 'github-public' ? 'github-url' : 'zip-upload',
           };
@@ -63,8 +63,10 @@ export class LocalScanEngine implements ScanEngine {
           if (error instanceof ScannerValidationError) {
             throw error;
           }
-          callbacks.onWarning?.('Could not parse this ZIP fully; produced a deterministic fallback report.');
-          scanInput = fallbackScan(input.file);
+          callbacks.onWarning?.(error instanceof ArchiveParseError
+            ? `${LIMITED_SCAN_WARNING} Archive classification: ${error.diagnostics.inputKind}.`
+            : LIMITED_SCAN_WARNING);
+          scanInput = fallbackScan(input.file, error instanceof ArchiveParseError ? error.diagnostics : undefined);
           scanInput.source = input.source || {
             sourceType: input.mode === 'github-public' ? 'github-url' : 'zip-upload',
           };

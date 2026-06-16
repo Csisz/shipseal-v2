@@ -18,8 +18,16 @@ async function demoZipFile(name = 'shipseal-main.zip') {
   zip.file('shipseal-main/package.json', JSON.stringify({ scripts: { test: 'vitest', build: 'vite build' } }));
   zip.file('shipseal-main/README.md', '# ShipSeal\n\n## Overview\nDemo public repo.\n\n## Setup\nnpm install\n');
   zip.file('shipseal-main/src/index.ts', 'export const ok = true;');
-  const blob = await zip.generateAsync({ type: 'blob' });
-  return new File([blob], name, { type: 'application/zip' });
+  const bytes = await zip.generateAsync({ type: 'uint8array' });
+  const file = new File([bytes], name, { type: 'application/zip' }) as File & { __zipBytes?: Uint8Array };
+  file.__zipBytes = bytes;
+  Object.defineProperty(file, 'arrayBuffer', { value: () => Promise.resolve(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)) });
+  return file;
+}
+
+async function zipResponse(file: File, headers: Headers) {
+  const bytes = (file as File & { __zipBytes?: Uint8Array }).__zipBytes;
+  return new Response(bytes || await file.arrayBuffer(), { status: 200, headers });
 }
 
 describe('public GitHub import helpers', () => {
@@ -61,7 +69,7 @@ describe('public GitHub import helpers', () => {
   it('keeps github-url source metadata when public import succeeds', async () => {
     const file = await demoZipFile();
     const headers = new Headers({ 'content-length': String(file.size) });
-    const fetchMock = vi.fn(async () => new Response(file, { status: 200, headers }));
+    const fetchMock = vi.fn(async () => zipResponse(file, headers));
     vi.stubGlobal('fetch', fetchMock);
 
     const imported = await importPublicGitHubRepo({ url: 'github.com/Csisz/shipseal', branch: 'main' });
@@ -80,7 +88,7 @@ describe('public GitHub import helpers', () => {
   it('can import through the same-origin proxy strategy', async () => {
     const file = await demoZipFile();
     const headers = new Headers({ 'content-length': String(file.size) });
-    const fetchMock = vi.fn(async () => new Response(file, { status: 200, headers }));
+    const fetchMock = vi.fn(async () => zipResponse(file, headers));
     vi.stubGlobal('fetch', fetchMock);
 
     const imported = await importPublicGitHubRepo({
@@ -96,7 +104,7 @@ describe('public GitHub import helpers', () => {
   it('uses the same-origin proxy first by default with HEAD ref', async () => {
     const file = await demoZipFile();
     const headers = new Headers({ 'content-length': String(file.size) });
-    const fetchMock = vi.fn(async () => new Response(file, { status: 200, headers }));
+    const fetchMock = vi.fn(async () => zipResponse(file, headers));
     vi.stubGlobal('fetch', fetchMock);
 
     await importPublicGitHubRepo({ url: 'github.com/Csisz/shipseal' });
@@ -111,7 +119,7 @@ describe('public GitHub import helpers', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ error: 'proxy unavailable' }), { status: 502 }))
-      .mockResolvedValueOnce(new Response(file, { status: 200, headers }));
+      .mockImplementationOnce(async () => zipResponse(file, headers));
     vi.stubGlobal('fetch', fetchMock);
 
     const imported = await importPublicGitHubRepo({ url: 'github.com/Csisz/shipseal' });
@@ -121,10 +129,36 @@ describe('public GitHub import helpers', () => {
     expect(imported.source.sourceType).toBe('github-url');
   });
 
+  it('falls back to direct codeload when the proxy returns an HTML app shell with HTTP 200', async () => {
+    const file = await demoZipFile();
+    const headers = new Headers({ 'content-length': String(file.size), 'content-type': 'application/zip' });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('<!doctype html><html><body>Vite app</body></html>', {
+        status: 200,
+        headers: new Headers({ 'content-type': 'text/html' }),
+      }))
+      .mockImplementationOnce(async () => zipResponse(file, headers));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const imported = await importPublicGitHubRepo({ url: 'github.com/Csisz/shipseal' });
+    const report = await new LocalScanEngine().scan({
+      file: imported.file,
+      mode: 'github-public',
+      source: imported.source,
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/github-archive?owner=Csisz&repo=shipseal&ref=HEAD', { method: 'GET', redirect: 'follow' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://codeload.github.com/Csisz/shipseal/zip/HEAD', { method: 'GET', redirect: 'follow' });
+    expect(report.scanSummary.limited).toBe(false);
+    expect(report.scanSummary.archiveDiagnostics?.startsWithZipMagic).toBe(true);
+    expect(report.scanSummary.archiveDiagnostics?.contentKind).toBe('zip');
+  });
+
   it('can use direct-browser codeload as an explicit fallback strategy', async () => {
     const file = await demoZipFile();
     const headers = new Headers({ 'content-length': String(file.size) });
-    const fetchMock = vi.fn(async () => new Response(file, { status: 200, headers }));
+    const fetchMock = vi.fn(async () => zipResponse(file, headers));
     vi.stubGlobal('fetch', fetchMock);
 
     await importPublicGitHubRepo({
@@ -175,7 +209,7 @@ describe('public GitHub import helpers', () => {
   it('imports a selected GitHub App repository archive with installation metadata', async () => {
     const file = await demoZipFile();
     const headers = new Headers({ 'content-length': String(file.size) });
-    const fetchMock = vi.fn(async () => new Response(file, { status: 200, headers }));
+    const fetchMock = vi.fn(async () => zipResponse(file, headers));
     vi.stubGlobal('fetch', fetchMock);
 
     const imported = await importGitHubAppRepoArchive({

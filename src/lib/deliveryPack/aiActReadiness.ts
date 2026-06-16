@@ -40,10 +40,10 @@ function generateAiActChecklist(intake: ProjectIntake) {
     '',
     '## Intake summary',
     `- Project: ${intake.projectName}`,
-    `- AI use case: ${valueOrUnknown(intake.aiUseCase)}`,
-    `- Target users: ${valueOrUnknown(intake.targetUsers)}`,
-    `- AI provider: ${valueOrUnknown(intake.aiProvider)}`,
-    `- Model: ${valueOrUnknown(intake.modelName)}`,
+    `- AI use case: ${valueOrNotProvided(intake.aiUseCase)}`,
+    `- Target users: ${valueOrNotProvided(intake.targetUsers)}`,
+    `- AI provider: ${valueOrNotProvided(intake.aiProvider)}`,
+    `- Model: ${valueOrNotProvided(intake.modelName)}`,
     `- Used in the EU: ${yesNo(intake.usedInEU)}`,
     `- Handles personal data: ${yesNo(intake.handlesPersonalData)}`,
     `- Generates user-facing AI output: ${yesNo(intake.generatesUserFacingContent)}`,
@@ -71,17 +71,17 @@ function generateTransparencyNoticeDraft(intake: ProjectIntake) {
     LEGAL_DISCLAIMER,
     '',
     '## English disclosure draft',
-    `This ${valueOrUnknown(intake.clientName) === 'not specified' ? 'service' : `service for ${valueOrUnknown(intake.clientName)}`} may use AI-assisted functionality in ${intake.projectName}. The AI feature may support: ${valueOrUnknown(intake.aiUseCase)}. AI-generated or AI-assisted outputs should be reviewed before relying on them for important decisions.`,
+    `This ${intake.clientName?.trim() ? `service for ${intake.clientName.trim()}` : 'service'} may use AI-assisted functionality in ${intake.projectName}. The AI feature may support: ${valueOrWorkflow(intake.aiUseCase)}. AI-generated or AI-assisted outputs should be reviewed before relying on them for important decisions.`,
     '',
     '## Magyar tájékoztató szövegtervezet',
-    `A ${intake.projectName} szolgáltatás AI-támogatott funkciókat használhat. Az AI funkció célja: ${valueOrUnknown(intake.aiUseCase)}. Az AI által generált vagy támogatott kimeneteket fontos döntések előtt emberi ellenőrzéssel javasolt átnézni.`,
+    `A ${intake.projectName} szolgáltatás AI-támogatott funkciókat használhat. Az AI funkció célja: ${valueOrWorkflow(intake.aiUseCase)}. Az AI által generált vagy támogatott kimeneteket fontos döntések előtt emberi ellenőrzéssel javasolt átnézni.`,
     '',
     '## Intake signals for reviewer',
     `- Used in the EU: ${yesNo(intake.usedInEU)}`,
     `- Generates user-facing AI output: ${yesNo(intake.generatesUserFacingContent)}`,
     `- Handles personal data: ${yesNo(intake.handlesPersonalData)}`,
     `- Human approval before action/publication: ${yesNo(intake.hasHumanApproval)}`,
-    `- AI provider/model: ${valueOrUnknown(intake.aiProvider)} / ${valueOrUnknown(intake.modelName)}`,
+    `- AI provider/model: ${valueOrNotProvided(intake.aiProvider)} / ${valueOrNotProvided(intake.modelName)}`,
     '',
     '## Publication note',
     'This is a draft disclosure only. Product, privacy, and legal owners should adapt it to the actual user journey, jurisdiction, provider terms, and risk profile.',
@@ -97,13 +97,13 @@ function generateLegalReviewQuestions(intake: ProjectIntake) {
     LEGAL_DISCLAIMER,
     '',
     '## Questions for legal or compliance reviewer',
-    `1. Based on the AI use case (${valueOrUnknown(intake.aiUseCase)}), what EU AI Act risk category should be assessed?`,
+    `1. Based on the AI use case (${valueOrWorkflow(intake.aiUseCase)}), what EU AI Act risk category should be assessed?`,
     `2. If the product is used in the EU (${yesNo(intake.usedInEU)}), which transparency, documentation, and user notice obligations may apply?`,
     `3. If user-facing AI output is generated (${yesNo(intake.generatesUserFacingContent)}), what disclosure wording should be shown and where in the user journey?`,
     `4. If personal data is handled (${yesNo(intake.handlesPersonalData)}), what GDPR lawful basis, DPA, DPIA, retention, and data subject rights review is needed?`,
     `5. Is human approval before action/publication sufficient or missing (${yesNo(intake.hasHumanApproval)}) for the intended use case?`,
-    `6. Are target users (${valueOrUnknown(intake.targetUsers)}) employees, consumers, children, vulnerable groups, or regulated professionals?`,
-    `7. Are the selected provider and model (${valueOrUnknown(intake.aiProvider)} / ${valueOrUnknown(intake.modelName)}) approved for this data and jurisdiction?`,
+    `6. Are target users (${valueOrNotProvided(intake.targetUsers)}) employees, consumers, children, vulnerable groups, or regulated professionals?`,
+    `7. Are the selected provider and model (${valueOrNotProvided(intake.aiProvider)} / ${valueOrNotProvided(intake.modelName)}) approved for this data and jurisdiction?`,
     '8. What logs, audit trails, incident response steps, and appeal/escalation paths should be documented before release?',
     '9. What client-facing disclaimers, terms, privacy notices, or contract updates are required before handoff?',
     '10. What residual risks should be accepted by the client in writing before production launch?',
@@ -115,9 +115,13 @@ function generateLegalReviewQuestions(intake: ProjectIntake) {
 }
 
 function yesNo(value: boolean) {
-  return value ? 'yes' : 'no';
+  return value ? 'yes' : 'Needs confirmation';
 }
 
-function valueOrUnknown(value?: string) {
-  return value?.trim() || 'not specified';
+function valueOrNotProvided(value?: string) {
+  return value?.trim() || 'Not provided';
+}
+
+function valueOrWorkflow(value?: string) {
+  return value?.trim() || 'the selected workflow';
 }

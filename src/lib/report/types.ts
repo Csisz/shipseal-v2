@@ -16,6 +16,8 @@ export interface ClientReportSummary {
   goNoGo: string;
   repositoryName: string;
   scanSummary: string;
+  scanLimited: boolean;
+  scanWarning: string;
   strengths: string[];
   risks: string[];
   aiActSummary: string;

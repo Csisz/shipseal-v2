@@ -53,4 +53,32 @@ describe('ShipSeal sample Delivery Pack', () => {
     expect(transparencyNotice).toContain('This is not legal advice');
     expect(handoff).toMatch(/Legal review recommended|This is not legal advice|privacy\/GDPR review/i);
   });
+
+  it('uses intake context across handoff, AI Act, testing, and MCP outputs', () => {
+    const handoff = textAt('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
+    const executiveSummary = textAt('06-client-handoff/EXECUTIVE_SUMMARY.md');
+    const roadmap = textAt('06-client-handoff/NEXT_STEPS_ROADMAP.md');
+    const checklist = textAt('05-ai-act-readiness/AI_ACT_READINESS_CHECKLIST.md');
+    const evalCases = textAt('04-testing/EVAL_TEST_CASES.md');
+    const redTeamPrompts = textAt('04-testing/RED_TEAM_PROMPTS.md');
+    const mcpReadiness = textAt('03-mcp-governance/MCP_READINESS.md');
+
+    for (const content of [handoff, executiveSummary, roadmap, checklist, evalCases, redTeamPrompts, mcpReadiness]) {
+      expect(content).toContain(SAMPLE_PROJECT_INTAKE.aiUseCase);
+    }
+    expect(handoff).toContain(SAMPLE_PROJECT_INTAKE.clientName);
+    expect(roadmap).toContain(SAMPLE_PROJECT_INTAKE.appDescription);
+    expect(mcpReadiness).toContain(SAMPLE_PROJECT_INTAKE.aiProvider);
+  });
+
+  it('does not generate duplicated fallback phrases in markdown outputs', () => {
+    const pack = buildSampleDeliveryPack();
+    const markdown = pack.files
+      .filter(file => file.kind === 'markdown')
+      .map(file => file.content)
+      .join('\n');
+
+    expect(markdown).not.toMatch(/\bthe the\b/i);
+    expect(markdown).not.toMatch(/\bworkflow workflow\b/i);
+  });
 });

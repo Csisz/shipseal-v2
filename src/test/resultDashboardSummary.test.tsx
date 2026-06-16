@@ -52,8 +52,9 @@ describe('ResultDashboard summary copy', () => {
 
     expect(screen.getByText('Full pack - 27 outputs')).toBeInTheDocument();
     expect(screen.queryByText('Full Delivery Pack: 27 required outputs')).not.toBeInTheDocument();
-    expect(screen.getByText(/Agent instructions, skills, MCP governance, tests, AI Act readiness and client handoff report/i)).toBeInTheDocument();
-    expect(screen.getByText(/Detailed scan results, governance and generated file previews/i)).toBeInTheDocument();
+    expect(screen.getByText(/Handoff, AI guidance, tests, risk notes and product notes/i)).toBeInTheDocument();
+    expect(screen.getByText(/Advanced details — full scan results and generated files/i)).toBeInTheDocument();
+    expect(screen.getByText(/Improve your score — optional fixes you can add back/i)).toBeInTheDocument();
   });
 
   it('shows skipped intake warning and regenerate action after intake edits', () => {

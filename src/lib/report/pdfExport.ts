@@ -13,6 +13,10 @@ export function buildClientReportPdfFilename(projectName: string) {
   return `shipseal-client-report-${fileSafe(projectName)}.pdf`;
 }
 
+export function shouldAddPdfContinuationPage(remainingHeightMm: number) {
+  return remainingHeightMm > 24;
+}
+
 export async function downloadClientReportPdf(input: ClientReportHtmlInput, projectName: string) {
   const [{ jsPDF }, html2canvasModule] = await Promise.all([
     import('jspdf'),
@@ -50,7 +54,7 @@ export async function downloadClientReportPdf(input: ClientReportHtmlInput, proj
     pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
     remainingHeight -= pageHeight;
 
-    while (remainingHeight > 0) {
+    while (shouldAddPdfContinuationPage(remainingHeight)) {
       position -= pageHeight;
       pdf.addPage();
       pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);

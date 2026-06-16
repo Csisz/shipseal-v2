@@ -50,6 +50,11 @@ function statusFromScore(score: number): MCPReadinessStatus {
   return 'Not MCP Ready';
 }
 
+function statusForInput(input: RepoScanInput, score: number): MCPReadinessStatus {
+  if (input.scanSummary?.limited) return 'Provisional MCP Readiness';
+  return statusFromScore(score);
+}
+
 function recommendation(
   category: MCPToolCategory,
   label: string,
@@ -100,7 +105,7 @@ export function buildMCPReadinessReport(input: RepoScanInput, meta: MCPAnalyzerM
   if (!docsPresent) score -= 10;
 
   score = Math.max(0, Math.min(100, Math.round(score)));
-  const status = statusFromScore(score);
+  const status = statusForInput(input, score);
 
   const recommendations: MCPRecommendation[] = [];
   if (governanceDetected || ciDetected) {
@@ -234,7 +239,9 @@ export function buildMCPReadinessReport(input: RepoScanInput, meta: MCPAnalyzerM
     });
   }
 
-  const summaryText = `${summary.repositoryName} is ${status}. MCP should be treated as a governed add-on to the main ShipSeal readiness status (${displayReadinessLevel(meta.agentStatus)}, ${meta.agentScore}/100), with cautious server access and human approval for high-risk actions.`;
+  const summaryText = input.scanSummary?.limited
+    ? `${summary.repositoryName} has Provisional MCP Readiness because the repository scan was limited. MCP recommendations must be confirmed after a successful full scan.`
+    : `${summary.repositoryName} is ${status}. MCP should be treated as a governed add-on to the main ShipSeal readiness status (${displayReadinessLevel(meta.agentStatus)}, ${meta.agentScore}/100), with cautious server access and human approval for high-risk actions.`;
   const generatedFiles = buildMCPPolicyFiles(input, meta, score, status, summaryText, recommendations, riskFindings);
 
   return {

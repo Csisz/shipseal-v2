@@ -8,6 +8,7 @@ import {
   buildRepoContextPackJson,
   buildScoreJson,
 } from '@/lib/exports';
+import { getDeliveryPackRequiredPaths } from '@/lib/deliveryPack/manifest';
 
 const HANDOFF_PATHS = [
   '06-client-handoff/CLIENT_HANDOFF_REPORT.md',
@@ -45,6 +46,35 @@ describe('ShipSeal client handoff report generator', () => {
     expect(files.clientHandoffReport).toContain('This is not legal advice');
     expect(files.clientHandoffReport).toContain('not a production security audit');
     expect(files.clientHandoffReport).toContain('30/60/90 day next steps roadmap');
+  });
+
+  it('uses intake values and manifest output count in client-facing reports', () => {
+    const files = generateClientHandoffFiles(intake(), buildScoreJson(buildSampleReport()));
+    const expectedCount = getDeliveryPackRequiredPaths().length;
+
+    expect(files.clientHandoffReport).toContain('Client: ClientCo');
+    expect(files.clientHandoffReport).toContain('Agency: AgencyCo');
+    expect(files.clientHandoffReport).toContain('App description: AI delivery dashboard for client projects.');
+    expect(files.clientHandoffReport).toContain('AI use case: Creates client-facing delivery summaries.');
+    expect(files.executiveSummary).toContain('Client: ClientCo');
+    expect(files.nextStepsRoadmap).toContain('App description: AI delivery dashboard for client projects.');
+    expect(files.clientHandoffReport).toContain(`The ShipSeal Delivery Pack includes ${expectedCount} manifest outputs`);
+    expect(files.clientHandoffReport).not.toContain('The Delivery Pack includes 8 generated files');
+  });
+
+  it('surfaces limited scan warning in client handoff markdown', () => {
+    const report = buildSampleReport();
+    report.scanSummary = {
+      ...report.scanSummary,
+      scanMode: 'limited-fallback',
+      limited: true,
+      limitationReason: 'ZIP parsing failed before repository contents could be fully analyzed.',
+      warnings: ['ZIP parsing failed, so ShipSeal used a deterministic fallback scan. This is a limited scan and must not be treated as a complete client handoff audit.'],
+    };
+    const files = generateClientHandoffFiles(intake(), buildScoreJson(report));
+
+    expect(files.clientHandoffReport).toContain('## Limited scan warning');
+    expect(files.clientHandoffReport).toContain('not a complete client handoff audit');
   });
 
   it('keeps all outputs non-empty and client-readable', () => {

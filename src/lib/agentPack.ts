@@ -103,7 +103,7 @@ export function buildAgentPack(
     source.githubBranch ? `- GitHub branch: ${source.githubBranch}` : '',
     source.sourceUrl ? `- Source URL: ${source.sourceUrl}` : '',
   ].filter(Boolean).join('\n');
-  const aiGuidance = meta.aiInstructions?.agentsMdEnhancement || 'Generated narrative was not available for this scan.';
+  const aiGuidance = stripHeading(meta.aiInstructions?.agentsMdEnhancement, 'Repository-specific AI guidance') || 'Generated narrative was not available for this scan.';
   const claudeEnhancement = meta.aiInstructions?.claudeMdEnhancement || '';
   const codexEnhancement = meta.aiInstructions?.codexPromptEnhancement || '';
   const reviewerEnhancement = meta.aiInstructions?.reviewerPromptEnhancement || '';
@@ -401,4 +401,10 @@ ${mcpNarrative.recommendedGovernanceActions.map(action => `- ${action}`).join('\
     { name: 'CI_QUALITY_GATE.yml', language: 'yaml', description: 'GitHub Actions workflow to enforce the gate.', content: ciYml },
     { name: 'AGENT_READINESS_REPORT.md', language: 'markdown', description: 'Full readiness report snapshot.', content: reportMd },
   ];
+}
+
+function stripHeading(content: string | undefined, heading: string) {
+  if (!content?.trim()) return '';
+  const pattern = new RegExp(`^#{1,6}\\s+${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\n+`, 'i');
+  return content.trim().replace(pattern, '').trim();
 }
