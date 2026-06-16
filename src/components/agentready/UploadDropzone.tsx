@@ -122,11 +122,6 @@ export function UploadDropzone({
               <div className="text-sm text-muted-foreground">
                 Connect before scanning so ShipSeal can later create a Pull Request for the same selected repository.
               </div>
-              {!appConfig.isConfigured && (
-                <div className="mt-2 text-xs text-warning">
-                  GitHub App connection is not configured in this demo. Use public URL or ZIP upload.
-                </div>
-              )}
               {githubInstallationId && repositoryListStatus === 'loading' && (
                 <div className="mt-2 text-xs text-primary-glow">
                   GitHub App installation detected. Loading repositories...
@@ -149,7 +144,7 @@ export function UploadDropzone({
                 <div className="mt-2 text-xs text-warning">No repositories are available for this GitHub App installation.</div>
               )}
             </div>
-            <Button type="button" variant="outline" disabled={disabled || !appConfig.isConfigured} onClick={onGitHubConnect}>
+            <Button type="button" variant="outline" disabled={disabled} onClick={onGitHubConnect}>
               <Plug className="h-4 w-4 mr-2" /> Connect GitHub
             </Button>
           </div>
@@ -198,7 +193,7 @@ export function UploadDropzone({
             <Button type="button" variant="outline" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubRepositoryRetry}>
               Retry repository listing
             </Button>
-            <Button type="button" variant="ghost" size="sm" disabled={disabled || !appConfig.isConfigured} onClick={onGitHubConnect}>
+            <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubConnect}>
               Reconnect GitHub
             </Button>
             <Button type="button" variant="ghost" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubDisconnect}>
@@ -206,7 +201,7 @@ export function UploadDropzone({
             </Button>
             {appConfig.installUrl && (
               <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubInstall}>
-                Install ShipSeal GitHub App
+                Install or configure ShipSeal GitHub App
               </Button>
             )}
           </div>

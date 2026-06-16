@@ -9,7 +9,7 @@ type LoginFlow = 'oauth_authorize' | 'app_install';
 type LoginErrorCode =
   | 'missing_client_id'
   | 'missing_client_secret'
-  | 'invalid_client_id'
+  | 'invalid_oauth_config'
   | 'invalid_callback_url'
   | 'missing_install_url'
   | 'login_redirect_failed';
@@ -22,6 +22,7 @@ interface LoginDecision {
   requiredCallbackUrl: string;
   authorizeUrlHost?: string;
   authorizeUrlPath?: string;
+  fallbackInstallUrl?: string;
   clientIdPresent: boolean;
   clientIdLooksValid: boolean;
   callbackUrlConfigured: boolean;
@@ -85,7 +86,7 @@ function sendPopupError(res: ServerResponse, status: number, input: { code: Logi
     </style>
   </head>
   <body>
-    <h1>GitHub connection needs configuration</h1>
+    <h1>GitHub login is not configured correctly.</h1>
     <p>${htmlEscape(input.message)}</p>
     <p>Safe error code: <code>${htmlEscape(input.code)}</code></p>
     ${input.missingEnv?.length ? `<p>Missing configuration: <code>${htmlEscape(input.missingEnv.join(', '))}</code></p>` : ''}
@@ -146,6 +147,14 @@ function buildInstallUrl(input: { installUrl?: string; slug?: string }) {
   if (input.installUrl?.trim()) return assertGitHubUrl(input.installUrl.trim(), '/apps/');
   if (input.slug?.trim()) return `https://github.com/apps/${encodeURIComponent(input.slug.trim())}/installations/new`;
   return '';
+}
+
+function tryBuildInstallUrl(input: { installUrl?: string; slug?: string }) {
+  try {
+    return { url: buildInstallUrl(input) };
+  } catch (error) {
+    return { url: '', error };
+  }
 }
 
 function assertGitHubUrl(value: string, requiredPathPrefix?: string) {
@@ -235,10 +244,35 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
   const callbackUrlConfigured = !!env.callbackUrl;
   const requiredCallbackUrl = redirectUri;
   const requestedFlow = firstValue(query.flow);
+  const fallback = tryBuildInstallUrl({ installUrl: env.installUrl, slug: env.slug });
+  const fallbackInstallUrl = fallback.url;
+
+  if (requestedFlow === 'install') {
+    if (fallback.error) throw fallback.error;
+    if (!fallbackInstallUrl) missingEnv.push('GITHUB_APP_INSTALL_URL or GITHUB_APP_SLUG');
+    return {
+      ok: !!fallbackInstallUrl,
+      flow: 'app_install',
+      redirectUrl: fallbackInstallUrl || undefined,
+      redirectUri,
+      requiredCallbackUrl,
+      ...safeUrlParts(fallbackInstallUrl),
+      fallbackInstallUrl,
+      clientIdPresent,
+      clientIdLooksValid,
+      callbackUrlConfigured,
+      missingEnv,
+      errorCode: fallbackInstallUrl ? undefined : 'missing_install_url',
+      message: fallbackInstallUrl
+        ? 'Opening the GitHub App installation/configuration flow.'
+        : 'GitHub App installation URL is not configured.',
+    };
+  }
 
   if (!env.clientSecret) missingEnv.push('GITHUB_APP_CLIENT_SECRET');
+  if (!clientIdPresent) missingEnv.push('GITHUB_APP_CLIENT_ID');
 
-  if (requestedFlow !== 'install' && clientIdPresent && clientIdLooksValid) {
+  if (clientIdPresent && env.clientSecret && clientIdLooksValid) {
     const authorizeUrl = buildGitHubLoginAuthorizeUrl({
       clientId: env.clientId,
       redirectUri,
@@ -251,6 +285,7 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
       redirectUri,
       requiredCallbackUrl,
       ...safeUrlParts(authorizeUrl),
+      fallbackInstallUrl,
       clientIdPresent,
       clientIdLooksValid,
       callbackUrlConfigured,
@@ -258,42 +293,23 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
     };
   }
 
-  if (!clientIdPresent) missingEnv.push('GITHUB_APP_CLIENT_ID');
-  const installUrl = buildInstallUrl({ installUrl: env.installUrl, slug: env.slug });
-  if (installUrl) {
-    return {
-      ok: true,
-      flow: 'app_install',
-      redirectUrl: installUrl,
-      redirectUri,
-      requiredCallbackUrl,
-      ...safeUrlParts(installUrl),
-      clientIdPresent,
-      clientIdLooksValid,
-      callbackUrlConfigured,
-      missingEnv,
-      errorCode: clientIdPresent ? 'invalid_client_id' : 'missing_client_id',
-      message: clientIdPresent
-        ? 'GitHub App OAuth client ID does not look valid, so ShipSeal is using the installation flow.'
-        : 'GitHub App OAuth client ID is missing, so ShipSeal is using the installation flow.',
-    };
-  }
-
-  const errorCode: LoginErrorCode = clientIdPresent && !clientIdLooksValid ? 'invalid_client_id' : 'missing_client_id';
-  if (!env.installUrl && !env.slug) missingEnv.push('GITHUB_APP_INSTALL_URL or GITHUB_APP_SLUG');
+  const errorCode: LoginErrorCode = !clientIdPresent
+    ? 'missing_client_id'
+    : !env.clientSecret
+      ? 'missing_client_secret'
+      : 'invalid_oauth_config';
   return {
     ok: false,
     flow: 'oauth_authorize',
     redirectUri,
     requiredCallbackUrl,
+    fallbackInstallUrl,
     clientIdPresent,
     clientIdLooksValid,
     callbackUrlConfigured,
     missingEnv,
     errorCode,
-    message: errorCode === 'invalid_client_id'
-      ? 'GitHub App OAuth client ID does not look valid and no install fallback is configured.'
-      : 'GitHub App OAuth client ID is missing and no install fallback is configured.',
+    message: 'GitHub login is not configured correctly.',
   };
 }
 
@@ -309,6 +325,7 @@ function debugPayload(decision: LoginDecision) {
     redirectUriOrigin: new URL(decision.redirectUri).origin,
     redirectUriPathname: new URL(decision.redirectUri).pathname,
     requiredCallbackUrl: decision.requiredCallbackUrl,
+    fallbackInstallUrl: decision.fallbackInstallUrl,
     callbackUrlConfigured: decision.callbackUrlConfigured,
     missingEnv: decision.missingEnv,
     errorCode: decision.errorCode,

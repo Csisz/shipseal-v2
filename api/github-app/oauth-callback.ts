@@ -29,8 +29,29 @@ function htmlEscape(value: string) {
     .replace(/"/g, '&quot;');
 }
 
-function sendHtml(res: ServerResponse, status: number, payload: Record<string, unknown>, title: string) {
+function getInstallFallbackUrl(env: NodeJS.ProcessEnv = process.env) {
+  const installUrl = (env.GITHUB_APP_INSTALL_URL || env.VITE_GITHUB_APP_INSTALL_URL || '').trim();
+  const slug = (env.GITHUB_APP_SLUG || env.VITE_GITHUB_APP_SLUG || '').trim();
+  if (installUrl) {
+    try {
+      const parsed = new URL(installUrl);
+      if (parsed.protocol === 'https:' && parsed.hostname === 'github.com') return parsed.toString();
+    } catch {
+      return '';
+    }
+  }
+  return slug ? `https://github.com/apps/${encodeURIComponent(slug)}/installations/new` : '';
+}
+
+function sendHtml(
+  res: ServerResponse,
+  status: number,
+  payload: Record<string, unknown>,
+  title: string,
+  options: { actionHref?: string; actionLabel?: string; autoClose?: boolean } = {}
+) {
   const safeJson = JSON.stringify(payload).replace(/</g, '\\u003c');
+  const autoClose = options.autoClose !== false;
   res.statusCode = status;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.end(`<!doctype html>
@@ -43,13 +64,14 @@ function sendHtml(res: ServerResponse, status: number, payload: Record<string, u
   <body>
     <p>${htmlEscape(title)}</p>
     <p><a href="/#scan">Return to ShipSeal</a></p>
+    ${options.actionHref && options.actionLabel ? `<p><a href="${htmlEscape(options.actionHref)}">${htmlEscape(options.actionLabel)}</a></p>` : ''}
     <script>
       (function () {
         var message = ${safeJson};
         if (window.opener && !window.opener.closed) {
           window.opener.postMessage(message, window.location.origin);
         }
-        window.setTimeout(function () { window.close(); }, 100);
+        ${autoClose ? 'window.setTimeout(function () { window.close(); }, 100);' : ''}
       }());
     </script>
   </body>
@@ -88,6 +110,21 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
 
   try {
     const installations = await authorizeAndListInstallations(code);
+    if (installations.length === 0) {
+      const installUrl = getInstallFallbackUrl();
+      sendHtml(
+        res,
+        200,
+        errorPayload('no_installations', 'No ShipSeal GitHub App installations were found for this GitHub account.'),
+        'Install ShipSeal GitHub App to choose repositories.',
+        {
+          actionHref: installUrl || undefined,
+          actionLabel: installUrl ? 'Install ShipSeal GitHub App' : undefined,
+          autoClose: false,
+        }
+      );
+      return;
+    }
     const payload = {
       source: 'shipseal-github-connect',
       status: 'ok',

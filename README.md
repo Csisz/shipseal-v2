@@ -179,12 +179,15 @@ Frontend demo env:
 - `VITE_GITHUB_APP_NAME` optional
 - `VITE_GITHUB_APP_INSTALL_URL` optional
 
-If `VITE_GITHUB_APP_INSTALL_URL` is set, ShipSeal uses it directly. If only `VITE_GITHUB_APP_SLUG` is set, ShipSeal opens `https://github.com/apps/{slug}/installations/new`. Without either value, the button stays disabled and explains that GitHub App install is not configured in the demo.
+The primary `Connect GitHub` action opens `/api/github-app/login` and uses server-side OAuth to discover existing GitHub App installations. `VITE_GITHUB_APP_INSTALL_URL` or `VITE_GITHUB_APP_SLUG` powers the secondary `Install or configure ShipSeal GitHub App` action for first-time installation or changing repository access.
 
-Server-side Vercel env for repository listing, App archive download, and App PR creation:
+Server-side Vercel env for OAuth connect, repository listing, App archive download, and App PR creation:
 
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_APP_CLIENT_ID`
+- `GITHUB_APP_CLIENT_SECRET`
+- `GITHUB_APP_CALLBACK_URL`
 - `GITHUB_API_BASE_URL` optional, defaults to `https://api.github.com`
 
 Keep `GITHUB_APP_PRIVATE_KEY` server-side only. If Vercel stores the key on one line, preserve newlines as `\n`; ShipSeal normalizes escaped newlines before signing the GitHub App JWT.
@@ -216,7 +219,7 @@ Repository permissions:
 - Pull requests: read/write
 - Workflows: read/write optional, only if ShipSeal writes CI workflow files
 
-Install the app only on selected repositories. For a Vercel demo, configure `VITE_GITHUB_APP_SLUG` and optionally `VITE_GITHUB_APP_INSTALL_URL`, then redeploy. For repository listing, App archive download, and App PR creation, set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` as server-side environment variables. Keep the private key out of frontend env vars. Callback URL should be `https://YOUR_DOMAIN/api/github-app/callback`.
+Install the app only on selected repositories. For a Vercel demo, configure `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_CALLBACK_URL`, `GITHUB_APP_ID`, and `GITHUB_APP_PRIVATE_KEY` as server-side environment variables. Configure `VITE_GITHUB_APP_SLUG` and optionally `VITE_GITHUB_APP_INSTALL_URL` for the secondary install/configure action. Keep the private key and OAuth secret out of frontend env vars. OAuth callback URL should be `https://YOUR_DOMAIN/api/github-app/oauth-callback`; setup callback URL should be `https://YOUR_DOMAIN/api/github-app/callback`.
 
 ## MVP Validation Offer
 

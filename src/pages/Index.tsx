@@ -44,6 +44,8 @@ function repositoryListFriendlyMessage(code?: string, fallback?: string) {
       return 'GitHub App installation was not found. Reconnect GitHub.';
     case 'user_authorization_failed':
       return 'GitHub authorization was not completed. Reconnect GitHub.';
+    case 'no_installations':
+      return 'No ShipSeal GitHub App installation was found for this account. Use Install or configure ShipSeal GitHub App.';
     case 'network_error':
       return 'ShipSeal could not reach GitHub. Retry repository listing.';
     case 'github_api_error':
@@ -175,7 +177,7 @@ const Index = () => {
         setRepositoryListMessage('Choose a GitHub account to list repositories.');
       } else {
         setRepositoryListStatus('error');
-        setRepositoryListMessage('No GitHub App installations were found. Install ShipSeal GitHub App.');
+        setRepositoryListMessage('No ShipSeal GitHub App installation was found for this account. Use Install or configure ShipSeal GitHub App.');
       }
     };
     window.addEventListener('message', onMessage);

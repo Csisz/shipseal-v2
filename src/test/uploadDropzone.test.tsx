@@ -17,7 +17,8 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(screen.getByText('Upload ZIP')).toBeInTheDocument();
     expect(screen.getByText('Best for local/private review without GitHub access.')).toBeInTheDocument();
     expect(screen.getByLabelText('Select repository')).toHaveAttribute('placeholder', 'Connect GitHub to list repositories');
-    expect(screen.getByText(/GitHub App connection is not configured in this demo/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Connect GitHub$/i })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /Install or configure ShipSeal GitHub App/i })).not.toBeInTheDocument();
   });
 
   it('shows local MVP CORS and ZIP fallback guidance', () => {
@@ -63,6 +64,34 @@ describe('UploadDropzone GitHub import copy', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Connect GitHub$/i }));
 
     expect(onConnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps install or configure as a separate secondary action', () => {
+    const onConnect = vi.fn();
+    const onInstall = vi.fn();
+
+    render(
+      <UploadDropzone
+        onFile={vi.fn()}
+        onGitHubImport={vi.fn()}
+        onGitHubConnect={onConnect}
+        onGitHubInstall={onInstall}
+        githubAppConfig={{
+          appName: 'ShipSeal Demo',
+          appSlug: 'shipseal-demo',
+          installUrl: 'https://github.com/apps/shipseal-demo/installations/new',
+          loginUrl: '/api/github-app/login',
+          isConfigured: true,
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Connect GitHub$/i }));
+    expect(onConnect).toHaveBeenCalledTimes(1);
+    expect(onInstall).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Install or configure ShipSeal GitHub App/i }));
+    expect(onInstall).toHaveBeenCalledTimes(1);
   });
 
   it('renders repository dropdown with loaded GitHub App repositories and selects a repo', () => {

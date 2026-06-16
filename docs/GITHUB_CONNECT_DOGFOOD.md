@@ -11,14 +11,16 @@ Expected deployed URLs:
 
 1. Open ShipSeal and go to the scan section.
 2. Click `Connect GitHub`.
-3. Confirm a centered GitHub authorization popup opens.
-4. Approve ShipSeal or choose the existing installation.
-5. Confirm the popup closes or shows `Return to ShipSeal`.
-6. Confirm the main ShipSeal page lists repositories in the repository selector.
-7. Select a repository and run a scan.
-8. Click `Disconnect GitHub` and confirm the repository selector resets.
-9. Reconnect and confirm repositories appear without editing GitHub App settings or clicking Save.
-10. Confirm `Import public GitHub URL` still works without connecting GitHub.
+3. Confirm a centered GitHub OAuth authorization/login popup opens.
+4. Confirm the primary popup does not open `https://github.com/settings/installations/...`.
+5. Approve ShipSeal.
+6. Confirm the popup closes or shows `Return to ShipSeal`.
+7. Confirm the main ShipSeal page lists repositories in the repository selector.
+8. Select a repository and run a scan.
+9. Click `Disconnect GitHub` and confirm the repository selector resets.
+10. Reconnect and confirm repositories appear without editing GitHub App settings or clicking Save.
+11. Use `Install or configure ShipSeal GitHub App` only for first-time installation or changing repository access.
+12. Confirm `Import public GitHub URL` still works without connecting GitHub.
 
 Required Vercel variables:
 

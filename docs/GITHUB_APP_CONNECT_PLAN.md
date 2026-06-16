@@ -71,28 +71,28 @@ Frontend MVP configuration:
 - `VITE_GITHUB_APP_NAME`
 - `VITE_GITHUB_APP_INSTALL_URL`
 
-If `VITE_GITHUB_APP_INSTALL_URL` is set, ShipSeal opens that URL when the user clicks `Connect GitHub`. If it is not set but `VITE_GITHUB_APP_SLUG` is present, the frontend builds:
+The primary `Connect GitHub` action opens `/api/github-app/login`, which uses server-side OAuth configuration and redirects to GitHub user authorization. The installation flow is a secondary `Install or configure ShipSeal GitHub App` action. If `VITE_GITHUB_APP_INSTALL_URL` is set, ShipSeal uses that URL for the secondary action. If it is not set but `VITE_GITHUB_APP_SLUG` is present, the frontend builds:
 
 ```text
 https://github.com/apps/{slug}/installations/new
 ```
 
-If neither value is configured, the `Connect GitHub` button stays disabled and the UI explains that GitHub App install is not configured in this demo.
+If neither value is configured, the secondary install/configure action is hidden. The primary Connect action still opens the server-side OAuth endpoint, which returns a friendly popup error if OAuth env is missing.
 
 Server-side MVP configuration:
 
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_APP_CLIENT_ID`
+- `GITHUB_APP_CLIENT_SECRET`
+- `GITHUB_APP_CALLBACK_URL`
 - `GITHUB_API_BASE_URL` optional, defaults to `https://api.github.com`
 
 Planned production hardening:
 
-- `GITHUB_APP_CLIENT_ID`
-- `GITHUB_APP_CLIENT_SECRET`
 - `GITHUB_APP_WEBHOOK_SECRET`
-- `GITHUB_APP_CALLBACK_URL`
 
-The current MVP does not exchange OAuth codes, store sessions, handle webhooks, or persist repository selections. It does generate GitHub App JWTs server-side, requests short-lived installation tokens, and uses those tokens for repository listing, archive download, and Readiness PR creation.
+The current MVP exchanges OAuth codes only to discover GitHub App installations available to the signed-in user. It does not store sessions, handle webhooks, or persist repository selections beyond local browser state. It does generate GitHub App JWTs server-side, requests short-lived installation tokens, and uses those tokens for repository listing, archive download, and Readiness PR creation.
 
 The repository listing MVP handles callback `installation_id`, calls `/api/github-app/repositories?installationId=...`, and returns `not_configured` when server credentials are missing. When server credentials are present, the endpoint returns minimized repository metadata only.
 
