@@ -39,6 +39,7 @@ export async function exchangeCodeForUserToken(
         client_id: config.clientId,
         client_secret: config.clientSecret,
         code,
+        ...(options.redirectUri ? { redirect_uri: options.redirectUri } : {}),
       }),
     });
   } catch {
@@ -46,12 +47,21 @@ export async function exchangeCodeForUserToken(
   }
 
   if (!response.ok) {
-    throw new GitHubAppApiError(response.status, 'GitHub user authorization failed.', 'user_authorization_failed');
+    throw new GitHubAppApiError(response.status, 'GitHub OAuth token exchange failed.', 'oauth_token_exchange_failed');
   }
 
-  const payload = await response.json() as { access_token?: string; error?: string };
-  if (!payload.access_token || payload.error) {
-    throw new GitHubAppApiError(401, 'GitHub user authorization failed.', 'user_authorization_failed');
+  let payload: { access_token?: string; error?: string; error_description?: string };
+  try {
+    payload = await response.json() as { access_token?: string; error?: string; error_description?: string };
+  } catch {
+    throw new GitHubAppApiError(502, 'GitHub OAuth token response was not valid JSON.', 'oauth_token_invalid_json');
+  }
+
+  if (payload.error) {
+    throw new GitHubAppApiError(401, 'GitHub OAuth token exchange failed.', 'github_oauth_error');
+  }
+  if (!payload.access_token) {
+    throw new GitHubAppApiError(401, 'GitHub OAuth token exchange did not return an access token.', 'github_oauth_error');
   }
 
   return { token: payload.access_token, apiBaseUrl: config.apiBaseUrl };
@@ -81,7 +91,12 @@ export async function listUserInstallations(
     throw new GitHubAppApiError(response.status, 'GitHub installation discovery failed.', 'github_api_error');
   }
 
-  const payload = await response.json() as { installations?: Array<Record<string, unknown>> };
+  let payload: { installations?: Array<Record<string, unknown>> };
+  try {
+    payload = await response.json() as { installations?: Array<Record<string, unknown>> };
+  } catch {
+    throw new GitHubAppApiError(502, 'GitHub installation discovery response was not valid JSON.', 'github_api_error');
+  }
   return (payload.installations || []).map(installation => {
     const account = installation.account && typeof installation.account === 'object'
       ? installation.account as Record<string, unknown>

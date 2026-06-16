@@ -14,6 +14,7 @@ export interface GitHubAppAuthOptions {
   env?: NodeJS.ProcessEnv;
   fetcher?: typeof fetch;
   now?: () => Date;
+  redirectUri?: string;
 }
 
 export interface GitHubAppRepositorySummary {
@@ -38,6 +39,11 @@ export type GitHubAppErrorCode =
   | 'missing_private_key'
   | 'missing_client_id'
   | 'missing_client_secret'
+  | 'missing_oauth_code'
+  | 'github_oauth_denied'
+  | 'github_oauth_error'
+  | 'oauth_token_exchange_failed'
+  | 'oauth_token_invalid_json'
   | 'invalid_private_key_format'
   | 'jwt_signing_failed'
   | 'installation_not_found'

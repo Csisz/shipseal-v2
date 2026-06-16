@@ -19,12 +19,15 @@ export interface GitHubAppInstallation {
 
 export type GitHubAppConnectionMessage =
   | {
+      type?: 'shipseal:github-connected' | 'shipseal:github-installations';
       source: 'shipseal-github-connect';
       status: 'ok';
       installationId?: string;
+      setupAction?: 'oauth' | string;
       installations?: GitHubAppInstallation[];
     }
   | {
+      type?: 'shipseal:github-error' | 'shipseal:github-install-required';
       source: 'shipseal-github-connect';
       status: 'error';
       code?: string;

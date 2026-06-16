@@ -496,10 +496,24 @@ describe('GitHub App Connect plan', () => {
 
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain('window.opener.postMessage');
+      expect(res.body).toContain('"type":"shipseal:github-connected"');
       expect(res.body).toContain('"source":"shipseal-github-connect"');
       expect(res.body).toContain('"installationId":"12345"');
+      expect(res.body).toContain('"setupAction":"oauth"');
       expect(res.body).not.toContain('client-secret');
       expect(res.body).not.toContain('user-token');
+      const firstCall = fetchMock.mock.calls[0];
+      expect(firstCall[0]).toBe('https://github.com/login/oauth/access_token');
+      expect(firstCall[1]).toMatchObject({
+        method: 'POST',
+        headers: expect.objectContaining({ Accept: 'application/json' }),
+      });
+      expect(JSON.parse(String(firstCall[1]?.body))).toMatchObject({
+        client_id: 'client-id',
+        client_secret: 'client-secret',
+        code: 'abc',
+        redirect_uri: 'http://localhost:8080/api/github-app/oauth-callback',
+      });
     } finally {
       process.env = originalEnv;
       vi.unstubAllGlobals();
@@ -537,6 +551,7 @@ describe('GitHub App Connect plan', () => {
       await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
 
       expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('"type":"shipseal:github-installations"');
       expect(res.body).toContain('"status":"ok"');
       expect(res.body).toContain('"id":"123"');
       expect(res.body).toContain('"id":"456"');
@@ -575,6 +590,7 @@ describe('GitHub App Connect plan', () => {
       await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
 
       expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('"type":"shipseal:github-install-required"');
       expect(res.body).toContain('"status":"error"');
       expect(res.body).toContain('"code":"no_installations"');
       expect(res.body).toContain('Install ShipSeal GitHub App');
@@ -593,7 +609,7 @@ describe('GitHub App Connect plan', () => {
     await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback' } as never, res as never);
 
     expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('user_authorization_failed');
+    expect(res.body).toContain('missing_oauth_code');
     expect(res.body).toContain('Return to ShipSeal');
     expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
     expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
@@ -611,10 +627,135 @@ describe('GitHub App Connect plan', () => {
     expect(res.body).toContain('window.opener.postMessage');
     expect(res.body).toContain('"source":"shipseal-github-connect"');
     expect(res.body).toContain('"status":"error"');
-    expect(res.body).toContain('"code":"user_authorization_failed"');
+    expect(res.body).toContain('"code":"github_oauth_denied"');
     expect(res.body).toContain('The user cancelled authorization');
     expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
     expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+  });
+
+  it('/api/github-app/oauth-callback returns a friendly error when token exchange is non-200', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'client-id',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: 'bad_verification_code', access_token: 'leaked-token' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const res = createResponse();
+
+    try {
+      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=bad' } as never, res as never);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain('"code":"oauth_token_exchange_failed"');
+      expect(res.body).toContain('Return to ShipSeal');
+      expect(res.body).not.toContain('bad_verification_code');
+      expect(res.body).not.toContain('leaked-token');
+      expect(res.body).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('/api/github-app/oauth-callback returns a friendly error when token exchange JSON is invalid', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'client-id',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new Error('not json raw body');
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const res = createResponse();
+
+    try {
+      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
+
+      expect(res.statusCode).toBe(502);
+      expect(res.body).toContain('"code":"oauth_token_invalid_json"');
+      expect(res.body).not.toContain('not json raw body');
+      expect(res.body).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('/api/github-app/oauth-callback returns a friendly error for GitHub OAuth error payloads', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'client-id',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ error: 'redirect_uri_mismatch', error_description: 'raw mismatch details' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const res = createResponse();
+
+    try {
+      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
+
+      expect(res.statusCode).toBe(401);
+      expect(res.body).toContain('"code":"github_oauth_error"');
+      expect(res.body).not.toContain('redirect_uri_mismatch');
+      expect(res.body).not.toContain('raw mismatch details');
+      expect(res.body).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('/api/github-app/oauth-callback?debug=1 returns safe diagnostics without exchanging the code', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'client-id',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+    };
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const res = createResponse();
+
+    try {
+      await oauthCallbackHandler({
+        method: 'GET',
+        url: '/api/github-app/oauth-callback?debug=1&code=abc',
+        headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
+      } as never, res as never);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        codePresent: true,
+        clientIdPresent: true,
+        clientSecretPresent: true,
+        callbackUrlUsable: true,
+        tokenExchangeAttempted: false,
+        tokenExchangeStatus: 'not_attempted',
+        installationsAttempted: false,
+      });
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(res.body).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+      vi.unstubAllGlobals();
+    }
   });
 
   it('/api/github-app/installations discovers already-installed app accounts from user authorization', async () => {

@@ -18,7 +18,12 @@ function queryFromRequest(req: VercelLikeRequest) {
     code: parsed.searchParams.get('code') || undefined,
     error: parsed.searchParams.get('error') || undefined,
     error_description: parsed.searchParams.get('error_description') || undefined,
+    debug: parsed.searchParams.get('debug') || undefined,
   };
+}
+
+function safeHeader(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function htmlEscape(value: string) {
@@ -80,6 +85,7 @@ function sendHtml(
 
 function errorPayload(code: string, message: string) {
   return {
+    type: code === 'no_installations' ? 'shipseal:github-install-required' : 'shipseal:github-error',
     source: 'shipseal-github-connect',
     status: 'error',
     code,
@@ -87,29 +93,116 @@ function errorPayload(code: string, message: string) {
   };
 }
 
-export default async function handler(req: VercelLikeRequest, res: ServerResponse) {
-  if (req.method && req.method !== 'GET') {
-    sendHtml(res, 405, errorPayload('github_api_error', 'Use GET.'), 'GitHub connection failed.');
-    return;
-  }
+function sendJson(res: ServerResponse, status: number, payload: Record<string, unknown>) {
+  res.statusCode = status;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(payload));
+}
 
-  const query = queryFromRequest(req);
-  const error = (firstValue(query.error) || '').trim();
-  const errorDescription = (firstValue(query.error_description) || '').trim();
-  const code = (firstValue(query.code) || '').trim();
+function resolveCallbackUrl(req: VercelLikeRequest, env: NodeJS.ProcessEnv = process.env) {
+  const configured = (env.GITHUB_APP_CALLBACK_URL || '').trim();
+  if (configured) return configured;
+  const host = safeHeader(req.headers?.host) || 'localhost:8080';
+  const forwardedProto = safeHeader(req.headers?.['x-forwarded-proto']);
+  const proto = (forwardedProto || (host.includes('localhost') ? 'http' : 'https')).split(',')[0].trim();
+  return `${proto}://${host.split(',')[0].trim()}/api/github-app/oauth-callback`;
+}
 
-  if (error || !code) {
-    sendHtml(
-      res,
-      400,
-      errorPayload('user_authorization_failed', errorDescription || error || 'GitHub authorization did not return a code.'),
-      'GitHub authorization was not completed.'
-    );
-    return;
-  }
-
+function isCallbackUrlUsable(value: string, env: NodeJS.ProcessEnv = process.env) {
   try {
-    const installations = await authorizeAndListInstallations(code);
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
+    if (parsed.pathname !== '/api/github-app/oauth-callback') return false;
+    if (env.VERCEL === '1' && parsed.protocol !== 'https:') return false;
+    if (env.VERCEL === '1' && /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function sendSafeFailure(res: ServerResponse, error: unknown, title = 'GitHub connection failed.') {
+  if (error instanceof GitHubAppNotConfiguredError) {
+    sendHtml(res, 501, errorPayload(error.code, error.message), 'GitHub connection is not configured.');
+    return;
+  }
+  if (error instanceof GitHubAppApiError) {
+    sendHtml(res, error.status >= 400 && error.status < 600 ? error.status : 502, errorPayload(error.code, error.message), title);
+    return;
+  }
+  sendHtml(res, 502, errorPayload('github_api_error', 'GitHub connection failed.'), title);
+}
+
+function sendDebug(res: ServerResponse, req: VercelLikeRequest, input: { codePresent: boolean; tokenExchangeAttempted?: boolean; tokenExchangeStatus?: string; installationsAttempted?: boolean; safeErrorCode?: string }) {
+  const callbackUrl = resolveCallbackUrl(req);
+  sendJson(res, input.safeErrorCode ? 500 : 200, {
+    codePresent: input.codePresent,
+    clientIdPresent: !!(process.env.GITHUB_APP_CLIENT_ID || '').trim(),
+    clientSecretPresent: !!(process.env.GITHUB_APP_CLIENT_SECRET || '').trim(),
+    callbackUrlUsable: isCallbackUrlUsable(callbackUrl),
+    tokenExchangeAttempted: !!input.tokenExchangeAttempted,
+    tokenExchangeStatus: input.tokenExchangeStatus || 'not_attempted',
+    installationsAttempted: !!input.installationsAttempted,
+    safeErrorCode: input.safeErrorCode,
+  });
+}
+
+export default async function handler(req: VercelLikeRequest, res: ServerResponse) {
+  try {
+    if (req.method && req.method !== 'GET') {
+      sendHtml(res, 405, errorPayload('github_api_error', 'Use GET.'), 'GitHub connection failed.');
+      return;
+    }
+
+    const query = queryFromRequest(req);
+    const debug = firstValue(query.debug) === '1';
+    const error = (firstValue(query.error) || '').trim();
+    const errorDescription = (firstValue(query.error_description) || '').trim();
+    const code = (firstValue(query.code) || '').trim();
+    const callbackUrl = resolveCallbackUrl(req);
+
+    if (debug) {
+      sendDebug(res, req, {
+        codePresent: !!code,
+        tokenExchangeAttempted: false,
+        installationsAttempted: false,
+        safeErrorCode: error ? (error === 'access_denied' ? 'github_oauth_denied' : 'github_oauth_error') : !code ? 'missing_oauth_code' : undefined,
+      });
+      return;
+    }
+
+    if (error) {
+      const codeName = error === 'access_denied' ? 'github_oauth_denied' : 'github_oauth_error';
+      sendHtml(
+        res,
+        400,
+        errorPayload(codeName, errorDescription || 'GitHub authorization was not completed.'),
+        'GitHub authorization was not completed.'
+      );
+      return;
+    }
+
+    if (!code) {
+      sendHtml(
+        res,
+        400,
+        errorPayload('missing_oauth_code', 'GitHub authorization did not return a code.'),
+        'GitHub authorization was not completed.'
+      );
+      return;
+    }
+
+    if (!isCallbackUrlUsable(callbackUrl)) {
+      sendHtml(
+        res,
+        500,
+        errorPayload('github_oauth_error', 'GitHub OAuth callback URL is not valid.'),
+        'GitHub connection failed.'
+      );
+      return;
+    }
+
+    const installations = await authorizeAndListInstallations(code, { redirectUri: callbackUrl });
     if (installations.length === 0) {
       const installUrl = getInstallFallbackUrl();
       sendHtml(
@@ -125,9 +218,12 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
       );
       return;
     }
+
     const payload = {
+      type: installations.length === 1 ? 'shipseal:github-connected' : 'shipseal:github-installations',
       source: 'shipseal-github-connect',
       status: 'ok',
+      setupAction: 'oauth',
       installationId: installations.length === 1 ? String(installations[0].id) : undefined,
       installations: installations.map(installation => ({
         ...installation,
@@ -136,14 +232,6 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
     };
     sendHtml(res, 200, payload, 'GitHub connected. You can return to ShipSeal.');
   } catch (err) {
-    if (err instanceof GitHubAppNotConfiguredError) {
-      sendHtml(res, 501, errorPayload(err.code, err.message), 'GitHub connection is not configured.');
-      return;
-    }
-    if (err instanceof GitHubAppApiError) {
-      sendHtml(res, err.status >= 400 && err.status < 600 ? err.status : 502, errorPayload(err.code, err.message), 'GitHub connection failed.');
-      return;
-    }
-    sendHtml(res, 502, errorPayload('github_api_error', 'GitHub connection failed.'), 'GitHub connection failed.');
+    sendSafeFailure(res, err);
   }
 }
