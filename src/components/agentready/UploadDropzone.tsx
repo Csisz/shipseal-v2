@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { formatFileSize, validateZipUpload } from '@/lib/uploadValidation';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import { getGitHubAppClientConfig, type GitHubAppClientConfig } from '@/lib/githubApp/config';
-import type { GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
+import type { GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
 
 interface Props {
   onFile: (file: File) => void;
@@ -18,7 +18,13 @@ interface Props {
   repositoryListStatus?: GitHubAppRepositoryListStatus;
   repositories?: GitHubAppRepository[];
   repositoryListMessage?: string;
+  githubInstallations?: GitHubAppInstallation[];
   onGitHubAppRepositorySelect?: (repository: GitHubAppRepository) => void;
+  onGitHubConnect?: () => void;
+  onGitHubInstall?: () => void;
+  onGitHubDisconnect?: () => void;
+  onGitHubRepositoryRetry?: () => void;
+  onGitHubInstallationSelect?: (installationId: string) => void;
 }
 
 export function UploadDropzone({
@@ -30,7 +36,13 @@ export function UploadDropzone({
   repositoryListStatus = 'idle',
   repositories = [],
   repositoryListMessage,
+  githubInstallations = [],
   onGitHubAppRepositorySelect,
+  onGitHubConnect,
+  onGitHubInstall,
+  onGitHubDisconnect,
+  onGitHubRepositoryRetry,
+  onGitHubInstallationSelect,
 }: Props) {
   const appConfig = useMemo(() => githubAppConfig || getGitHubAppClientConfig(), [githubAppConfig]);
   const [mode, setMode] = useState<'github-app' | 'github' | 'zip'>('github-app');
@@ -67,11 +79,6 @@ export function UploadDropzone({
     setDragging(false);
     const f = e.dataTransfer.files?.[0];
     if (f) handle(f);
-  };
-
-  const connectGitHub = () => {
-    if (!appConfig.isConfigured) return;
-    window.open(appConfig.installUrl, '_blank', 'noopener,noreferrer');
   };
 
   return (
@@ -125,19 +132,45 @@ export function UploadDropzone({
                   GitHub App installation detected. Loading repositories...
                 </div>
               )}
+              {githubInstallationId && repositoryListStatus === 'loaded' && (
+                <div className="mt-2 text-xs text-success">
+                  GitHub connected. Select a repository to scan.
+                </div>
+              )}
               {githubInstallationId && repositoryListStatus === 'not_configured' && (
                 <div className="mt-2 text-xs text-warning">
-                  GitHub App installation detected, but repository listing is not configured in this demo.
+                  {repositoryListMessage || 'GitHub connection is configured, but ShipSeal could not create an installation token.'}
                 </div>
               )}
               {repositoryListStatus === 'error' && repositoryListMessage && (
                 <div className="mt-2 text-xs text-destructive">{repositoryListMessage}</div>
               )}
+              {repositoryListStatus === 'loaded' && repositories.length === 0 && (
+                <div className="mt-2 text-xs text-warning">No repositories are available for this GitHub App installation.</div>
+              )}
             </div>
-            <Button type="button" variant="outline" disabled={disabled || !appConfig.isConfigured} onClick={connectGitHub}>
+            <Button type="button" variant="outline" disabled={disabled || !appConfig.isConfigured} onClick={onGitHubConnect}>
               <Plug className="h-4 w-4 mr-2" /> Connect GitHub
             </Button>
           </div>
+          {githubInstallations.length > 1 && (
+            <label className="mb-4 block">
+              <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">GitHub account</span>
+              <select
+                aria-label="Select GitHub installation"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                value={githubInstallationId || ''}
+                onChange={event => onGitHubInstallationSelect?.(event.target.value)}
+              >
+                <option value="" disabled>Select GitHub account</option>
+                {githubInstallations.map(installation => (
+                  <option key={installation.id} value={installation.id}>
+                    {installation.accountLogin}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="block">
             <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">Select repository</span>
             {repositoryListStatus === 'loaded' && repositories.length > 0 ? (
@@ -161,6 +194,22 @@ export function UploadDropzone({
               <Input aria-label="Select repository" disabled placeholder="Connect GitHub to list repositories" />
             )}
           </label>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubRepositoryRetry}>
+              Retry repository listing
+            </Button>
+            <Button type="button" variant="ghost" size="sm" disabled={disabled || !appConfig.isConfigured} onClick={onGitHubConnect}>
+              Reconnect GitHub
+            </Button>
+            <Button type="button" variant="ghost" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubDisconnect}>
+              Disconnect GitHub
+            </Button>
+            {appConfig.installUrl && (
+              <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubInstall}>
+                Install ShipSeal GitHub App
+              </Button>
+            )}
+          </div>
         </div>
       ) : mode === 'zip' ? (
         <label

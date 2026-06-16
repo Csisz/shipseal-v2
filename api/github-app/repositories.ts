@@ -32,6 +32,7 @@ export async function listInstallationRepositories(installationId: string, optio
       status: 400,
       body: {
         status: 'invalid_request',
+        code: 'installation_not_found',
         message: 'A valid installationId query parameter is required.',
       },
     };
@@ -52,6 +53,7 @@ export async function listInstallationRepositories(installationId: string, optio
         status: 501,
         body: {
           status: 'not_configured',
+          code: error.code,
           message: 'GitHub App server credentials are not configured yet.',
         },
       };
@@ -61,6 +63,7 @@ export async function listInstallationRepositories(installationId: string, optio
         status: error.status === 404 ? 404 : 502,
         body: {
           status: 'github_error',
+          code: error.code,
           message: error.message,
         },
       };
@@ -69,6 +72,7 @@ export async function listInstallationRepositories(installationId: string, optio
       status: 502,
       body: {
         status: 'github_error',
+        code: 'github_api_error',
         message: 'GitHub App repository listing failed.',
       },
     };

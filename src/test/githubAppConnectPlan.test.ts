@@ -3,6 +3,8 @@ import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import startHandler from '../../api/github-app/start';
 import callbackHandler from '../../api/github-app/callback';
+import oauthCallbackHandler from '../../api/github-app/oauth-callback';
+import installationsHandler from '../../api/github-app/installations';
 import repositoriesHandler, { listInstallationRepositories } from '../../api/github-app/repositories';
 import archiveHandler from '../../api/github-app/archive';
 import createGitHubAppPrHandler, {
@@ -32,16 +34,27 @@ function createResponse() {
 }
 
 describe('GitHub App Connect plan', () => {
-  it('/api/github-app/start returns a planned not implemented response', async () => {
+  it('/api/github-app/start redirects to GitHub OAuth authorization', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'client-id',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+    };
     const res = createResponse();
 
-    await startHandler({ method: 'GET' } as never, res as never);
+    try {
+      await startHandler({ method: 'GET', headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https' } } as never, res as never);
 
-    expect(res.statusCode).toBe(501);
-    expect(res.json()).toEqual({
-      status: 'not_implemented',
-      message: 'GitHub App connection is planned. Use temporary token mode for now.',
-    });
+      expect(res.statusCode).toBe(302);
+      const location = (res.setHeader as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0] === 'Location')?.[1] as string;
+      expect(location).toContain('https://github.com/login/oauth/authorize?');
+      expect(location).toContain('client_id=client-id');
+      expect(location).toContain('redirect_uri=https%3A%2F%2Fshipseal.test%2Fapi%2Fgithub-app%2Foauth-callback');
+      expect(location).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+    }
   });
 
   it('/api/github-app/callback rejects missing installation_id', async () => {
@@ -79,6 +92,7 @@ describe('GitHub App Connect plan', () => {
       status: 501,
       body: {
         status: 'not_configured',
+        code: 'missing_app_id',
         message: 'GitHub App server credentials are not configured yet.',
       },
     });
@@ -161,8 +175,97 @@ describe('GitHub App Connect plan', () => {
     expect(notConfigured.statusCode).toBe(501);
     expect(notConfigured.json()).toEqual({
       status: 'not_configured',
+      code: 'missing_app_id',
       message: 'GitHub App server credentials are not configured yet.',
     });
+  });
+
+  it('/api/github-app/oauth-callback returns postMessage HTML for existing installations', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'client-id',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'user-token' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          installations: [{
+            id: 12345,
+            account: { login: 'Csisz', type: 'User' },
+            html_url: 'https://github.com/settings/installations/12345',
+          }],
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    const res = createResponse();
+
+    try {
+      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).toContain('window.opener.postMessage');
+      expect(res.body).toContain('"source":"shipseal-github-connect"');
+      expect(res.body).toContain('"installationId":"12345"');
+      expect(res.body).not.toContain('client-secret');
+      expect(res.body).not.toContain('user-token');
+    } finally {
+      process.env = originalEnv;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('/api/github-app/oauth-callback returns a safe error page when code is missing', async () => {
+    const res = createResponse();
+
+    await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback' } as never, res as never);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('user_authorization_failed');
+    expect(res.body).toContain('Return to ShipSeal');
+    expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
+    expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+  });
+
+  it('/api/github-app/installations discovers already-installed app accounts from user authorization', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'client-id',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ access_token: 'user-token' }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ installations: [{ id: 7, account: { login: 'Acme', type: 'Organization' } }] }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    const res = createResponse();
+
+    try {
+      await installationsHandler({ method: 'GET', url: '/api/github-app/installations?code=abc' } as never, res as never);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        status: 'ok',
+        installations: [{ id: '7', accountLogin: 'Acme', accountType: 'Organization', htmlUrl: undefined }],
+      });
+      expect(res.body).not.toContain('user-token');
+    } finally {
+      process.env = originalEnv;
+      vi.unstubAllGlobals();
+    }
   });
 
   it('/api/github-app/archive streams a mocked zipball without exposing tokens', async () => {

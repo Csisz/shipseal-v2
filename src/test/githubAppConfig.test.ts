@@ -13,6 +13,7 @@ describe('GitHub App client config', () => {
       appName: 'ShipSeal Demo',
       appSlug: 'shipseal-demo',
       installUrl: 'https://github.com/apps/shipseal-demo/installations/new?state=demo',
+      loginUrl: '/api/github-app/login',
       isConfigured: true,
     });
   });
@@ -24,6 +25,7 @@ describe('GitHub App client config', () => {
 
     expect(config.appName).toBe('ShipSeal');
     expect(config.installUrl).toBe('https://github.com/apps/shipseal-demo/installations/new');
+    expect(config.loginUrl).toBe('/api/github-app/login');
     expect(config.isConfigured).toBe(true);
     expect(buildGitHubAppInstallUrl('shipseal-demo')).toBe(config.installUrl);
   });
@@ -35,6 +37,7 @@ describe('GitHub App client config', () => {
       appName: 'ShipSeal',
       appSlug: '',
       installUrl: '',
+      loginUrl: '/api/github-app/login',
       isConfigured: false,
     });
   });

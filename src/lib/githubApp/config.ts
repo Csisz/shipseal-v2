@@ -8,6 +8,7 @@ export interface GitHubAppClientConfig {
   appName: string;
   appSlug: string;
   installUrl: string;
+  loginUrl: string;
   isConfigured: boolean;
 }
 
@@ -23,6 +24,7 @@ export function getGitHubAppClientConfig(env: GitHubAppEnv = import.meta.env): G
       appName,
       appSlug,
       installUrl: explicitInstallUrl,
+      loginUrl: '/api/github-app/login',
       isConfigured: true,
     };
   }
@@ -32,6 +34,7 @@ export function getGitHubAppClientConfig(env: GitHubAppEnv = import.meta.env): G
       appName,
       appSlug,
       installUrl: buildGitHubAppInstallUrl(appSlug),
+      loginUrl: '/api/github-app/login',
       isConfigured: true,
     };
   }
@@ -40,6 +43,7 @@ export function getGitHubAppClientConfig(env: GitHubAppEnv = import.meta.env): G
     appName,
     appSlug: '',
     installUrl: '',
+    loginUrl: '/api/github-app/login',
     isConfigured: false,
   };
 }

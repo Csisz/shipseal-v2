@@ -102,11 +102,12 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
     res.end(archive);
   } catch (error) {
     if (error instanceof GitHubAppNotConfiguredError) {
-      sendJson(res, 501, { status: 'not_configured', message: 'GitHub App server credentials are not configured yet.' });
+      sendJson(res, 501, { status: 'not_configured', code: error.code, message: 'GitHub App server credentials are not configured yet.' });
       return;
     }
     sendJson(res, error instanceof GitHubAppApiError && error.status === 404 ? 404 : 502, {
       status: 'github_error',
+      code: error instanceof GitHubAppApiError ? error.code : 'github_api_error',
       message: error instanceof Error ? error.message : 'GitHub App archive download failed.',
     });
   }

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Index from '@/pages/Index';
@@ -63,6 +63,9 @@ vi.mock('@/components/agentready/UploadDropzone', () => ({
     repositories = [],
     repositoryListMessage,
     onGitHubAppRepositorySelect,
+    onGitHubConnect,
+    onGitHubDisconnect,
+    onGitHubRepositoryRetry,
   }: {
     onFile: (file: File) => void;
     githubInstallationId?: string;
@@ -70,6 +73,9 @@ vi.mock('@/components/agentready/UploadDropzone', () => ({
     repositories?: GitHubAppRepository[];
     repositoryListMessage?: string;
     onGitHubAppRepositorySelect?: (repo: GitHubAppRepository) => void;
+    onGitHubConnect?: () => void;
+    onGitHubDisconnect?: () => void;
+    onGitHubRepositoryRetry?: () => void;
   }) => (
     <div>
       <button
@@ -81,6 +87,10 @@ vi.mock('@/components/agentready/UploadDropzone', () => ({
       {githubInstallationId && <div>Installation: {githubInstallationId}</div>}
       {repositoryListStatus === 'loading' && <div>GitHub App installation detected. Loading repositories...</div>}
       {repositoryListStatus === 'not_configured' && <div>{repositoryListMessage}</div>}
+      {repositoryListStatus === 'error' && <div>{repositoryListMessage}</div>}
+      <button type="button" onClick={onGitHubConnect}>Connect GitHub</button>
+      <button type="button" onClick={onGitHubRepositoryRetry}>Retry repository listing</button>
+      <button type="button" onClick={onGitHubDisconnect}>Disconnect GitHub</button>
       {repositoryListStatus === 'loaded' && (
         <button type="button" onClick={() => onGitHubAppRepositorySelect?.(repositories[0])}>
           Select {repositories[0]?.fullName}
@@ -94,6 +104,7 @@ describe('ShipSeal pre-scan intake flow', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
+    window.localStorage.clear();
     window.history.pushState({}, '', '/');
   });
 
@@ -165,6 +176,7 @@ describe('ShipSeal pre-scan intake flow', () => {
     expect(screen.getByText('Installation: 12345')).toBeInTheDocument();
     expect(screen.getByText(/GitHub App installation detected. Loading repositories/i)).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/repositories?installationId=12345'));
+    expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBe('12345');
     expect(await screen.findByRole('button', { name: /Select Csisz\/shipseal/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Select Csisz\/shipseal/i }));
@@ -178,5 +190,90 @@ describe('ShipSeal pre-scan intake flow', () => {
       ref: 'main',
     });
     expect(screen.getByText(/Scanning repository/i)).toBeInTheDocument();
+  });
+
+  it('opens popup connect, receives postMessage, persists installation, retries and disconnects', async () => {
+    const openMock = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        status: 'ok',
+        repositories: [{
+          id: 1,
+          owner: 'Csisz',
+          name: 'shipseal',
+          fullName: 'Csisz/shipseal',
+          defaultBranch: 'main',
+          private: false,
+          htmlUrl: 'https://github.com/Csisz/shipseal',
+        }],
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <MemoryRouter>
+        <Index />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Connect GitHub$/i }));
+    expect(openMock).toHaveBeenCalledWith('/api/github-app/login', 'shipseal-github-connect', expect.stringContaining('popup=yes'));
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
+        data: {
+          source: 'shipseal-github-connect',
+          status: 'ok',
+          installationId: '777',
+          installations: [{ id: '777', accountLogin: 'Csisz' }],
+        },
+      }));
+    });
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/repositories?installationId=777'));
+    expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBe('777');
+    expect(await screen.findByRole('button', { name: /Select Csisz\/shipseal/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Retry repository listing/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(screen.getByRole('button', { name: /Disconnect GitHub/i }));
+    expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBeNull();
+    expect(screen.queryByText('Installation: 777')).not.toBeInTheDocument();
+  });
+
+  it('maps repository listing backend errors to actionable messages', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      json: async () => ({
+        status: 'not_configured',
+        code: 'invalid_private_key_format',
+        message: 'raw backend message',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    window.localStorage.setItem('shipseal.githubInstallationId', '999');
+
+    render(
+      <MemoryRouter>
+        <Index />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText('GitHub App private key is missing or invalid in Vercel.')).toBeInTheDocument();
+    expect(screen.queryByText('Repository listing is not available yet.')).not.toBeInTheDocument();
+  });
+
+  it('keeps public GitHub URL import separate from GitHub Connect', () => {
+    render(
+      <MemoryRouter>
+        <Index />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText('Step 1: Upload your project')).toBeInTheDocument();
+    expect(scanMocks.startGitHubScan).not.toHaveBeenCalled();
   });
 });

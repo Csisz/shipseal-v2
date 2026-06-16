@@ -42,17 +42,19 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(screen.getByText('Detected repository: Csisz/shipseal')).toBeInTheDocument();
   });
 
-  it('opens GitHub App install when source-level Connect GitHub is configured', () => {
-    const openMock = vi.spyOn(window, 'open').mockImplementation(() => null);
+  it('starts popup GitHub Connect when source-level Connect GitHub is configured', () => {
+    const onConnect = vi.fn();
 
     render(
       <UploadDropzone
         onFile={vi.fn()}
         onGitHubImport={vi.fn()}
+        onGitHubConnect={onConnect}
         githubAppConfig={{
           appName: 'ShipSeal Demo',
           appSlug: 'shipseal-demo',
           installUrl: 'https://github.com/apps/shipseal-demo/installations/new',
+          loginUrl: '/api/github-app/login',
           isConfigured: true,
         }}
       />
@@ -60,11 +62,7 @@ describe('UploadDropzone GitHub import copy', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Connect GitHub$/i }));
 
-    expect(openMock).toHaveBeenCalledWith(
-      'https://github.com/apps/shipseal-demo/installations/new',
-      '_blank',
-      'noopener,noreferrer'
-    );
+    expect(onConnect).toHaveBeenCalledTimes(1);
   });
 
   it('renders repository dropdown with loaded GitHub App repositories and selects a repo', () => {
@@ -76,6 +74,7 @@ describe('UploadDropzone GitHub import copy', () => {
         onGitHubImport={vi.fn()}
         githubInstallationId="12345"
         repositoryListStatus="loaded"
+        onGitHubConnect={vi.fn()}
         repositories={[{
           id: 1,
           owner: 'Csisz',
