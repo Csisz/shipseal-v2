@@ -60,6 +60,36 @@ describe('GitHub App Connect plan', () => {
     }
   });
 
+  it('/api/github-app/login accepts the deployed GitHub App client ID shape without strict prefix matching', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'cfdd8f4457f94a121791bfc9580eaec60e8050b4',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+      GITHUB_APP_SLUG: 'shipseal-demo',
+    };
+    const res = createResponse();
+
+    try {
+      await startHandler({
+        method: 'GET',
+        url: '/api/github-app/login',
+        headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
+      } as never, res as never);
+
+      expect(res.statusCode).toBe(302);
+      const location = (res.setHeader as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0] === 'Location')?.[1] as string;
+      expect(location).toContain('https://github.com/login/oauth/authorize?');
+      expect(location).toContain('client_id=cfdd8f4457f94a121791bfc9580eaec60e8050b4');
+      expect(location).toContain('redirect_uri=https%3A%2F%2Fshipseal-v2.vercel.app%2Fapi%2Fgithub-app%2Foauth-callback');
+      expect(location).toContain('state=');
+      expect(location).not.toContain('github.com/settings/installations');
+      expect(location).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
   it('/api/github-app/login returns a friendly popup error when OAuth env is missing', async () => {
     const originalEnv = process.env;
     process.env = {};
@@ -131,13 +161,55 @@ describe('GitHub App Connect plan', () => {
         authorizeUrlPath: '/login/oauth/authorize',
         clientIdPresent: true,
         clientIdLooksValid: true,
+        clientSecretPresent: true,
         redirectUri: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
         redirectUriOrigin: 'https://shipseal-v2.vercel.app',
         redirectUriPathname: '/api/github-app/oauth-callback',
         requiredCallbackUrl: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
         fallbackInstallUrl: '',
         callbackUrlConfigured: true,
+        callbackUrlUsable: true,
         missingEnv: [],
+        invalidFields: [],
+      });
+      expect(res.body).not.toContain('client-secret');
+      expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
+  it('/api/github-app/login?debug=1 marks inferred Vercel callback URL usable without explicit callback env', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'cfdd8f4457f94a121791bfc9580eaec60e8050b4',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+      GITHUB_APP_SLUG: 'shipseal-demo',
+    };
+    const res = createResponse();
+
+    try {
+      await startHandler({
+        method: 'GET',
+        url: '/api/github-app/login?debug=1',
+        headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
+      } as never, res as never);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        ok: true,
+        flow: 'oauth_authorize',
+        clientIdPresent: true,
+        clientIdLooksValid: true,
+        clientSecretPresent: true,
+        redirectUri: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
+        requiredCallbackUrl: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
+        fallbackInstallUrl: 'https://github.com/apps/shipseal-demo/installations/new',
+        callbackUrlConfigured: false,
+        callbackUrlUsable: true,
+        missingEnv: [],
+        invalidFields: [],
       });
       expect(res.body).not.toContain('client-secret');
       expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
@@ -167,7 +239,7 @@ describe('GitHub App Connect plan', () => {
       expect(res.statusCode).toBe(500);
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8');
       expect(res.body).toContain('GitHub login is not configured correctly.');
-      expect(res.body).toContain('invalid_oauth_config');
+      expect(res.body).toContain('invalid_client_id_format');
       expect(res.body).not.toContain('github.com/settings/installations');
       expect(res.body).not.toContain('github.com/apps/shipseal-demo/installations/new');
       expect(res.body).not.toContain('client-secret');
@@ -228,9 +300,12 @@ describe('GitHub App Connect plan', () => {
         flow: 'oauth_authorize',
         clientIdPresent: true,
         clientIdLooksValid: false,
+        clientSecretPresent: true,
         redirectUri: 'https://shipseal-v2.vercel.app/api/github-app/oauth-callback',
         fallbackInstallUrl: 'https://github.com/apps/shipseal-demo/installations/new',
-        errorCode: 'invalid_oauth_config',
+        callbackUrlUsable: true,
+        invalidFields: ['GITHUB_APP_CLIENT_ID'],
+        errorCode: 'invalid_client_id_format',
       });
       expect(res.body).not.toContain('client-secret');
       expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');

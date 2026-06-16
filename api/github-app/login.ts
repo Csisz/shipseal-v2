@@ -9,6 +9,7 @@ type LoginFlow = 'oauth_authorize' | 'app_install';
 type LoginErrorCode =
   | 'missing_client_id'
   | 'missing_client_secret'
+  | 'invalid_client_id_format'
   | 'invalid_oauth_config'
   | 'invalid_callback_url'
   | 'missing_install_url'
@@ -25,7 +26,10 @@ interface LoginDecision {
   fallbackInstallUrl?: string;
   clientIdPresent: boolean;
   clientIdLooksValid: boolean;
+  clientSecretPresent: boolean;
   callbackUrlConfigured: boolean;
+  callbackUrlUsable: boolean;
+  invalidFields: string[];
   missingEnv: string[];
   errorCode?: LoginErrorCode;
   message?: string;
@@ -101,6 +105,13 @@ function sendDebugError(res: ServerResponse, error: unknown) {
     sendJson(res, error.status, {
       ok: false,
       flow: 'oauth_authorize',
+      clientIdPresent: false,
+      clientIdLooksValid: false,
+      clientSecretPresent: false,
+      callbackUrlConfigured: false,
+      callbackUrlUsable: error.code !== 'invalid_callback_url',
+      missingEnv: [],
+      invalidFields: error.code === 'invalid_callback_url' ? ['GITHUB_APP_CALLBACK_URL'] : [],
       errorCode: error.code,
       message: error.message,
     });
@@ -110,6 +121,13 @@ function sendDebugError(res: ServerResponse, error: unknown) {
   sendJson(res, 500, {
     ok: false,
     flow: 'oauth_authorize',
+    clientIdPresent: false,
+    clientIdLooksValid: false,
+    clientSecretPresent: false,
+    callbackUrlConfigured: false,
+    callbackUrlUsable: false,
+    missingEnv: [],
+    invalidFields: [],
     errorCode: 'login_redirect_failed',
     message: 'GitHub login redirect could not be created.',
   });
@@ -139,8 +157,17 @@ function serverEnv(env: NodeJS.ProcessEnv = process.env) {
   return { clientId, clientSecret, callbackUrl, installUrl, slug };
 }
 
-function looksLikeGitHubClientId(clientId: string) {
-  return /^(Iv1\.[0-9a-f]{12,}|Ov23li[A-Za-z0-9_-]{10,}|[0-9a-f]{20})$/i.test(clientId);
+function clientIdInvalidReasons(clientId: string) {
+  const reasons: string[] = [];
+  if (!clientId) return reasons;
+  if (/\s/.test(clientId)) reasons.push('GITHUB_APP_CLIENT_ID');
+  if (clientId.length < 8 || clientId.length > 128) reasons.push('GITHUB_APP_CLIENT_ID');
+  if (!/^[A-Za-z0-9._-]+$/.test(clientId)) reasons.push('GITHUB_APP_CLIENT_ID');
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(clientId)) reasons.push('GITHUB_APP_CLIENT_ID');
+  if (/PRIVATE_KEY|BEGIN|END|-----|github_pat_|ghp_|gho_|ghu_|ghs_|ghr_|sk-/i.test(clientId)) {
+    reasons.push('GITHUB_APP_CLIENT_ID');
+  }
+  return Array.from(new Set(reasons));
 }
 
 function buildInstallUrl(input: { installUrl?: string; slug?: string }) {
@@ -238,14 +265,19 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
   const query = queryFromRequest(req);
   const env = serverEnv();
   const missingEnv: string[] = [];
+  const invalidFields: string[] = [];
   const clientIdPresent = !!env.clientId;
-  const clientIdLooksValid = clientIdPresent && looksLikeGitHubClientId(env.clientId);
+  const clientIdInvalid = clientIdInvalidReasons(env.clientId);
+  const clientIdLooksValid = clientIdPresent && clientIdInvalid.length === 0;
+  const clientSecretPresent = !!env.clientSecret;
   const redirectUri = resolveCallbackUrl(req, firstValue(query.redirectUri), env.callbackUrl);
   const callbackUrlConfigured = !!env.callbackUrl;
+  const callbackUrlUsable = true;
   const requiredCallbackUrl = redirectUri;
   const requestedFlow = firstValue(query.flow);
   const fallback = tryBuildInstallUrl({ installUrl: env.installUrl, slug: env.slug });
   const fallbackInstallUrl = fallback.url;
+  invalidFields.push(...clientIdInvalid);
 
   if (requestedFlow === 'install') {
     if (fallback.error) throw fallback.error;
@@ -260,7 +292,10 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
       fallbackInstallUrl,
       clientIdPresent,
       clientIdLooksValid,
+      clientSecretPresent,
       callbackUrlConfigured,
+      callbackUrlUsable,
+      invalidFields,
       missingEnv,
       errorCode: fallbackInstallUrl ? undefined : 'missing_install_url',
       message: fallbackInstallUrl
@@ -269,10 +304,10 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
     };
   }
 
-  if (!env.clientSecret) missingEnv.push('GITHUB_APP_CLIENT_SECRET');
+  if (!clientSecretPresent) missingEnv.push('GITHUB_APP_CLIENT_SECRET');
   if (!clientIdPresent) missingEnv.push('GITHUB_APP_CLIENT_ID');
 
-  if (clientIdPresent && env.clientSecret && clientIdLooksValid) {
+  if (clientIdPresent && clientSecretPresent && clientIdLooksValid) {
     const authorizeUrl = buildGitHubLoginAuthorizeUrl({
       clientId: env.clientId,
       redirectUri,
@@ -288,16 +323,21 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
       fallbackInstallUrl,
       clientIdPresent,
       clientIdLooksValid,
+      clientSecretPresent,
       callbackUrlConfigured,
+      callbackUrlUsable,
+      invalidFields,
       missingEnv,
     };
   }
 
   const errorCode: LoginErrorCode = !clientIdPresent
     ? 'missing_client_id'
-    : !env.clientSecret
+    : !clientSecretPresent
       ? 'missing_client_secret'
-      : 'invalid_oauth_config';
+      : !clientIdLooksValid
+        ? 'invalid_client_id_format'
+        : 'invalid_oauth_config';
   return {
     ok: false,
     flow: 'oauth_authorize',
@@ -306,7 +346,10 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
     fallbackInstallUrl,
     clientIdPresent,
     clientIdLooksValid,
+    clientSecretPresent,
     callbackUrlConfigured,
+    callbackUrlUsable,
+    invalidFields,
     missingEnv,
     errorCode,
     message: 'GitHub login is not configured correctly.',
@@ -321,13 +364,16 @@ function debugPayload(decision: LoginDecision) {
     authorizeUrlPath: decision.authorizeUrlPath,
     clientIdPresent: decision.clientIdPresent,
     clientIdLooksValid: decision.clientIdLooksValid,
+    clientSecretPresent: decision.clientSecretPresent,
     redirectUri: decision.redirectUri,
     redirectUriOrigin: new URL(decision.redirectUri).origin,
     redirectUriPathname: new URL(decision.redirectUri).pathname,
     requiredCallbackUrl: decision.requiredCallbackUrl,
     fallbackInstallUrl: decision.fallbackInstallUrl,
     callbackUrlConfigured: decision.callbackUrlConfigured,
+    callbackUrlUsable: decision.callbackUrlUsable,
     missingEnv: decision.missingEnv,
+    invalidFields: decision.invalidFields,
     errorCode: decision.errorCode,
     message: decision.message,
   };
