@@ -34,6 +34,36 @@ function createResponse() {
 }
 
 describe('GitHub App Connect plan', () => {
+  it('imports GitHub Connect serverless handlers with Vercel-compatible relative imports', async () => {
+    const [loginModule, callbackModule, installationsModule, repositoriesModule] = await Promise.all([
+      import('../../api/github-app/login'),
+      import('../../api/github-app/oauth-callback'),
+      import('../../api/github-app/installations'),
+      import('../../api/github-app/repositories'),
+    ]);
+
+    expect(typeof loginModule.default).toBe('function');
+    expect(typeof callbackModule.default).toBe('function');
+    expect(typeof installationsModule.default).toBe('function');
+    expect(typeof repositoriesModule.default).toBe('function');
+
+    const apiFiles = [
+      'api/create-readiness-pr.ts',
+      'api/github-app/archive.ts',
+      'api/github-app/create-readiness-pr.ts',
+      'api/github-app/installations.ts',
+      'api/github-app/oauth-callback.ts',
+      'api/github-app/repositories.ts',
+      'api/github-app/start.ts',
+      'api/_lib/githubAppAuth.ts',
+      'api/_lib/githubAppClient.ts',
+      'api/_lib/githubAppOAuth.ts',
+    ];
+    for (const file of apiFiles) {
+      expect(readFileSync(file, 'utf8')).not.toMatch(/from\s+['"]\.{1,2}\/(?![^'"]+\.js['"])[^'"]+['"]/);
+    }
+  });
+
   it('/api/github-app/start redirects to GitHub OAuth authorization', async () => {
     const originalEnv = process.env;
     process.env = {

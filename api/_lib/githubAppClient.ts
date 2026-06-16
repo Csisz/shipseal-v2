@@ -1,6 +1,6 @@
-import type { GitHubAppAuthOptions, GitHubAppRepositorySummary } from './githubAppTypes';
-import { GitHubAppApiError } from './githubAppTypes';
-import { getInstallationAccessToken } from './githubAppAuth';
+import type { GitHubAppAuthOptions, GitHubAppRepositorySummary } from './githubAppTypes.js';
+import { GitHubAppApiError } from './githubAppTypes.js';
+import { getInstallationAccessToken } from './githubAppAuth.js';
 
 export class GitHubInstallationClient {
   constructor(

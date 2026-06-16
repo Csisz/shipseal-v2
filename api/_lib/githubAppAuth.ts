@@ -1,6 +1,6 @@
 import { createSign } from 'node:crypto';
-import type { GitHubAppAuthOptions, GitHubAppServerConfig } from './githubAppTypes';
-import { GitHubAppApiError, GitHubAppNotConfiguredError } from './githubAppTypes';
+import type { GitHubAppAuthOptions, GitHubAppServerConfig } from './githubAppTypes.js';
+import { GitHubAppApiError, GitHubAppNotConfiguredError } from './githubAppTypes.js';
 
 export function normalizeGitHubAppPrivateKey(value: string) {
   return value.trim().replace(/\\n/g, '\n');

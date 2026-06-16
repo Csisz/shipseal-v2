@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../_lib/githubAppTypes';
-import { createGitHubInstallationClient } from '../_lib/githubAppClient';
+import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../_lib/githubAppTypes.js';
+import { createGitHubInstallationClient } from '../_lib/githubAppClient.js';
 
 const OWNER_REPO_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const REF_PATTERN = /^[A-Za-z0-9._/-]+$/;

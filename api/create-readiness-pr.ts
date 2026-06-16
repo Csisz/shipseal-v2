@@ -4,7 +4,7 @@ import {
   isValidationError,
   userFacingGitHubWriteError,
   validateCreateReadinessPrRequest,
-} from './_lib/githubWrite';
+} from './_lib/githubWrite.js';
 
 const MAX_BODY_BYTES = 768 * 1024;
 

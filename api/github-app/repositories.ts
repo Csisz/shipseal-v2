@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { GitHubAppAuthOptions } from '../_lib/githubAppTypes';
-import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../_lib/githubAppTypes';
-import { listGitHubAppRepositories } from '../_lib/githubAppClient';
+import type { GitHubAppAuthOptions } from '../_lib/githubAppTypes.js';
+import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../_lib/githubAppTypes.js';
+import { listGitHubAppRepositories } from '../_lib/githubAppClient.js';
 
 type QueryValue = string | string[] | undefined;
 type VercelLikeRequest = IncomingMessage & {

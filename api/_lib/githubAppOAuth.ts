@@ -1,5 +1,5 @@
-import type { GitHubAppAuthOptions, GitHubAppInstallationSummary, GitHubAppOAuthConfig } from './githubAppTypes';
-import { GitHubAppApiError, GitHubAppNotConfiguredError } from './githubAppTypes';
+import type { GitHubAppAuthOptions, GitHubAppInstallationSummary, GitHubAppOAuthConfig } from './githubAppTypes.js';
+import { GitHubAppApiError, GitHubAppNotConfiguredError } from './githubAppTypes.js';
 
 export function getGitHubAppOAuthConfig(env: NodeJS.ProcessEnv = process.env): GitHubAppOAuthConfig {
   const clientId = (env.GITHUB_APP_CLIENT_ID || '').trim();
