@@ -94,7 +94,7 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(onInstall).toHaveBeenCalledTimes(1);
   });
 
-  it('renders repository dropdown with loaded GitHub App repositories and selects a repo', () => {
+  it('renders repository dropdown with loaded GitHub App repositories and selects a repo', async () => {
     const onSelect = vi.fn();
 
     render(
@@ -117,7 +117,8 @@ describe('UploadDropzone GitHub import copy', () => {
       />
     );
 
-    fireEvent.change(screen.getByLabelText('Select repository'), { target: { value: 'Csisz/shipseal' } });
+    fireEvent.pointerDown(screen.getByLabelText('Select repository'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Csisz/shipseal' }));
 
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({
       owner: 'Csisz',

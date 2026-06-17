@@ -1,8 +1,9 @@
 import type React from 'react';
-import { useCallback, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { Github, Upload, FileArchive, X, Plug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { formatFileSize, validateZipUpload } from '@/lib/uploadValidation';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
@@ -51,6 +52,7 @@ export function UploadDropzone({
   const [error, setError] = useState<string | null>(null);
   const [githubUrl, setGithubUrl] = useState('');
   const [githubBranch, setGithubBranch] = useState('');
+  const [selectedRepositoryFullName, setSelectedRepositoryFullName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const detectedRepository = useMemo(() => {
@@ -73,6 +75,12 @@ export function UploadDropzone({
     setError(null);
     setSelected(f);
   }, []);
+
+  useEffect(() => {
+    if (selectedRepositoryFullName && !repositories.some(repository => repository.fullName === selectedRepositoryFullName)) {
+      setSelectedRepositoryFullName('');
+    }
+  }, [repositories, selectedRepositoryFullName]);
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -151,40 +159,42 @@ export function UploadDropzone({
           {githubInstallations.length > 1 && (
             <label className="mb-4 block">
               <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">GitHub account</span>
-              <select
-                aria-label="Select GitHub installation"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                value={githubInstallationId || ''}
-                onChange={event => onGitHubInstallationSelect?.(event.target.value)}
-              >
-                <option value="" disabled>Select GitHub account</option>
-                {githubInstallations.map(installation => (
-                  <option key={installation.id} value={installation.id}>
-                    {installation.accountLogin}
-                  </option>
-                ))}
-              </select>
+              <Select value={githubInstallationId || undefined} onValueChange={value => onGitHubInstallationSelect?.(value)}>
+                <SelectTrigger aria-label="Select GitHub installation" className={shipSealSelectTriggerClass}>
+                  <SelectValue placeholder="Select GitHub account" />
+                </SelectTrigger>
+                <SelectContent className={shipSealSelectContentClass}>
+                  {githubInstallations.map(installation => (
+                    <SelectItem key={installation.id} value={installation.id} className={shipSealSelectItemClass}>
+                      {installation.accountLogin}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           )}
           <label className="block">
             <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">Select repository</span>
             {repositoryListStatus === 'loaded' && repositories.length > 0 ? (
-              <select
-                aria-label="Select repository"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
-                defaultValue=""
-                onChange={event => {
-                  const repository = repositories.find(repo => repo.fullName === event.target.value);
+              <Select
+                value={selectedRepositoryFullName || undefined}
+                onValueChange={value => {
+                  setSelectedRepositoryFullName(value);
+                  const repository = repositories.find(repo => repo.fullName === value);
                   if (repository) onGitHubAppRepositorySelect?.(repository);
                 }}
               >
-                <option value="" disabled>Select repository</option>
-                {repositories.map(repository => (
-                  <option key={repository.fullName} value={repository.fullName}>
-                    {repository.fullName}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger aria-label="Select repository" className={shipSealSelectTriggerClass}>
+                  <SelectValue placeholder="Select repository" />
+                </SelectTrigger>
+                <SelectContent className={shipSealSelectContentClass}>
+                  {repositories.map(repository => (
+                    <SelectItem key={repository.fullName} value={repository.fullName} className={shipSealSelectItemClass}>
+                      {repository.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <Input aria-label="Select repository" disabled placeholder="Connect GitHub to list repositories" />
             )}
@@ -317,6 +327,21 @@ export function UploadDropzone({
     </div>
   );
 }
+
+const shipSealSelectTriggerClass = cn(
+  'h-11 rounded-xl border-primary/30 bg-secondary/35 px-4 text-sm text-foreground shadow-elegant ring-offset-0 transition-all',
+  'hover:border-primary/60 hover:bg-secondary/50 focus:ring-2 focus:ring-primary/50 focus:ring-offset-0',
+  'data-[placeholder]:text-muted-foreground',
+);
+
+const shipSealSelectContentClass = cn(
+  'max-h-80 rounded-xl border-primary/30 bg-card/95 text-foreground shadow-glow backdrop-blur-xl',
+);
+
+const shipSealSelectItemClass = cn(
+  'rounded-lg py-2.5 pr-3 text-sm text-foreground/90 focus:bg-primary/20 focus:text-foreground',
+  'data-[state=checked]:bg-primary/20 data-[state=checked]:text-primary-glow',
+);
 
 function SourceOption({
   active,
