@@ -175,6 +175,10 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
       </div>
 
       <div className="mb-8">
+        <ScanEvidencePanel report={report} />
+      </div>
+
+      <div className="mb-8">
         <DecisionSummary report={report} ready={ready} nextActions={report.aiNarrative.nextBestActions.slice(0, 3)} />
       </div>
 
@@ -318,7 +322,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
           </ul>
         )}
         <div className="mt-4 text-xs text-muted-foreground">
-          ShipSeal does not execute uploaded code. ZIP scanning stays local in your browser and reads only a bounded text subset.
+          Static scan complete: ShipSeal read repository structure and key project files without executing code. It reads metadata, key config/docs/test files, and a safe limited text subset while ignoring generated/vendor folders such as node_modules, dist, build, .next, and coverage.
         </div>
       </div>
 
@@ -452,6 +456,96 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
       <div className="mt-1 text-sm font-semibold truncate">{value}</div>
     </div>
   );
+}
+
+function ScanEvidencePanel({ report }: { report: ReadinessReport }) {
+  const evidence = report.scanEvidence;
+  const keySignals = keyFileSignals(evidence.keyFilesFound);
+  const stack = [
+    ...evidence.topFrameworks,
+    ...evidence.topLanguages.filter(language => !evidence.topFrameworks.includes(language)),
+  ].slice(0, 5);
+
+  return (
+    <div className="glass rounded-2xl p-6">
+      <div className="flex flex-wrap items-start gap-3">
+        <ShieldCheck className={evidence.limitedScan ? 'mt-1 h-5 w-5 text-warning' : 'mt-1 h-5 w-5 text-success'} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-display font-semibold">Scan evidence</h3>
+            <Badge variant="outline" className={evidence.limitedScan ? 'border-warning/60 text-warning' : 'border-success/40 text-success'}>
+              {evidence.limitedScan ? 'Limited scan' : 'Full archive scan'}
+            </Badge>
+            <Badge variant="outline" className="border-primary/40 text-primary-glow">
+              {displayEvidenceSource(evidence.sourceType)}
+            </Badge>
+          </div>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Static scan complete: ShipSeal read repository structure and key project files without executing code.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <SafetyMetric label="Repository" value={evidence.repositoryFullName} />
+        <SafetyMetric label="Branch / ref" value={evidence.branchOrRef || 'default'} />
+        <SafetyMetric label="Scanned at" value={new Date(report.scannedAt).toLocaleString()} />
+        <SafetyMetric label="Archive size" value={evidence.approximateArchiveSizeBytes ? formatFileSize(evidence.approximateArchiveSizeBytes) : 'Not reported'} />
+        <SafetyMetric label="Files discovered" value={evidence.discoveredFileCount.toLocaleString()} />
+        <SafetyMetric label="Files analyzed" value={evidence.analyzedFileCount.toLocaleString()} />
+        <SafetyMetric label="Files ignored" value={evidence.ignoredFileCount.toLocaleString()} />
+        <SafetyMetric label="Generated/vendor ignored" value={evidence.generatedOrVendorFileCount.toLocaleString()} />
+      </div>
+
+      <div className="mt-5 grid lg:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-border/60 bg-secondary/20 p-4">
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-2">Detected stack</div>
+          <div className="flex flex-wrap gap-2">
+            {(stack.length ? stack : ['Not detected']).map(item => (
+              <Badge key={item} variant="outline" className="border-border/70 bg-background/25 text-foreground">
+                {item}
+              </Badge>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-xl border border-border/60 bg-secondary/20 p-4">
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-2">Key files found</div>
+          <div className="flex flex-wrap gap-2">
+            {keySignals.map(signal => (
+              <Badge key={signal.label} variant="outline" className={signal.found ? 'border-success/40 text-success' : 'border-border/60 text-muted-foreground'}>
+                {signal.found ? 'Found' : 'Missing'}: {signal.label}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {evidence.limitedScan && evidence.limitationReason && (
+        <div className="mt-4 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning">
+          {evidence.limitationReason}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function keyFileSignals(keyFiles: ReadinessReport['scanEvidence']['keyFilesFound']) {
+  return [
+    { label: 'README', found: keyFiles.readme },
+    { label: 'package.json', found: keyFiles.packageJson },
+    { label: 'tests', found: keyFiles.tests },
+    { label: 'CI workflow', found: keyFiles.ciConfig },
+    { label: '.env example', found: keyFiles.envExample },
+    { label: '.gitignore', found: keyFiles.gitignore },
+    { label: 'AGENTS', found: keyFiles.agentInstructions },
+    { label: 'CLAUDE', found: keyFiles.claudeInstructions },
+  ];
+}
+
+function displayEvidenceSource(sourceType: ReadinessReport['scanEvidence']['sourceType']) {
+  if (sourceType === 'github-app') return 'GitHub App';
+  if (sourceType === 'public-github') return 'Public GitHub';
+  return 'ZIP upload';
 }
 
 function Disclosure({ title, children, defaultOpen = false }: { title: string; children: React.ReactNode; defaultOpen?: boolean }) {

@@ -69,6 +69,7 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
     categories: report.categories,
     detectedStack: report.stack,
     scanSummary: report.scanSummary,
+    scanEvidence: report.scanEvidence,
     aiNarrative: report.aiNarrative,
     repoContextPack: {
       repositoryName: report.repoContextPack.repositoryName,

@@ -1,4 +1,4 @@
-import type { ReadinessReport, RepoScanInput } from './types';
+import type { ReadinessReport, RepoFileSummary, RepoScanInput, ScanEvidence, ScanSummary } from './types';
 import { detectStack } from './stack';
 import { evaluateReadiness, scoreRepo } from './scoring';
 import { buildAgentPack } from './agentPack';
@@ -56,6 +56,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     binaryFilesIgnored: input.files.filter(f => !f.isDir && !isGeneratedOrVendorPath(f.path) && isBinaryLikePath(f.path)).length,
     readableTextBytesAnalyzed: Object.values(input.textContents).reduce((total, text) => total + text.length, 0),
   };
+  const scanEvidence = buildScanEvidence(input, stack, scanSummary);
   const baseMcpReadiness = buildMCPReadinessReport(input, {
     stack,
     summary,
@@ -90,6 +91,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     blockers: scoring.blockers,
     improvements: scoring.improvements,
     scanSummary,
+    scanEvidence,
     mcpReadiness,
   });
   const repoContextPack = buildRepoContextPack(input, stack, {
@@ -111,6 +113,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     blockers: scoring.blockers,
     improvements: scoring.improvements,
     scanSummary,
+    scanEvidence,
     mcpReadiness,
     readinessNarrative: aiNarrative,
     mcpNarrative,
@@ -146,8 +149,63 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     aiAgentInstructions,
     mcpReadiness,
     scanSummary,
+    scanEvidence,
     sampleFiles: input.files.filter(f => !f.isDir && !f.ignored && !isGeneratedOrVendorPath(f.path) && !isBinaryLikePath(f.path)).slice(0, 30),
   };
+}
+
+function buildScanEvidence(input: RepoScanInput, stack: ReturnType<typeof detectStack>, scanSummary: ScanSummary): ScanEvidence {
+  return {
+    sourceType: evidenceSourceType(input),
+    repositoryFullName: repositoryFullName(input),
+    branchOrRef: input.source?.githubBranch || input.source?.githubDefaultBranch,
+    discoveredFileCount: scanSummary.totalFilesFound,
+    analyzedFileCount: scanSummary.filesAnalyzed,
+    ignoredFileCount: scanSummary.filesIgnored,
+    generatedOrVendorFileCount: scanSummary.generatedVendorFilesIgnored,
+    totalReadableBytes: scanSummary.readableTextBytesAnalyzed,
+    approximateArchiveSizeBytes: scanSummary.archiveDiagnostics?.fileSizeBytes,
+    topLanguages: stack.languages.slice(0, 4),
+    topFrameworks: stack.frameworks.slice(0, 4),
+    keyFilesFound: keyFilesFound(input.files),
+    warningCount: scanSummary.warnings.length,
+    limitedScan: scanSummary.limited || scanSummary.scanMode === 'limited-fallback',
+    ...(scanSummary.limited || scanSummary.scanMode === 'limited-fallback'
+      ? { limitationReason: scanSummary.limitationReason || scanSummary.warnings[0] || 'Repository scan was limited.' }
+      : {}),
+  };
+}
+
+function evidenceSourceType(input: RepoScanInput): ScanEvidence['sourceType'] {
+  if (input.source?.githubInstallationId) return 'github-app';
+  if (input.source?.sourceType === 'github-url' || input.source?.sourceType === 'github-public') return 'public-github';
+  return 'zip';
+}
+
+function repositoryFullName(input: RepoScanInput) {
+  if (input.source?.githubOwner && input.source.githubRepo) {
+    return `${input.source.githubOwner}/${input.source.githubRepo}`;
+  }
+  return input.repoName;
+}
+
+function keyFilesFound(files: RepoFileSummary[]): ScanEvidence['keyFilesFound'] {
+  const paths = new Set(files.map(file => normalizeEvidencePath(file.path)));
+  const hasPath = (pattern: RegExp) => [...paths].some(path => pattern.test(path));
+  return {
+    readme: hasPath(/(^|\/)readme(\.md)?$/i),
+    packageJson: paths.has('package.json') || hasPath(/(^|\/)package\.json$/i),
+    tests: hasPath(/(^|\/)(tests?|__tests__)\/|(\.|-)(test|spec)\.[cm]?[jt]sx?$/i),
+    ciConfig: hasPath(/(^|\/)\.github\/workflows\/[^/]+\.(ya?ml)$/i),
+    envExample: hasPath(/(^|\/)\.env(\.[^./]+)?\.example$|(^|\/)\.env\.example$/i),
+    gitignore: hasPath(/(^|\/)\.gitignore$/i),
+    agentInstructions: hasPath(/(^|\/)(agents\.md|\.cursorrules|\.cursor\/rules(\/|$))/i),
+    claudeInstructions: hasPath(/(^|\/)claude\.md$/i),
+  };
+}
+
+function normalizeEvidencePath(path: string) {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
 }
 
 // Sample report for "View sample report" button

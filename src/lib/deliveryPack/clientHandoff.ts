@@ -17,6 +17,15 @@ interface HandoffScoreSummary {
   generatedFiles: string[];
   scanLimited: boolean;
   scanWarnings: string[];
+  scanEvidence: {
+    sourceType: string;
+    repositoryFullName: string;
+    branchOrRef: string;
+    discoveredFileCount: string;
+    analyzedFileCount: string;
+    ignoredFileCount: string;
+    keyFileSignals: string[];
+  };
   mcpStatus: string;
   mcpScore: string;
   aiActSummary: string;
@@ -67,6 +76,9 @@ function renderClientHandoffReport(
     '## ShipSeal readiness snapshot',
     `- Repository scanned: ${summary.repositoryName}`,
     `- Scan coverage: ${summary.scanLimited ? 'Limited scan' : 'Full scan'}`,
+    `- Scan source: ${summary.scanEvidence.sourceType}`,
+    `- Branch/ref: ${summary.scanEvidence.branchOrRef}`,
+    `- Files discovered/analyzed/ignored: ${summary.scanEvidence.discoveredFileCount} / ${summary.scanEvidence.analyzedFileCount} / ${summary.scanEvidence.ignoredFileCount}`,
     `- Score: ${summary.score}`,
     `- Readiness status: ${summary.status}`,
     `- Critical delivery risks detected: ${summary.criticalBlockers.length}`,
@@ -79,6 +91,13 @@ function renderClientHandoffReport(
       ...asBullets(summary.scanWarnings),
       '',
     ] : []),
+    '## Scan evidence',
+    `- Source archive: ${summary.scanEvidence.sourceType}`,
+    `- Repository/ref: ${summary.scanEvidence.repositoryFullName} @ ${summary.scanEvidence.branchOrRef}`,
+    `- File coverage: ${summary.scanEvidence.analyzedFileCount} analyzed out of ${summary.scanEvidence.discoveredFileCount} discovered files.`,
+    '- Static scan only: ShipSeal read repository structure and key project files without executing code.',
+    ...asBullets(summary.scanEvidence.keyFileSignals),
+    '',
     '## What looks ready',
     ...asBullets(strengths),
     '',
@@ -215,6 +234,7 @@ function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): 
   const mcp = asRecord(source.mcpReadiness);
   const repoContext = asRecord(source.repoContextPack);
   const scanSummary = asRecord(source.scanSummary);
+  const scanEvidence = asRecord(source.scanEvidence);
 
   return {
     repositoryName: stringValue(source.repositoryName) || fallbackRepositoryName || 'Not provided',
@@ -227,6 +247,15 @@ function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): 
     generatedFiles: arrayValue(source.generatedFiles).map(value => String(value)),
     scanLimited: scanSummary.limited === true || stringValue(scanSummary.scanMode) === 'limited-fallback',
     scanWarnings: arrayValue(scanSummary.warnings).map(value => String(value)),
+    scanEvidence: {
+      sourceType: displayEvidenceSource(stringValue(scanEvidence.sourceType)),
+      repositoryFullName: stringValue(scanEvidence.repositoryFullName) || stringValue(source.repositoryName) || fallbackRepositoryName || 'Not provided',
+      branchOrRef: stringValue(scanEvidence.branchOrRef) || 'default',
+      discoveredFileCount: numberString(scanEvidence.discoveredFileCount),
+      analyzedFileCount: numberString(scanEvidence.analyzedFileCount),
+      ignoredFileCount: numberString(scanEvidence.ignoredFileCount),
+      keyFileSignals: keyFileSignals(asRecord(scanEvidence.keyFilesFound)),
+    },
     mcpStatus: stringValue(mcp.status) || stringValue(repoContext.mcpStatus) || 'Not detected',
     mcpScore: typeof mcp.score === 'number' ? `${mcp.score}/100` : 'Not detected',
     aiActSummary: 'Pre-screen only. Review AI Act, transparency, privacy, and human oversight notes with qualified reviewers.',
@@ -240,9 +269,36 @@ function topStrengths(summary: HandoffScoreSummary) {
     .map(category => `${stringValue(category.name) || 'Readiness area'} has a strong signal in the scan (${category.earned}/${category.max}).`);
 
   if (summary.generatedFiles.length) strengths.push(`The ShipSeal Delivery Pack includes ${summary.generatedFiles.length} manifest outputs for review and handoff.`);
+  strengths.push(...summary.scanEvidence.keyFileSignals.slice(0, 4));
   if (summary.isReady === true) strengths.push('The scan did not report critical handoff blockers.');
 
   return strengths.length ? strengths : ['Not detected'];
+}
+
+function keyFileSignals(keyFiles: Record<string, unknown>) {
+  const signals = [
+    keyFiles.readme === true ? 'README found.' : '',
+    keyFiles.packageJson === true ? 'package.json found.' : '',
+    keyFiles.tests === true ? 'Test files found.' : '',
+    keyFiles.ciConfig === true ? 'CI workflow found.' : '',
+    keyFiles.envExample === true ? '.env example found.' : '',
+    keyFiles.gitignore === true ? '.gitignore found.' : '',
+    keyFiles.agentInstructions === true ? 'Agent instruction files found.' : '',
+    keyFiles.claudeInstructions === true ? 'CLAUDE.md found.' : '',
+  ].filter(Boolean);
+
+  return signals.length ? signals : ['No key project files were confirmed in the scan evidence.'];
+}
+
+function displayEvidenceSource(sourceType?: string) {
+  if (sourceType === 'github-app') return 'GitHub App';
+  if (sourceType === 'public-github') return 'Public GitHub';
+  if (sourceType === 'zip') return 'ZIP upload';
+  return 'Not provided';
+}
+
+function numberString(value: unknown) {
+  return typeof value === 'number' ? value.toLocaleString() : 'Not provided';
 }
 
 function topRisks(summary: HandoffScoreSummary, intake: ProjectIntake) {

@@ -10,6 +10,7 @@ import {
   importPublicGitHubRepo,
 } from '@/lib/github/githubImport';
 import { LocalScanEngine } from '@/lib/scanEngine';
+import { buildScoreJson } from '@/lib/exports';
 import type { ScanSourceMetadata } from '@/lib/types';
 import JSZip from 'jszip';
 
@@ -254,7 +255,75 @@ describe('public GitHub import helpers', () => {
     expect(report.fileCount).toBeGreaterThan(0);
     expect(report.repoContextPack.scripts).toMatchObject({ test: 'vitest', build: 'vite build' });
     expect(report.scanSummary.limited).toBe(false);
+    expect(report.scanEvidence).toMatchObject({
+      sourceType: 'github-app',
+      repositoryFullName: 'Csisz/shipseal',
+      branchOrRef: 'main',
+      limitedScan: false,
+      keyFilesFound: expect.objectContaining({
+        readme: true,
+        packageJson: true,
+      }),
+    });
     expect(report.blockers.map(blocker => blocker.id)).not.toContain('limited-scan');
+  });
+
+  it('marks a GitHub App archive parse failure as a limited scan with reason', async () => {
+    const file = new File(['not a zip archive'], 'Csisz-shipseal-v2-main.zip', { type: 'application/zip' });
+    const report = await new LocalScanEngine().scan({
+      file,
+      mode: 'github-public',
+      source: {
+        sourceType: 'github-url',
+        githubOwner: 'Csisz',
+        githubRepo: 'shipseal-v2',
+        githubBranch: 'main',
+        githubInstallationId: '12345',
+      },
+    });
+
+    expect(report.repoName).toBe('Csisz/shipseal-v2');
+    expect(report.scanSummary.limited).toBe(true);
+    expect(report.scanSummary.scanMode).toBe('limited-fallback');
+    expect(report.scanSummary.limitationReason).toBe('ZIP parsing failed before repository contents could be fully analyzed.');
+    expect(report.scanEvidence).toMatchObject({
+      sourceType: 'github-app',
+      repositoryFullName: 'Csisz/shipseal-v2',
+      branchOrRef: 'main',
+      limitedScan: true,
+      limitationReason: 'ZIP parsing failed before repository contents could be fully analyzed.',
+    });
+    expect(report.blockers.map(blocker => blocker.id)).toContain('limited-scan');
+  });
+
+  it('exports score.json evidence using actual GitHub App repository name and file counts', async () => {
+    const file = await demoZipFile();
+    const headers = new Headers({ 'content-length': String(file.size), 'content-type': 'application/zip' });
+    const fetchMock = vi.fn(async () => zipResponse(file, headers));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const imported = await importGitHubAppRepoArchive({
+      installationId: '12345',
+      owner: 'Csisz',
+      repo: 'shipseal',
+      ref: 'main',
+    });
+    const report = await new LocalScanEngine().scan({
+      file: imported.file,
+      mode: 'github-public',
+      source: imported.source,
+    });
+    const scoreJson = buildScoreJson(report);
+
+    expect(scoreJson.repositoryName).toBe('Csisz/shipseal');
+    expect(scoreJson.scanSummary.totalFilesFound).toBe(report.scanSummary.totalFilesFound);
+    expect(scoreJson.scanEvidence).toMatchObject({
+      sourceType: 'github-app',
+      repositoryFullName: 'Csisz/shipseal',
+      discoveredFileCount: report.scanSummary.totalFilesFound,
+      analyzedFileCount: report.scanSummary.filesAnalyzed,
+      limitedScan: false,
+    });
   });
 
   it('returns a friendly error when a selected GitHub App archive cannot be downloaded', async () => {

@@ -257,6 +257,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
         <h2>Executive summary</h2>
         <p>${escapeHtml(summary.projectName)} was reviewed with ShipSeal to prepare an AI project handoff package. The report summarizes readiness score, client-facing risks, AI Act readiness signals, testing coverage, MCP governance, and next steps.</p>
         <p class="muted">${escapeHtml(summary.scanSummary)}</p>
+        <p class="muted">${escapeHtml(summary.scanEvidenceSummary)}</p>
         ${summary.scanLimited ? `<p class="warning">${escapeHtml(summary.scanWarning)}</p>` : ''}
       </section>
 
@@ -359,6 +360,7 @@ function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
     goNoGo,
     repositoryName: stringValue(score.repositoryName) || intake.projectName || 'Not detected',
     scanSummary: scanSummaryText(score.scanSummary),
+    scanEvidenceSummary: scanEvidenceText(score.scanEvidence),
     scanLimited: isLimitedScan(score.scanSummary),
     scanWarning: limitedScanWarning(score.scanSummary),
     strengths: strengthsFromScore(score),
@@ -377,6 +379,8 @@ function scoreSource(scoreJson: unknown): Record<string, unknown> {
 
 function strengthsFromScore(score: Record<string, unknown>) {
   const categories = arrayValue(score.categories).map(asRecord);
+  const evidence = asRecord(score.scanEvidence);
+  const keyFiles = asRecord(evidence.keyFilesFound);
   const strengths = categories
     .filter(category => numeric(category.earned) >= numeric(category.max) * 0.7 && numeric(category.max) > 0)
     .slice(0, 4)
@@ -385,6 +389,11 @@ function strengthsFromScore(score: Record<string, unknown>) {
   if (arrayValue(score.generatedFiles).length) {
     strengths.push(`ShipSeal Delivery Pack manifest outputs detected: ${arrayValue(score.generatedFiles).length}.`);
   }
+  if (keyFiles.readme === true) strengths.push('README found in the scanned repository.');
+  if (keyFiles.packageJson === true) strengths.push('package.json found with project metadata and scripts.');
+  if (keyFiles.ciConfig === true) strengths.push('CI workflow configuration found.');
+  if (keyFiles.tests === true) strengths.push('Test files found.');
+  if (keyFiles.gitignore === true) strengths.push('.gitignore found for generated or local files.');
 
   return strengths.length ? strengths : ['No major strengths detected from available data.'];
 }
@@ -453,6 +462,17 @@ function scanSummaryText(scanSummaryValue: unknown) {
   }
 
   return 'Scan summary was not provided.';
+}
+
+function scanEvidenceText(scanEvidenceValue: unknown) {
+  const evidence = asRecord(scanEvidenceValue);
+  const source = stringValue(evidence.sourceType) || 'unknown source';
+  const repository = stringValue(evidence.repositoryFullName) || 'unknown repository';
+  const branch = stringValue(evidence.branchOrRef) || 'default ref';
+  const discovered = typeof evidence.discoveredFileCount === 'number' ? evidence.discoveredFileCount : 'unknown';
+  const analyzed = typeof evidence.analyzedFileCount === 'number' ? evidence.analyzedFileCount : 'unknown';
+  const warnings = typeof evidence.warningCount === 'number' ? evidence.warningCount : 0;
+  return `Scan evidence: ${source} archive for ${repository} @ ${branch}; ${analyzed} analyzed files out of ${discovered} discovered files; warnings: ${warnings}. ShipSeal did not execute repository code.`;
 }
 
 function isLimitedScan(scanSummaryValue: unknown) {

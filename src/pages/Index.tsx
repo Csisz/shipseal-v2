@@ -398,6 +398,22 @@ const Index = () => {
             />
           </Suspense>
         </main>
+      ) : isScanning ? (
+        <main className="min-h-screen pt-28 pb-16">
+          <div className="container">
+            <ScanProgress
+              steps={scan.steps}
+              currentStepIndex={scan.currentStepIndex}
+              progress={scan.progress}
+              warnings={scan.warnings}
+              repositoryLabel={scan.activeRepositoryLabel}
+              sourceLabel={scan.activeScanSourceLabel}
+              discoveredFileCount={scan.discoveredFileCount}
+              analyzedFileCount={scan.analyzedFileCount}
+              onCancel={scan.cancelScan}
+            />
+          </div>
+        </main>
       ) : (
         <main>
           <Landing
@@ -406,15 +422,7 @@ const Index = () => {
             onPickPackage={handlePickPackage}
             scanSlot={
               <div id="scan" ref={scanSectionRef} className="scroll-mt-28">
-                {isScanning ? (
-                  <ScanProgress
-                    steps={scan.steps}
-                    currentStepIndex={scan.currentStepIndex}
-                    progress={scan.progress}
-                    warnings={scan.warnings}
-                    onCancel={scan.cancelScan}
-                  />
-                ) : pendingSource ? (
+                {pendingSource ? (
                   <ProjectContextStep
                     sourceType={pendingSource.type === 'zip' ? 'ZIP upload' : pendingSource.type === 'github-app' ? 'Connected GitHub repository' : 'Public GitHub repository'}
                     sourceLabel={pendingSource.type === 'zip' ? pendingSource.file.name : pendingSource.url}

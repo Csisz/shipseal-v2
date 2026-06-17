@@ -9,6 +9,7 @@ import type {
   ReadinessLevel,
   RepoContextPackSummary,
   RepositorySummary,
+  ScanEvidence,
   ScanSummary,
   ScoreCategory,
 } from '../types';
@@ -30,6 +31,7 @@ export interface ReadinessNarrativeInput {
   blockers: CriticalBlocker[];
   improvements: Improvement[];
   scanSummary: ScanSummary;
+  scanEvidence?: ScanEvidence;
   mcpReadiness: Pick<MCPReadinessReport, 'score' | 'status' | 'summary' | 'riskFindings' | 'recommendedServerCategories'>;
 }
 

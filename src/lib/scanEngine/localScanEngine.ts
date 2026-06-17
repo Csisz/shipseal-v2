@@ -59,6 +59,7 @@ export class LocalScanEngine implements ScanEngine {
           if (input.source?.githubOwner && input.source.githubRepo) {
             scanInput.repoName = `${input.source.githubOwner}/${input.source.githubRepo}`;
           }
+          if (scanInput.scanSummary) callbacks.onScanSummary?.(scanInput.scanSummary);
         } catch (error) {
           if (error instanceof ScannerValidationError) {
             throw error;
@@ -73,6 +74,7 @@ export class LocalScanEngine implements ScanEngine {
           if (input.source?.githubOwner && input.source.githubRepo) {
             scanInput.repoName = `${input.source.githubOwner}/${input.source.githubRepo}`;
           }
+          if (scanInput.scanSummary) callbacks.onScanSummary?.(scanInput.scanSummary);
         }
       });
 

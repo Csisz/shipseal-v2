@@ -35,6 +35,25 @@ function priorityImprovements(improvements: Improvement[]) {
     .map(improvement => `${improvement.title} (${improvement.category})`);
 }
 
+function evidenceSignals(input: ReadinessNarrativeInput) {
+  const keyFiles = input.scanEvidence?.keyFilesFound;
+  const signals = [
+    keyFiles?.readme ? 'README found' : '',
+    keyFiles?.packageJson ? 'package.json found' : '',
+    Object.keys(input.stack.scripts).length ? `package scripts found (${Object.keys(input.stack.scripts).slice(0, 4).join(', ')})` : '',
+    keyFiles?.ciConfig ? 'CI workflow found' : '',
+    keyFiles?.tests ? 'test files found' : '',
+    keyFiles?.envExample ? '.env example found' : '.env example missing',
+    keyFiles?.gitignore ? '.gitignore found' : '',
+    keyFiles?.agentInstructions ? 'agent instructions found' : '',
+    input.scanSummary.ignoredGeneratedFolders.includes('node_modules') || input.scanSummary.ignoredGeneratedFolders.includes('dist') || input.scanSummary.ignoredGeneratedFolders.includes('build')
+      ? `.gitignore/generated-folder hygiene signal from ignored folders (${input.scanSummary.ignoredGeneratedFolders.slice(0, 4).join(', ')})`
+      : '',
+  ].filter(Boolean);
+
+  return signals.length ? signals.join('; ') : 'no concrete key-file signals were found in the readable subset';
+}
+
 export class LocalAIProvider implements AIProvider {
   async generateReadinessNarrative(input: ReadinessNarrativeInput): Promise<GeneratedReadinessNarrative> {
     return this.generateReadinessNarrativeSync(input);
@@ -54,13 +73,14 @@ export class LocalAIProvider implements AIProvider {
     const languages = list(input.stack.languages, 'unknown languages');
     const commands = commandList(input);
     const strongSignals = strongestCategories(input.categories);
+    const concreteSignals = evidenceSignals(input);
     const topBlockers = input.blockers.slice(0, 3).map(blocker => blocker.title);
     const improvements = priorityImprovements(input.improvements);
 
     if (input.isReady) {
       return {
         executiveSummary: `${input.repositoryName} is AI Coding Ready at ${input.score}/100. ShipSeal found a usable ${stack} shape, ${languages}, ${frameworks}, and enough verification context for coding agents to work from repository metadata without executing uploaded code.`,
-        readinessExplanation: `The ready status comes from deterministic checks: score >= 85 and zero critical blockers. Strongest signals: ${strongSignals.join('; ') || 'balanced scoring across the readiness categories'}. Suggested commands include ${commands}. MCP Readiness is tracked separately as ${input.mcpReadiness.status} (${input.mcpReadiness.score}/100), so governance work can continue without weakening the main ready state.`,
+        readinessExplanation: `The ready status comes from deterministic checks: score >= 85 and zero critical blockers. Concrete scan signals: ${concreteSignals}. Strongest scoring areas: ${strongSignals.join('; ') || 'balanced scoring across the readiness categories'}. Suggested commands include ${commands}. MCP Readiness is tracked separately as ${input.mcpReadiness.status} (${input.mcpReadiness.score}/100), so governance work can continue without weakening the main ready state.`,
         blockerExplanation: 'No critical blockers were detected. Remaining work is optional improvement work, not a readiness gate.',
         improvementPriorities: improvements.length ? improvements : ['Keep generated ShipSeal instructions current as the repository changes.'],
         nextBestActions: [
@@ -79,7 +99,7 @@ export class LocalAIProvider implements AIProvider {
 
     return {
       executiveSummary: `${input.repositoryName} is not AI Coding Ready yet (${input.score}/100, ${displayReadinessLevel(input.level)}). The local scan found ${stack} signals, but readiness is blocked by ${blockerText}.`,
-      readinessExplanation: `ShipSeal will only mark the repository ready when the deterministic score is at least 85 and criticalBlockers.length is 0. Detected context: ${languages}; frameworks: ${frameworks}; commands: ${commands}. Uploaded code was not executed during this scan.`,
+      readinessExplanation: `ShipSeal will only mark the repository ready when the deterministic score is at least 85 and criticalBlockers.length is 0. Detected context: ${languages}; frameworks: ${frameworks}; commands: ${commands}. Concrete scan signals: ${concreteSignals}. Uploaded code was not executed during this scan.`,
       blockerExplanation: input.blockers.length
         ? `Minimum path to readiness: ${input.blockers.map(blocker => `${blocker.title} - ${blocker.detail}`).join(' ')}`
         : 'There are no critical blockers, but the deterministic score is still below the readiness threshold.',

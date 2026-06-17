@@ -1,8 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
-import { GITHUB_PUBLIC_SCAN_STEPS, localScanEngine, ScanCancelledError, SCAN_ENGINE_STEPS } from '@/lib/scanEngine';
+import { GITHUB_APP_SCAN_STEPS, GITHUB_PUBLIC_SCAN_STEPS, localScanEngine, ScanCancelledError, SCAN_ENGINE_STEPS } from '@/lib/scanEngine';
 import { GitHubImportError, importGitHubAppRepoArchive, importPublicGitHubRepo } from '@/lib/github/githubImport';
 import type { GitHubImportErrorCategory } from '@/lib/github/types';
-import type { ReadinessReport, ScanSourceMetadata } from '@/lib/types';
+import type { ReadinessReport, ScanSourceMetadata, ScanSummary } from '@/lib/types';
 
 export type RepoScanStatus = 'idle' | 'scanning' | 'completed' | 'failed' | 'cancelled';
 
@@ -17,7 +17,13 @@ export interface RepoScanState {
   errorCategory: GitHubImportErrorCategory | null;
   report: ReadinessReport | null;
   steps: readonly string[];
+  activeRepositoryLabel: string | null;
+  activeScanSourceLabel: string | null;
+  discoveredFileCount: number | null;
+  analyzedFileCount: number | null;
 }
+
+const MIN_SCAN_VISIBLE_MS = 900;
 
 const initialState: RepoScanState = {
   selectedFile: null,
@@ -30,7 +36,25 @@ const initialState: RepoScanState = {
   errorCategory: null,
   report: null,
   steps: SCAN_ENGINE_STEPS,
+  activeRepositoryLabel: null,
+  activeScanSourceLabel: null,
+  discoveredFileCount: null,
+  analyzedFileCount: null,
 };
+
+function applyScanSummary(summary: ScanSummary) {
+  return {
+    discoveredFileCount: summary.totalFilesFound,
+    analyzedFileCount: summary.filesAnalyzed,
+  };
+}
+
+async function waitForMinimumVisibleDuration(startedAt: number) {
+  const remaining = MIN_SCAN_VISIBLE_MS - (Date.now() - startedAt);
+  if (remaining > 0) {
+    await new Promise(resolve => window.setTimeout(resolve, remaining));
+  }
+}
 
 export function useRepoScan() {
   const [state, setState] = useState<RepoScanState>(initialState);
@@ -60,6 +84,7 @@ export function useRepoScan() {
   }, []);
 
   const startScan = useCallback(async (file: File) => {
+    const startedAt = Date.now();
     const token = scanTokenRef.current + 1;
     scanTokenRef.current = token;
     const controller = new AbortController();
@@ -71,6 +96,8 @@ export function useRepoScan() {
       status: 'scanning',
       currentStep: SCAN_ENGINE_STEPS[0],
       steps: SCAN_ENGINE_STEPS,
+      activeRepositoryLabel: file.name.replace(/\.zip$/i, '') || file.name,
+      activeScanSourceLabel: 'ZIP upload',
     });
 
     try {
@@ -89,9 +116,15 @@ export function useRepoScan() {
             if (scanTokenRef.current !== token) return;
             setState(current => ({ ...current, warnings: [...current.warnings, warning] }));
           },
+          onScanSummary: summary => {
+            if (scanTokenRef.current !== token) return;
+            setState(current => ({ ...current, ...applyScanSummary(summary) }));
+          },
         }
       );
 
+      if (scanTokenRef.current !== token || controller.signal.aborted) return null;
+      await waitForMinimumVisibleDuration(startedAt);
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({
         ...current,
@@ -120,6 +153,7 @@ export function useRepoScan() {
   }, []);
 
   const startGitHubScan = useCallback(async (url: string, branch?: string, sourceOverride: Partial<ScanSourceMetadata> = {}) => {
+    const startedAt = Date.now();
     const token = scanTokenRef.current + 1;
     scanTokenRef.current = token;
     const controller = new AbortController();
@@ -130,6 +164,8 @@ export function useRepoScan() {
       status: 'scanning',
       currentStep: GITHUB_PUBLIC_SCAN_STEPS[0],
       steps: GITHUB_PUBLIC_SCAN_STEPS,
+      activeRepositoryLabel: url,
+      activeScanSourceLabel: 'Public GitHub',
     });
 
     try {
@@ -150,7 +186,7 @@ export function useRepoScan() {
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({ ...current, selectedFile: imported.file }));
 
-      const localToGitHubStepIndex = [2, 3, 4, 4, 5, 6, 7];
+      const localToGitHubStepIndex = [2, 3, 4, 4, 4, 5, 5];
       const report = await localScanEngine.scan(
         { file: imported.file, mode: 'github-public', source: { ...imported.source, ...sourceOverride }, signal: controller.signal },
         {
@@ -171,9 +207,15 @@ export function useRepoScan() {
             if (scanTokenRef.current !== token) return;
             setState(current => ({ ...current, warnings: [...current.warnings, warning] }));
           },
+          onScanSummary: summary => {
+            if (scanTokenRef.current !== token) return;
+            setState(current => ({ ...current, ...applyScanSummary(summary) }));
+          },
         }
       );
 
+      if (scanTokenRef.current !== token || controller.signal.aborted) return null;
+      await waitForMinimumVisibleDuration(startedAt);
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({
         ...current,
@@ -209,6 +251,7 @@ export function useRepoScan() {
   }, []);
 
   const startGitHubAppScan = useCallback(async (input: { installationId: string; owner: string; repo: string; ref?: string }) => {
+    const startedAt = Date.now();
     const token = scanTokenRef.current + 1;
     scanTokenRef.current = token;
     const controller = new AbortController();
@@ -217,11 +260,14 @@ export function useRepoScan() {
     setState({
       ...initialState,
       status: 'scanning',
-      currentStep: GITHUB_PUBLIC_SCAN_STEPS[0],
-      steps: GITHUB_PUBLIC_SCAN_STEPS,
+      currentStep: GITHUB_APP_SCAN_STEPS[0],
+      steps: GITHUB_APP_SCAN_STEPS,
+      activeRepositoryLabel: `${input.owner}/${input.repo}`,
+      activeScanSourceLabel: 'GitHub App',
     });
 
     try {
+      setState(current => ({ ...current, currentStep: GITHUB_APP_SCAN_STEPS[1], currentStepIndex: 1, progress: 12 }));
       const imported = await importGitHubAppRepoArchive(input);
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({ ...current, selectedFile: imported.file, progress: 30 }));
@@ -231,10 +277,10 @@ export function useRepoScan() {
         {
           onStepStart: (step, index) => {
             if (scanTokenRef.current !== token) return;
-            const adjustedIndex = [2, 3, 4, 4, 5, 6, 7][index] ?? GITHUB_PUBLIC_SCAN_STEPS.length - 1;
+            const adjustedIndex = [2, 3, 4, 4, 4, 5, 5][index] ?? GITHUB_APP_SCAN_STEPS.length - 1;
             setState(current => ({
               ...current,
-              currentStep: GITHUB_PUBLIC_SCAN_STEPS[adjustedIndex] || step,
+              currentStep: GITHUB_APP_SCAN_STEPS[adjustedIndex] || step,
               currentStepIndex: adjustedIndex,
             }));
           },
@@ -246,15 +292,21 @@ export function useRepoScan() {
             if (scanTokenRef.current !== token) return;
             setState(current => ({ ...current, warnings: [...current.warnings, warning] }));
           },
+          onScanSummary: summary => {
+            if (scanTokenRef.current !== token) return;
+            setState(current => ({ ...current, ...applyScanSummary(summary) }));
+          },
         }
       );
 
+      if (scanTokenRef.current !== token || controller.signal.aborted) return null;
+      await waitForMinimumVisibleDuration(startedAt);
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({
         ...current,
         status: 'completed',
         currentStep: null,
-        currentStepIndex: GITHUB_PUBLIC_SCAN_STEPS.length,
+        currentStepIndex: GITHUB_APP_SCAN_STEPS.length,
         progress: 100,
         report,
       }));

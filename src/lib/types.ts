@@ -136,6 +136,35 @@ export interface ScanSourceMetadata {
   archiveDiagnostics?: Partial<ScanSummary['archiveDiagnostics']>;
 }
 
+export type ScanEvidenceSourceType = 'github-app' | 'public-github' | 'zip';
+
+export interface ScanEvidence {
+  sourceType: ScanEvidenceSourceType;
+  repositoryFullName: string;
+  branchOrRef?: string;
+  discoveredFileCount: number;
+  analyzedFileCount: number;
+  ignoredFileCount: number;
+  generatedOrVendorFileCount: number;
+  totalReadableBytes: number;
+  approximateArchiveSizeBytes?: number;
+  topLanguages: string[];
+  topFrameworks: string[];
+  keyFilesFound: {
+    readme: boolean;
+    packageJson: boolean;
+    tests: boolean;
+    ciConfig: boolean;
+    envExample: boolean;
+    gitignore: boolean;
+    agentInstructions: boolean;
+    claudeInstructions: boolean;
+  };
+  warningCount: number;
+  limitedScan: boolean;
+  limitationReason?: string;
+}
+
 export interface ScoreItem {
   id: string;
   label: string;
@@ -246,6 +275,7 @@ export interface ReadinessReport {
   aiAgentInstructions: GeneratedAgentInstructions;
   mcpReadiness: MCPReadinessReport;
   scanSummary: ScanSummary;
+  scanEvidence: ScanEvidence;
   sampleFiles: RepoFileSummary[];
 }
 
@@ -271,6 +301,7 @@ export interface ScoreJsonExport {
   categories: ScoreCategory[];
   detectedStack: DetectedStack;
   scanSummary: ScanSummary;
+  scanEvidence: ScanEvidence;
   aiNarrative: GeneratedReadinessNarrative;
   repoContextPack: {
     repositoryName: string;
