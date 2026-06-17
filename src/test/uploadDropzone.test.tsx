@@ -117,8 +117,8 @@ describe('UploadDropzone GitHub import copy', () => {
       />
     );
 
-    fireEvent.pointerDown(screen.getByLabelText('Select repository'));
-    fireEvent.click(await screen.findByRole('option', { name: 'Csisz/shipseal' }));
+    fireEvent.pointerDown(screen.getByLabelText('Select repository'), { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByText('Csisz/shipseal'));
 
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({
       owner: 'Csisz',
