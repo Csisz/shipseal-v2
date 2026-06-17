@@ -7,6 +7,39 @@ describe('UploadDropzone GitHub import copy', () => {
     vi.restoreAllMocks();
   });
 
+  const mockPointerCaptureForRadixSelect = () => {
+    if (!window.PointerEvent) {
+      class MockPointerEvent extends MouseEvent {
+        pointerId: number;
+        pointerType: string;
+
+        constructor(type: string, params: PointerEventInit = {}) {
+          super(type, params);
+          this.pointerId = params.pointerId ?? 1;
+          this.pointerType = params.pointerType ?? 'mouse';
+        }
+      }
+
+      window.PointerEvent = MockPointerEvent as typeof PointerEvent;
+    }
+
+    if (!HTMLElement.prototype.hasPointerCapture) {
+      HTMLElement.prototype.hasPointerCapture = vi.fn(() => false);
+    }
+
+    if (!HTMLElement.prototype.setPointerCapture) {
+      HTMLElement.prototype.setPointerCapture = vi.fn();
+    }
+
+    if (!HTMLElement.prototype.releasePointerCapture) {
+      HTMLElement.prototype.releasePointerCapture = vi.fn();
+    }
+
+    if (!Element.prototype.scrollIntoView) {
+      Element.prototype.scrollIntoView = vi.fn();
+    }
+  };
+
   it('shows repository source options before scanning', () => {
     render(<UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} />);
 
@@ -96,6 +129,7 @@ describe('UploadDropzone GitHub import copy', () => {
 
   it('renders repository dropdown with loaded GitHub App repositories and selects a repo', async () => {
     const onSelect = vi.fn();
+    mockPointerCaptureForRadixSelect();
 
     render(
       <UploadDropzone
@@ -117,7 +151,11 @@ describe('UploadDropzone GitHub import copy', () => {
       />
     );
 
-    fireEvent.pointerDown(screen.getByLabelText('Select repository'), { button: 0, ctrlKey: false });
+    fireEvent.pointerDown(screen.getByLabelText('Select repository', { selector: 'button' }), {
+      button: 0,
+      ctrlKey: false,
+      pointerType: 'mouse',
+    });
     fireEvent.click(await screen.findByText('Csisz/shipseal'));
 
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({
