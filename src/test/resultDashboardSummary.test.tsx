@@ -50,7 +50,8 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByText('Full ShipSeal package - 27 outputs')).toBeInTheDocument();
+    expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
+    expect(screen.getByText('27 outputs')).toBeInTheDocument();
     expect(screen.queryByText('Full Delivery Pack: 27 required outputs')).not.toBeInTheDocument();
     expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
     expect(screen.getByText(/Advanced details — full scan results and generated files/i)).toBeInTheDocument();
@@ -68,9 +69,28 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByText('Agent development pack - 9 outputs')).toBeInTheDocument();
-    expect(screen.queryByText('Full ShipSeal package - 27 outputs')).not.toBeInTheDocument();
+    expect(screen.getByText('Agent development pack')).toBeInTheDocument();
+    expect(screen.getByText('9 outputs')).toBeInTheDocument();
+    expect(screen.queryByText('Full ShipSeal package')).not.toBeInTheDocument();
     expect(screen.getByText(/AGENTS.md, CLAUDE.md, Codex guidance, repo context, and agent safety notes/i)).toBeInTheDocument();
+  });
+
+  it('shows long selected package labels without combining them into the compact metric value', () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        selectedPackages={['safety-risk']}
+      />
+    );
+
+    expect(screen.getByText('Project package')).toBeInTheDocument();
+    expect(screen.getByText('Security and data pre-screen')).toBeInTheDocument();
+    expect(screen.getByText('6 outputs')).toBeInTheDocument();
+    expect(screen.queryByText(/Security and data pre-screen - 6 outputs/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Security notes, env\/secrets signals, data\/privacy checklist, and risk summary/i)).toBeInTheDocument();
   });
 
   it('shows skipped intake warning and regenerate action after intake edits', () => {

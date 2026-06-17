@@ -95,15 +95,16 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <span>scanned {new Date(report.scannedAt).toLocaleTimeString()}</span>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="mt-6 grid grid-cols-3 gap-3">
               <SummaryTile label="Score" value={`${report.score}/100`} />
               <SummaryTile label="Status" value={displayReadinessLevel(readiness.level)} />
               <SummaryTile label="Blockers" value={String(report.blockers.length)} />
-              <SummaryTile label="Project package" value={`${deliveryFocus.packageLabel} - ${deliveryFocus.generatedPaths.length} outputs`} />
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">
-              {deliveryFocus.packageSummary}
-            </p>
+            <ProjectPackageSummary
+              packageLabel={deliveryFocus.packageLabel}
+              outputCount={deliveryFocus.generatedPaths.length}
+              packageSummary={deliveryFocus.packageSummary}
+            />
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Selected packages</span>
@@ -457,6 +458,35 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border border-border/60 bg-secondary/25 px-3 py-3 min-w-0">
       <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
       <div className="mt-1 text-sm font-semibold truncate">{value}</div>
+    </div>
+  );
+}
+
+function ProjectPackageSummary({
+  packageLabel,
+  outputCount,
+  packageSummary,
+}: {
+  packageLabel: string;
+  outputCount: number;
+  packageSummary: string;
+}) {
+  return (
+    <div className="mt-3 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-4 shadow-sm shadow-primary/5">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Project package</div>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 text-base font-semibold leading-snug text-foreground sm:text-lg">
+          {packageLabel}
+        </div>
+        <Badge variant="outline" className="w-fit shrink-0 border-primary/50 bg-primary/15 text-primary-glow">
+          {outputCount} outputs
+        </Badge>
+      </div>
+      {packageSummary && (
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+          {packageSummary}
+        </p>
+      )}
     </div>
   );
 }
