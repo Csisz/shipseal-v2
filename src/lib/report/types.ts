@@ -15,6 +15,10 @@ export interface ClientReportSummary {
   status: string;
   goNoGo: string;
   repositoryName: string;
+  selectedGoal: string;
+  selectedGoalSummary: string;
+  generatedOutputCount: number;
+  intakeNote: string;
   scanSummary: string;
   scanEvidenceSummary: string;
   scanLimited: boolean;

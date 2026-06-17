@@ -320,7 +320,11 @@ export interface ScoreJsonExport {
   deliveryPackFocus?: {
     selectedGoals: Array<{ id: string; title: string }>;
     emphasizedFiles: string[];
+    generatedFiles: string[];
+    manifestFiles: string[];
     fullPackage: boolean;
+    packageLabel: string;
+    packageSummary: string;
   };
   mcpReadiness: {
     score: number;

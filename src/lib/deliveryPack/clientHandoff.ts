@@ -15,6 +15,8 @@ interface HandoffScoreSummary {
   improvements: Array<{ title?: string; category?: string; detail?: string }>;
   categories: Array<{ name?: string; earned?: number; max?: number }>;
   generatedFiles: string[];
+  packageLabel: string;
+  packageSummary: string;
   scanLimited: boolean;
   scanWarnings: string[];
   scanEvidence: {
@@ -75,6 +77,9 @@ function renderClientHandoffReport(
     '',
     '## ShipSeal readiness snapshot',
     `- Repository scanned: ${summary.repositoryName}`,
+    `- Selected package: ${summary.packageLabel}`,
+    `- Package focus: ${summary.packageSummary}`,
+    `- Generated outputs: ${summary.generatedFiles.length}`,
     `- Scan coverage: ${summary.scanLimited ? 'Limited scan' : 'Full scan'}`,
     `- Scan source: ${summary.scanEvidence.sourceType}`,
     `- Branch/ref: ${summary.scanEvidence.branchOrRef}`,
@@ -98,6 +103,11 @@ function renderClientHandoffReport(
     '- Static scan only: ShipSeal read repository structure and key project files without executing code.',
     ...asBullets(summary.scanEvidence.keyFileSignals),
     '',
+    ...(missingIntakeNote(intake) ? [
+      '## Intake note',
+      `- ${missingIntakeNote(intake)}`,
+      '',
+    ] : []),
     '## What looks ready',
     ...asBullets(strengths),
     '',
@@ -229,12 +239,26 @@ function executiveSummaryParagraph(intake: ProjectIntake, summary: HandoffScoreS
   ].filter(Boolean).join(' ');
 }
 
+function missingIntakeNote(intake: ProjectIntake) {
+  const missing = [
+    ['client', intake.clientName],
+    ['agency', intake.agencyName],
+    ['app description', intake.appDescription],
+    ['AI use case', intake.aiUseCase],
+  ].filter(([, value]) => typeof value !== 'string' || !value.trim()).map(([label]) => label);
+
+  return missing.length
+    ? `Some project context is not provided yet (${missing.join(', ')}). Complete it before sharing the final client report if those details matter.`
+    : '';
+}
+
 function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): HandoffScoreSummary {
   const source = asRecord(scoreJson);
   const mcp = asRecord(source.mcpReadiness);
   const repoContext = asRecord(source.repoContextPack);
   const scanSummary = asRecord(source.scanSummary);
   const scanEvidence = asRecord(source.scanEvidence);
+  const deliveryFocus = asRecord(source.deliveryPackFocus);
 
   return {
     repositoryName: stringValue(source.repositoryName) || fallbackRepositoryName || 'Not provided',
@@ -245,6 +269,8 @@ function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): 
     improvements: arrayValue(source.improvements).map(asRecord),
     categories: arrayValue(source.categories).map(asRecord),
     generatedFiles: arrayValue(source.generatedFiles).map(value => String(value)),
+    packageLabel: stringValue(deliveryFocus.packageLabel) || 'Full ShipSeal package',
+    packageSummary: stringValue(deliveryFocus.packageSummary) || 'Full ShipSeal outputs prepared.',
     scanLimited: scanSummary.limited === true || stringValue(scanSummary.scanMode) === 'limited-fallback',
     scanWarnings: arrayValue(scanSummary.warnings).map(value => String(value)),
     scanEvidence: {

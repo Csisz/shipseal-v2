@@ -18,6 +18,7 @@ import { criticalBlockersEmptyStateText, displayReadinessLevel } from '@/lib/uiC
 import type { ProjectIntake } from '@/lib/intake';
 import { createDefaultProjectIntake, normalizeProjectIntake } from '@/lib/intake';
 import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages } from '@/lib/packages';
+import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 
 interface Props {
   report: ReadinessReport;
@@ -33,6 +34,7 @@ interface Props {
 export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false, selectedPackages }: Props) {
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
   const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
+  const deliveryFocus = resolveDeliveryPackFocus(resolvedPackages);
   const [contextCopied, setContextCopied] = useState(false);
   const [appliedIntake, setAppliedIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [draftIntake, setDraftIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
@@ -97,10 +99,10 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <SummaryTile label="Score" value={`${report.score}/100`} />
               <SummaryTile label="Status" value={displayReadinessLevel(readiness.level)} />
               <SummaryTile label="Blockers" value={String(report.blockers.length)} />
-              <SummaryTile label="Project package" value={fullPackageSelected ? 'Full pack - 27 outputs' : 'Focused pack'} />
+              <SummaryTile label="Project package" value={`${deliveryFocus.packageLabel} - ${deliveryFocus.generatedPaths.length} outputs`} />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Handoff, AI guidance, tests, risk notes and product notes — prepared together.
+              {deliveryFocus.packageSummary}
             </p>
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -120,7 +122,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               )}
               {!fullPackageSelected && (
                 <span className="text-[11px] text-muted-foreground">
-                  The full pack is generated below — your selected packages are the place to start.
+                  This export is focused on the selected goal. Choose Full ShipSeal package for every output.
                 </span>
               )}
             </div>
@@ -430,6 +432,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
             contextFiles={{ markdown: report.contextPack, json: repoContextJson }}
             scoreJson={scoreJson}
             intake={appliedIntake}
+            selectedPackages={resolvedPackages}
           />
           <h3 className="font-display text-xl font-semibold mt-8 mb-3">MCP Governance Pack</h3>
           <AgentPackTabs files={mcpPackFiles} />

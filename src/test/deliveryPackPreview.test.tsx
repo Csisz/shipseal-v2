@@ -36,7 +36,7 @@ describe('DeliveryPackPreview', () => {
     expect(screen.getByText('06-client-handoff/CLIENT_HANDOFF_REPORT.html')).toBeInTheDocument();
   });
 
-  it('highlights selected goal outputs while keeping the complete pack visible', () => {
+  it('shows the focused selected goal outputs', () => {
     const report = buildSampleReport();
 
     render(
@@ -48,10 +48,10 @@ describe('DeliveryPackPreview', () => {
     );
 
     expect(screen.getByText('Create tests and red-team prompts')).toBeInTheDocument();
-    expect(screen.getByText(/outputs are highlighted first for this goal/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Focus').length).toBeGreaterThan(0);
+    expect(screen.getByText(/focused outputs will be generated for this goal/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Included').length).toBeGreaterThan(0);
     expect(screen.getByText('04-testing/RED_TEAM_PROMPTS.md')).toBeInTheDocument();
-    expect(screen.getByText('06-client-handoff/CLIENT_HANDOFF_REPORT.md')).toBeInTheDocument();
+    expect(screen.queryByText('06-client-handoff/CLIENT_HANDOFF_REPORT.md')).not.toBeInTheDocument();
   });
 
   it('shows report quality warning when intake was skipped', () => {

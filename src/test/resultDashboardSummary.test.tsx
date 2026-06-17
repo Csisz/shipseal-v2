@@ -50,11 +50,27 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByText('Full pack - 27 outputs')).toBeInTheDocument();
+    expect(screen.getByText('Full ShipSeal package - 27 outputs')).toBeInTheDocument();
     expect(screen.queryByText('Full Delivery Pack: 27 required outputs')).not.toBeInTheDocument();
-    expect(screen.getByText(/Handoff, AI guidance, tests, risk notes and product notes/i)).toBeInTheDocument();
+    expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
     expect(screen.getByText(/Advanced details — full scan results and generated files/i)).toBeInTheDocument();
     expect(screen.getByText(/Improve your score — optional fixes you can add back/i)).toBeInTheDocument();
+  });
+
+  it('shows the selected goal package instead of always showing full pack', () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        selectedPackages={['agent-readiness']}
+      />
+    );
+
+    expect(screen.getByText('Agent development pack - 9 outputs')).toBeInTheDocument();
+    expect(screen.queryByText('Full ShipSeal package - 27 outputs')).not.toBeInTheDocument();
+    expect(screen.getByText(/AGENTS.md, CLAUDE.md, Codex guidance, repo context, and agent safety notes/i)).toBeInTheDocument();
   });
 
   it('shows skipped intake warning and regenerate action after intake edits', () => {

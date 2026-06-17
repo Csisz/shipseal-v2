@@ -1,6 +1,5 @@
 import type { AgentPackFile, MCPPolicyFile, ReadinessReport, ScoreJsonExport } from './types';
 import { buildDeliveryPackFiles } from './deliveryPack';
-import { getDeliveryPackRequiredPaths } from './deliveryPack/manifest';
 import { resolveDeliveryPackFocus } from './deliveryPack/goalMapping';
 import { normalizeProjectIntake } from './intake';
 import type { PartialProjectIntake } from './intake';
@@ -30,6 +29,7 @@ export interface BuildAgentPackZipOptions {
   repositoryName?: string;
   scoreJson?: unknown;
   intake?: PartialProjectIntake;
+  selectedPackages?: string[];
 }
 
 export interface BuildScoreJsonOptions {
@@ -84,11 +84,15 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
       mcpStatus: report.repoContextPack.mcpSummary.status,
       rawFileContentsIncluded: false,
     },
-    generatedFiles: getDeliveryPackRequiredPaths(),
+    generatedFiles: deliveryPackFocus.generatedPaths,
     deliveryPackFocus: {
       selectedGoals: deliveryPackFocus.selectedGoals,
       emphasizedFiles: deliveryPackFocus.emphasizedPaths,
+      generatedFiles: deliveryPackFocus.generatedPaths,
+      manifestFiles: deliveryPackFocus.manifestPaths,
       fullPackage: deliveryPackFocus.fullPackage,
+      packageLabel: deliveryPackFocus.packageLabel,
+      packageSummary: deliveryPackFocus.packageSummary,
     },
     mcpReadiness: {
       score: report.mcpReadiness.score,
@@ -135,6 +139,7 @@ export async function buildAgentPackZipBlob(
     repositoryName: options.repositoryName,
     scoreJson: options.scoreJson,
     intake: options.intake,
+    selectedPackages: options.selectedPackages,
   });
 
   for (const file of deliveryFiles) {
@@ -150,10 +155,11 @@ export async function downloadAgentPackZip(
   mcpFiles: MCPPolicyFile[] = [],
   contextFiles?: { markdown: string; json: unknown },
   scoreJson?: unknown,
-  intake?: PartialProjectIntake
+  intake?: PartialProjectIntake,
+  selectedPackages?: string[]
 ) {
   const normalizedIntake = normalizeProjectIntake(intake, repositoryName);
-  const blob = await buildAgentPackZipBlob(files, mcpFiles, contextFiles, { repositoryName, scoreJson, intake: normalizedIntake });
+  const blob = await buildAgentPackZipBlob(files, mcpFiles, contextFiles, { repositoryName, scoreJson, intake: normalizedIntake, selectedPackages });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

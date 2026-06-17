@@ -10,6 +10,7 @@ import {
   SHIPSEAL_DELIVERY_PACK_MANIFEST,
   getDeliveryPackFileContracts,
 } from './manifest';
+import { resolveDeliveryPackFocus } from './goalMapping';
 import type { DeliveryPackGeneratedFile, DeliveryPackManifest } from './types';
 
 export interface BuildDeliveryPackFilesInput {
@@ -20,6 +21,7 @@ export interface BuildDeliveryPackFilesInput {
   scoreJson?: unknown;
   intake?: PartialProjectIntake;
   manifest?: DeliveryPackManifest;
+  selectedPackages?: string[];
 }
 
 export function buildDeliveryPackFiles(input: BuildDeliveryPackFilesInput): DeliveryPackGeneratedFile[] {
@@ -28,8 +30,10 @@ export function buildDeliveryPackFiles(input: BuildDeliveryPackFilesInput): Deli
   const intake = normalizeProjectIntake(input.intake, projectName);
   const agentFileByName = new Map(input.agentFiles.map(file => [file.name, file]));
   const mcpFileByName = new Map((input.mcpFiles || []).map(file => [file.filename, file]));
+  const focus = resolveDeliveryPackFocus(input.selectedPackages || selectedPackagesFromScoreJson(input.scoreJson));
+  const generatedPathSet = new Set(focus.generatedPaths);
 
-  return getDeliveryPackFileContracts(manifest).map(fileContract => {
+  return getDeliveryPackFileContracts(manifest).filter(fileContract => generatedPathSet.has(fileContract.path)).map(fileContract => {
     const sourceContent = resolveSourceContent(fileContract.path, fileContract.filename, {
       agentFileByName,
       mcpFileByName,
@@ -63,6 +67,17 @@ function objectValue(value: unknown, key: string): string | undefined {
   if (!value || typeof value !== 'object') return undefined;
   const record = value as Record<string, unknown>;
   return typeof record[key] === 'string' && record[key].trim() ? record[key].trim() : undefined;
+}
+
+function selectedPackagesFromScoreJson(scoreJson: unknown): string[] {
+  const source = scoreJson && typeof scoreJson === 'object' ? scoreJson as Record<string, unknown> : {};
+  const focus = source.deliveryPackFocus && typeof source.deliveryPackFocus === 'object'
+    ? source.deliveryPackFocus as Record<string, unknown>
+    : {};
+  const selectedGoals = Array.isArray(focus.selectedGoals) ? focus.selectedGoals : [];
+  return selectedGoals
+    .map(goal => goal && typeof goal === 'object' ? (goal as Record<string, unknown>).id : undefined)
+    .filter((id): id is string => typeof id === 'string' && id.trim().length > 0);
 }
 
 function resolveSourceContent(

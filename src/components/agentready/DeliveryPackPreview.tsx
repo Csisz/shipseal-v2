@@ -5,7 +5,7 @@ import type { ReadinessReport } from '@/lib/types';
 import type { PartialProjectIntake } from '@/lib/intake';
 import { normalizeProjectIntake } from '@/lib/intake';
 import { buildRepoContextPackJson, buildScoreJson, downloadAgentPackZip } from '@/lib/exports';
-import { getDeliveryPackRequiredPaths, resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { downloadClientReportPdf, generateClientReportHtml } from '@/lib/report';
 import { toast } from '@/hooks/use-toast';
 
@@ -18,8 +18,8 @@ interface Props {
 
 export function DeliveryPackPreview({ report, intake, intakeSkipped = false, selectedPackages = [] }: Props) {
   const normalizedIntake = normalizeProjectIntake(intake, report.repoName);
-  const requiredPaths = getDeliveryPackRequiredPaths();
   const focus = resolveDeliveryPackFocus(selectedPackages);
+  const generatedPaths = focus.generatedPaths;
   const scoreJson = buildScoreJson(report, { selectedPackages });
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const risks = previewRisks(report, normalizedIntake);
@@ -64,7 +64,8 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false, sel
               report.mcpReadiness.generatedFiles,
               { markdown: report.contextPack, json: buildRepoContextPackJson(report) },
               scoreJson,
-              normalizedIntake
+              normalizedIntake,
+              selectedPackages
             )}
             className="bg-gradient-primary border-0 shadow-glow hover:opacity-90"
           >
@@ -77,7 +78,7 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false, sel
         <PreviewMetric label="ShipSeal score" value={`${report.score}/100`} />
         <PreviewMetric label="Go/no-go category" value={goNoGo} />
         <PreviewMetric label="MCP readiness" value={displayMcpReadiness(report.mcpReadiness.status)} />
-        <PreviewMetric label="Output files" value={`${requiredPaths.length} required`} />
+        <PreviewMetric label="Output files" value={`${generatedPaths.length} generated`} />
       </div>
 
       <div className="mb-5 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3">
@@ -91,8 +92,8 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false, sel
         </div>
         <p className="mt-2 text-xs text-muted-foreground">
           {focus.fullPackage
-            ? 'Full ShipSeal includes every required output.'
-            : `${focus.emphasizedPaths.length} outputs are highlighted first for this goal. The ZIP still includes the complete required Delivery Pack.`}
+            ? 'Full ShipSeal includes every manifest output.'
+            : `${generatedPaths.length} focused outputs will be generated for this goal. The full manifest remains available through the Full ShipSeal package.`}
         </p>
       </div>
 
@@ -150,11 +151,11 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false, sel
         <div className="rounded-lg border border-border/60 bg-secondary/25 p-4">
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-2">Files included in the Delivery Pack</div>
           <div className="grid sm:grid-cols-2 gap-1.5 max-h-56 overflow-auto pr-1">
-            {requiredPaths.map(path => (
+            {generatedPaths.map(path => (
               <div key={path} className="flex items-center gap-2 rounded border border-border/50 bg-background/35 px-2 py-1">
-                {!focus.fullPackage && focus.emphasizedPaths.includes(path) && (
+                {!focus.fullPackage && (
                   <span className="shrink-0 rounded border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-primary-glow">
-                    Focus
+                    Included
                   </span>
                 )}
                 <span className="truncate font-mono text-[11px] text-foreground/85">{path}</span>

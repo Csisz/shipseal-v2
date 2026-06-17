@@ -55,6 +55,25 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).not.toContain('No human approval');
   });
 
+  it('uses selected goal and scan evidence in the client report', () => {
+    const report = buildSampleProjectReadinessReport();
+    const html = generateClientReportHtml({
+      intake: {
+        ...SAMPLE_PROJECT_INTAKE,
+        clientName: '',
+        agencyName: '',
+      },
+      scoreJson: buildScoreJson(report, { selectedPackages: ['mcp-readiness'] }),
+    });
+
+    expect(html).toContain('Selected package: MCP readiness pack');
+    expect(html).toContain('MCP readiness, MCP security policy, tool allowlist, and server recommendations.');
+    expect(html).toContain('Scan evidence:');
+    expect(html).toContain(report.repoName);
+    expect(html).toContain('Some project context is not provided yet');
+    expect(html).toContain('Generated outputs: 7');
+  });
+
   it('exports CLIENT_HANDOFF_REPORT.html into the Delivery Pack ZIP', async () => {
     const report = buildSampleProjectReadinessReport();
     const blob = await buildAgentPackZipBlob(

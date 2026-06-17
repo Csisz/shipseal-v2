@@ -54,30 +54,56 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(scoreJson.content.generatedFiles).toEqual(getDeliveryPackRequiredPaths());
   });
 
-  it('maps selected goals to emphasized Delivery Pack outputs without changing required paths', () => {
+  it('maps selected goals to focused Delivery Pack outputs', () => {
     const clientHandoff = resolveDeliveryPackFocus(['client-handoff']);
     const testing = resolveDeliveryPackFocus(['testing-red-team']);
     const full = resolveDeliveryPackFocus(['full-package']);
 
-    expect(clientHandoff.emphasizedPaths).toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
-    expect(clientHandoff.emphasizedPaths).not.toContain('04-testing/RED_TEAM_PROMPTS.md');
-    expect(testing.emphasizedPaths).toContain('04-testing/RED_TEAM_PROMPTS.md');
-    expect(testing.emphasizedPaths).not.toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
-    expect(full.emphasizedPaths).toEqual(getDeliveryPackRequiredPaths());
+    expect(clientHandoff.generatedPaths).toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
+    expect(clientHandoff.generatedPaths).toContain('06-client-handoff/EXECUTIVE_SUMMARY.md');
+    expect(clientHandoff.generatedPaths).not.toContain('04-testing/RED_TEAM_PROMPTS.md');
+    expect(testing.generatedPaths).toContain('04-testing/RED_TEAM_PROMPTS.md');
+    expect(testing.generatedPaths).toContain('04-testing/CI_QUALITY_GATE.yml');
+    expect(testing.generatedPaths).not.toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
+    expect(full.generatedPaths).toEqual(getDeliveryPackRequiredPaths());
   });
 
   it('includes selected goal focus metadata in score.json', () => {
     const report = buildSampleReport();
     const scoreJson = buildScoreJson(report, { selectedPackages: ['mcp-readiness'] });
+    const focus = resolveDeliveryPackFocus(['mcp-readiness']);
 
-    expect(scoreJson.generatedFiles).toEqual(getDeliveryPackRequiredPaths());
+    expect(scoreJson.generatedFiles).toEqual(focus.generatedPaths);
     expect(scoreJson.deliveryPackFocus?.fullPackage).toBe(false);
+    expect(scoreJson.deliveryPackFocus?.packageLabel).toBe('MCP readiness pack');
     expect(scoreJson.deliveryPackFocus?.selectedGoals).toEqual([{
       id: 'mcp-readiness',
       title: 'MCP readiness and tool integration',
     }]);
+    expect(scoreJson.deliveryPackFocus?.generatedFiles).toEqual(focus.generatedPaths);
+    expect(scoreJson.deliveryPackFocus?.manifestFiles).toEqual(getDeliveryPackRequiredPaths());
     expect(scoreJson.deliveryPackFocus?.emphasizedFiles).toContain('03-mcp-governance/MCP_READINESS.md');
     expect(scoreJson.deliveryPackFocus?.emphasizedFiles).not.toContain('04-testing/EVAL_TEST_CASES.md');
+  });
+
+  it('exports a focused ZIP whose file list matches score.json generatedFiles', async () => {
+    const report = buildSampleReport();
+    const selectedPackages = ['testing-red-team'];
+    const scoreJson = buildScoreJson(report, { selectedPackages });
+    const blob = await buildAgentPackZipBlob(
+      report.agentPack,
+      report.mcpReadiness.generatedFiles,
+      { markdown: report.contextPack, json: buildRepoContextPackJson(report) },
+      { repositoryName: report.repoName, scoreJson, selectedPackages }
+    );
+    const zip = await JSZip.loadAsync(blob);
+    const paths = Object.values(zip.files).filter(file => !file.dir).map(file => file.name).sort();
+
+    expect(paths).toEqual([...scoreJson.generatedFiles].sort());
+    expect(paths).toContain('04-testing/RED_TEAM_PROMPTS.md');
+    expect(paths).toContain('score.json');
+    expect(paths).not.toContain('03-mcp-governance/MCP_READINESS.md');
+    expect(paths).not.toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
   });
 
   it('includes at least five SKILL.md files', async () => {

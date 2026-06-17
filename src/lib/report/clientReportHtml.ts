@@ -256,8 +256,10 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       <section>
         <h2>Executive summary</h2>
         <p>${escapeHtml(summary.projectName)} was reviewed with ShipSeal to prepare an AI project handoff package. The report summarizes readiness score, client-facing risks, AI Act readiness signals, testing coverage, MCP governance, and next steps.</p>
+        <p class="muted">Selected package: ${escapeHtml(summary.selectedGoal)}. ${escapeHtml(summary.selectedGoalSummary)} Generated outputs: ${escapeHtml(summary.generatedOutputCount)}.</p>
         <p class="muted">${escapeHtml(summary.scanSummary)}</p>
         <p class="muted">${escapeHtml(summary.scanEvidenceSummary)}</p>
+        ${summary.intakeNote ? `<p class="muted">${escapeHtml(summary.intakeNote)}</p>` : ''}
         ${summary.scanLimited ? `<p class="warning">${escapeHtml(summary.scanWarning)}</p>` : ''}
       </section>
 
@@ -359,6 +361,10 @@ function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
     status: stringValue(score.status) || 'Not detected',
     goNoGo,
     repositoryName: stringValue(score.repositoryName) || intake.projectName || 'Not detected',
+    selectedGoal: selectedGoalLabel(score),
+    selectedGoalSummary: selectedGoalSummary(score),
+    generatedOutputCount: arrayValue(score.generatedFiles).length,
+    intakeNote: intakeCompletenessNote(input.intake),
     scanSummary: scanSummaryText(score.scanSummary),
     scanEvidenceSummary: scanEvidenceText(score.scanEvidence),
     scanLimited: isLimitedScan(score.scanSummary),
@@ -375,6 +381,29 @@ function scoreSource(scoreJson: unknown): Record<string, unknown> {
   const source = asRecord(scoreJson);
   const wrapped = asRecord(source.content);
   return Object.keys(wrapped).length ? wrapped : source;
+}
+
+function selectedGoalLabel(score: Record<string, unknown>) {
+  const focus = asRecord(score.deliveryPackFocus);
+  return stringValue(focus.packageLabel) || 'Full ShipSeal package';
+}
+
+function selectedGoalSummary(score: Record<string, unknown>) {
+  const focus = asRecord(score.deliveryPackFocus);
+  return stringValue(focus.packageSummary) || 'Full ShipSeal outputs prepared.';
+}
+
+function intakeCompletenessNote(intake: ClientReportHtmlInput['intake']) {
+  const missing = [
+    ['client', intake.clientName],
+    ['agency', intake.agencyName],
+    ['app description', intake.appDescription],
+    ['AI use case', intake.aiUseCase],
+  ].filter(([, value]) => typeof value !== 'string' || !value.trim()).map(([label]) => label);
+
+  return missing.length
+    ? `Some project context is not provided yet (${missing.join(', ')}). These fields can be completed before client delivery without blocking this technical scan.`
+    : '';
 }
 
 function strengthsFromScore(score: Record<string, unknown>) {

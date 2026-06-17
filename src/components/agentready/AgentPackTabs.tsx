@@ -13,10 +13,11 @@ interface Props {
   contextFiles?: { markdown: string; json: unknown };
   scoreJson?: unknown;
   intake?: PartialProjectIntake;
+  selectedPackages?: string[];
   zipLabel?: string;
 }
 
-export function AgentPackTabs({ files, repositoryName, mcpFiles = [], contextFiles, scoreJson, intake, zipLabel = 'Download ShipSeal Delivery Pack' }: Props) {
+export function AgentPackTabs({ files, repositoryName, mcpFiles = [], contextFiles, scoreJson, intake, selectedPackages, zipLabel = 'Download ShipSeal Delivery Pack' }: Props) {
   const [active, setActive] = useState(0);
   const [copiedName, setCopiedName] = useState<string | null>(null);
   const file = files[active];
@@ -58,7 +59,7 @@ export function AgentPackTabs({ files, repositoryName, mcpFiles = [], contextFil
         <div className="text-sm text-muted-foreground min-w-0 break-words">{file.description}</div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           {repositoryName && (
-            <Button variant="outline" size="sm" onClick={() => downloadAgentPackZip(repositoryName, files, mcpFiles, contextFiles, scoreJson, intake)} className="border-border/60">
+            <Button variant="outline" size="sm" onClick={() => downloadAgentPackZip(repositoryName, files, mcpFiles, contextFiles, scoreJson, intake, selectedPackages)} className="border-border/60">
               <Archive className="h-3.5 w-3.5 mr-1.5" /> {zipLabel}
             </Button>
           )}
