@@ -6,6 +6,8 @@ export interface GitHubAppRepository {
   defaultBranch?: string;
   private: boolean;
   htmlUrl: string;
+  pushedAt?: string;
+  updatedAt?: string;
 }
 
 export type GitHubAppRepositoryListStatus = 'idle' | 'loading' | 'loaded' | 'not_configured' | 'error';

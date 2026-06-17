@@ -55,6 +55,8 @@ function repositoryListFriendlyMessage(code?: string, fallback?: string) {
   }
 }
 
+const EMPTY_GITHUB_APP_REPOSITORIES_MESSAGE = 'No repositories are available for this GitHub App installation. Configure the ShipSeal GitHub App and choose All repositories or add the missing repository.';
+
 function openCenteredPopup(url: string, name: string) {
   const width = 620;
   const height = 720;
@@ -125,7 +127,7 @@ const Index = () => {
         if (response.ok && payload?.status === 'ok' && Array.isArray(payload.repositories)) {
           setGithubRepositories(payload.repositories);
           setRepositoryListStatus('loaded');
-          setRepositoryListMessage(payload.repositories.length ? '' : 'No repositories are available for this GitHub App installation.');
+          setRepositoryListMessage(payload.repositories.length ? '' : EMPTY_GITHUB_APP_REPOSITORIES_MESSAGE);
           return;
         }
         if (payload?.status === 'not_configured') {

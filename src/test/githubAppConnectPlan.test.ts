@@ -33,6 +33,31 @@ function createResponse() {
   };
 }
 
+function githubRepositoryPayload(overrides: Partial<Record<string, unknown>> = {}) {
+  const name = typeof overrides.name === 'string' ? overrides.name : 'shipseal';
+  const owner = typeof overrides.owner === 'object' ? overrides.owner : { login: 'Csisz' };
+  return {
+    id: 1,
+    owner,
+    name,
+    full_name: `Csisz/${name}`,
+    default_branch: 'main',
+    private: false,
+    html_url: `https://github.com/Csisz/${name}`,
+    ...overrides,
+  };
+}
+
+function jsonGitHubResponse(body: unknown, headers?: Record<string, string>) {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      ...headers,
+    },
+  });
+}
+
 describe('GitHub App Connect plan', () => {
   it('imports GitHub Connect serverless handlers with Vercel-compatible relative imports', async () => {
     const [loginModule, callbackModule, installationsModule, repositoriesModule] = await Promise.all([
@@ -464,7 +489,107 @@ describe('GitHub App Connect plan', () => {
       },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(1, 'https://api.github.com/app/installations/12345/access_tokens', expect.objectContaining({ method: 'POST' }));
-    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://api.github.com/installation/repositories', expect.objectContaining({ method: 'GET' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://api.github.com/installation/repositories?per_page=100&page=1', expect.objectContaining({ method: 'GET' }));
+  });
+
+  it('/api/github-app/repositories fetches multiple pages of GitHub App repositories', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const privatePem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ token: 'installation-token' }),
+      })
+      .mockResolvedValueOnce(jsonGitHubResponse({
+        repositories: [githubRepositoryPayload({ id: 1, name: 'shipseal' })],
+      }, {
+        link: '<https://api.github.com/installation/repositories?per_page=100&page=2>; rel="next"',
+      }))
+      .mockResolvedValueOnce(jsonGitHubResponse({
+        repositories: [githubRepositoryPayload({ id: 2, name: 'shipseal-v2' })],
+      }));
+
+    const result = await listInstallationRepositories('12345', {
+      fetcher: fetchMock as never,
+      now: () => new Date(Date.UTC(2026, 5, 8, 8, 0)),
+      env: {
+        GITHUB_APP_ID: '999',
+        GITHUB_APP_PRIVATE_KEY: privatePem,
+      } as NodeJS.ProcessEnv,
+    });
+
+    expect(result.status).toBe(200);
+    expect((result.body.repositories as Array<{ fullName: string }>).map(repo => repo.fullName))
+      .toEqual(['Csisz/shipseal', 'Csisz/shipseal-v2']);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://api.github.com/installation/repositories?per_page=100&page=1', expect.objectContaining({ method: 'GET' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, 'https://api.github.com/installation/repositories?per_page=100&page=2', expect.objectContaining({ method: 'GET' }));
+  });
+
+  it('/api/github-app/repositories includes repositories returned from page 2 in the final list', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const privatePem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ token: 'installation-token' }),
+      })
+      .mockResolvedValueOnce(jsonGitHubResponse({
+        repositories: [githubRepositoryPayload({ id: 1, name: 'older-repo' })],
+      }, {
+        link: '<https://api.github.com/installation/repositories?per_page=100&page=2>; rel="next"',
+      }))
+      .mockResolvedValueOnce(jsonGitHubResponse({
+        repositories: [githubRepositoryPayload({ id: 2, name: 'missing-before-pagination' })],
+      }));
+
+    const result = await listInstallationRepositories('12345', {
+      fetcher: fetchMock as never,
+      now: () => new Date(Date.UTC(2026, 5, 8, 8, 0)),
+      env: {
+        GITHUB_APP_ID: '999',
+        GITHUB_APP_PRIVATE_KEY: privatePem,
+      } as NodeJS.ProcessEnv,
+    });
+
+    expect(result.status).toBe(200);
+    expect((result.body.repositories as Array<{ fullName: string }>).map(repo => repo.fullName))
+      .toContain('Csisz/missing-before-pagination');
+  });
+
+  it('/api/github-app/repositories sorts newer pushed or updated repositories first', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const privatePem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: async () => ({ token: 'installation-token' }),
+      })
+      .mockResolvedValueOnce(jsonGitHubResponse({
+        repositories: [
+          githubRepositoryPayload({ id: 1, name: 'older', pushed_at: '2026-06-01T10:00:00Z', updated_at: '2026-06-01T10:00:00Z' }),
+          githubRepositoryPayload({ id: 2, name: 'newer-updated', updated_at: '2026-06-10T10:00:00Z' }),
+          githubRepositoryPayload({ id: 3, name: 'newer-pushed', pushed_at: '2026-06-15T10:00:00Z', updated_at: '2026-06-02T10:00:00Z' }),
+        ],
+      }));
+
+    const result = await listInstallationRepositories('12345', {
+      fetcher: fetchMock as never,
+      now: () => new Date(Date.UTC(2026, 5, 8, 8, 0)),
+      env: {
+        GITHUB_APP_ID: '999',
+        GITHUB_APP_PRIVATE_KEY: privatePem,
+      } as NodeJS.ProcessEnv,
+    });
+
+    expect(result.status).toBe(200);
+    expect((result.body.repositories as Array<{ name: string }>).map(repo => repo.name))
+      .toEqual(['newer-pushed', 'newer-updated', 'older']);
   });
 
   it('normalizes GitHub App private keys and reports missing env as not configured', () => {

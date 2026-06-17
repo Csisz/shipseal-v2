@@ -175,7 +175,9 @@ export function UploadDropzone({
                 <div className="mt-2 text-xs text-destructive">{repositoryListMessage}</div>
               )}
               {repositoryListStatus === 'loaded' && repositories.length === 0 && (
-                <div className="mt-2 text-xs text-warning">No repositories are available for this GitHub App installation.</div>
+                <div className="mt-2 text-xs text-warning">
+                  {repositoryListMessage || 'No repositories are available for this GitHub App installation. Configure the ShipSeal GitHub App and choose All repositories or add the missing repository.'}
+                </div>
               )}
             </div>
             <Button type="button" variant="outline" disabled={disabled} onClick={onGitHubConnect}>

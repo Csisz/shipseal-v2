@@ -25,6 +25,8 @@ export interface GitHubAppRepositorySummary {
   defaultBranch?: string;
   private: boolean;
   htmlUrl: string;
+  pushedAt?: string;
+  updatedAt?: string;
 }
 
 export interface GitHubAppInstallationSummary {
