@@ -42,7 +42,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const readinessReport = report.agentPack.find(file => file.name === 'AGENT_READINESS_REPORT.md');
   const repoContextJson = buildRepoContextPackJson(report);
-  const scoreJson = buildScoreJson(report);
+  const scoreJson = buildScoreJson(report, { selectedPackages: resolvedPackages });
   const mcpPackFiles: AgentPackFile[] = report.mcpReadiness.generatedFiles.map(file => ({
     name: file.filename,
     language: 'markdown',
@@ -97,7 +97,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <SummaryTile label="Score" value={`${report.score}/100`} />
               <SummaryTile label="Status" value={displayReadinessLevel(readiness.level)} />
               <SummaryTile label="Blockers" value={String(report.blockers.length)} />
-              <SummaryTile label="Project package" value="Full pack - 27 outputs" />
+              <SummaryTile label="Project package" value={fullPackageSelected ? 'Full pack - 27 outputs' : 'Focused pack'} />
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
               Handoff, AI guidance, tests, risk notes and product notes — prepared together.
@@ -161,7 +161,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => downloadJsonFile('score.json', buildScoreJson(report))}
+                onClick={() => downloadJsonFile('score.json', buildScoreJson(report, { selectedPackages: resolvedPackages }))}
                 className="border-border/60"
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export score.json
@@ -178,7 +178,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         <DecisionSummary report={report} ready={ready} nextActions={report.aiNarrative.nextBestActions.slice(0, 3)} />
       </div>
 
-      <DeliveryPackPreview report={report} intake={appliedIntake} intakeSkipped={wasIntakeSkipped} />
+      <DeliveryPackPreview report={report} intake={appliedIntake} intakeSkipped={wasIntakeSkipped} selectedPackages={resolvedPackages} />
 
       <Disclosure title="Project context used for this report" defaultOpen={wasIntakeSkipped || intakeDirty}>
         <ProjectContextPanel

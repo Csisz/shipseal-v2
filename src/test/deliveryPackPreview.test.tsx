@@ -29,9 +29,29 @@ describe('DeliveryPackPreview', () => {
     expect(screen.getByText('AI Act readiness')).toBeInTheDocument();
     expect(screen.getByText('Testing pack')).toBeInTheDocument();
     expect(screen.getByText('Client handoff')).toBeInTheDocument();
+    expect(screen.getByText('Delivery focus')).toBeInTheDocument();
+    expect(screen.getByText('Full ShipSeal package')).toBeInTheDocument();
     expect(screen.getByText('01-agent-instructions/AGENTS.md')).toBeInTheDocument();
     expect(screen.getByText('06-client-handoff/CLIENT_HANDOFF_REPORT.md')).toBeInTheDocument();
     expect(screen.getByText('06-client-handoff/CLIENT_HANDOFF_REPORT.html')).toBeInTheDocument();
+  });
+
+  it('highlights selected goal outputs while keeping the complete pack visible', () => {
+    const report = buildSampleReport();
+
+    render(
+      <DeliveryPackPreview
+        report={report}
+        intake={createDefaultProjectIntake(report.repoName)}
+        selectedPackages={['testing-red-team']}
+      />
+    );
+
+    expect(screen.getByText('Create tests and red-team prompts')).toBeInTheDocument();
+    expect(screen.getByText(/outputs are highlighted first for this goal/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Focus').length).toBeGreaterThan(0);
+    expect(screen.getByText('04-testing/RED_TEAM_PROMPTS.md')).toBeInTheDocument();
+    expect(screen.getByText('06-client-handoff/CLIENT_HANDOFF_REPORT.md')).toBeInTheDocument();
   });
 
   it('shows report quality warning when intake was skipped', () => {

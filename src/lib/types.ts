@@ -286,6 +286,11 @@ export interface ScoreJsonExport {
     rawFileContentsIncluded: false;
   };
   generatedFiles: string[];
+  deliveryPackFocus?: {
+    selectedGoals: Array<{ id: string; title: string }>;
+    emphasizedFiles: string[];
+    fullPackage: boolean;
+  };
   mcpReadiness: {
     score: number;
     status: MCPReadinessStatus;

@@ -232,6 +232,46 @@ describe('public GitHub import helpers', () => {
     } satisfies ScanSourceMetadata);
   });
 
+  it('scans a selected GitHub App repository archive as a full real-repo scan', async () => {
+    const file = await demoZipFile();
+    const headers = new Headers({ 'content-length': String(file.size), 'content-type': 'application/zip' });
+    const fetchMock = vi.fn(async () => zipResponse(file, headers));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const imported = await importGitHubAppRepoArchive({
+      installationId: '12345',
+      owner: 'Csisz',
+      repo: 'shipseal',
+      ref: 'main',
+    });
+    const report = await new LocalScanEngine().scan({
+      file: imported.file,
+      mode: 'github-public',
+      source: imported.source,
+    });
+
+    expect(report.repoName).toBe('Csisz/shipseal');
+    expect(report.fileCount).toBeGreaterThan(0);
+    expect(report.repoContextPack.scripts).toMatchObject({ test: 'vitest', build: 'vite build' });
+    expect(report.scanSummary.limited).toBe(false);
+    expect(report.blockers.map(blocker => blocker.id)).not.toContain('limited-scan');
+  });
+
+  it('returns a friendly error when a selected GitHub App archive cannot be downloaded', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'upstream failed' }), { status: 502 })));
+
+    await expect(importGitHubAppRepoArchive({
+      installationId: '12345',
+      owner: 'Csisz',
+      repo: 'shipseal',
+      ref: 'main',
+    })).rejects.toMatchObject({
+      name: 'GitHubImportError',
+      category: 'unknown-import-error',
+      message: 'GitHub import failed with HTTP 502. Download the repository as ZIP from GitHub and upload it manually.',
+    } satisfies Partial<GitHubImportError>);
+  });
+
   it('ZIP upload flow still works with zip-upload source metadata', async () => {
     const file = await demoZipFile('zip-upload.zip');
     const report = await new LocalScanEngine().scan({

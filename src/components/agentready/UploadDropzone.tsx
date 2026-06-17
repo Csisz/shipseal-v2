@@ -1,9 +1,10 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { Github, Upload, FileArchive, X, Plug } from 'lucide-react';
+import { GitBranch, Github, Search, Upload, FileArchive, X, Plug } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { formatFileSize, validateZipUpload } from '@/lib/uploadValidation';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
@@ -53,6 +54,7 @@ export function UploadDropzone({
   const [githubUrl, setGithubUrl] = useState('');
   const [githubBranch, setGithubBranch] = useState('');
   const [selectedRepositoryFullName, setSelectedRepositoryFullName] = useState('');
+  const [repositorySearch, setRepositorySearch] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const detectedRepository = useMemo(() => {
@@ -81,6 +83,30 @@ export function UploadDropzone({
       setSelectedRepositoryFullName('');
     }
   }, [repositories, selectedRepositoryFullName]);
+
+  const filteredRepositories = useMemo(() => {
+    const query = repositorySearch.trim().toLowerCase();
+    if (!query) return repositories;
+    return repositories.filter(repository => {
+      const haystack = [
+        repository.fullName,
+        repository.owner,
+        repository.name,
+        repository.defaultBranch,
+        repository.private ? 'private' : 'public',
+      ].join(' ').toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [repositories, repositorySearch]);
+
+  const selectedRepository = useMemo(
+    () => repositories.find(repository => repository.fullName === selectedRepositoryFullName),
+    [repositories, selectedRepositoryFullName]
+  );
+
+  const confirmGitHubRepository = useCallback(() => {
+    if (selectedRepository) onGitHubAppRepositorySelect?.(selectedRepository);
+  }, [onGitHubAppRepositorySelect, selectedRepository]);
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -173,32 +199,78 @@ export function UploadDropzone({
               </Select>
             </label>
           )}
-          <label className="block">
+          <div className="block">
             <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">Select repository</span>
             {repositoryListStatus === 'loaded' && repositories.length > 0 ? (
-              <Select
-                value={selectedRepositoryFullName || undefined}
-                onValueChange={value => {
-                  setSelectedRepositoryFullName(value);
-                  const repository = repositories.find(repo => repo.fullName === value);
-                  if (repository) onGitHubAppRepositorySelect?.(repository);
-                }}
-              >
-                <SelectTrigger aria-label="Select repository" className={shipSealSelectTriggerClass}>
-                  <SelectValue placeholder="Select repository" />
-                </SelectTrigger>
-                <SelectContent className={shipSealSelectContentClass}>
-                  {repositories.map(repository => (
-                    <SelectItem key={repository.fullName} value={repository.fullName} className={shipSealSelectItemClass}>
-                      {repository.fullName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    aria-label="Search repositories"
+                    value={repositorySearch}
+                    onChange={event => setRepositorySearch(event.target.value)}
+                    placeholder="Search repositories"
+                    className="h-10 rounded-xl border-primary/25 bg-secondary/25 pl-9"
+                  />
+                </div>
+                <Select
+                  value={selectedRepositoryFullName}
+                  onValueChange={value => setSelectedRepositoryFullName(value)}
+                >
+                  <SelectTrigger aria-label="Select repository" className={shipSealSelectTriggerClass}>
+                    <SelectValue placeholder={filteredRepositories.length ? 'Choose a repository' : 'No matching repositories'} />
+                  </SelectTrigger>
+                  <SelectContent className={shipSealSelectContentClass}>
+                    {filteredRepositories.map(repository => (
+                      <SelectItem key={repository.fullName} value={repository.fullName} className={shipSealSelectItemClass}>
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <span className="truncate font-medium">{repository.fullName}</span>
+                          <span className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                            <span>{repository.private ? 'Private' : 'Public'}</span>
+                            <span className="inline-flex items-center gap-1">
+                              <GitBranch className="h-3 w-3" /> {repository.defaultBranch || 'default branch'}
+                            </span>
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {filteredRepositories.length === 0 && (
+                  <div className="rounded-lg border border-border/60 bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
+                    No repositories match that search.
+                  </div>
+                )}
+                {selectedRepository && (
+                  <div className="rounded-xl border border-primary/30 bg-primary/10 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-foreground">{selectedRepository.fullName}</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <Badge variant="outline" className="border-border/70 bg-background/25 text-[10px]">
+                            {selectedRepository.private ? 'Private' : 'Public'}
+                          </Badge>
+                          <span className="inline-flex items-center gap-1">
+                            <GitBranch className="h-3 w-3" /> {selectedRepository.defaultBranch || 'default branch'}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={confirmGitHubRepository}
+                        disabled={disabled}
+                        className="bg-gradient-primary border-0 shadow-glow hover:opacity-90 sm:shrink-0"
+                      >
+                        Scan selected repository
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : (
               <Input aria-label="Select repository" disabled placeholder="Connect GitHub to list repositories" />
             )}
-          </label>
+          </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubRepositoryRetry}>
               Retry repository listing
@@ -209,6 +281,11 @@ export function UploadDropzone({
             <Button type="button" variant="ghost" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubDisconnect}>
               Disconnect GitHub
             </Button>
+            {repositoryListStatus === 'error' && (
+              <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => setMode('github')}>
+                Use public URL instead
+              </Button>
+            )}
             {appConfig.installUrl && (
               <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubInstall}>
                 Install or configure ShipSeal GitHub App

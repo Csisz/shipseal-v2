@@ -93,7 +93,7 @@ vi.mock('@/components/agentready/UploadDropzone', () => ({
       <button type="button" onClick={onGitHubDisconnect}>Disconnect GitHub</button>
       {repositoryListStatus === 'loaded' && (
         <button type="button" onClick={() => onGitHubAppRepositorySelect?.(repositories[0])}>
-          Select {repositories[0]?.fullName}
+          Scan selected repository: {repositories[0]?.fullName}
         </button>
       )}
     </div>
@@ -177,9 +177,9 @@ describe('ShipSeal pre-scan intake flow', () => {
     expect(screen.getByText(/GitHub App installation detected. Loading repositories/i)).toBeInTheDocument();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/repositories?installationId=12345'));
     expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBe('12345');
-    expect(await screen.findByRole('button', { name: /Select Csisz\/shipseal/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Scan selected repository: Csisz\/shipseal/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Select Csisz\/shipseal/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Scan selected repository: Csisz\/shipseal/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /Full ShipSeal package/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Scan project$/i }));
 
@@ -234,7 +234,7 @@ describe('ShipSeal pre-scan intake flow', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/repositories?installationId=777'));
     expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBe('777');
-    expect(await screen.findByRole('button', { name: /Select Csisz\/shipseal/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Scan selected repository: Csisz\/shipseal/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Retry repository listing/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));

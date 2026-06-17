@@ -5,7 +5,7 @@ import type { ReadinessReport } from '@/lib/types';
 import type { PartialProjectIntake } from '@/lib/intake';
 import { normalizeProjectIntake } from '@/lib/intake';
 import { buildRepoContextPackJson, buildScoreJson, downloadAgentPackZip } from '@/lib/exports';
-import { getDeliveryPackRequiredPaths } from '@/lib/deliveryPack';
+import { getDeliveryPackRequiredPaths, resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { downloadClientReportPdf, generateClientReportHtml } from '@/lib/report';
 import { toast } from '@/hooks/use-toast';
 
@@ -13,12 +13,14 @@ interface Props {
   report: ReadinessReport;
   intake?: PartialProjectIntake;
   intakeSkipped?: boolean;
+  selectedPackages?: string[];
 }
 
-export function DeliveryPackPreview({ report, intake, intakeSkipped = false }: Props) {
+export function DeliveryPackPreview({ report, intake, intakeSkipped = false, selectedPackages = [] }: Props) {
   const normalizedIntake = normalizeProjectIntake(intake, report.repoName);
   const requiredPaths = getDeliveryPackRequiredPaths();
-  const scoreJson = buildScoreJson(report);
+  const focus = resolveDeliveryPackFocus(selectedPackages);
+  const scoreJson = buildScoreJson(report, { selectedPackages });
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const risks = previewRisks(report, normalizedIntake);
   const goNoGo = goNoGoCategory(report, normalizedIntake);
@@ -78,6 +80,22 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false }: P
         <PreviewMetric label="Output files" value={`${requiredPaths.length} required`} />
       </div>
 
+      <div className="mb-5 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Delivery focus</span>
+          {focus.selectedGoals.map(goal => (
+            <Badge key={goal.id} variant="outline" className="border-primary/45 bg-background/25 text-[10px]">
+              {goal.title}
+            </Badge>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {focus.fullPackage
+            ? 'Full ShipSeal includes every required output.'
+            : `${focus.emphasizedPaths.length} outputs are highlighted first for this goal. The ZIP still includes the complete required Delivery Pack.`}
+        </p>
+      </div>
+
       {intakeSkipped && (
         <div className="mb-5 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning">
           Client report quality is limited because project intake was skipped.
@@ -133,8 +151,13 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false }: P
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-2">Files included in the Delivery Pack</div>
           <div className="grid sm:grid-cols-2 gap-1.5 max-h-56 overflow-auto pr-1">
             {requiredPaths.map(path => (
-              <div key={path} className="font-mono text-[11px] text-foreground/85 truncate rounded border border-border/50 bg-background/35 px-2 py-1">
-                {path}
+              <div key={path} className="flex items-center gap-2 rounded border border-border/50 bg-background/35 px-2 py-1">
+                {!focus.fullPackage && focus.emphasizedPaths.includes(path) && (
+                  <span className="shrink-0 rounded border border-primary/35 bg-primary/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-primary-glow">
+                    Focus
+                  </span>
+                )}
+                <span className="truncate font-mono text-[11px] text-foreground/85">{path}</span>
               </div>
             ))}
           </div>

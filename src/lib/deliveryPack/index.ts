@@ -53,3 +53,11 @@ export type {
 export {
   generateClientHandoffFiles,
 } from './clientHandoff';
+
+export type {
+  DeliveryPackFocus,
+} from './goalMapping';
+
+export {
+  resolveDeliveryPackFocus,
+} from './goalMapping';
