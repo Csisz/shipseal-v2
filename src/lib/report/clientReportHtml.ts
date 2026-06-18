@@ -22,7 +22,6 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       --brand: #1d5cff;
       --brand-dark: #08245f;
       --brand-mid: #0b3b94;
-      --seal: #d7e7ff;
       --warm: #f8efe1;
       --success: #067647;
       --warning: #b54708;
@@ -50,7 +49,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     }
 
     header {
-      padding: 30px 36px 24px;
+      padding: 28px 36px 22px;
       border-bottom: 1px solid #cbd7ec;
       background:
         linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(29,92,255,0.16) 54%, rgba(8,36,95,0.18) 100%),
@@ -65,34 +64,18 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       justify-content: space-between;
       gap: 24px;
       align-items: flex-start;
-      margin-bottom: 18px;
+      margin-bottom: 14px;
     }
 
     .brand-lockup {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .seal-mark {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
-      border: 1px solid rgba(255,255,255,0.42);
-      background: rgba(255,255,255,0.12);
-      color: #fff;
-      font-weight: 900;
-      line-height: 1;
+      display: block;
     }
 
     .brand-name {
-      font-weight: 800;
+      font-weight: 900;
       letter-spacing: 0;
       color: #fff;
-      font-size: 14px;
+      font-size: 16px;
       text-transform: uppercase;
     }
 
@@ -105,7 +88,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     }
 
     h1 {
-      font-size: 35px;
+      font-size: 33px;
       line-height: 1.12;
       margin: 6px 0 8px;
       letter-spacing: 0;
@@ -125,10 +108,10 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
 
     p { margin: 0 0 8px; }
 
-    main { padding: 24px 36px 32px; }
+    main { padding: 22px 36px 24px; }
 
     section {
-      margin: 0 0 18px;
+      margin: 0 0 15px;
       break-inside: avoid;
       page-break-inside: avoid;
     }
@@ -142,7 +125,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     }
 
     .meta-grid { grid-template-columns: repeat(4, 1fr); margin-top: 16px; }
-    .score-grid { grid-template-columns: 1.25fr 1fr 1.25fr 0.7fr; margin-top: 12px; }
+    .score-grid { grid-template-columns: 1.45fr 1fr 1.2fr 0.65fr; margin-top: 10px; }
     .two-grid { grid-template-columns: repeat(2, 1fr); }
     .three-grid { grid-template-columns: repeat(3, 1fr); }
 
@@ -172,32 +155,40 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       color: var(--brand-dark);
       border-color: rgba(255,255,255,0.72);
       box-shadow: inset 0 0 0 1px rgba(8,36,95,0.08);
+      min-width: 0;
+      overflow: hidden;
     }
 
     .score-value {
-      display: inline-flex;
+      display: flex;
       align-items: baseline;
+      justify-content: center;
       gap: 5px;
       width: 100%;
+      max-width: 100%;
       white-space: nowrap;
-      font-size: 42px;
       line-height: 1;
       font-weight: 800;
       letter-spacing: 0;
-      margin-top: 4px;
+      margin-top: 2px;
       overflow-wrap: normal;
       word-break: keep-all;
+      overflow: hidden;
     }
 
     .score-number {
-      font-size: 48px;
+      display: inline-block;
+      flex: 0 0 auto;
+      font-size: 42px;
       line-height: 0.95;
       color: var(--brand-dark);
       white-space: nowrap;
     }
 
     .score-denominator {
-      font-size: 18px;
+      display: inline-block;
+      flex: 0 0 auto;
+      font-size: 16px;
       font-weight: 800;
       color: #5270a4;
       white-space: nowrap;
@@ -283,10 +274,10 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
 
     .disclaimer {
       border-top: 1px solid var(--line);
-      padding: 12px 14px 0;
+      padding: 10px 12px 0;
       color: var(--muted);
-      font-size: 12px;
-      background: #fbfcff;
+      font-size: 11.5px;
+      background: linear-gradient(180deg, #fbfcff 0%, #f6f8fc 100%);
       border-radius: 8px 8px 0 0;
       break-inside: avoid;
       page-break-inside: avoid;
@@ -308,7 +299,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     }
     .file-list {
       columns: 2;
-      column-gap: 18px;
+      column-gap: 16px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
       font-size: 12.5px;
       overflow-wrap: anywhere;
@@ -317,15 +308,15 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     .manifest-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 8px;
-      margin-top: 10px;
+      gap: 7px;
+      margin-top: 8px;
     }
 
     .manifest-group {
       border: 1px solid #dce4f2;
       background: #fbfcff;
       border-radius: 8px;
-      padding: 9px 10px;
+      padding: 8px 9px;
       break-inside: avoid;
       page-break-inside: avoid;
     }
@@ -341,8 +332,8 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       list-style: none;
       padding-left: 0;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 12.5px;
-      line-height: 1.36;
+      font-size: 12.2px;
+      line-height: 1.3;
       color: #24324a;
       overflow-wrap: anywhere;
     }
@@ -369,9 +360,9 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
         border-radius: 0;
         box-shadow: none;
       }
-      header { padding: 20px 22px 18px; }
-      main { padding: 18px 0 0; }
-      section { margin-bottom: 14px; }
+      header { padding: 18px 22px 16px; }
+      main { padding: 16px 0 0; }
+      section { margin-bottom: 12px; }
       .card { border-color: #cfd7e3; padding: 10px; }
       .avoid-break, .card, section {
         break-inside: avoid;
@@ -393,11 +384,8 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     <header>
       <div class="brand">
         <div class="brand-lockup">
-          <div class="seal-mark">S</div>
-          <div>
-            <div class="brand-name">ShipSeal</div>
-            <div class="eyebrow">Sealed delivery pack report</div>
-          </div>
+          <div class="brand-name">SHIPSEAL</div>
+          <div class="eyebrow">Sealed Delivery Pack Report</div>
         </div>
         <div class="small muted">Generated ${escapeHtml(summary.generatedTimestamp)}</div>
       </div>
