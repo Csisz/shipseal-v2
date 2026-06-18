@@ -156,31 +156,31 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       border-color: rgba(255,255,255,0.72);
       box-shadow: inset 0 0 0 1px rgba(8,36,95,0.08);
       min-width: 0;
-      overflow: hidden;
+      overflow: visible;
     }
 
     .score-value {
       display: flex;
       align-items: baseline;
-      justify-content: center;
-      gap: 5px;
+      justify-content: flex-start;
+      gap: 4px;
       width: 100%;
       max-width: 100%;
       white-space: nowrap;
       line-height: 1;
       font-weight: 800;
       letter-spacing: 0;
-      margin-top: 2px;
+      margin-top: 3px;
       overflow-wrap: normal;
       word-break: keep-all;
-      overflow: hidden;
+      overflow: visible;
     }
 
     .score-number {
       display: inline-block;
       flex: 0 0 auto;
-      font-size: 42px;
-      line-height: 0.95;
+      font-size: 30px;
+      line-height: 1;
       color: var(--brand-dark);
       white-space: nowrap;
     }
@@ -188,14 +188,15 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     .score-denominator {
       display: inline-block;
       flex: 0 0 auto;
-      font-size: 16px;
+      font-size: 14px;
+      line-height: 1;
       font-weight: 800;
       color: #5270a4;
       white-space: nowrap;
     }
 
     .score-text {
-      font-size: 26px;
+      font-size: 22px;
       line-height: 1;
       color: var(--brand-dark);
       white-space: nowrap;
