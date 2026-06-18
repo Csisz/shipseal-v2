@@ -23,6 +23,8 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('ShipSeal');
     expect(html).toContain(SAMPLE_PROJECT_INTAKE.projectName);
     expect(html).toContain('Readiness score');
+    expect(html).toContain('class="score-number"');
+    expect(html).toContain('class="score-denominator"');
     expect(html).toContain('Readiness decision');
     expect(html).toContain('AI Act readiness pre-screen');
     expect(html).toContain('Testing and eval summary');

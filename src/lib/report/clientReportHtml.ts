@@ -15,12 +15,15 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
   <style>
     :root {
       color-scheme: light;
-      --ink: #172033;
+      --ink: #142033;
       --muted: #667085;
-      --line: #d9e0ea;
-      --soft: #f5f7fb;
-      --brand: #155eef;
-      --brand-dark: #0b3b94;
+      --line: #d7deea;
+      --soft: #f6f8fc;
+      --brand: #1d5cff;
+      --brand-dark: #08245f;
+      --brand-mid: #0b3b94;
+      --seal: #d7e7ff;
+      --warm: #f8efe1;
       --success: #067647;
       --warning: #b54708;
       --danger: #b42318;
@@ -30,7 +33,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
 
     body {
       margin: 0;
-      background: #eef2f7;
+      background: #e8edf5;
       color: var(--ink);
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       line-height: 1.42;
@@ -41,13 +44,18 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       margin: 32px auto;
       background: #fff;
       border: 1px solid var(--line);
-      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.15);
     }
 
     header {
-      padding: 28px 36px 22px;
-      border-bottom: 1px solid var(--line);
-      background: linear-gradient(135deg, #ffffff 0%, #eef5ff 100%);
+      padding: 30px 36px 24px;
+      border-bottom: 1px solid #cbd7ec;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(29,92,255,0.16) 54%, rgba(8,36,95,0.18) 100%),
+        linear-gradient(145deg, #071b49 0%, #0b3b94 58%, #155eef 100%);
+      color: #fff;
       break-inside: avoid;
       page-break-inside: avoid;
     }
@@ -60,16 +68,36 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       margin-bottom: 18px;
     }
 
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .seal-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.42);
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      font-weight: 900;
+      line-height: 1;
+    }
+
     .brand-name {
       font-weight: 800;
       letter-spacing: 0;
-      color: var(--brand-dark);
+      color: #fff;
       font-size: 14px;
       text-transform: uppercase;
     }
 
     .eyebrow {
-      color: var(--muted);
+      color: rgba(255,255,255,0.76);
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0;
@@ -77,10 +105,11 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     }
 
     h1 {
-      font-size: 34px;
+      font-size: 35px;
       line-height: 1.12;
       margin: 6px 0 8px;
       letter-spacing: 0;
+      max-width: 780px;
     }
 
     h2 {
@@ -112,8 +141,8 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       gap: 10px;
     }
 
-    .meta-grid { grid-template-columns: repeat(4, 1fr); }
-    .score-grid { grid-template-columns: 0.9fr 1fr 1.3fr 0.65fr; margin-top: 14px; }
+    .meta-grid { grid-template-columns: repeat(4, 1fr); margin-top: 16px; }
+    .score-grid { grid-template-columns: 1.25fr 1fr 1.25fr 0.7fr; margin-top: 12px; }
     .two-grid { grid-template-columns: repeat(2, 1fr); }
     .three-grid { grid-template-columns: repeat(3, 1fr); }
 
@@ -127,18 +156,58 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       overflow-wrap: anywhere;
     }
 
-    .score-card {
-      background: #0b3b94;
+    header .card {
+      border-color: rgba(255,255,255,0.22);
+      background: rgba(255,255,255,0.12);
       color: #fff;
-      border-color: #0b3b94;
+    }
+
+    header .label,
+    header .muted {
+      color: rgba(255,255,255,0.74);
+    }
+
+    .score-card {
+      background: #ffffff;
+      color: var(--brand-dark);
+      border-color: rgba(255,255,255,0.72);
+      box-shadow: inset 0 0 0 1px rgba(8,36,95,0.08);
     }
 
     .score-value {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 5px;
+      width: 100%;
+      white-space: nowrap;
       font-size: 42px;
       line-height: 1;
       font-weight: 800;
       letter-spacing: 0;
       margin-top: 4px;
+      overflow-wrap: normal;
+      word-break: keep-all;
+    }
+
+    .score-number {
+      font-size: 48px;
+      line-height: 0.95;
+      color: var(--brand-dark);
+      white-space: nowrap;
+    }
+
+    .score-denominator {
+      font-size: 18px;
+      font-weight: 800;
+      color: #5270a4;
+      white-space: nowrap;
+    }
+
+    .score-text {
+      font-size: 26px;
+      line-height: 1;
+      color: var(--brand-dark);
+      white-space: nowrap;
     }
 
     .label {
@@ -150,7 +219,35 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       margin-bottom: 4px;
     }
 
-    .score-card .label { color: rgba(255,255,255,0.72); }
+    .score-card .label { color: #62749a; }
+
+    .decision-card {
+      background: #f9fbff;
+      color: var(--ink);
+      border-color: rgba(255,255,255,0.72);
+    }
+
+    .package-card {
+      background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+      color: var(--ink);
+      border-color: rgba(255,255,255,0.72);
+    }
+
+    .output-card {
+      color: var(--ink);
+      background: var(--warm);
+      border-color: rgba(255,255,255,0.72);
+    }
+
+    .decision-card .muted,
+    .package-card .muted,
+    .output-card .muted {
+      color: var(--muted);
+    }
+
+    .output-card strong {
+      font-size: 22px;
+    }
 
     ul {
       padding-left: 18px;
@@ -186,9 +283,13 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
 
     .disclaimer {
       border-top: 1px solid var(--line);
-      padding-top: 18px;
+      padding: 12px 14px 0;
       color: var(--muted);
       font-size: 12px;
+      background: #fbfcff;
+      border-radius: 8px 8px 0 0;
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
 
     .muted { color: var(--muted); }
@@ -207,9 +308,42 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     }
     .file-list {
       columns: 2;
-      column-gap: 28px;
+      column-gap: 18px;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
+      font-size: 12.5px;
+      overflow-wrap: anywhere;
+    }
+
+    .manifest-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .manifest-group {
+      border: 1px solid #dce4f2;
+      background: #fbfcff;
+      border-radius: 8px;
+      padding: 9px 10px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .manifest-title {
+      color: var(--brand-mid);
+      font-size: 11px;
+      font-weight: 800;
+      margin-bottom: 5px;
+    }
+
+    .manifest-list {
+      list-style: none;
+      padding-left: 0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12.5px;
+      line-height: 1.36;
+      color: #24324a;
       overflow-wrap: anywhere;
     }
     .warning {
@@ -232,25 +366,25 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
         width: 100%;
         margin: 0;
         border: 0;
+        border-radius: 0;
         box-shadow: none;
       }
-      header { padding: 0 0 20px; }
-      main { padding: 20px 0 0; }
-      section { margin-bottom: 16px; }
+      header { padding: 20px 22px 18px; }
+      main { padding: 18px 0 0; }
+      section { margin-bottom: 14px; }
       .card { border-color: #cfd7e3; padding: 10px; }
       .avoid-break, .card, section {
         break-inside: avoid;
         page-break-inside: avoid;
       }
-      .file-list { columns: 2; }
+      .manifest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
     }
 
     @media (max-width: 760px) {
       .page { margin: 0; border-left: 0; border-right: 0; }
       header, main { padding-left: 22px; padding-right: 22px; }
-      .brand, .meta-grid, .score-grid, .two-grid, .three-grid, .roadmap { grid-template-columns: 1fr; display: grid; }
+      .brand, .meta-grid, .score-grid, .two-grid, .three-grid, .roadmap, .manifest-grid { grid-template-columns: 1fr; display: grid; }
       h1 { font-size: 28px; }
-      .file-list { columns: 1; }
     }
   </style>
 </head>
@@ -258,9 +392,12 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
   <div class="page">
     <header>
       <div class="brand">
-        <div>
-          <div class="brand-name">ShipSeal</div>
-          <div class="eyebrow">Print-ready client report</div>
+        <div class="brand-lockup">
+          <div class="seal-mark">S</div>
+          <div>
+            <div class="brand-name">ShipSeal</div>
+            <div class="eyebrow">Sealed delivery pack report</div>
+          </div>
         </div>
         <div class="small muted">Generated ${escapeHtml(summary.generatedTimestamp)}</div>
       </div>
@@ -275,18 +412,18 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       <div class="score-grid">
         <div class="card score-card">
           <div class="label">Readiness score</div>
-          <div class="score-value">${escapeHtml(summary.score)}</div>
+          ${renderScore(summary.score)}
         </div>
-        <div class="card">
+        <div class="card decision-card">
           <div class="label">Readiness decision</div>
           <strong>${escapeHtml(summary.status)}</strong>
           <div class="small muted">${escapeHtml(summary.goNoGo)}</div>
         </div>
-        <div class="card">
+        <div class="card package-card">
           <div class="label">Selected package</div>
           <strong>${escapeHtml(summary.selectedGoal)}</strong>
         </div>
-        <div class="card"><div class="label">Outputs</div><strong>${escapeHtml(summary.generatedOutputCount)}</strong></div>
+        <div class="card output-card"><div class="label">Outputs</div><strong>${escapeHtml(summary.generatedOutputCount)}</strong></div>
       </div>
     </header>
 
@@ -348,7 +485,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       <section>
         <h2>Generated file list</h2>
         <p class="muted small">This list matches the selected package outputs recorded in score.json and used for the Delivery Pack ZIP.</p>
-        ${renderList(summary.generatedFiles, 'file-list')}
+        ${renderGeneratedFiles(summary.generatedFiles)}
       </section>
 
       <section class="avoid-break">
@@ -721,6 +858,63 @@ function limitedScanWarning(scanSummaryValue: unknown) {
   const scan = asRecord(scanSummaryValue);
   const warning = arrayValue(scan.warnings).map(value => String(value)).find(value => /limited scan|fallback scan|ZIP parsing failed/i.test(value));
   return warning || 'Limited scan: ShipSeal could not fully parse the repository. Do not treat this as a complete client handoff audit.';
+}
+
+function renderScore(score: string) {
+  const match = score.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (!match) {
+    return `<div class="score-value"><span class="score-text">${escapeHtml(score)}</span></div>`;
+  }
+
+  return [
+    '<div class="score-value" aria-label="Readiness score">',
+    `<span class="score-number">${escapeHtml(match[1])}</span>`,
+    `<span class="score-denominator">/${escapeHtml(match[2])}</span>`,
+    '</div>',
+  ].join('');
+}
+
+function renderGeneratedFiles(files: string[]) {
+  const groups = groupGeneratedFiles(files);
+  return [
+    '<div class="manifest-grid">',
+    ...groups.map(group => [
+      '<div class="manifest-group">',
+      `<div class="manifest-title">${escapeHtml(group.title)}</div>`,
+      renderList(group.files, 'manifest-list'),
+      '</div>',
+    ].join('')),
+    '</div>',
+  ].join('');
+}
+
+function groupGeneratedFiles(files: string[]) {
+  const groups = new Map<string, string[]>();
+
+  for (const file of files) {
+    const key = file.includes('/') ? file.split('/')[0] : 'root';
+    groups.set(key, [...(groups.get(key) || []), file]);
+  }
+
+  return Array.from(groups.entries()).map(([key, groupFiles]) => ({
+    title: manifestGroupTitle(key),
+    files: groupFiles,
+  }));
+}
+
+function manifestGroupTitle(folder: string) {
+  const labels: Record<string, string> = {
+    root: 'Root metadata',
+    '01-agent-instructions': 'Agent instructions',
+    '02-skills': 'Skills',
+    '03-mcp-governance': 'MCP governance',
+    '04-testing': 'Testing',
+    '05-ai-act-readiness': 'AI Act readiness',
+    '06-client-handoff': 'Client handoff',
+    '07-context': 'Repository context',
+  };
+
+  return labels[folder] || folder;
 }
 
 function renderList(values: string[], className?: string) {
