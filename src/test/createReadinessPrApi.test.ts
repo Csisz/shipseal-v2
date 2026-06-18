@@ -78,6 +78,8 @@ describe('Create Readiness PR API', () => {
     expect(payload.repo).toBe('shipseal');
     expect(payload.prTitle).toBe('Add ShipSeal readiness pack');
     expect(payload.prBody).toContain('Selected package: Full ShipSeal package');
+    expect(payload.prBody).toContain('This PR adds a safe reviewed subset of the selected ShipSeal package');
+    expect(payload.prBody).toContain('The downloadable Delivery Pack contains the full package outputs');
     expect(payload.prBody).toContain(`Readiness score: ${report.score}/100`);
     expect(payload.prBody).toContain('Uploaded or imported repository code was not executed');
     expect(payload.prBody).toContain('Files added:');
@@ -106,7 +108,7 @@ describe('Create Readiness PR API', () => {
     const paths = payload.files.map(file => file.path);
 
     expect(payload.prBody).toContain('Selected package: Security and data pre-screen');
-    expect(payload.prBody).toContain('PR output count: 3');
+    expect(payload.prBody).toContain('PR safe subset: 3');
     expect(paths).toEqual([
       'SECURITY.md',
       'docs/CRITICAL_FILES_POLICY.md',

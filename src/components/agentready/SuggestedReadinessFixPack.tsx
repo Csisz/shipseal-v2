@@ -138,8 +138,11 @@ export function SuggestedReadinessFixPack({ report, githubConnection, selectedPa
               <InfoRow label="Branch name" value={prPlan.branchName} />
               <InfoRow label="PR title" value={prPlan.title} />
               <InfoRow label="Selected package" value={focus.packageLabel} />
-              <InfoRow label="PR files" value={`${prPreviewFiles.length} files`} />
-              <div className="mt-3 text-xs text-muted-foreground">{prPlan.summary}</div>
+              <InfoRow label="Delivery Pack outputs" value={`${focus.generatedPaths.length} files`} />
+              <InfoRow label="PR safe subset" value={`${prPreviewFiles.length} files`} />
+              <div className="mt-3 text-xs text-muted-foreground">
+                {prPlan.summary} The repository PR stays intentionally smaller than the ZIP/report export.
+              </div>
             </div>
 
             <div className="rounded-lg border border-border/60 bg-secondary/25 p-4">
@@ -164,7 +167,7 @@ export function SuggestedReadinessFixPack({ report, githubConnection, selectedPa
             <div className="rounded-lg border border-border/60 bg-secondary/25 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <GitBranch className="h-3.5 w-3.5 text-accent" />
-                <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Changed files preview</div>
+                <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">PR safe subset preview</div>
               </div>
               <div className="grid sm:grid-cols-2 gap-2">
                 {prPreviewFiles.map(file => (
@@ -175,7 +178,7 @@ export function SuggestedReadinessFixPack({ report, githubConnection, selectedPa
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                Suggested files are included in your Delivery Pack. Add them to your repository to improve future scans.
+                These repository-ready files are a safe subset of the selected package. The full Delivery Pack remains available as the ZIP/report export.
               </p>
             </div>
 

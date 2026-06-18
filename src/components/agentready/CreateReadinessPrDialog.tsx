@@ -172,9 +172,12 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
                 <Info label="Branch" value={plan.branchName} />
                 <Info label="PR title" value={plan.title} />
                 <Info label="Selected package" value={focus.packageLabel} />
-                <Info label="PR output count" value={`${prFiles.length} files`} />
+                <Info label="Delivery Pack outputs" value={`${focus.generatedPaths.length} files`} />
+                <Info label="PR safe subset" value={`${prFiles.length} files`} />
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">{focus.packageSummary}</p>
+              <p className="mt-3 text-xs text-muted-foreground">
+                The downloadable Delivery Pack contains the full selected package: {focus.packageSummary} This PR adds only a safe reviewed subset of repository-ready files.
+              </p>
               <div className="mt-4 grid sm:grid-cols-2 gap-2">
                 {prFiles.map(file => (
                   <div key={file.path} className="rounded-md border border-border/60 bg-background/30 px-3 py-2">

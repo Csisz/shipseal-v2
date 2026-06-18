@@ -111,7 +111,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     main { padding: 22px 36px 24px; }
 
     section {
-      margin: 0 0 15px;
+      margin: 0 0 12px;
       break-inside: avoid;
       page-break-inside: avoid;
     }
@@ -270,12 +270,12 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     .roadmap {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      gap: 8px;
     }
 
     .disclaimer {
       border-top: 1px solid var(--line);
-      padding: 10px 12px 0;
+      padding: 8px 10px 0;
       color: var(--muted);
       font-size: 11.5px;
       background: linear-gradient(180deg, #fbfcff 0%, #f6f8fc 100%);
@@ -361,15 +361,18 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
         border-radius: 0;
         box-shadow: none;
       }
-      header { padding: 18px 22px 16px; }
-      main { padding: 16px 0 0; }
-      section { margin-bottom: 12px; }
+      header { padding: 16px 22px 14px; }
+      main { padding: 14px 0 0; }
+      section { margin-bottom: 9px; }
       .card { border-color: #cfd7e3; padding: 10px; }
       .avoid-break, .card, section {
         break-inside: avoid;
         page-break-inside: avoid;
       }
-      .manifest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+      .file-list { columns: 3; column-gap: 12px; font-size: 11.5px; }
+      .manifest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+      .roadmap { gap: 7px; }
+      .disclaimer { margin-top: 4px; padding-top: 7px; }
     }
 
     @media (max-width: 760px) {

@@ -43,7 +43,7 @@ export function buildReadinessPrPlan(selectedPackages: string[] = []): Readiness
   return {
     branchName: 'shipseal/readiness-pack',
     title: 'Add ShipSeal readiness pack',
-    summary: `This pull request adds ShipSeal-generated readiness files for ${focus.packageLabel}: ${focus.packageSummary}`,
+    summary: `This pull request adds a safe starter subset of ShipSeal-generated readiness files for ${focus.packageLabel}. The full Delivery Pack covers: ${focus.packageSummary}`,
     files,
     categories,
     manualGitSteps,

@@ -300,6 +300,64 @@ describe('SuggestedReadinessFixPack', () => {
     expect(payload.prBody).toContain('CI workflow recommendation as an example');
   });
 
+  it('distinguishes Agent development Delivery Pack outputs from the PR safe subset', async () => {
+    const report = buildSampleReport();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        ok: true,
+        prUrl: 'https://github.com/Csisz/shipseal/pull/34',
+        branchName: 'shipseal/readiness-pack',
+        baseBranch: 'main',
+        fileCount: 3,
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <CreateReadinessPrDialog
+        report={report}
+        files={buildSuggestedReadinessFixPack(report)}
+        selectedPackages={['agent-readiness']}
+        githubConnection={createConnectedGitHubConnection({
+          owner: 'Csisz',
+          repo: 'shipseal',
+          defaultBranch: 'main',
+          installationId: '123',
+        })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Create Readiness PR$/i }));
+    const dialog = screen.getByRole('dialog');
+
+    expect(within(dialog).getByText('Agent development pack')).toBeInTheDocument();
+    expect(within(dialog).getByText('Delivery Pack outputs')).toBeInTheDocument();
+    expect(within(dialog).getByText('11 files')).toBeInTheDocument();
+    expect(within(dialog).getByText('PR safe subset')).toBeInTheDocument();
+    expect(within(dialog).getByText('3 files')).toBeInTheDocument();
+    expect(within(dialog).getByText(/safe reviewed subset of repository-ready files/i)).toBeInTheDocument();
+    expect(within(dialog).queryByText('01-agent-instructions/CODEX_PROMPTS.md')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('.github/workflows/ci.yml')).not.toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByLabelText(/I understand ShipSeal will create a branch/i));
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create Pull Request/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/create-readiness-pr', expect.objectContaining({ method: 'POST' })));
+    const [, request] = fetchMock.mock.calls[0];
+    const payload = JSON.parse(request.body);
+    const paths = payload.files.map((file: { path: string }) => file.path);
+
+    expect(paths).toEqual(['AGENTS.md', 'CLAUDE.md', 'docs/CRITICAL_FILES_POLICY.md']);
+    expect(paths).not.toContain('.github/workflows/ci.yml');
+    expect(payload.prBody).toContain('Selected package: Agent development pack');
+    expect(payload.prBody).toContain('Delivery Pack outputs: 11');
+    expect(payload.prBody).toContain('PR safe subset: 3');
+    expect(payload.prBody).toContain('This PR adds a safe reviewed subset of the selected ShipSeal package');
+    expect(payload.prBody).toContain('The downloadable Delivery Pack contains the full package outputs');
+  });
+
   it('shows friendly guidance when the connected GitHub App cannot write to the selected repo', async () => {
     const report = buildSampleReport();
     const fetchMock = vi.fn().mockResolvedValue({

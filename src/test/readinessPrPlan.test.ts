@@ -10,6 +10,8 @@ describe('Readiness PR plan', () => {
     expect(plan.branchName).toBe('shipseal/readiness-pack');
     expect(plan.title).toBe('Add ShipSeal readiness pack');
     expect(plan.summary).toContain('ShipSeal-generated readiness files');
+    expect(plan.summary).toContain('safe starter subset');
+    expect(plan.summary).toContain('The full Delivery Pack covers');
     expect(plan.safetyNote).toContain('Uploaded or imported repository code was not executed');
     expect(paths).toContain('AGENTS.md');
     expect(paths).toContain('CLAUDE.md');

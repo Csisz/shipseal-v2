@@ -135,7 +135,6 @@ const GOAL_READINESS_PR_PATHS: Record<ShipSealPackageId, string[]> = {
   'agent-readiness': [
     'AGENTS.md',
     'CLAUDE.md',
-    'docs/AGENT_CHANGE_POLICY.md',
     'docs/CRITICAL_FILES_POLICY.md',
   ],
   'testing-red-team': [
