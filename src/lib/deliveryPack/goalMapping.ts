@@ -9,6 +9,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '06-client-handoff/CLIENT_HANDOFF_REPORT.html',
     '06-client-handoff/EXECUTIVE_SUMMARY.md',
     '06-client-handoff/NEXT_STEPS_ROADMAP.md',
+    '06-client-handoff/DELIVERY_MANIFEST.md',
     ROOT_SCORE,
   ],
   'launch-readiness': [
@@ -16,6 +17,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '04-testing/TESTING_STRATEGY.md',
     '05-ai-act-readiness/AI_ACT_READINESS_CHECKLIST.md',
     '05-ai-act-readiness/TRANSPARENCY_NOTICE_DRAFT.md',
+    '05-ai-act-readiness/USER_FACING_DISCLOSURE_NOTES.md',
     '05-ai-act-readiness/LEGAL_REVIEW_QUESTIONS.md',
     '06-client-handoff/CLIENT_HANDOFF_REPORT.md',
     '06-client-handoff/EXECUTIVE_SUMMARY.md',
@@ -23,19 +25,21 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     ROOT_SCORE,
   ],
   'safety-risk': [
-    '03-mcp-governance/MCP_SECURITY_POLICY.md',
-    '03-mcp-governance/MCP_TOOL_ALLOWLIST.md',
+    '08-security-data/SECURITY_NOTES.md',
+    '08-security-data/ENV_SECRETS_FINDINGS.md',
+    '08-security-data/DATA_PRIVACY_CHECKLIST.md',
+    '08-security-data/RISK_SUMMARY.md',
+    '08-security-data/HUMAN_APPROVAL_REVIEWERS.md',
     '04-testing/RED_TEAM_PROMPTS.md',
-    '05-ai-act-readiness/AI_ACT_READINESS_CHECKLIST.md',
-    '05-ai-act-readiness/LEGAL_REVIEW_QUESTIONS.md',
-    '06-client-handoff/CLIENT_HANDOFF_REPORT.md',
     ROOT_SCORE,
   ],
   'agent-readiness': [
     '01-agent-instructions/AGENTS.md',
     '01-agent-instructions/CLAUDE.md',
     '01-agent-instructions/CODEX_PROMPTS.md',
+    '01-agent-instructions/CURSOR_RULES.md',
     '01-agent-instructions/REVIEWER_PROMPT.md',
+    '01-agent-instructions/AGENT_SAFETY_NOTES.md',
     '02-skills/code-review/SKILL.md',
     '02-skills/test-generation/SKILL.md',
     '07-context/REPO_CONTEXT_PACK.md',
@@ -58,10 +62,18 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
   ],
   'sales-present': [
     '05-ai-act-readiness/TRANSPARENCY_NOTICE_DRAFT.md',
+    '05-ai-act-readiness/USER_FACING_DISCLOSURE_NOTES.md',
     '06-client-handoff/CLIENT_HANDOFF_REPORT.md',
     '06-client-handoff/CLIENT_HANDOFF_REPORT.html',
     '06-client-handoff/EXECUTIVE_SUMMARY.md',
     '07-context/REPO_CONTEXT_PACK.md',
+    ROOT_SCORE,
+  ],
+  'ai-act-transparency': [
+    '05-ai-act-readiness/TRANSPARENCY_NOTICE_DRAFT.md',
+    '05-ai-act-readiness/AI_ACT_READINESS_CHECKLIST.md',
+    '05-ai-act-readiness/USER_FACING_DISCLOSURE_NOTES.md',
+    '05-ai-act-readiness/LEGAL_REVIEW_QUESTIONS.md',
     ROOT_SCORE,
   ],
   'mcp-readiness': [
@@ -85,6 +97,7 @@ const GOAL_LABELS: Record<ShipSealPackageId, string> = {
   'rescue-refactor': 'Rescue and refactor pack',
   'sales-present': 'Sales and presentation pack',
   'mcp-readiness': 'MCP readiness pack',
+  'ai-act-transparency': 'AI Act and transparency pack',
   'full-package': 'Full ShipSeal package',
 };
 
@@ -97,7 +110,59 @@ const GOAL_SUMMARIES: Record<ShipSealPackageId, string> = {
   'rescue-refactor': 'Prioritized fix roadmap, review guidance, and repository context for cleanup.',
   'sales-present': 'Client-facing report, executive summary, transparency draft, and presentation context.',
   'mcp-readiness': 'MCP readiness, MCP security policy, tool allowlist, and server recommendations.',
+  'ai-act-transparency': 'Transparency notice, AI Act readiness checklist, user-facing disclosure notes, and legal review questions.',
   'full-package': 'Everything ShipSeal can generate across handoff, agents, testing, safety, MCP, and transparency.',
+};
+
+const GOAL_READINESS_PR_PATHS: Record<ShipSealPackageId, string[]> = {
+  'client-handoff': [
+    'docs/HANDOFF_CHECKLIST.md',
+    'docs/OWNERSHIP.md',
+    'docs/RELEASE_CHECKLIST.md',
+  ],
+  'launch-readiness': [
+    'CONTRIBUTING.md',
+    'docs/RELEASE_CHECKLIST.md',
+    'docs/CRITICAL_FILES_POLICY.md',
+    'docs/OWNERSHIP.md',
+    'docs/shipseal/CI_QUALITY_GATE.example.yml',
+  ],
+  'safety-risk': [
+    'SECURITY.md',
+    'docs/CRITICAL_FILES_POLICY.md',
+    'docs/OWNERSHIP.md',
+  ],
+  'agent-readiness': [
+    'AGENTS.md',
+    'CLAUDE.md',
+    'docs/AGENT_CHANGE_POLICY.md',
+    'docs/CRITICAL_FILES_POLICY.md',
+  ],
+  'testing-red-team': [
+    'CONTRIBUTING.md',
+    'docs/RELEASE_CHECKLIST.md',
+    'docs/shipseal/CI_QUALITY_GATE.example.yml',
+  ],
+  'rescue-refactor': [
+    'AGENTS.md',
+    'docs/AGENT_CHANGE_POLICY.md',
+    'docs/CRITICAL_FILES_POLICY.md',
+    'docs/OWNERSHIP.md',
+  ],
+  'sales-present': [
+    'docs/HANDOFF_CHECKLIST.md',
+    'docs/AI_ACT_READINESS_NOTES.md',
+  ],
+  'mcp-readiness': [
+    'docs/CRITICAL_FILES_POLICY.md',
+    'docs/OWNERSHIP.md',
+  ],
+  'ai-act-transparency': [
+    'docs/AI_ACT_READINESS_NOTES.md',
+    'docs/HANDOFF_CHECKLIST.md',
+    'docs/CRITICAL_FILES_POLICY.md',
+  ],
+  'full-package': [],
 };
 
 export interface DeliveryPackFocus {
@@ -105,6 +170,7 @@ export interface DeliveryPackFocus {
   emphasizedPaths: string[];
   generatedPaths: string[];
   manifestPaths: string[];
+  readinessPrPaths: string[];
   fullPackage: boolean;
   packageLabel: string;
   packageSummary: string;
@@ -117,13 +183,20 @@ export function resolveDeliveryPackFocus(selectedPackages: string[] = []): Deliv
   const generatedPaths = fullPackage
     ? allPaths
     : uniquePaths(selectedGoals.flatMap(goal => GOAL_OUTPUT_PATHS[goal])).filter(path => allPaths.includes(path));
+  const allReadinessPrPaths = uniquePaths(Object.entries(GOAL_READINESS_PR_PATHS)
+    .filter(([id]) => id !== FULL_PACKAGE_ID)
+    .flatMap(([, paths]) => paths));
+  const readinessPrPaths = fullPackage
+    ? allReadinessPrPaths
+    : uniquePaths(selectedGoals.flatMap(goal => GOAL_READINESS_PR_PATHS[goal]));
   const selectedGoalSummaries = selectedGoals.map(id => GOAL_SUMMARIES[id]);
 
   return {
     selectedGoals: selectedGoals.map(id => ({ id, title: getShipSealPackage(id)?.title || id })),
     emphasizedPaths: generatedPaths,
     generatedPaths,
-    manifestPaths: allPaths,
+    manifestPaths: generatedPaths,
+    readinessPrPaths,
     fullPackage,
     packageLabel: fullPackage
       ? GOAL_LABELS[FULL_PACKAGE_ID]

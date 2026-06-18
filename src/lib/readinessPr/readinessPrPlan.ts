@@ -1,15 +1,19 @@
 import type { ReadinessPrPlan } from './types';
+import { resolveDeliveryPackFocus } from '@/lib/deliveryPack/goalMapping';
 
-const files = [
-  { path: 'AGENTS.md', readinessCategory: 'AI agent instruction readiness' },
-  { path: 'CLAUDE.md', readinessCategory: 'AI agent instruction readiness' },
-  { path: 'CONTRIBUTING.md', readinessCategory: 'Team workflow & governance' },
-  { path: 'SECURITY.md', readinessCategory: 'Security & secret handling' },
-  { path: 'docs/CRITICAL_FILES_POLICY.md', readinessCategory: 'Team workflow & governance / safety' },
-  { path: 'docs/RELEASE_CHECKLIST.md', readinessCategory: 'Build, test & quality gates' },
-  { path: 'docs/OWNERSHIP.md', readinessCategory: 'Team workflow & governance' },
-  { path: '.github/workflows/ci.yml', readinessCategory: 'Build, test & quality gates' },
-];
+const FILE_CATEGORIES: Record<string, string> = {
+  'AGENTS.md': 'AI agent instruction readiness',
+  'CLAUDE.md': 'AI agent instruction readiness',
+  'CONTRIBUTING.md': 'Team workflow & governance',
+  'SECURITY.md': 'Security & secret handling',
+  'docs/AGENT_CHANGE_POLICY.md': 'AI agent instruction readiness / safety',
+  'docs/AI_ACT_READINESS_NOTES.md': 'AI Act readiness / governance',
+  'docs/CRITICAL_FILES_POLICY.md': 'Team workflow & governance / safety',
+  'docs/HANDOFF_CHECKLIST.md': 'Client handoff quality',
+  'docs/OWNERSHIP.md': 'Team workflow & governance',
+  'docs/RELEASE_CHECKLIST.md': 'Build, test & quality gates',
+  'docs/shipseal/CI_QUALITY_GATE.example.yml': 'Build, test & quality gates',
+};
 
 const categories = [
   'AI agent instruction readiness',
@@ -24,16 +28,22 @@ const manualGitSteps = [
   '',
   '# unzip shipseal-readiness-fix-pack-[repo].zip into the repository root',
   '',
-  'git add AGENTS.md CLAUDE.md CONTRIBUTING.md SECURITY.md docs/ .github/workflows/ci.yml',
+  'git add AGENTS.md CLAUDE.md CONTRIBUTING.md SECURITY.md docs/',
   'git commit -m "Add ShipSeal readiness fix pack"',
   'git push origin shipseal/readiness-pack',
 ].join('\n');
 
-export function buildReadinessPrPlan(): ReadinessPrPlan {
+export function buildReadinessPrPlan(selectedPackages: string[] = []): ReadinessPrPlan {
+  const focus = resolveDeliveryPackFocus(selectedPackages);
+  const files = focus.readinessPrPaths.map(path => ({
+    path,
+    readinessCategory: FILE_CATEGORIES[path] || 'ShipSeal readiness',
+  }));
+
   return {
     branchName: 'shipseal/readiness-pack',
     title: 'Add ShipSeal readiness pack',
-    summary: 'This pull request adds ShipSeal-generated readiness files: agent instructions, governance notes, testing guidance, security review notes and client handoff documentation.',
+    summary: `This pull request adds ShipSeal-generated readiness files for ${focus.packageLabel}: ${focus.packageSummary}`,
     files,
     categories,
     manualGitSteps,

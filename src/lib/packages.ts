@@ -26,6 +26,7 @@ export type ShipSealGoalId =
   | 'rescue-refactor'
   | 'sales-present'
   | 'mcp-readiness'
+  | 'ai-act-transparency'
   | 'full-package';
 
 export interface ShipSealGoal {
@@ -146,6 +147,19 @@ export const SHIPSEAL_GOALS: ShipSealGoal[] = [
       'MCP server recommendations',
       'MCP security policy',
       'Tool allowlist',
+    ],
+    icon: ClipboardCheck,
+  },
+  {
+    id: 'ai-act-transparency',
+    title: 'AI Act / transparency readiness',
+    sentence: 'Prepare transparency notices, AI Act readiness notes, disclosure copy and legal review questions.',
+    chips: ['Transparency', 'AI Act', 'Disclosure'],
+    includes: [
+      'Transparency notice',
+      'AI Act readiness checklist',
+      'User-facing disclosure notes',
+      'Legal review questions',
     ],
     icon: ClipboardCheck,
   },

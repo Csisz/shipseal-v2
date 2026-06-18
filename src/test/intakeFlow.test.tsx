@@ -136,7 +136,7 @@ describe('ShipSeal pre-scan intake flow', () => {
     expect(screen.getByText('What ShipSeal will prepare')).toBeInTheDocument();
     expect(screen.getByText('Client handoff')).toBeInTheDocument();
     expect(screen.getByText('AI agent development pack')).toBeInTheDocument();
-    expect(screen.getByText('View generated file list')).toBeInTheDocument();
+    expect(screen.getByText(/View generated file list/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Back$/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Scan project$/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /skip intake and scan repository only/i })).not.toBeInTheDocument();

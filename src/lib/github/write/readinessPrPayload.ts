@@ -2,8 +2,12 @@ import type { ReadinessReport } from '@/lib/types';
 import { buildSuggestedReadinessFixPack } from '@/lib/readinessFixPack';
 import type { ReadinessFixPackFile } from '@/lib/readinessFixPack';
 import { buildReadinessPrPlan } from '@/lib/readinessPr';
+import { resolveDeliveryPackFocus } from '@/lib/deliveryPack/goalMapping';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import type { CreateGitHubAppReadinessPrPayload, CreateReadinessPrFilePayload, CreateReadinessPrPayload } from './types';
+
+export const ACTIVE_CI_WORKFLOW_PATH = '.github/workflows/ci.yml';
+export const EXAMPLE_CI_WORKFLOW_PATH = 'docs/shipseal/CI_QUALITY_GATE.example.yml';
 
 export interface ReadinessPrPayloadInput {
   report: ReadinessReport;
@@ -12,6 +16,8 @@ export interface ReadinessPrPayloadInput {
   repo?: string;
   baseBranch?: string;
   files?: ReadinessFixPackFile[];
+  includeActiveWorkflow?: boolean;
+  selectedPackages?: string[];
 }
 
 export function buildCreateReadinessPrPayload({
@@ -21,10 +27,12 @@ export function buildCreateReadinessPrPayload({
   repo,
   baseBranch,
   files: inputFiles,
+  includeActiveWorkflow,
+  selectedPackages,
 }: ReadinessPrPayloadInput): CreateReadinessPrPayload {
   const repoInfo = inferGitHubRepo(report, owner, repo);
-  const plan = buildReadinessPrPlan();
-  const files = readinessPrFiles(report, inputFiles);
+  const plan = buildReadinessPrPlan(selectedPackages);
+  const files = readinessPrFiles(report, inputFiles, { includeActiveWorkflow, selectedPackages });
 
   return {
     owner: repoInfo.owner,
@@ -32,7 +40,7 @@ export function buildCreateReadinessPrPayload({
     baseBranch: baseBranch || report.source.githubDefaultBranch || report.source.githubBranch || undefined,
     branchName: plan.branchName,
     prTitle: plan.title,
-    prBody: buildReadinessPrBody(report, files),
+    prBody: buildReadinessPrBody(report, files, selectedPackages),
     files,
     githubToken,
   };
@@ -45,6 +53,8 @@ export function buildCreateGitHubAppReadinessPrPayload(input: {
   repo: string;
   baseBranch?: string;
   files?: ReadinessFixPackFile[];
+  includeActiveWorkflow?: boolean;
+  selectedPackages?: string[];
 }): CreateGitHubAppReadinessPrPayload {
   const {
     report,
@@ -53,8 +63,11 @@ export function buildCreateGitHubAppReadinessPrPayload(input: {
     repo,
     baseBranch,
   } = input;
-  const plan = buildReadinessPrPlan();
-  const files = readinessPrFiles(report, input.files);
+  const plan = buildReadinessPrPlan(input.selectedPackages);
+  const files = readinessPrFiles(report, input.files, {
+    includeActiveWorkflow: input.includeActiveWorkflow,
+    selectedPackages: input.selectedPackages,
+  });
 
   return {
     installationId,
@@ -63,23 +76,44 @@ export function buildCreateGitHubAppReadinessPrPayload(input: {
     baseBranch: baseBranch || report.source.githubDefaultBranch || report.source.githubBranch || undefined,
     branchName: plan.branchName,
     prTitle: plan.title,
-    prBody: buildReadinessPrBody(report, files),
+    prBody: buildReadinessPrBody(report, files, input.selectedPackages),
     files,
   };
 }
 
-export function readinessPrFiles(report: ReadinessReport, files?: ReadinessFixPackFile[]): CreateReadinessPrFilePayload[] {
-  return (files || buildSuggestedReadinessFixPack(report))
-    .filter(file => isPrFile(file.path))
+export function readinessPrFiles(
+  report: ReadinessReport,
+  files?: ReadinessFixPackFile[],
+  options: { includeActiveWorkflow?: boolean; selectedPackages?: string[] } = {}
+): CreateReadinessPrFilePayload[] {
+  return readinessPrPreviewFiles(files || buildSuggestedReadinessFixPack(report), options)
     .map<CreateReadinessPrFilePayload>(file => ({ path: file.path, content: file.content }));
 }
 
-export function buildReadinessPrBody(report: ReadinessReport, files: CreateReadinessPrFilePayload[]) {
-  const plan = buildReadinessPrPlan();
+export function readinessPrPreviewFiles(
+  files: ReadinessFixPackFile[],
+  options: { includeActiveWorkflow?: boolean; selectedPackages?: string[] } = {}
+): ReadinessFixPackFile[] {
+  const focus = resolveDeliveryPackFocus(options.selectedPackages);
+  const allowedPaths = new Set(focus.readinessPrPaths);
+  const order = new Map(focus.readinessPrPaths.map((path, index) => [path, index]));
+  return files
+    .map(file => mapPrFile(file, options.includeActiveWorkflow === true, allowedPaths))
+    .filter((file): file is ReadinessFixPackFile => Boolean(file))
+    .sort((a, b) => readinessPrOrder(a.path, order) - readinessPrOrder(b.path, order));
+}
+
+export function buildReadinessPrBody(report: ReadinessReport, files: CreateReadinessPrFilePayload[], selectedPackages: string[] = []) {
+  const focus = resolveDeliveryPackFocus(selectedPackages);
+  const plan = buildReadinessPrPlan(selectedPackages);
   const fileList = files.map(file => `- \`${file.path}\``).join('\n');
+  const includesActiveWorkflow = files.some(file => file.path === ACTIVE_CI_WORKFLOW_PATH);
   return [
     plan.summary,
     '',
+    `Selected package: ${focus.packageLabel}`,
+    `Package focus: ${focus.packageSummary}`,
+    `PR output count: ${files.length}`,
     `Readiness score: ${report.score}/100`,
     `Readiness status: ${report.level}`,
     `Repository scanned: ${report.repoName}`,
@@ -88,16 +122,27 @@ export function buildReadinessPrBody(report: ReadinessReport, files: CreateReadi
     fileList,
     '',
     'Why this helps:',
-    '- Gives future AI coding agents repository-specific operating instructions.',
-    '- Adds review, ownership, security, release, and CI guidance for safer handoff.',
-    '- Makes future ShipSeal scans more likely to detect readiness evidence.',
+    `- Aligns repository-ready files with the selected ${focus.packageLabel}.`,
+    '- Adds reviewable ShipSeal guidance without pushing directly to main.',
+    '- Makes future ShipSeal scans more likely to detect readiness evidence for this goal.',
+    '',
+    'CI quality gate note:',
+    includesActiveWorkflow
+      ? `- This PR includes an active GitHub Actions workflow at \`${ACTIVE_CI_WORKFLOW_PATH}\` because active workflow inclusion was explicitly selected.`
+      : `- ShipSeal provides the CI workflow recommendation as an example at \`${EXAMPLE_CI_WORKFLOW_PATH}\` by default.`,
+    includesActiveWorkflow
+      ? '- Review the workflow carefully before merging because GitHub Actions will run after it is installed.'
+      : '- It is not installed as an active GitHub Actions workflow unless you explicitly choose to include the active workflow file.',
+    includesActiveWorkflow
+      ? '- If this repository uses different CI commands, adjust the workflow before merge.'
+      : '- Review the example before copying it into `.github/workflows/`.',
     '',
     'Safety note:',
     plan.safetyNote,
     '',
     'Recommended manual review:',
     '- Review every generated file before merging.',
-    '- Confirm CI/workflow changes are acceptable for this repository.',
+    '- Review the CI quality gate example before enabling it as an active workflow.',
     '- Adapt placeholders and ownership notes to the real team.',
     '',
     plan.expectedImpactNote,
@@ -133,6 +178,48 @@ function isPrFile(path: string) {
     'docs/CRITICAL_FILES_POLICY.md',
     'docs/RELEASE_CHECKLIST.md',
     'docs/OWNERSHIP.md',
-    '.github/workflows/ci.yml',
+    EXAMPLE_CI_WORKFLOW_PATH,
+    ACTIVE_CI_WORKFLOW_PATH,
   ].includes(path);
+}
+
+function mapPrFile(file: ReadinessFixPackFile, includeActiveWorkflow: boolean, allowedPaths: Set<string>): ReadinessFixPackFile | null {
+  if (file.path === EXAMPLE_CI_WORKFLOW_PATH) {
+    if (!allowedPaths.has(EXAMPLE_CI_WORKFLOW_PATH)) return null;
+    if (!includeActiveWorkflow) return file;
+    return {
+      ...file,
+      path: ACTIVE_CI_WORKFLOW_PATH,
+      title: 'CI quality gate workflow',
+      purpose: 'Install the recommended GitHub Actions quality gate as an active workflow.',
+      whyUseful: 'Adds an active CI workflow after explicit human opt-in.',
+      content: file.content.replace(
+        /^# ShipSeal CI quality gate example\n# Documentation only: review before copying this file into \.github\/workflows\/ci\.yml\.\n\n/,
+        ''
+      ),
+    };
+  }
+  if (file.path === ACTIVE_CI_WORKFLOW_PATH) {
+    if (!allowedPaths.has(EXAMPLE_CI_WORKFLOW_PATH) && !allowedPaths.has(ACTIVE_CI_WORKFLOW_PATH)) return null;
+    if (includeActiveWorkflow) return file;
+    return {
+      ...file,
+      path: EXAMPLE_CI_WORKFLOW_PATH,
+      title: 'CI quality gate example',
+      purpose: 'Provide a recommended CI quality gate as documentation instead of installing an active GitHub Actions workflow by default.',
+      whyUseful: 'Gives reviewers a safe workflow template to copy into .github/workflows/ only after human review.',
+      content: [
+        '# ShipSeal CI quality gate example',
+        '# Documentation only: review before copying this file into .github/workflows/ci.yml.',
+        '',
+        file.content,
+      ].join('\n'),
+    };
+  }
+  return isPrFile(file.path) && allowedPaths.has(file.path) ? file : null;
+}
+
+function readinessPrOrder(path: string, order: Map<string, number>) {
+  if (path === ACTIVE_CI_WORKFLOW_PATH) return order.get(EXAMPLE_CI_WORKFLOW_PATH) ?? Number.MAX_SAFE_INTEGER;
+  return order.get(path) ?? Number.MAX_SAFE_INTEGER;
 }

@@ -17,7 +17,8 @@ describe('Suggested Readiness Fix Pack generator', () => {
     expect(paths).toContain('CLAUDE.md');
     expect(paths).toContain('CONTRIBUTING.md');
     expect(paths).toContain('SECURITY.md');
-    expect(paths).toContain('.github/workflows/ci.yml');
+    expect(paths).not.toContain('.github/workflows/ci.yml');
+    expect(paths).toContain('docs/shipseal/CI_QUALITY_GATE.example.yml');
 
     for (const entry of READINESS_FIX_PACK_MANIFEST) {
       expect(entry.readinessCategory).toBeTruthy();
@@ -35,7 +36,8 @@ describe('Suggested Readiness Fix Pack generator', () => {
     expect(paths).toContain('AGENTS.md');
     expect(paths).toContain('CLAUDE.md');
     expect(paths).toContain('CONTRIBUTING.md');
-    expect(paths).toContain('.github/workflows/ci.yml');
+    expect(paths).not.toContain('.github/workflows/ci.yml');
+    expect(paths).toContain('docs/shipseal/CI_QUALITY_GATE.example.yml');
     expect(paths).toContain('docs/CRITICAL_FILES_POLICY.md');
 
     for (const file of pack) {
@@ -61,12 +63,15 @@ describe('Suggested Readiness Fix Pack generator', () => {
     expect(paths).toContain('CLAUDE.md');
     expect(paths).toContain('CONTRIBUTING.md');
     expect(paths).toContain('SECURITY.md');
-    expect(paths).toContain('.github/workflows/ci.yml');
+    expect(paths).not.toContain('.github/workflows/ci.yml');
+    expect(paths).toContain('docs/shipseal/CI_QUALITY_GATE.example.yml');
 
-    for (const path of ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md', 'SECURITY.md', '.github/workflows/ci.yml']) {
+    for (const path of ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md', 'SECURITY.md', 'docs/shipseal/CI_QUALITY_GATE.example.yml']) {
       const content = await zip.file(path)?.async('string');
       expect(content?.trim().length).toBeGreaterThan(80);
     }
+    expect(await zip.file('docs/shipseal/CI_QUALITY_GATE.example.yml')?.async('string'))
+      .toContain('Documentation only');
   });
 
   it('manual Git steps refer to the Fix Pack branch and commit', () => {

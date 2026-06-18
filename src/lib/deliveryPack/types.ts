@@ -6,6 +6,7 @@ export type DeliveryPackSectionId =
   | 'ai-act-readiness'
   | 'client-handoff'
   | 'context'
+  | 'security-data'
   | 'root';
 
 export type DeliveryPackFileKind =

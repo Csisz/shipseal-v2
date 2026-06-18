@@ -67,9 +67,9 @@ export const READINESS_FIX_PACK_MANIFEST: ReadinessFixPackManifestEntry[] = [
     requiresHumanReview: true,
   },
   {
-    path: '.github/workflows/ci.yml',
-    title: 'CI quality gate workflow',
-    purpose: 'Add a simple GitHub Actions quality gate for install, tests and build commands.',
+    path: 'docs/shipseal/CI_QUALITY_GATE.example.yml',
+    title: 'CI quality gate example',
+    purpose: 'Provide a recommended GitHub Actions quality gate as documentation before installing it as an active workflow.',
     readinessCategory: 'Build, test & quality gates',
     expectedImpact: EXPECTED_IMPACT,
     isSafeToAdd: true,

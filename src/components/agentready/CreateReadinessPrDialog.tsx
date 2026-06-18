@@ -22,13 +22,16 @@ import { buildGitHubConnectionFromReport, type GitHubConnectionState } from '@/l
 import type { ReadinessReport } from '@/lib/types';
 import type { ReadinessFixPackFile } from '@/lib/readinessFixPack';
 import { buildReadinessPrPlan } from '@/lib/readinessPr';
+import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import {
   CreateReadinessPrClientError,
+  ACTIVE_CI_WORKFLOW_PATH,
   buildCreateGitHubAppReadinessPrPayload,
   buildCreateReadinessPrPayload,
   createGitHubAppReadinessPr,
   createReadinessPr,
   inferGitHubRepo,
+  readinessPrPreviewFiles,
 } from '@/lib/github/write';
 
 interface Props {
@@ -36,13 +39,14 @@ interface Props {
   files: ReadinessFixPackFile[];
   githubAppConfig?: GitHubAppClientConfig;
   githubConnection?: GitHubConnectionState;
+  selectedPackages?: string[];
 }
 
-export function CreateReadinessPrDialog({ report, files, githubAppConfig, githubConnection }: Props) {
+export function CreateReadinessPrDialog({ report, files, githubAppConfig, githubConnection, selectedPackages = [] }: Props) {
   const [open, setOpen] = useState(false);
-  const plan = useMemo(() => buildReadinessPrPlan(), []);
+  const plan = useMemo(() => buildReadinessPrPlan(selectedPackages), [selectedPackages]);
+  const focus = useMemo(() => resolveDeliveryPackFocus(selectedPackages), [selectedPackages]);
   const inferred = useMemo(() => inferGitHubRepo(report), [report]);
-  const prFiles = useMemo(() => files.filter(file => plan.files.some(planned => planned.path === file.path)), [files, plan.files]);
   const appConfig = useMemo(() => githubAppConfig || getGitHubAppClientConfig(), [githubAppConfig]);
   const connection = useMemo(() => githubConnection || buildGitHubConnectionFromReport(report), [githubConnection, report]);
   const [owner, setOwner] = useState(inferred.owner);
@@ -54,8 +58,10 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState<{ pullRequestUrl: string; branchName: string } | null>(null);
   const [advancedSection, setAdvancedSection] = useState<string>('');
+  const [includeActiveWorkflow, setIncludeActiveWorkflow] = useState(false);
 
-  const hasWorkflowFile = prFiles.some(file => file.path === '.github/workflows/ci.yml');
+  const prFiles = useMemo(() => readinessPrPreviewFiles(files, { includeActiveWorkflow, selectedPackages }), [files, includeActiveWorkflow, selectedPackages]);
+  const hasWorkflowFile = prFiles.some(file => file.path === ACTIVE_CI_WORKFLOW_PATH);
   const currentRepository = inferred.owner && inferred.repo ? `${inferred.owner}/${inferred.repo}` : '';
   const connectedRepository = connection.owner && connection.repo ? `${connection.owner}/${connection.repo}` : '';
 
@@ -89,6 +95,8 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
           repo: connection.repo,
           baseBranch: baseBranch || connection.defaultBranch || undefined,
           files: prFiles,
+          includeActiveWorkflow,
+          selectedPackages,
         }));
         setSuccess({ pullRequestUrl: response.prUrl, branchName: response.branchName });
       } catch (requestError) {
@@ -121,6 +129,8 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
         baseBranch: baseBranch || undefined,
         githubToken,
         files: prFiles,
+        includeActiveWorkflow,
+        selectedPackages,
       }));
       setSuccess({ pullRequestUrl: response.pullRequestUrl, branchName: response.branchName });
       setGithubToken('');
@@ -161,8 +171,10 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
               <div className="grid sm:grid-cols-2 gap-3 text-sm">
                 <Info label="Branch" value={plan.branchName} />
                 <Info label="PR title" value={plan.title} />
+                <Info label="Selected package" value={focus.packageLabel} />
+                <Info label="PR output count" value={`${prFiles.length} files`} />
               </div>
-              <p className="mt-3 text-xs text-muted-foreground">{plan.summary}</p>
+              <p className="mt-3 text-xs text-muted-foreground">{focus.packageSummary}</p>
               <div className="mt-4 grid sm:grid-cols-2 gap-2">
                 {prFiles.map(file => (
                   <div key={file.path} className="rounded-md border border-border/60 bg-background/30 px-3 py-2">
@@ -174,6 +186,19 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
               <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
                 ShipSeal will create a new branch and open a pull request. It will not push to main, and uploaded or imported code is not executed.
               </div>
+              <label className="mt-3 flex items-start gap-3 rounded-lg border border-border/60 bg-background/30 p-3 text-sm text-foreground/90">
+                <Checkbox
+                  checked={includeActiveWorkflow}
+                  onCheckedChange={checked => setIncludeActiveWorkflow(checked === true)}
+                  aria-label="Include active GitHub Actions workflow"
+                />
+                <span>
+                  <span className="block font-medium">Include active GitHub Actions workflow</span>
+                  <span className="block mt-1 text-xs text-muted-foreground">
+                    Disabled by default. ShipSeal normally adds the CI quality gate as a documentation example for review before copying into .github/workflows/.
+                  </span>
+                </span>
+              </label>
               {hasWorkflowFile && (
                 <div className="mt-3 flex gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
                   <AlertTriangle className="h-4 w-4 shrink-0" />

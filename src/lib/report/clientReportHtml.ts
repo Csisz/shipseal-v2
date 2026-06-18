@@ -650,7 +650,7 @@ function packageFocus(score: Record<string, unknown>, intake: ClientReportHtmlIn
         keyFiles.envExample === true ? 'Env/secrets: .env example found for safer configuration handoff.' : 'Env/secrets: sample file was not confirmed in scan evidence.',
         intake.handlesPersonalData ? 'Personal data handling is indicated; privacy/GDPR review ownership should be confirmed.' : 'Personal data handling needs confirmation before final delivery.',
         intake.hasHumanApproval ? 'Human approval is indicated in intake.' : 'Human approval and reviewer ownership need confirmation.',
-        'Review generated MCP security policy, tool allowlist, AI Act checklist, and legal review questions before production use.',
+        'Review generated security notes, env/secrets findings, data/privacy checklist, risk summary, and reviewer ownership before production use.',
       ],
     };
   }
@@ -663,6 +663,50 @@ function packageFocus(score: Record<string, unknown>, intake: ClientReportHtmlIn
         'Use the executive summary and 30/60/90 roadmap to align client owner, agency, and reviewer next steps.',
         `Delivery manifest: ${outputCount(score)} generated outputs are listed in this report and score.json.`,
         'Complete client and agency fields before final delivery if they are still blank.',
+      ],
+    };
+  }
+
+  if (goalId === 'agent-readiness') {
+    return {
+      title: 'AI agent development focus',
+      items: [
+        'Review AGENTS.md, CLAUDE.md, Codex/Cursor guidance, repo context, and agent safety notes together.',
+        'Confirm safe edit boundaries and human-review rules before assigning agent work.',
+        `Delivery manifest: ${outputCount(score)} generated outputs for the selected agent-development package.`,
+      ],
+    };
+  }
+
+  if (goalId === 'testing-red-team') {
+    return {
+      title: 'Testing and red-team focus',
+      items: [
+        'Review test plan, eval cases, red-team prompts, quality gates, and CI/test recommendations.',
+        'Keep CI quality gate files as non-active examples unless explicitly enabled by a maintainer.',
+        `Delivery manifest: ${outputCount(score)} generated outputs for the selected testing package.`,
+      ],
+    };
+  }
+
+  if (goalId === 'mcp-readiness') {
+    return {
+      title: 'MCP readiness focus',
+      items: [
+        'Review MCP readiness, MCP security policy, tool allowlist, and server recommendations.',
+        'Use least-privilege tool access and require human approval for high-risk MCP categories.',
+        `Delivery manifest: ${outputCount(score)} generated outputs for the selected MCP package.`,
+      ],
+    };
+  }
+
+  if (goalId === 'ai-act-transparency') {
+    return {
+      title: 'AI Act / transparency focus',
+      items: [
+        'Review transparency notice, AI Act readiness checklist, user-facing disclosure notes, and legal review questions.',
+        'Treat these outputs as product-side preparation for qualified legal/compliance review.',
+        `Delivery manifest: ${outputCount(score)} generated outputs for the selected transparency package.`,
       ],
     };
   }
@@ -699,6 +743,50 @@ function packageChecklist(score: Record<string, unknown>, intake: ClientReportHt
         'Confirm the generated output list matches the Delivery Pack ZIP.',
         'Review the client handoff report and executive summary for client-safe wording.',
         'Confirm readiness decision and roadmap ownership with the client owner.',
+      ],
+    };
+  }
+
+  if (goalId === 'agent-readiness') {
+    return {
+      title: 'Agent guidance review',
+      items: [
+        'Confirm AGENTS.md and CLAUDE.md match the repository workflow.',
+        'Review Codex/Cursor guidance and agent safety notes for over-broad permissions.',
+        'Confirm repo context excludes secrets and raw sensitive content.',
+      ],
+    };
+  }
+
+  if (goalId === 'testing-red-team') {
+    return {
+      title: 'Quality gate review',
+      items: [
+        'Confirm test cases and red-team prompts cover the highest-risk user flows.',
+        'Review CI/test recommendations as examples before enabling them in the repository.',
+        'Re-run tests after adopting any generated quality gate.',
+      ],
+    };
+  }
+
+  if (goalId === 'mcp-readiness') {
+    return {
+      title: 'MCP governance review',
+      items: [
+        'Confirm tool allowlist entries are least-privilege and business-justified.',
+        'Review MCP security policy and server recommendations before enabling tools.',
+        'Assign a human owner for high-risk MCP categories.',
+      ],
+    };
+  }
+
+  if (goalId === 'ai-act-transparency') {
+    return {
+      title: 'Transparency review',
+      items: [
+        'Review transparency notice and user-facing disclosure notes before publication.',
+        'Confirm AI Act checklist assumptions with qualified legal/compliance owners.',
+        'Record open legal review questions before client handoff.',
       ],
     };
   }

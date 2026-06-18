@@ -93,6 +93,8 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
       outputCount: deliveryPackFocus.generatedPaths.length,
       manifestFiles: deliveryPackFocus.manifestPaths,
       manifestOutputCount: deliveryPackFocus.manifestPaths.length,
+      readinessPrFiles: deliveryPackFocus.readinessPrPaths,
+      readinessPrOutputCount: deliveryPackFocus.readinessPrPaths.length,
       fullPackage: deliveryPackFocus.fullPackage,
       packageLabel: deliveryPackFocus.packageLabel,
       packageSummary: deliveryPackFocus.packageSummary,

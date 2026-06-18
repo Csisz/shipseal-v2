@@ -51,8 +51,8 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
-    expect(screen.getByText('27 outputs')).toBeInTheDocument();
-    expect(screen.queryByText('Full Delivery Pack: 27 required outputs')).not.toBeInTheDocument();
+    expect(screen.getByText('36 outputs')).toBeInTheDocument();
+    expect(screen.queryByText('Full Delivery Pack: 36 required outputs')).not.toBeInTheDocument();
     expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
     expect(screen.getByText(/Advanced details — full scan results and generated files/i)).toBeInTheDocument();
     expect(screen.getByText(/Improve your score — optional fixes you can add back/i)).toBeInTheDocument();
@@ -70,7 +70,7 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getByText('Agent development pack')).toBeInTheDocument();
-    expect(screen.getByText('9 outputs')).toBeInTheDocument();
+    expect(screen.getByText('11 outputs')).toBeInTheDocument();
     expect(screen.queryByText('Full ShipSeal package')).not.toBeInTheDocument();
     expect(screen.getByText(/AGENTS.md, CLAUDE.md, Codex guidance, repo context, and agent safety notes/i)).toBeInTheDocument();
   });

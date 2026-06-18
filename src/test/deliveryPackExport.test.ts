@@ -64,11 +64,31 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
 
     expect(clientHandoff.generatedPaths).toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
     expect(clientHandoff.generatedPaths).toContain('06-client-handoff/EXECUTIVE_SUMMARY.md');
+    expect(clientHandoff.generatedPaths).toContain('06-client-handoff/DELIVERY_MANIFEST.md');
     expect(clientHandoff.generatedPaths).not.toContain('04-testing/RED_TEAM_PROMPTS.md');
     expect(testing.generatedPaths).toContain('04-testing/RED_TEAM_PROMPTS.md');
     expect(testing.generatedPaths).toContain('04-testing/CI_QUALITY_GATE.yml');
     expect(testing.generatedPaths).not.toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
+    expect(resolveDeliveryPackFocus(['safety-risk']).generatedPaths).toContain('08-security-data/DATA_PRIVACY_CHECKLIST.md');
+    expect(resolveDeliveryPackFocus(['ai-act-transparency']).generatedPaths).toContain('05-ai-act-readiness/USER_FACING_DISCLOSURE_NOTES.md');
     expect(full.generatedPaths).toEqual(getDeliveryPackRequiredPaths());
+  });
+
+  it('returns expected output paths for each major package', () => {
+    const expected: Array<[string, string[]]> = [
+      ['client-handoff', ['06-client-handoff/CLIENT_HANDOFF_REPORT.md', '06-client-handoff/DELIVERY_MANIFEST.md']],
+      ['agent-readiness', ['01-agent-instructions/AGENTS.md', '01-agent-instructions/CURSOR_RULES.md', '07-context/REPO_CONTEXT_PACK.md']],
+      ['testing-red-team', ['04-testing/EVAL_TEST_CASES.md', '04-testing/CI_QUALITY_GATE.yml']],
+      ['safety-risk', ['08-security-data/ENV_SECRETS_FINDINGS.md', '08-security-data/DATA_PRIVACY_CHECKLIST.md']],
+      ['mcp-readiness', ['03-mcp-governance/MCP_READINESS.md', '03-mcp-governance/MCP_TOOL_ALLOWLIST.md']],
+      ['ai-act-transparency', ['05-ai-act-readiness/TRANSPARENCY_NOTICE_DRAFT.md', '05-ai-act-readiness/USER_FACING_DISCLOSURE_NOTES.md']],
+    ];
+
+    for (const [packageId, paths] of expected) {
+      const focus = resolveDeliveryPackFocus([packageId]);
+      for (const path of paths) expect(focus.generatedPaths).toContain(path);
+      expect(focus.generatedPaths).toContain('score.json');
+    }
   });
 
   it('includes selected goal focus metadata in score.json', () => {
@@ -86,8 +106,10 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     }]);
     expect(scoreJson.deliveryPackFocus?.generatedFiles).toEqual(focus.generatedPaths);
     expect(scoreJson.deliveryPackFocus?.outputCount).toBe(focus.generatedPaths.length);
-    expect(scoreJson.deliveryPackFocus?.manifestFiles).toEqual(getDeliveryPackRequiredPaths());
-    expect(scoreJson.deliveryPackFocus?.manifestOutputCount).toBe(getDeliveryPackRequiredPaths().length);
+    expect(scoreJson.deliveryPackFocus?.manifestFiles).toEqual(focus.generatedPaths);
+    expect(scoreJson.deliveryPackFocus?.manifestOutputCount).toBe(focus.generatedPaths.length);
+    expect(scoreJson.deliveryPackFocus?.readinessPrFiles).toEqual(focus.readinessPrPaths);
+    expect(scoreJson.deliveryPackFocus?.readinessPrOutputCount).toBe(focus.readinessPrPaths.length);
     expect(scoreJson.deliveryPackFocus?.emphasizedFiles).toContain('03-mcp-governance/MCP_READINESS.md');
     expect(scoreJson.deliveryPackFocus?.emphasizedFiles).not.toContain('04-testing/EVAL_TEST_CASES.md');
   });
@@ -113,6 +135,7 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(exportedScoreJson.selectedPackage).toBe(scoreJson.deliveryPackFocus?.packageLabel);
     expect(exportedScoreJson.outputCount).toBe(scoreJson.generatedFiles.length);
     expect(exportedScoreJson.content.generatedFiles).toEqual(scoreJson.generatedFiles);
+    expect(exportedScoreJson.content.deliveryPackFocus.manifestOutputCount).toBe(scoreJson.generatedFiles.length);
   });
 
   it('exports a focused ZIP whose file list matches score.json generatedFiles', async () => {

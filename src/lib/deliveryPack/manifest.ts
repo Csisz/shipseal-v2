@@ -37,7 +37,9 @@ export const SHIPSEAL_DELIVERY_PACK_MANIFEST: DeliveryPackManifest = {
       'AGENTS.md',
       'CLAUDE.md',
       'CODEX_PROMPTS.md',
+      'CURSOR_RULES.md',
       'REVIEWER_PROMPT.md',
+      'AGENT_SAFETY_NOTES.md',
     ]),
     section('skills', '02-skills', 'Skills', [
       'code-review/SKILL.md',
@@ -61,6 +63,7 @@ export const SHIPSEAL_DELIVERY_PACK_MANIFEST: DeliveryPackManifest = {
     section('ai-act-readiness', '05-ai-act-readiness', 'AI Act readiness', [
       'AI_ACT_READINESS_CHECKLIST.md',
       'TRANSPARENCY_NOTICE_DRAFT.md',
+      'USER_FACING_DISCLOSURE_NOTES.md',
       'LEGAL_REVIEW_QUESTIONS.md',
     ]),
     section('client-handoff', '06-client-handoff', 'Client handoff', [
@@ -68,10 +71,18 @@ export const SHIPSEAL_DELIVERY_PACK_MANIFEST: DeliveryPackManifest = {
       ['CLIENT_HANDOFF_REPORT.html', 'html'],
       'EXECUTIVE_SUMMARY.md',
       'NEXT_STEPS_ROADMAP.md',
+      'DELIVERY_MANIFEST.md',
     ]),
     section('context', '07-context', 'Context', [
       'REPO_CONTEXT_PACK.md',
       ['repo-context-pack.json', 'json'],
+    ]),
+    section('security-data', '08-security-data', 'Security and data pre-screen', [
+      'SECURITY_NOTES.md',
+      'ENV_SECRETS_FINDINGS.md',
+      'DATA_PRIVACY_CHECKLIST.md',
+      'RISK_SUMMARY.md',
+      'HUMAN_APPROVAL_REVIEWERS.md',
     ]),
   ],
   rootFiles: [

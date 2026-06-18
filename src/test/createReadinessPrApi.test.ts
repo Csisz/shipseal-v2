@@ -77,12 +77,60 @@ describe('Create Readiness PR API', () => {
     expect(payload.owner).toBe('Csisz');
     expect(payload.repo).toBe('shipseal');
     expect(payload.prTitle).toBe('Add ShipSeal readiness pack');
+    expect(payload.prBody).toContain('Selected package: Full ShipSeal package');
     expect(payload.prBody).toContain(`Readiness score: ${report.score}/100`);
     expect(payload.prBody).toContain('Uploaded or imported repository code was not executed');
     expect(payload.prBody).toContain('Files added:');
+    expect(payload.prBody).toContain('CI workflow recommendation as an example');
+    expect(payload.prBody).toContain('It is not installed as an active GitHub Actions workflow');
     expect(paths).toContain('AGENTS.md');
     expect(paths).toContain('CLAUDE.md');
+    expect(paths).not.toContain('.github/workflows/ci.yml');
+    expect(paths).toContain('docs/shipseal/CI_QUALITY_GATE.example.yml');
+  });
+
+  it('builds a package-focused PR payload from the selected goal', () => {
+    const report = {
+      ...buildSampleReport(),
+      source: {
+        sourceType: 'github-url' as const,
+        githubOwner: 'Csisz',
+        githubRepo: 'shipseal',
+      },
+    };
+    const payload = buildCreateReadinessPrPayload({
+      report,
+      githubToken: 'ghp_mock',
+      selectedPackages: ['safety-risk'],
+    });
+    const paths = payload.files.map(file => file.path);
+
+    expect(payload.prBody).toContain('Selected package: Security and data pre-screen');
+    expect(payload.prBody).toContain('PR output count: 3');
+    expect(paths).toEqual([
+      'SECURITY.md',
+      'docs/CRITICAL_FILES_POLICY.md',
+      'docs/OWNERSHIP.md',
+    ]);
+    expect(paths).not.toContain('AGENTS.md');
+    expect(paths).not.toContain('.github/workflows/ci.yml');
+  });
+
+  it('can include the active GitHub Actions workflow only when explicitly requested', () => {
+    const report = {
+      ...buildSampleReport(),
+      source: {
+        sourceType: 'github-url' as const,
+        githubOwner: 'Csisz',
+        githubRepo: 'shipseal',
+      },
+    };
+    const payload = buildCreateReadinessPrPayload({ report, githubToken: 'ghp_mock', includeActiveWorkflow: true });
+    const paths = payload.files.map(file => file.path);
+
     expect(paths).toContain('.github/workflows/ci.yml');
+    expect(paths).not.toContain('docs/shipseal/CI_QUALITY_GATE.example.yml');
+    expect(payload.prBody).toContain('active GitHub Actions workflow at `.github/workflows/ci.yml`');
   });
 
   it('infers owner and repo from owner/repo repository names and honors default branch metadata', () => {

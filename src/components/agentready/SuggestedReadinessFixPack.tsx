@@ -10,18 +10,23 @@ import {
 } from '@/lib/readinessFixPack';
 import { buildReadinessPrPlan } from '@/lib/readinessPr';
 import type { GitHubConnectionState } from '@/lib/githubConnection/types';
+import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import { readinessPrPreviewFiles } from '@/lib/github/write';
 import { CreateReadinessPrDialog } from './CreateReadinessPrDialog';
 
 interface Props {
   report: ReadinessReport;
   githubConnection?: GitHubConnectionState;
+  selectedPackages?: string[];
 }
 
-export function SuggestedReadinessFixPack({ report, githubConnection }: Props) {
+export function SuggestedReadinessFixPack({ report, githubConnection, selectedPackages = [] }: Props) {
   const files = useMemo(() => buildSuggestedReadinessFixPack(report), [report]);
   const [selectedPath, setSelectedPath] = useState(files[0]?.path || '');
   const selected = files.find(file => file.path === selectedPath) || files[0];
-  const prPlan = useMemo(() => buildReadinessPrPlan(), []);
+  const prPlan = useMemo(() => buildReadinessPrPlan(selectedPackages), [selectedPackages]);
+  const prPreviewFiles = useMemo(() => readinessPrPreviewFiles(files, { selectedPackages }), [files, selectedPackages]);
+  const focus = useMemo(() => resolveDeliveryPackFocus(selectedPackages), [selectedPackages]);
   const [copied, setCopied] = useState(false);
   const [copiedManualSteps, setCopiedManualSteps] = useState(false);
 
@@ -132,6 +137,8 @@ export function SuggestedReadinessFixPack({ report, githubConnection }: Props) {
               <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-2">Planned PR</div>
               <InfoRow label="Branch name" value={prPlan.branchName} />
               <InfoRow label="PR title" value={prPlan.title} />
+              <InfoRow label="Selected package" value={focus.packageLabel} />
+              <InfoRow label="PR files" value={`${prPreviewFiles.length} files`} />
               <div className="mt-3 text-xs text-muted-foreground">{prPlan.summary}</div>
             </div>
 
@@ -160,7 +167,7 @@ export function SuggestedReadinessFixPack({ report, githubConnection }: Props) {
                 <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Changed files preview</div>
               </div>
               <div className="grid sm:grid-cols-2 gap-2">
-                {prPlan.files.map(file => (
+                {prPreviewFiles.map(file => (
                   <div key={file.path} className="rounded-md border border-border/60 bg-background/30 px-3 py-2">
                     <div className="font-mono text-[11px] text-foreground/90 break-all">{file.path}</div>
                     <div className="text-[10px] text-muted-foreground mt-1">{file.readinessCategory}</div>
@@ -186,7 +193,7 @@ export function SuggestedReadinessFixPack({ report, githubConnection }: Props) {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2">
-              <CreateReadinessPrDialog report={report} files={files} githubConnection={githubConnection} />
+              <CreateReadinessPrDialog report={report} files={files} githubConnection={githubConnection} selectedPackages={selectedPackages} />
               <Button type="button" variant="outline" onClick={copyManualSteps}>
                 <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy manual Git steps
               </Button>

@@ -325,6 +325,8 @@ export interface ScoreJsonExport {
     outputCount: number;
     manifestFiles: string[];
     manifestOutputCount: number;
+    readinessPrFiles: string[];
+    readinessPrOutputCount: number;
     fullPackage: boolean;
     packageLabel: string;
     packageSummary: string;

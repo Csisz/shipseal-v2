@@ -110,7 +110,7 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('Client handoff priorities');
     expect(html).toContain('Delivery manifest review');
     expect(html).toContain('executive summary, readiness decision, roadmap, and delivery manifest');
-    expect(html).toContain('Generated outputs: 5');
+    expect(html).toContain('Generated outputs: 6');
     expect(html).toContain('06-client-handoff/NEXT_STEPS_ROADMAP.md');
   });
 
@@ -129,7 +129,21 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('Privacy and reviewer checklist');
     expect(html).toContain('Env/secrets');
     expect(html).toContain('Human approval and reviewer ownership need confirmation');
-    expect(html).toContain('03-mcp-governance/MCP_SECURITY_POLICY.md');
+    expect(html).toContain('08-security-data/DATA_PRIVACY_CHECKLIST.md');
+  });
+
+  it('prioritizes transparency sections for AI Act package', () => {
+    const report = buildSampleProjectReadinessReport();
+    const html = generateClientReportHtml({
+      intake: SAMPLE_PROJECT_INTAKE,
+      scoreJson: buildScoreJson(report, { selectedPackages: ['ai-act-transparency'] }),
+    });
+
+    expect(html).toContain('Selected package: AI Act and transparency pack');
+    expect(html).toContain('AI Act / transparency focus');
+    expect(html).toContain('Transparency review');
+    expect(html).toContain('Generated outputs: 5');
+    expect(html).toContain('05-ai-act-readiness/USER_FACING_DISCLOSURE_NOTES.md');
   });
 
   it('exports CLIENT_HANDOFF_REPORT.html into the Delivery Pack ZIP', async () => {

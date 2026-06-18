@@ -202,7 +202,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
       </Disclosure>
 
       <Disclosure title="Improve your score — optional fixes you can add back">
-        <SuggestedReadinessFixPack report={report} githubConnection={githubConnection} />
+        <SuggestedReadinessFixPack report={report} githubConnection={githubConnection} selectedPackages={resolvedPackages} />
       </Disclosure>
 
       <Disclosure title="Advanced details — full scan results and generated files">

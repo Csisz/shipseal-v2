@@ -19,7 +19,7 @@ import { getGitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
 import { ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
-import { getDeliveryPackRequiredPaths } from '@/lib/deliveryPack/manifest';
+import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 
 type PendingSource =
   | { type: 'zip'; file: File; projectName: string }
@@ -607,7 +607,7 @@ const OUTPUT_CATEGORIES = [
     id: 'ai-act',
     title: 'AI Act / transparency readiness',
     description: 'Transparency notice draft and legal review questions.',
-    goalIds: ['launch-readiness', 'safety-risk', 'full-package'],
+    goalIds: ['ai-act-transparency', 'full-package'],
   },
   {
     id: 'roadmap',
@@ -625,7 +625,8 @@ const OUTPUT_CATEGORIES = [
 function OutputPreview({ selectedPackages }: { selectedPackages: string[] }) {
   const effectiveSelection = selectedPackages.includes(FULL_PACKAGE_ID) ? [FULL_PACKAGE_ID] : selectedPackages;
   const activeIds = new Set(effectiveSelection);
-  const filePaths = getDeliveryPackRequiredPaths();
+  const focus = resolveDeliveryPackFocus(effectiveSelection);
+  const filePaths = focus.generatedPaths;
 
   return (
     <div className="glass rounded-2xl p-6">
@@ -659,7 +660,7 @@ function OutputPreview({ selectedPackages }: { selectedPackages: string[] }) {
 
       <details className="group mt-5 rounded-xl border border-border/60 bg-secondary/15">
         <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors [&::-webkit-details-marker]:hidden">
-          <span>View generated file list</span>
+          <span>View generated file list ({filePaths.length})</span>
           <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
         </summary>
         <div className="grid gap-2 border-t border-border/50 px-4 py-4 sm:grid-cols-2">

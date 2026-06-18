@@ -21,7 +21,8 @@ describe('SuggestedReadinessFixPack', () => {
     expect(screen.getAllByText('AGENTS.md').length).toBeGreaterThan(0);
     expect(screen.getAllByText('CLAUDE.md').length).toBeGreaterThan(0);
     expect(screen.getAllByText('CONTRIBUTING.md').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('.github/workflows/ci.yml').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('docs/shipseal/CI_QUALITY_GATE.example.yml').length).toBeGreaterThan(0);
+    expect(screen.queryByText('.github/workflows/ci.yml')).not.toBeInTheDocument();
     expect(screen.getAllByText(/AI agent instruction readiness/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/These files are already included in your Delivery Pack/i)).toBeInTheDocument();
     expect(screen.getByText('Delivery Pack')).toBeInTheDocument();
@@ -71,8 +72,14 @@ describe('SuggestedReadinessFixPack', () => {
     expect(within(dialog).getByText(/Step 1: Review changes/i)).toBeInTheDocument();
     expect(within(dialog).getByText('shipseal/readiness-pack')).toBeInTheDocument();
     expect(within(dialog).getByText('AGENTS.md')).toBeInTheDocument();
+    expect(within(dialog).getByText('docs/shipseal/CI_QUALITY_GATE.example.yml')).toBeInTheDocument();
+    expect(within(dialog).queryByText('.github/workflows/ci.yml')).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Include active GitHub Actions workflow')).not.toBeChecked();
+    expect(within(dialog).queryByText(/This PR includes a GitHub Actions workflow file/i)).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByLabelText('Include active GitHub Actions workflow'));
     expect(within(dialog).getByText('.github/workflows/ci.yml')).toBeInTheDocument();
     expect(within(dialog).getByText(/This PR includes a GitHub Actions workflow file/i)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByLabelText('Include active GitHub Actions workflow'));
     expect(within(dialog).getAllByText('Connect GitHub').length).toBeGreaterThan(0);
     expect(within(dialog).getByText(/Connect GitHub before creating a Pull Request/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/GitHub App install is not configured in this demo/i)).toBeInTheDocument();
@@ -105,9 +112,11 @@ describe('SuggestedReadinessFixPack', () => {
       branchName: 'shipseal/readiness-pack',
       prTitle: 'Add ShipSeal readiness pack',
     });
-    expect(payload.files.map((file: { path: string }) => file.path)).toContain('.github/workflows/ci.yml');
+    expect(payload.files.map((file: { path: string }) => file.path)).not.toContain('.github/workflows/ci.yml');
+    expect(payload.files.map((file: { path: string }) => file.path)).toContain('docs/shipseal/CI_QUALITY_GATE.example.yml');
     expect(payload.prBody).toContain('Readiness score:');
     expect(payload.prBody).toContain('Uploaded or imported repository code was not executed');
+    expect(payload.prBody).toContain('It is not installed as an active GitHub Actions workflow');
   });
 
   it('auto-fills owner and repo from a GitHub source URL and allows an empty base branch', async () => {
@@ -288,6 +297,7 @@ describe('SuggestedReadinessFixPack', () => {
     expect(payload.files.map((file: { path: string }) => file.path)).toEqual(buildReadinessPrPlan().files.map(file => file.path));
     expect(payload.prBody).toContain('Readiness score:');
     expect(payload.prBody).toContain('Uploaded or imported repository code was not executed');
+    expect(payload.prBody).toContain('CI workflow recommendation as an example');
   });
 
   it('shows friendly guidance when the connected GitHub App cannot write to the selected repo', async () => {
