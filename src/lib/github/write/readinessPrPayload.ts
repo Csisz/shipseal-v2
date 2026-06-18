@@ -1,5 +1,6 @@
 import type { ReadinessReport } from '@/lib/types';
 import { buildSuggestedReadinessFixPack } from '@/lib/readinessFixPack';
+import type { ReadinessFixPackFile } from '@/lib/readinessFixPack';
 import { buildReadinessPrPlan } from '@/lib/readinessPr';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import type { CreateGitHubAppReadinessPrPayload, CreateReadinessPrFilePayload, CreateReadinessPrPayload } from './types';
@@ -10,6 +11,7 @@ export interface ReadinessPrPayloadInput {
   owner?: string;
   repo?: string;
   baseBranch?: string;
+  files?: ReadinessFixPackFile[];
 }
 
 export function buildCreateReadinessPrPayload({
@@ -18,12 +20,11 @@ export function buildCreateReadinessPrPayload({
   owner,
   repo,
   baseBranch,
+  files: inputFiles,
 }: ReadinessPrPayloadInput): CreateReadinessPrPayload {
   const repoInfo = inferGitHubRepo(report, owner, repo);
   const plan = buildReadinessPrPlan();
-  const files = buildSuggestedReadinessFixPack(report)
-    .filter(file => isPrFile(file.path))
-    .map<CreateReadinessPrFilePayload>(file => ({ path: file.path, content: file.content }));
+  const files = readinessPrFiles(report, inputFiles);
 
   return {
     owner: repoInfo.owner,
@@ -31,29 +32,29 @@ export function buildCreateReadinessPrPayload({
     baseBranch: baseBranch || report.source.githubDefaultBranch || report.source.githubBranch || undefined,
     branchName: plan.branchName,
     prTitle: plan.title,
-    prBody: `${plan.summary}\n\n${plan.safetyNote}\n\n${plan.expectedImpactNote}`,
+    prBody: buildReadinessPrBody(report, files),
     files,
     githubToken,
   };
 }
 
-export function buildCreateGitHubAppReadinessPrPayload({
-  report,
-  installationId,
-  owner,
-  repo,
-  baseBranch,
-}: {
+export function buildCreateGitHubAppReadinessPrPayload(input: {
   report: ReadinessReport;
   installationId: string;
   owner: string;
   repo: string;
   baseBranch?: string;
+  files?: ReadinessFixPackFile[];
 }): CreateGitHubAppReadinessPrPayload {
+  const {
+    report,
+    installationId,
+    owner,
+    repo,
+    baseBranch,
+  } = input;
   const plan = buildReadinessPrPlan();
-  const files = buildSuggestedReadinessFixPack(report)
-    .filter(file => isPrFile(file.path))
-    .map<CreateReadinessPrFilePayload>(file => ({ path: file.path, content: file.content }));
+  const files = readinessPrFiles(report, input.files);
 
   return {
     installationId,
@@ -62,9 +63,45 @@ export function buildCreateGitHubAppReadinessPrPayload({
     baseBranch: baseBranch || report.source.githubDefaultBranch || report.source.githubBranch || undefined,
     branchName: plan.branchName,
     prTitle: plan.title,
-    prBody: `${plan.summary}\n\n${plan.safetyNote}\n\n${plan.expectedImpactNote}`,
+    prBody: buildReadinessPrBody(report, files),
     files,
   };
+}
+
+export function readinessPrFiles(report: ReadinessReport, files?: ReadinessFixPackFile[]): CreateReadinessPrFilePayload[] {
+  return (files || buildSuggestedReadinessFixPack(report))
+    .filter(file => isPrFile(file.path))
+    .map<CreateReadinessPrFilePayload>(file => ({ path: file.path, content: file.content }));
+}
+
+export function buildReadinessPrBody(report: ReadinessReport, files: CreateReadinessPrFilePayload[]) {
+  const plan = buildReadinessPrPlan();
+  const fileList = files.map(file => `- \`${file.path}\``).join('\n');
+  return [
+    plan.summary,
+    '',
+    `Readiness score: ${report.score}/100`,
+    `Readiness status: ${report.level}`,
+    `Repository scanned: ${report.repoName}`,
+    '',
+    'Files added:',
+    fileList,
+    '',
+    'Why this helps:',
+    '- Gives future AI coding agents repository-specific operating instructions.',
+    '- Adds review, ownership, security, release, and CI guidance for safer handoff.',
+    '- Makes future ShipSeal scans more likely to detect readiness evidence.',
+    '',
+    'Safety note:',
+    plan.safetyNote,
+    '',
+    'Recommended manual review:',
+    '- Review every generated file before merging.',
+    '- Confirm CI/workflow changes are acceptable for this repository.',
+    '- Adapt placeholders and ownership notes to the real team.',
+    '',
+    plan.expectedImpactNote,
+  ].join('\n');
 }
 
 export function inferGitHubRepo(report: ReadinessReport, owner?: string, repo?: string) {

@@ -9,13 +9,15 @@ import {
   buildSuggestedReadinessFixPack,
 } from '@/lib/readinessFixPack';
 import { buildReadinessPrPlan } from '@/lib/readinessPr';
+import type { GitHubConnectionState } from '@/lib/githubConnection/types';
 import { CreateReadinessPrDialog } from './CreateReadinessPrDialog';
 
 interface Props {
   report: ReadinessReport;
+  githubConnection?: GitHubConnectionState;
 }
 
-export function SuggestedReadinessFixPack({ report }: Props) {
+export function SuggestedReadinessFixPack({ report, githubConnection }: Props) {
   const files = useMemo(() => buildSuggestedReadinessFixPack(report), [report]);
   const [selectedPath, setSelectedPath] = useState(files[0]?.path || '');
   const selected = files.find(file => file.path === selectedPath) || files[0];
@@ -119,7 +121,7 @@ export function SuggestedReadinessFixPack({ report }: Props) {
               Preview the repository changes ShipSeal would propose in a safe pull request.
             </p>
             <p className="text-xs text-muted-foreground mt-2">
-              ShipSeal will only write after you review the files, provide a token, and confirm the operation. It creates a separate branch and opens a pull request for human review.
+              ShipSeal will only write after you review the files and confirm the operation. Connected GitHub repositories use the GitHub App with no pasted token.
             </p>
           </div>
         </div>
@@ -184,7 +186,7 @@ export function SuggestedReadinessFixPack({ report }: Props) {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-2">
-              <CreateReadinessPrDialog report={report} files={files} />
+              <CreateReadinessPrDialog report={report} files={files} githubConnection={githubConnection} />
               <Button type="button" variant="outline" onClick={copyManualSteps}>
                 <Copy className="h-3.5 w-3.5 mr-1.5" /> Copy manual Git steps
               </Button>

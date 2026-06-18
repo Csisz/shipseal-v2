@@ -161,28 +161,38 @@ async function createSafeBranch(client: GitHubInstallationClient, request: GitHu
     });
     return request.branchName;
   } catch (error) {
-    if (!(error instanceof GitHubAppApiError) || error.status !== 422) throw error;
+    if (!(error instanceof GitHubAppApiError) || error.status !== 422) {
+      throw new GitHubAppApiError(error instanceof GitHubAppApiError ? error.status : 502, 'ShipSeal could not create the readiness branch.', error instanceof GitHubAppApiError ? error.code : 'github_api_error');
+    }
     const fallback = `${request.branchName}-${timestamp(now())}`;
-    await client.postJson(`/repos/${request.owner}/${request.repo}/git/refs`, {
-      ref: `refs/heads/${fallback}`,
-      sha: baseSha,
-    });
+    try {
+      await client.postJson(`/repos/${request.owner}/${request.repo}/git/refs`, {
+        ref: `refs/heads/${fallback}`,
+        sha: baseSha,
+      });
+    } catch (fallbackError) {
+      throw new GitHubAppApiError(fallbackError instanceof GitHubAppApiError ? fallbackError.status : 502, 'ShipSeal could not create a timestamped readiness branch. A ShipSeal branch may already exist, or the repository may be read-only.', fallbackError instanceof GitHubAppApiError ? fallbackError.code : 'github_api_error');
+    }
     return fallback;
   }
 }
 
 async function putFile(client: GitHubInstallationClient, request: GitHubAppPrRequest, branchName: string, file: GitHubAppPrFile) {
   const encodedPath = file.path.split('/').map(part => encodeURIComponent(part)).join('/');
-  const current = await client.getJson<{ sha?: string }>(
-    `/repos/${request.owner}/${request.repo}/contents/${encodedPath}?ref=${encodeURIComponent(branchName)}`,
-    { optional404: true }
-  );
-  await client.putJson(`/repos/${request.owner}/${request.repo}/contents/${encodedPath}`, {
-    message: `Add ${file.path} from ShipSeal Readiness Fix Pack`,
-    content: toBase64(file.content),
-    branch: branchName,
-    ...(current?.sha ? { sha: current.sha } : {}),
-  });
+  try {
+    const current = await client.getJson<{ sha?: string }>(
+      `/repos/${request.owner}/${request.repo}/contents/${encodedPath}?ref=${encodeURIComponent(branchName)}`,
+      { optional404: true }
+    );
+    await client.putJson(`/repos/${request.owner}/${request.repo}/contents/${encodedPath}`, {
+      message: `Add ${file.path} from ShipSeal Readiness Fix Pack`,
+      content: toBase64(file.content),
+      branch: branchName,
+      ...(current?.sha ? { sha: current.sha } : {}),
+    });
+  } catch (error) {
+    throw new GitHubAppApiError(error instanceof GitHubAppApiError ? error.status : 502, `ShipSeal could not write generated readiness file: ${file.path}.`, error instanceof GitHubAppApiError ? error.code : 'github_api_error');
+  }
 }
 
 export async function createReadinessPrWithGitHubApp(
@@ -200,12 +210,17 @@ export async function createReadinessPrWithGitHubApp(
     await putFile(client, request, branchName, file);
   }
 
-  const pr = await client.postJson<{ html_url: string }>(`/repos/${request.owner}/${request.repo}/pulls`, {
-    title: request.prTitle,
-    head: branchName,
-    base: baseBranch,
-    body: request.prBody,
-  });
+  let pr: { html_url: string };
+  try {
+    pr = await client.postJson<{ html_url: string }>(`/repos/${request.owner}/${request.repo}/pulls`, {
+      title: request.prTitle,
+      head: branchName,
+      base: baseBranch,
+      body: request.prBody,
+    });
+  } catch (error) {
+    throw new GitHubAppApiError(error instanceof GitHubAppApiError ? error.status : 502, 'GitHub could not open the Pull Request. A similar PR may already exist for this branch.', error instanceof GitHubAppApiError ? error.code : 'github_api_error');
+  }
 
   return {
     prUrl: pr.html_url,
@@ -248,8 +263,22 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
       });
       return;
     }
-    sendJson(res, error instanceof GitHubAppApiError && error.status === 404 ? 404 : 502, {
-      error: error instanceof Error ? error.message : 'GitHub App Create Readiness PR failed.',
-    });
+    const friendly = userFacingGitHubAppPrError(error);
+    sendJson(res, friendly.status, { error: friendly.error });
   }
+}
+
+function userFacingGitHubAppPrError(error: unknown) {
+  if (!(error instanceof GitHubAppApiError)) {
+    return { status: 502, error: 'GitHub App Create Readiness PR failed. Retry or reconnect GitHub.' };
+  }
+  const lower = error.message.toLowerCase();
+
+  if (error.status === 401) return { status: 401, error: 'GitHub App installation token could not be used. Reconnect GitHub and retry.' };
+  if (error.status === 403) return { status: 403, error: 'GitHub App does not have permission to write to this repository. Check Contents and Pull requests permissions.' };
+  if (error.status === 404) return { status: 404, error: 'GitHub App installation or selected repository was not found. Reconnect GitHub and select the repository again.' };
+  if (lower.includes('branch')) return { status: 422, error: error.message };
+  if (lower.includes('file')) return { status: 422, error: error.message };
+  if (lower.includes('pull request')) return { status: 422, error: error.message };
+  return { status: 502, error: 'GitHub App Create Readiness PR failed. Check repository access and retry.' };
 }

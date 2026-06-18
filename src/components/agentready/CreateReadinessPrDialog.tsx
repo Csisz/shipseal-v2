@@ -88,12 +88,11 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
           owner: connection.owner,
           repo: connection.repo,
           baseBranch: baseBranch || connection.defaultBranch || undefined,
+          files: prFiles,
         }));
         setSuccess({ pullRequestUrl: response.prUrl, branchName: response.branchName });
       } catch (requestError) {
-        setError(requestError instanceof CreateReadinessPrClientError
-          ? requestError.message
-          : 'Create Readiness PR failed. Check repository access and try again.');
+        setError(friendlyPrError(requestError));
       } finally {
         setIsSubmitting(false);
       }
@@ -121,14 +120,13 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
         repo,
         baseBranch: baseBranch || undefined,
         githubToken,
+        files: prFiles,
       }));
       setSuccess({ pullRequestUrl: response.pullRequestUrl, branchName: response.branchName });
       setGithubToken('');
     } catch (requestError) {
       setGithubToken('');
-      setError(requestError instanceof CreateReadinessPrClientError
-        ? requestError.message
-        : 'Create Readiness PR failed. Check repository access and try again.');
+      setError(friendlyPrError(requestError));
     } finally {
       setIsSubmitting(false);
     }
@@ -174,7 +172,7 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
                 ))}
               </div>
               <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
-                ShipSeal will create a new branch and open a pull request. It will not push to main.
+                ShipSeal will create a new branch and open a pull request. It will not push to main, and uploaded or imported code is not executed.
               </div>
               {hasWorkflowFile && (
                 <div className="mt-3 flex gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
@@ -204,7 +202,7 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
                     <div className="min-w-0 flex-1">
                       <div className="font-display font-semibold">Connect GitHub before creating a Pull Request.</div>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Public URL and ZIP scans can still export reports and fix packs. PR creation requires a connected GitHub repository.
+                        PR creation requires a connected GitHub App repository. Reconnect GitHub, select the repository from the picker, then scan again.
                       </p>
                       {currentRepository && (
                         <p className="mt-2 text-xs text-foreground/85">Current repository: {currentRepository}</p>
@@ -262,7 +260,7 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
                             <Input aria-label="Repository name" value={repo} onChange={event => setRepo(event.target.value)} />
                           </label>
                           <p className="sm:col-span-2 text-xs text-muted-foreground">
-                            Repository owner and name are required only if you want ShipSeal to create a GitHub Pull Request.
+                            Repository owner and name are used only in developer/test mode. Connected GitHub App repositories do not require a pasted token.
                           </p>
                           <label className="block">
                             <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">Base branch</span>
@@ -320,7 +318,7 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
               <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
                 <div className="inline-flex items-start gap-2 text-xs text-muted-foreground">
                   <ShieldCheck className="h-3.5 w-3.5 mt-0.5" />
-                  <span>Token is held in memory only for this request and cleared after submit.</span>
+                  <span>{connection.canCreatePullRequest ? 'GitHub App installation tokens stay server-side and are never returned to the browser.' : 'Temporary token mode keeps the token in memory only for this request and clears it after submit.'}</span>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2">
                   {success && (
@@ -350,4 +348,20 @@ function Info({ label, value }: { label: string; value: string }) {
       <div className="mt-1 text-xs font-mono text-foreground/90 break-all">{value}</div>
     </div>
   );
+}
+
+function friendlyPrError(error: unknown) {
+  const fallback = 'Create Readiness PR failed. Check repository access and try again.';
+  if (!(error instanceof CreateReadinessPrClientError)) return fallback;
+  const message = error.message;
+  const lower = message.toLowerCase();
+
+  if (lower.includes('not configured')) return 'GitHub App is not configured yet. Check the Vercel GitHub App environment variables, then retry.';
+  if (lower.includes('installation') && lower.includes('not found')) return 'GitHub App is not installed for this repository. Reconnect GitHub or configure the ShipSeal GitHub App for the selected repo.';
+  if (lower.includes('repository') && lower.includes('not found')) return 'GitHub could not find the selected repository or branch. Reconnect GitHub and select the repository again.';
+  if (lower.includes('permission') || error.status === 403) return 'GitHub App does not have permission to write to this repository. Check repository access and Contents/Pull requests permissions.';
+  if (lower.includes('branch')) return 'ShipSeal could not create the readiness branch. Retry, or delete an old ShipSeal readiness branch if one already exists.';
+  if (lower.includes('file') || lower.includes('contents')) return 'ShipSeal could not write one of the generated readiness files. Check repository permissions and retry.';
+  if (lower.includes('pull request') || lower.includes('similar pr')) return 'GitHub could not open the Pull Request. A similar PR may already exist for this branch.';
+  return message || fallback;
 }

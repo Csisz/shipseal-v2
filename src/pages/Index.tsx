@@ -108,6 +108,7 @@ const Index = () => {
   const scanSectionRef = useRef<HTMLDivElement>(null);
 
   const activeReport = sampleReport || scan.report;
+  const activeGithubConnection = pendingSource?.type === 'github-app' ? pendingSource.connection : undefined;
   const isScanning = scan.status === 'scanning';
 
   useEffect(() => {
@@ -395,6 +396,7 @@ const Index = () => {
               initialIntake={submittedIntake}
               intakeSkipped={submittedIntakeSkipped}
               selectedPackages={selectedPackages}
+              githubConnection={activeGithubConnection}
             />
           </Suspense>
         </main>

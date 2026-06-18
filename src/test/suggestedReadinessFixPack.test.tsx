@@ -5,6 +5,7 @@ import { SuggestedReadinessFixPack } from '@/components/agentready/SuggestedRead
 import { createConnectedGitHubConnection } from '@/lib/githubConnection/types';
 import { buildSampleReport } from '@/lib/readiness';
 import { buildSuggestedReadinessFixPack } from '@/lib/readinessFixPack';
+import { buildReadinessPrPlan } from '@/lib/readinessPr';
 
 describe('SuggestedReadinessFixPack', () => {
   afterEach(() => {
@@ -31,7 +32,7 @@ describe('SuggestedReadinessFixPack', () => {
     expect(screen.getByText('MVP write')).toBeInTheDocument();
     expect(screen.getByText(/Preview the repository changes ShipSeal would propose in a safe pull request/i)).toBeInTheDocument();
     expect(screen.getByText('shipseal/readiness-pack')).toBeInTheDocument();
-    expect(screen.getByText('Add ShipSeal readiness and agent governance pack')).toBeInTheDocument();
+    expect(screen.getByText('Add ShipSeal readiness pack')).toBeInTheDocument();
     expect(screen.getByText(/ShipSeal will not push directly to main/i)).toBeInTheDocument();
     expect(screen.getByText(/Then open a Pull Request on GitHub/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Create Readiness PR$/i })).toBeEnabled();
@@ -102,8 +103,11 @@ describe('SuggestedReadinessFixPack', () => {
       repo: 'shipseal',
       baseBranch: 'main',
       branchName: 'shipseal/readiness-pack',
+      prTitle: 'Add ShipSeal readiness pack',
     });
     expect(payload.files.map((file: { path: string }) => file.path)).toContain('.github/workflows/ci.yml');
+    expect(payload.prBody).toContain('Readiness score:');
+    expect(payload.prBody).toContain('Uploaded or imported repository code was not executed');
   });
 
   it('auto-fills owner and repo from a GitHub source URL and allows an empty base branch', async () => {
@@ -141,7 +145,7 @@ describe('SuggestedReadinessFixPack', () => {
     expect(within(dialog).getByLabelText('Base branch')).toHaveValue('');
     expect(within(dialog).getByText(/Leave empty to use the repository default branch/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/ShipSeal keeps it in memory and does not store it/i)).toBeInTheDocument();
-    expect(within(dialog).getByText(/For production use, connect GitHub at repository source selection/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Temporary token mode keeps the token in memory only for this request/i)).toBeInTheDocument();
     expect(within(dialog).getByText(/Developer\/test mode. For production use, connect GitHub/i)).toBeInTheDocument();
 
     fireEvent.change(within(dialog).getByLabelText('GitHub token'), { target: { value: 'ghp_mock' } });
@@ -155,6 +159,7 @@ describe('SuggestedReadinessFixPack', () => {
       owner: 'Csisz',
       repo: 'shipseal',
       branchName: 'shipseal/readiness-pack',
+      prTitle: 'Add ShipSeal readiness pack',
     });
     expect(payload).not.toHaveProperty('baseBranch');
   });
@@ -179,7 +184,7 @@ describe('SuggestedReadinessFixPack', () => {
 
     expect(ownerInput).toHaveValue('');
     expect(repoInput).toHaveValue('');
-    expect(within(dialog).getByText(/Repository owner and name are required only if you want ShipSeal to create a GitHub Pull Request/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Repository owner and name are used only in developer\/test mode/i)).toBeInTheDocument();
 
     fireEvent.change(ownerInput, { target: { value: 'Csisz' } });
     fireEvent.change(repoInput, { target: { value: 'shipseal' } });
@@ -277,7 +282,44 @@ describe('SuggestedReadinessFixPack', () => {
       repo: 'shipseal',
       baseBranch: 'main',
       branchName: 'shipseal/readiness-pack',
+      prTitle: 'Add ShipSeal readiness pack',
     });
     expect(payload).not.toHaveProperty('githubToken');
+    expect(payload.files.map((file: { path: string }) => file.path)).toEqual(buildReadinessPrPlan().files.map(file => file.path));
+    expect(payload.prBody).toContain('Readiness score:');
+    expect(payload.prBody).toContain('Uploaded or imported repository code was not executed');
+  });
+
+  it('shows friendly guidance when the connected GitHub App cannot write to the selected repo', async () => {
+    const report = buildSampleReport();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        error: 'GitHub App does not have permission to write to this repository.',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(
+      <CreateReadinessPrDialog
+        report={report}
+        files={buildSuggestedReadinessFixPack(report)}
+        githubConnection={createConnectedGitHubConnection({
+          owner: 'Csisz',
+          repo: 'shipseal',
+          defaultBranch: 'main',
+          installationId: '123',
+        })}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Create Readiness PR$/i }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByLabelText(/I understand ShipSeal will create a branch/i));
+    fireEvent.click(within(dialog).getByRole('button', { name: /Create Pull Request/i }));
+
+    expect(await within(dialog).findByText(/GitHub App does not have permission to write to this repository/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Contents\/Pull requests permissions/i)).toBeInTheDocument();
   });
 });

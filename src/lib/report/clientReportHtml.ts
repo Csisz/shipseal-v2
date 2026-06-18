@@ -151,10 +151,10 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     }
 
     .score-card {
-      background: #ffffff;
-      color: var(--brand-dark);
-      border-color: rgba(255,255,255,0.72);
-      box-shadow: inset 0 0 0 1px rgba(8,36,95,0.08);
+      background: #071b49;
+      color: #ffffff;
+      border-color: rgba(255,255,255,0.34);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
       min-width: 0;
       overflow: visible;
     }
@@ -181,7 +181,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       flex: 0 0 auto;
       font-size: 30px;
       line-height: 1;
-      color: var(--brand-dark);
+      color: #ffffff;
       white-space: nowrap;
     }
 
@@ -191,14 +191,14 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       font-size: 14px;
       line-height: 1;
       font-weight: 800;
-      color: #5270a4;
+      color: rgba(255,255,255,0.78);
       white-space: nowrap;
     }
 
     .score-text {
       font-size: 22px;
       line-height: 1;
-      color: var(--brand-dark);
+      color: #ffffff;
       white-space: nowrap;
     }
 
@@ -211,7 +211,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       margin-bottom: 4px;
     }
 
-    .score-card .label { color: #62749a; }
+    .score-card .label { color: rgba(255,255,255,0.76); }
 
     .decision-card {
       background: #f9fbff;

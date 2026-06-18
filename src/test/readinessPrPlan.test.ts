@@ -8,8 +8,9 @@ describe('Readiness PR plan', () => {
     const serialized = JSON.stringify(plan);
 
     expect(plan.branchName).toBe('shipseal/readiness-pack');
-    expect(plan.title).toBeTruthy();
-    expect(plan.summary).toContain('ShipSeal-generated agent instructions');
+    expect(plan.title).toBe('Add ShipSeal readiness pack');
+    expect(plan.summary).toContain('ShipSeal-generated readiness files');
+    expect(plan.safetyNote).toContain('Uploaded or imported repository code was not executed');
     expect(paths).toContain('AGENTS.md');
     expect(paths).toContain('CLAUDE.md');
     expect(paths).toContain('.github/workflows/ci.yml');

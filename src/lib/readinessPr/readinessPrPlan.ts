@@ -32,12 +32,12 @@ const manualGitSteps = [
 export function buildReadinessPrPlan(): ReadinessPrPlan {
   return {
     branchName: 'shipseal/readiness-pack',
-    title: 'Add ShipSeal readiness and agent governance pack',
-    summary: 'This pull request adds ShipSeal-generated agent instructions, governance notes, testing guidance, security review notes and client handoff documentation to improve AI project delivery readiness.',
+    title: 'Add ShipSeal readiness pack',
+    summary: 'This pull request adds ShipSeal-generated readiness files: agent instructions, governance notes, testing guidance, security review notes and client handoff documentation.',
     files,
     categories,
     manualGitSteps,
-    safetyNote: 'ShipSeal will not push directly to main. A future GitHub integration should create a separate branch and open a pull request for human review.',
+    safetyNote: 'ShipSeal will not push directly to main. Uploaded or imported repository code was not executed; this PR contains generated text/config files for human review.',
     expectedImpactNote: 'These files are expected to improve future ShipSeal scans, depending on repository content and review.',
   };
 }

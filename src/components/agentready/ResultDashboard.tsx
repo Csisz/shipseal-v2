@@ -19,6 +19,7 @@ import type { ProjectIntake } from '@/lib/intake';
 import { createDefaultProjectIntake, normalizeProjectIntake } from '@/lib/intake';
 import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages } from '@/lib/packages';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import type { GitHubConnectionState } from '@/lib/githubConnection/types';
 
 interface Props {
   report: ReadinessReport;
@@ -29,9 +30,10 @@ interface Props {
   intakeSkipped?: boolean;
   /** Package options the user picked before the scan; defaults to the full package. */
   selectedPackages?: string[];
+  githubConnection?: GitHubConnectionState;
 }
 
-export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false, selectedPackages }: Props) {
+export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false, selectedPackages, githubConnection }: Props) {
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
   const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
   const deliveryFocus = resolveDeliveryPackFocus(resolvedPackages);
@@ -200,7 +202,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
       </Disclosure>
 
       <Disclosure title="Improve your score — optional fixes you can add back">
-        <SuggestedReadinessFixPack report={report} />
+        <SuggestedReadinessFixPack report={report} githubConnection={githubConnection} />
       </Disclosure>
 
       <Disclosure title="Advanced details — full scan results and generated files">

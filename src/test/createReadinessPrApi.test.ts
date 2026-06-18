@@ -18,7 +18,7 @@ const validPayload = {
   repo: 'shipseal',
   baseBranch: 'main',
   branchName: 'shipseal/readiness-pack',
-  prTitle: 'Add ShipSeal readiness and agent governance pack',
+  prTitle: 'Add ShipSeal readiness pack',
   prBody: 'This pull request adds ShipSeal-generated readiness files.',
   files,
   githubToken: 'ghp_mock',
@@ -76,6 +76,10 @@ describe('Create Readiness PR API', () => {
 
     expect(payload.owner).toBe('Csisz');
     expect(payload.repo).toBe('shipseal');
+    expect(payload.prTitle).toBe('Add ShipSeal readiness pack');
+    expect(payload.prBody).toContain(`Readiness score: ${report.score}/100`);
+    expect(payload.prBody).toContain('Uploaded or imported repository code was not executed');
+    expect(payload.prBody).toContain('Files added:');
     expect(paths).toContain('AGENTS.md');
     expect(paths).toContain('CLAUDE.md');
     expect(paths).toContain('.github/workflows/ci.yml');
