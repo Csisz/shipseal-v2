@@ -27,6 +27,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '03-mcp-governance/MCP_TOOL_ALLOWLIST.md',
     '04-testing/RED_TEAM_PROMPTS.md',
     '05-ai-act-readiness/AI_ACT_READINESS_CHECKLIST.md',
+    '05-ai-act-readiness/LEGAL_REVIEW_QUESTIONS.md',
     '06-client-handoff/CLIENT_HANDOFF_REPORT.md',
     ROOT_SCORE,
   ],
@@ -90,7 +91,7 @@ const GOAL_LABELS: Record<ShipSealPackageId, string> = {
 const GOAL_SUMMARIES: Record<ShipSealPackageId, string> = {
   'client-handoff': 'Client report, executive summary, readiness decision, roadmap, and delivery manifest.',
   'launch-readiness': 'Go/no-go readiness, quality gates, AI Act pre-screen, and client next steps.',
-  'safety-risk': 'Security notes, env/secrets signals, data/privacy checklist, and risk summary.',
+  'safety-risk': 'Env/secrets signals, data/privacy checklist, red-team prompts, and risk summary.',
   'agent-readiness': 'AGENTS.md, CLAUDE.md, Codex guidance, repo context, and agent safety notes.',
   'testing-red-team': 'Testing plan, eval cases, red-team prompts, quality gates, and CI/test recommendations.',
   'rescue-refactor': 'Prioritized fix roadmap, review guidance, and repository context for cleanup.',

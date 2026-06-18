@@ -74,10 +74,11 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false, sel
         </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+      <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
         <PreviewMetric label="ShipSeal score" value={`${report.score}/100`} />
         <PreviewMetric label="Go/no-go category" value={goNoGo} />
-        <PreviewMetric label="MCP readiness" value={displayMcpReadiness(report.mcpReadiness.status)} />
+        <PreviewMetric label="Selected package" value={focus.packageLabel} />
+        <PreviewMetric label="Repository / ref" value={`${report.repoName} @ ${branchOrRef(report)}`} />
         <PreviewMetric label="Output files" value={`${generatedPaths.length} generated`} />
       </div>
 
@@ -93,13 +94,20 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false, sel
         <p className="mt-2 text-xs text-muted-foreground">
           {focus.fullPackage
             ? 'Full ShipSeal includes every manifest output.'
-            : `${generatedPaths.length} focused outputs will be generated for this goal. The full manifest remains available through the Full ShipSeal package.`}
+            : `${generatedPaths.length} focused outputs will be generated for this goal. The score.json export and Delivery Pack ZIP use the same generated file list.`}
+        </p>
+      </div>
+
+      <div className="mb-5 rounded-lg border border-border/60 bg-secondary/25 px-4 py-3">
+        <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1">Scan evidence</div>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          {scanEvidenceText(report)} ShipSeal did not execute repository code.
         </p>
       </div>
 
       {intakeSkipped && (
         <div className="mb-5 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning">
-          Client report quality is limited because project intake was skipped.
+          Client and agency fields can be completed before final delivery.
         </div>
       )}
 
@@ -111,7 +119,7 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false, sel
 
       {!intakeSkipped && intakeCompletenessWarning(normalizedIntake) && (
         <div className="mb-5 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning">
-          Client report quality improves when project intake fields are completed.
+          Client and agency fields can be completed before final delivery.
         </div>
       )}
 
@@ -246,7 +254,7 @@ function testingStatusText(report: ReadinessReport) {
 }
 
 function clientHandoffStatusText(intake: ReturnType<typeof normalizeProjectIntake>) {
-  const client = intake.clientName?.trim() || 'client';
+  const client = intake.clientName?.trim() || 'final delivery';
   return `Client handoff report, executive summary, and 30/60/90 roadmap are ready for ${client}.`;
 }
 
@@ -264,9 +272,11 @@ function intakeCompletenessWarning(intake: ReturnType<typeof normalizeProjectInt
   return missingText || missingRiskSignals;
 }
 
-function displayMcpReadiness(status?: string) {
-  if (!status) return 'Not detected';
-  if (/Enterprise MCP Ready/i.test(status)) return 'MCP Governance Ready';
-  if (/MCP Ready/i.test(status)) return 'Strong MCP readiness signal';
-  return status;
+function branchOrRef(report: ReadinessReport) {
+  return report.scanEvidence.branchOrRef || report.source.githubBranch || report.source.githubDefaultBranch || 'default ref';
+}
+
+function scanEvidenceText(report: ReadinessReport) {
+  const evidence = report.scanEvidence;
+  return `${evidence.sourceType} archive for ${evidence.repositoryFullName || report.repoName} @ ${branchOrRef(report)}; ${evidence.analyzedFileCount} analyzed files out of ${evidence.discoveredFileCount} discovered files; ${evidence.ignoredFileCount} ignored files.`;
 }

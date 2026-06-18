@@ -70,8 +70,8 @@ function renderClientHandoffReport(
     '',
     '## Client and project context',
     `- Project: ${intake.projectName}`,
-    `- Client: ${valueOrNotProvided(intake.clientName)}`,
-    `- Agency: ${valueOrNotProvided(intake.agencyName)}`,
+    `- Client: ${clientAgencyValue(intake.clientName)}`,
+    `- Agency: ${clientAgencyValue(intake.agencyName)}`,
     `- App description: ${valueOrNotProvided(intake.appDescription)}`,
     `- AI use case: ${valueOrNotProvided(intake.aiUseCase)}`,
     '',
@@ -167,8 +167,8 @@ function renderExecutiveSummary(
     executiveSummaryParagraph(intake, summary, goNoGo),
     '',
     '## Client context',
-    `- Client: ${valueOrNotProvided(intake.clientName)}`,
-    `- Agency: ${valueOrNotProvided(intake.agencyName)}`,
+    `- Client: ${clientAgencyValue(intake.clientName)}`,
+    `- Agency: ${clientAgencyValue(intake.agencyName)}`,
     `- AI use case: ${valueOrNotProvided(intake.aiUseCase)}`,
     '',
     '## What looks strong',
@@ -196,8 +196,8 @@ function renderNextStepsRoadmap(
     DISCLAIMER,
     '',
     '## Roadmap basis',
-    `- Client: ${valueOrNotProvided(intake.clientName)}`,
-    `- Agency: ${valueOrNotProvided(intake.agencyName)}`,
+    `- Client: ${clientAgencyValue(intake.clientName)}`,
+    `- Agency: ${clientAgencyValue(intake.agencyName)}`,
     `- App description: ${valueOrNotProvided(intake.appDescription)}`,
     `- AI use case: ${valueOrNotProvided(intake.aiUseCase)}`,
     `- Scan coverage: ${summary.scanLimited ? 'Limited scan' : 'Full scan'}`,
@@ -246,10 +246,13 @@ function missingIntakeNote(intake: ProjectIntake) {
     ['app description', intake.appDescription],
     ['AI use case', intake.aiUseCase],
   ].filter(([, value]) => typeof value !== 'string' || !value.trim()).map(([label]) => label);
+  const missingClientOrAgency = missing.includes('client') || missing.includes('agency');
 
-  return missing.length
-    ? `Some project context is not provided yet (${missing.join(', ')}). Complete it before sharing the final client report if those details matter.`
-    : '';
+  if (!missing.length) return '';
+  if (missingClientOrAgency) {
+    return `Client and agency fields can be completed before final delivery. Missing project context: ${missing.join(', ')}.`;
+  }
+  return `Some project context can be completed before final delivery: ${missing.join(', ')}.`;
 }
 
 function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): HandoffScoreSummary {
@@ -381,4 +384,8 @@ function stringValue(value: unknown): string | undefined {
 
 function valueOrNotProvided(value?: string) {
   return value?.trim() || 'Not provided';
+}
+
+function clientAgencyValue(value?: string) {
+  return value?.trim() || 'Can be completed before final delivery';
 }

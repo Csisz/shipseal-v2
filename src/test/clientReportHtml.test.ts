@@ -23,8 +23,12 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('ShipSeal');
     expect(html).toContain(SAMPLE_PROJECT_INTAKE.projectName);
     expect(html).toContain('Readiness score');
+    expect(html).toContain('Readiness decision');
     expect(html).toContain('AI Act readiness pre-screen');
     expect(html).toContain('Testing and eval summary');
+    expect(html).toContain('Generated file list');
+    expect(html).toContain('Full ShipSeal overview');
+    expect(html).toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.html');
     expect(html).toContain('30/60/90 day next steps roadmap');
     expect(html).toContain('ShipSeal does not provide legal advice');
     expect(html).toContain('MCP readiness is a separate governance dimension');
@@ -68,10 +72,62 @@ describe('ShipSeal print-ready client report HTML', () => {
 
     expect(html).toContain('Selected package: MCP readiness pack');
     expect(html).toContain('MCP readiness, MCP security policy, tool allowlist, and server recommendations.');
+    expect(html).toContain('Selected package focus');
     expect(html).toContain('Scan evidence:');
     expect(html).toContain(report.repoName);
-    expect(html).toContain('Some project context is not provided yet');
+    expect(html).toContain('Client and agency fields can be completed before final delivery.');
     expect(html).toContain('Generated outputs: 7');
+    expect(html).toContain('03-mcp-governance/MCP_READINESS.md');
+    expect(html).toContain('score.json');
+  });
+
+  it('handles missing client and agency fields gracefully', () => {
+    const report = buildSampleProjectReadinessReport();
+    const html = generateClientReportHtml({
+      intake: {
+        ...SAMPLE_PROJECT_INTAKE,
+        clientName: '',
+        agencyName: '',
+      },
+      scoreJson: buildScoreJson(report, { selectedPackages: ['client-handoff'] }),
+    });
+
+    expect(html).toContain('Client and agency fields can be completed before final delivery.');
+    expect(html).toContain('To be completed before final delivery');
+    expect(html).not.toContain('<div class="card"><div class="label">Client</div>Not provided</div>');
+    expect(html).not.toContain('<div class="card"><div class="label">Agency</div>Not provided</div>');
+  });
+
+  it('prioritizes client handoff sections for the client handoff package', () => {
+    const report = buildSampleProjectReadinessReport();
+    const html = generateClientReportHtml({
+      intake: SAMPLE_PROJECT_INTAKE,
+      scoreJson: buildScoreJson(report, { selectedPackages: ['client-handoff'] }),
+    });
+
+    expect(html).toContain('Client handoff priorities');
+    expect(html).toContain('Delivery manifest review');
+    expect(html).toContain('executive summary, readiness decision, roadmap, and delivery manifest');
+    expect(html).toContain('Generated outputs: 5');
+    expect(html).toContain('06-client-handoff/NEXT_STEPS_ROADMAP.md');
+  });
+
+  it('prioritizes security and data pre-screen sections for safety-risk package', () => {
+    const report = buildSampleProjectReadinessReport();
+    const html = generateClientReportHtml({
+      intake: {
+        ...SAMPLE_PROJECT_INTAKE,
+        handlesPersonalData: true,
+        hasHumanApproval: false,
+      },
+      scoreJson: buildScoreJson(report, { selectedPackages: ['safety-risk'] }),
+    });
+
+    expect(html).toContain('Security/data risk summary');
+    expect(html).toContain('Privacy and reviewer checklist');
+    expect(html).toContain('Env/secrets');
+    expect(html).toContain('Human approval and reviewer ownership need confirmation');
+    expect(html).toContain('03-mcp-governance/MCP_SECURITY_POLICY.md');
   });
 
   it('exports CLIENT_HANDOFF_REPORT.html into the Delivery Pack ZIP', async () => {

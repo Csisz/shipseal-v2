@@ -20,17 +20,20 @@ describe('DeliveryPackPreview', () => {
     expect(screen.getByText('ShipSeal score')).toBeInTheDocument();
     expect(screen.getByText(`${report.score}/100`)).toBeInTheDocument();
     expect(screen.getByText('Go/no-go category')).toBeInTheDocument();
+    expect(screen.getByText('Selected package')).toBeInTheDocument();
+    expect(screen.getByText('Repository / ref')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download pdf report/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /open html report/i })).toBeInTheDocument();
     expect(screen.getByText(/PDF uses the standalone client report/i)).toBeInTheDocument();
     expect(screen.getByText(/Print \/ Save as PDF/i)).toBeInTheDocument();
-    expect(screen.getByText(/Client report quality improves when project intake fields are completed/i)).toBeInTheDocument();
+    expect(screen.getByText(/Client and agency fields can be completed before final delivery/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download shipseal delivery pack/i })).toBeInTheDocument();
+    expect(screen.getByText('Scan evidence')).toBeInTheDocument();
     expect(screen.getByText('AI Act readiness')).toBeInTheDocument();
     expect(screen.getByText('Testing pack')).toBeInTheDocument();
     expect(screen.getByText('Client handoff')).toBeInTheDocument();
     expect(screen.getByText('Delivery focus')).toBeInTheDocument();
-    expect(screen.getByText('Full ShipSeal package')).toBeInTheDocument();
+    expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
     expect(screen.getByText('01-agent-instructions/AGENTS.md')).toBeInTheDocument();
     expect(screen.getByText('06-client-handoff/CLIENT_HANDOFF_REPORT.md')).toBeInTheDocument();
     expect(screen.getByText('06-client-handoff/CLIENT_HANDOFF_REPORT.html')).toBeInTheDocument();
@@ -49,6 +52,7 @@ describe('DeliveryPackPreview', () => {
 
     expect(screen.getByText('Create tests and red-team prompts')).toBeInTheDocument();
     expect(screen.getByText(/focused outputs will be generated for this goal/i)).toBeInTheDocument();
+    expect(screen.getByText(/score.json export and Delivery Pack ZIP use the same generated file list/i)).toBeInTheDocument();
     expect(screen.getAllByText('Included').length).toBeGreaterThan(0);
     expect(screen.getByText('04-testing/RED_TEAM_PROMPTS.md')).toBeInTheDocument();
     expect(screen.queryByText('06-client-handoff/CLIENT_HANDOFF_REPORT.md')).not.toBeInTheDocument();
@@ -59,6 +63,6 @@ describe('DeliveryPackPreview', () => {
 
     render(<DeliveryPackPreview report={report} intake={createDefaultProjectIntake(report.repoName)} intakeSkipped />);
 
-    expect(screen.getByText(/Client report quality is limited because project intake was skipped/i)).toBeInTheDocument();
+    expect(screen.getByText(/Client and agency fields can be completed before final delivery/i)).toBeInTheDocument();
   });
 });

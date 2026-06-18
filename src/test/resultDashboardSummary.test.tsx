@@ -88,9 +88,9 @@ describe('ResultDashboard summary copy', () => {
 
     expect(screen.getByText('Project package')).toBeInTheDocument();
     expect(screen.getByText('Security and data pre-screen')).toBeInTheDocument();
-    expect(screen.getByText('6 outputs')).toBeInTheDocument();
+    expect(screen.getByText('7 outputs')).toBeInTheDocument();
     expect(screen.queryByText(/Security and data pre-screen - 6 outputs/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Security notes, env\/secrets signals, data\/privacy checklist, and risk summary/i)).toBeInTheDocument();
+    expect(screen.getByText(/Env\/secrets signals, data\/privacy checklist, red-team prompts, and risk summary/i)).toBeInTheDocument();
   });
 
   it('shows skipped intake warning and regenerate action after intake edits', () => {

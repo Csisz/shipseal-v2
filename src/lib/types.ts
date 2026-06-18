@@ -317,11 +317,14 @@ export interface ScoreJsonExport {
     rawFileContentsIncluded: false;
   };
   generatedFiles: string[];
+  outputCount: number;
   deliveryPackFocus?: {
     selectedGoals: Array<{ id: string; title: string }>;
     emphasizedFiles: string[];
     generatedFiles: string[];
+    outputCount: number;
     manifestFiles: string[];
+    manifestOutputCount: number;
     fullPackage: boolean;
     packageLabel: string;
     packageSummary: string;

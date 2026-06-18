@@ -1,6 +1,16 @@
 import { generateClientReportHtml } from './clientReportHtml';
 import type { ClientReportHtmlInput } from './types';
 
+export interface PdfAvoidRange {
+  top: number;
+  bottom: number;
+}
+
+export interface PdfSlice {
+  top: number;
+  height: number;
+}
+
 function fileSafe(value: string) {
   return value
     .trim()
@@ -14,7 +24,42 @@ export function buildClientReportPdfFilename(projectName: string) {
 }
 
 export function shouldAddPdfContinuationPage(remainingHeightMm: number) {
-  return remainingHeightMm > 24;
+  return remainingHeightMm > 36;
+}
+
+export function planPdfSlices(totalHeight: number, pageHeight: number, avoidRanges: PdfAvoidRange[] = []): PdfSlice[] {
+  const slices: PdfSlice[] = [];
+  let top = 0;
+
+  while (top < totalHeight) {
+    const remaining = totalHeight - top;
+    if (remaining <= pageHeight) {
+      slices.push({ top, height: remaining });
+      break;
+    }
+
+    const preferredBottom = top + pageHeight;
+    const adjustedBottom = findPdfSliceBottom(top, preferredBottom, pageHeight, totalHeight, avoidRanges);
+    const height = Math.max(1, adjustedBottom - top);
+    slices.push({ top, height });
+    top += height;
+  }
+
+  return slices;
+}
+
+function findPdfSliceBottom(sliceTop: number, preferredBottom: number, pageHeight: number, totalHeight: number, avoidRanges: PdfAvoidRange[]) {
+  const minUsefulBottom = sliceTop + pageHeight * 0.68;
+  const splitRange = avoidRanges
+    .filter(range => range.top < preferredBottom && range.bottom > preferredBottom)
+    .sort((a, b) => b.top - a.top)
+    .find(range => range.top >= minUsefulBottom);
+
+  if (splitRange && totalHeight - splitRange.top < pageHeight * 0.35) {
+    return preferredBottom;
+  }
+
+  return splitRange ? Math.floor(splitRange.top) : preferredBottom;
 }
 
 export async function downloadClientReportPdf(input: ClientReportHtmlInput, projectName: string) {
@@ -44,25 +89,51 @@ export async function downloadClientReportPdf(input: ClientReportHtmlInput, proj
     const pdf = new jsPDF('p', 'mm', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pageWidth;
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-    const imageData = canvas.toDataURL('image/png');
+    const pageHeightPx = Math.floor(canvas.width * (pageHeight / pageWidth));
+    const avoidRanges = collectPdfAvoidRanges(container, canvas);
+    const slices = planPdfSlices(canvas.height, pageHeightPx, avoidRanges);
 
-    let remainingHeight = imgHeight;
-    let position = 0;
+    slices.forEach((slice, index) => {
+      if (index > 0) pdf.addPage();
 
-    pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
-    remainingHeight -= pageHeight;
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = slice.height;
+      const context = sliceCanvas.getContext('2d');
+      context?.drawImage(
+        canvas,
+        0,
+        slice.top,
+        canvas.width,
+        slice.height,
+        0,
+        0,
+        canvas.width,
+        slice.height
+      );
 
-    while (shouldAddPdfContinuationPage(remainingHeight)) {
-      position -= pageHeight;
-      pdf.addPage();
-      pdf.addImage(imageData, 'PNG', 0, position, imgWidth, imgHeight);
-      remainingHeight -= pageHeight;
-    }
+      const imgHeight = (slice.height * pageWidth) / canvas.width;
+      pdf.addImage(sliceCanvas.toDataURL('image/png'), 'PNG', 0, 0, pageWidth, imgHeight);
+    });
 
     pdf.save(buildClientReportPdfFilename(projectName));
   } finally {
     container.remove();
   }
+}
+
+function collectPdfAvoidRanges(container: HTMLElement, canvas: HTMLCanvasElement): PdfAvoidRange[] {
+  const containerRect = container.getBoundingClientRect();
+  const scale = canvas.width / containerRect.width;
+
+  return Array.from(container.querySelectorAll<HTMLElement>('section, .card, .avoid-break'))
+    .map(element => {
+      const rect = element.getBoundingClientRect();
+      return {
+        top: Math.max(0, (rect.top - containerRect.top) * scale),
+        bottom: Math.min(canvas.height, (rect.bottom - containerRect.top) * scale),
+      };
+    })
+    .filter(range => range.bottom - range.top > 24)
+    .sort((a, b) => a.top - b.top);
 }
