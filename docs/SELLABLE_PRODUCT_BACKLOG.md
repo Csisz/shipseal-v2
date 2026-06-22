@@ -1,6 +1,6 @@
 # ShipSeal Sellable Product Backlog
 
-Last updated: 2026-06-17
+Last updated: 2026-06-22
 
 This document lists the remaining functionality needed to turn ShipSeal from a strong MVP prototype into a sellable product. It combines the current product direction, recent implementation progress, and the next feature ideas that fit the ShipSeal positioning.
 
@@ -37,6 +37,119 @@ Recent progress:
 - Project package summary readability has been improved.
 
 The next phase should focus on making exports, reports, PR creation, and AI-agent operating guidance feel professional and commercially usable.
+
+## ShipSeal 2.0 Strategic Priorities
+
+These priorities extend the existing sellable MVP into the new ShipSeal 2.0 direction: an AI Agent Efficiency Platform that turns chaotic AI-built projects into efficient AI workspaces. Existing Delivery Pack, report, GitHub App, and readiness PR functionality remains part of the product foundation.
+
+## Priority: Context Compression Engine
+
+Goal:
+
+Reduce the amount of irrelevant repository context that AI coding agents need to read before making safe changes.
+
+Expected outcomes:
+
+- Generate compressed repository summaries for Codex, Claude Code, Cursor, and similar agents.
+- Identify high-signal files, low-signal files, and context that should be excluded from routine agent prompts.
+- Produce token-aware context briefs for common workflows such as bug fix, feature work, refactor, test generation, and review.
+
+## Priority: Agent Memory Compiler
+
+Goal:
+
+Compile durable project memory from repository structure, docs, tests, recent readiness outputs, and human-provided project notes.
+
+Expected outcomes:
+
+- Generate reusable agent memory files.
+- Separate persistent project facts from temporary scan findings.
+- Help agents avoid rediscovering the same context on every session.
+
+## Priority: Folder-level AGENTS
+
+Goal:
+
+Create scoped `AGENTS.md` guidance for important folders and subsystems.
+
+Expected outcomes:
+
+- Recommend where folder-level agent instructions are useful.
+- Generate concise instructions for frontend, API, scanner, export, tests, docs, and infrastructure folders.
+- Reduce broad top-level instruction files when local folder guidance is safer.
+
+## Priority: Context Packs
+
+Goal:
+
+Package the right context for a selected agent task instead of shipping every generated file to every workflow.
+
+Expected outcomes:
+
+- Generate task-specific context packs.
+- Support client handoff, AI agent development, security review, testing, MCP readiness, and refactor contexts.
+- Keep context packs aligned with Delivery Pack outputs and readiness PR safe subsets.
+
+## Priority: Agent Efficiency Analytics
+
+Goal:
+
+Measure how ready the repository is for efficient agent work.
+
+Expected outcomes:
+
+- Add an agent efficiency score.
+- Surface context size, instruction quality, duplication, missing ownership, and likely token waste.
+- Show before/after impact when ShipSeal-generated files are added.
+
+## Priority: Context Waste Analyzer
+
+Goal:
+
+Find files, docs, patterns, and repository structures that cause agents to waste context or repeat work.
+
+Expected outcomes:
+
+- Flag duplicate documentation and stale roadmaps.
+- Identify oversized files, noisy folders, outdated generated artifacts, and ambiguous instructions.
+- Recommend exclusions or summaries for routine agent sessions.
+
+## Priority: Agent Refactor Suggestions
+
+Goal:
+
+Suggest small, reviewable refactors that make a project easier for AI agents and humans to maintain.
+
+Expected outcomes:
+
+- Recommend documentation, folder, naming, test, and ownership improvements.
+- Avoid broad automated rewrites.
+- Prioritize changes that reduce agent confusion and improve future PR quality.
+
+## Priority: Agent Efficiency PR
+
+Goal:
+
+Create a reviewed GitHub PR that adds safe agent-efficiency improvements to the selected repository.
+
+Expected outcomes:
+
+- Use the connected GitHub App flow.
+- Add only generated safe documentation/configuration files.
+- Include clear PR body language about context compression, token waste reduction, and human review.
+- Do not include active workflows by default.
+
+## Priority: AI Workspace Optimization
+
+Goal:
+
+Position ShipSeal as the system that converts messy AI-built repos into durable AI workspaces.
+
+Expected outcomes:
+
+- Combine readiness scoring, Delivery Packs, context compression, agent memory, folder-level instructions, and efficiency analytics.
+- Support freelancers, agencies, and small teams using Codex, Claude Code, Cursor, GitHub Copilot, and future coding agents.
+- Make the long-term product direction clear beyond the original Delivery Pack Generator MVP.
 
 ## Definition Of A Sellable MVP
 
@@ -566,4 +679,3 @@ Before calling a build sellable, test these flows:
 - Should PDF reports support white-label branding in the first paid version?
 - Should “Founder reviewed audit” remain out of scope or return as a paid add-on later?
 - Should AI Act readiness be framed as legal-adjacent documentation support rather than compliance advice?
-

@@ -1,110 +1,116 @@
-# 01 - Cég- és termékleírás
+﻿# DEPRECATED
 
-## Projekt- és terméknév
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
+# 01 - CĂ©g- Ă©s termĂ©kleĂ­rĂˇs
+
+## Projekt- Ă©s termĂ©knĂ©v
 
 **ShipSeal**  
-Lehetséges cégnév/márkanév: **ShipSeal Labs** vagy **ShipSeal AI**.
+LehetsĂ©ges cĂ©gnĂ©v/mĂˇrkanĂ©v: **ShipSeal Labs** vagy **ShipSeal AI**.
 
-A név jelentése ebben a kontextusban: a termék „lezárja” és átadásra alkalmassá teszi az AI-projektet, mint egy minőségi pecsét az ügyfélátadás előtt.
+A nĂ©v jelentĂ©se ebben a kontextusban: a termĂ©k â€žlezĂˇrjaâ€ť Ă©s ĂˇtadĂˇsra alkalmassĂˇ teszi az AI-projektet, mint egy minĹ‘sĂ©gi pecsĂ©t az ĂĽgyfĂ©lĂˇtadĂˇs elĹ‘tt.
 
-## Mit csinál a cégünk?
+## Mit csinĂˇl a cĂ©gĂĽnk?
 
-A ShipSeal olyan AI-projekt átadás-előkészítő és readiness platformot fejleszt, amely segít AI freelancereknek, AI ügynökségeknek, no-code/low-code buildereknek és kis SaaS csapatoknak eldönteni, hogy egy AI-alkalmazás készen áll-e ügyfélátadásra, pilotra vagy élesítésre.
+A ShipSeal olyan AI-projekt ĂˇtadĂˇs-elĹ‘kĂ©szĂ­tĹ‘ Ă©s readiness platformot fejleszt, amely segĂ­t AI freelancereknek, AI ĂĽgynĂ¶ksĂ©geknek, no-code/low-code buildereknek Ă©s kis SaaS csapatoknak eldĂ¶nteni, hogy egy AI-alkalmazĂˇs kĂ©szen Ăˇll-e ĂĽgyfĂ©lĂˇtadĂˇsra, pilotra vagy Ă©lesĂ­tĂ©sre.
 
-A rendszer nemcsak auditál, hanem konkrét átadási anyagokat is előállít:
+A rendszer nemcsak auditĂˇl, hanem konkrĂ©t ĂˇtadĂˇsi anyagokat is elĹ‘ĂˇllĂ­t:
 
-- agent instruction fájlokat (`AGENTS.md`, `CLAUDE.md`, Codex/Cursor/Windsurf promptok),
+- agent instruction fĂˇjlokat (`AGENTS.md`, `CLAUDE.md`, Codex/Cursor/Windsurf promptok),
 - Claude Code / agent skilleket (`SKILL.md` csomagok),
-- MCP readiness és governance javaslatot,
-- teszteseteket és red-team promptokat,
-- EU AI Act readiness előszűrést,
-- transparency notice / disclosure szövegtervezeteket,
-- ügyfélnek átadható, white-label PDF/Markdown riportot,
-- go/no-go döntést és javítási roadmapet.
+- MCP readiness Ă©s governance javaslatot,
+- teszteseteket Ă©s red-team promptokat,
+- EU AI Act readiness elĹ‘szĹ±rĂ©st,
+- transparency notice / disclosure szĂ¶vegtervezeteket,
+- ĂĽgyfĂ©lnek ĂˇtadhatĂł, white-label PDF/Markdown riportot,
+- go/no-go dĂ¶ntĂ©st Ă©s javĂ­tĂˇsi roadmapet.
 
-## Mi a fő probléma?
+## Mi a fĹ‘ problĂ©ma?
 
-A generatív AI miatt egyre több kis csapat és freelancer épít gyorsan AI-prototípusokat. A demók sokszor látványosak, de az átadás előtti állapot bizonytalan:
+A generatĂ­v AI miatt egyre tĂ¶bb kis csapat Ă©s freelancer Ă©pĂ­t gyorsan AI-prototĂ­pusokat. A demĂłk sokszor lĂˇtvĂˇnyosak, de az ĂˇtadĂˇs elĹ‘tti Ăˇllapot bizonytalan:
 
-- nincs rendes dokumentáció,
-- nincs agenteknek szóló projektkontekstus,
-- nincs tesztelési stratégia,
+- nincs rendes dokumentĂˇciĂł,
+- nincs agenteknek szĂłlĂł projektkontekstus,
+- nincs tesztelĂ©si stratĂ©gia,
 - nincs eval/red-team csomag,
-- nincs ügyfélnek átadható readiness riport,
-- nincs AI Act / transparency előszűrés,
-- nincs tiszta fejlesztési folytatási csomag,
-- nincs megválaszolva: „ezt oda merem adni az ügyfélnek?”
+- nincs ĂĽgyfĂ©lnek ĂˇtadhatĂł readiness riport,
+- nincs AI Act / transparency elĹ‘szĹ±rĂ©s,
+- nincs tiszta fejlesztĂ©si folytatĂˇsi csomag,
+- nincs megvĂˇlaszolva: â€žezt oda merem adni az ĂĽgyfĂ©lnek?â€ť
 
-A ShipSeal erre a résre épít.
+A ShipSeal erre a rĂ©sre Ă©pĂ­t.
 
-## Egy mondatos termékígéret
+## Egy mondatos termĂ©kĂ­gĂ©ret
 
-**ShipSeal átalakítja az AI-prototípust agent-ready, tesztelhető, dokumentált és ügyfélnek átadható projektcsomaggá.**
+**ShipSeal ĂˇtalakĂ­tja az AI-prototĂ­pust agent-ready, tesztelhetĹ‘, dokumentĂˇlt Ă©s ĂĽgyfĂ©lnek ĂˇtadhatĂł projektcsomaggĂˇ.**
 
-Angol landing page verzió:
+Angol landing page verziĂł:
 
 **Seal your AI project before you ship it: agent-ready, testable and client-ready.**
 
-## Célcsoport
+## CĂ©lcsoport
 
-### Elsődleges célcsoport
+### ElsĹ‘dleges cĂ©lcsoport
 
 - AI freelancerek,
-- kis AI ügynökségek,
+- kis AI ĂĽgynĂ¶ksĂ©gek,
 - no-code/low-code AI builderek,
-- prompt engineering / automation tanácsadók,
-- indie SaaS fejlesztők, akik AI-appot adnak át ügyfeleknek.
+- prompt engineering / automation tanĂˇcsadĂłk,
+- indie SaaS fejlesztĹ‘k, akik AI-appot adnak Ăˇt ĂĽgyfeleknek.
 
-### Másodlagos célcsoport
+### MĂˇsodlagos cĂ©lcsoport
 
-- KKV-k, akik AI-appot rendeltek és független readiness review-t szeretnének,
-- AI-képzést / workshopot tartó cégek,
-- fejlesztőcsapatok, akik AI coding agentekkel akarják továbbvinni a projektjeiket.
+- KKV-k, akik AI-appot rendeltek Ă©s fĂĽggetlen readiness review-t szeretnĂ©nek,
+- AI-kĂ©pzĂ©st / workshopot tartĂł cĂ©gek,
+- fejlesztĹ‘csapatok, akik AI coding agentekkel akarjĂˇk tovĂˇbbvinni a projektjeiket.
 
-## Miért fizetne ezért valaki?
+## MiĂ©rt fizetne ezĂ©rt valaki?
 
-A célcsoport nem elméleti megfelelőséget vásárol, hanem időt, bizalmat és professzionális átadási anyagot:
+A cĂ©lcsoport nem elmĂ©leti megfelelĹ‘sĂ©get vĂˇsĂˇrol, hanem idĹ‘t, bizalmat Ă©s professzionĂˇlis ĂˇtadĂˇsi anyagot:
 
-- kevesebb manuális dokumentálás,
-- gyorsabb ügyfélátadás,
-- profibb látszat és valós minőség,
-- kevesebb beégési kockázat,
-- előre megfogalmazott tesztek és red-team kérdések,
-- EU AI Act / transparency témában legalább előszűrt, nem jogi, de rendezett dokumentáció,
-- fejlesztési folytatás Claude Code / Codex / más agentek számára.
+- kevesebb manuĂˇlis dokumentĂˇlĂˇs,
+- gyorsabb ĂĽgyfĂ©lĂˇtadĂˇs,
+- profibb lĂˇtszat Ă©s valĂłs minĹ‘sĂ©g,
+- kevesebb beĂ©gĂ©si kockĂˇzat,
+- elĹ‘re megfogalmazott tesztek Ă©s red-team kĂ©rdĂ©sek,
+- EU AI Act / transparency tĂ©mĂˇban legalĂˇbb elĹ‘szĹ±rt, nem jogi, de rendezett dokumentĂˇciĂł,
+- fejlesztĂ©si folytatĂˇs Claude Code / Codex / mĂˇs agentek szĂˇmĂˇra.
 
-## Termékmodulok
+## TermĂ©kmodulok
 
 ### 1. Project Intake
 
-Bekéri:
+BekĂ©ri:
 
 - repo ZIP vagy GitHub URL,
-- AI-app célját,
-- célfelhasználókat,
-- kezelt adattípusokat,
-- használt modelleket,
+- AI-app cĂ©ljĂˇt,
+- cĂ©lfelhasznĂˇlĂłkat,
+- kezelt adattĂ­pusokat,
+- hasznĂˇlt modelleket,
 - promptokat,
-- példa outputokat,
-- emberi jóváhagyási pontokat,
-- EU/nem EU célpiacot,
-- ügyfélátadási kontextust.
+- pĂ©lda outputokat,
+- emberi jĂłvĂˇhagyĂˇsi pontokat,
+- EU/nem EU cĂ©lpiacot,
+- ĂĽgyfĂ©lĂˇtadĂˇsi kontextust.
 
 ### 2. Repository & Delivery Readiness Scanner
 
 Elemzi:
 
-- projektstruktúrát,
-- dokumentációt,
+- projektstruktĂşrĂˇt,
+- dokumentĂˇciĂłt,
 - build/test/lint jeleket,
-- meglévő agent instruction fájlokat,
-- `.env.example` és secret-kezelési jeleket,
-- repo méretét, vendor/generated tartalmakat,
-- működési parancsokat.
+- meglĂ©vĹ‘ agent instruction fĂˇjlokat,
+- `.env.example` Ă©s secret-kezelĂ©si jeleket,
+- repo mĂ©retĂ©t, vendor/generated tartalmakat,
+- mĹ±kĂ¶dĂ©si parancsokat.
 
 ### 3. Agent Pack Generator
 
-Generálja:
+GenerĂˇlja:
 
 - `AGENTS.md`,
 - `CLAUDE.md`,
@@ -116,7 +122,7 @@ Generálja:
 
 ### 4. Skills Pack Generator
 
-Generálja például:
+GenerĂˇlja pĂ©ldĂˇul:
 
 - `.claude/skills/code-review/SKILL.md`,
 - `.claude/skills/test-generation/SKILL.md`,
@@ -126,44 +132,44 @@ Generálja például:
 
 ### 5. MCP Readiness & Governance
 
-Nem vakon generál MCP szervert. Először eldönti:
+Nem vakon generĂˇl MCP szervert. ElĹ‘szĂ¶r eldĂ¶nti:
 
 - kell-e MCP,
-- milyen adatforrás / tool indokolja,
+- milyen adatforrĂˇs / tool indokolja,
 - read-only vagy write-capable legyen-e,
-- milyen engedélyezési és naplózási szabály kell,
-- milyen security kockázatok vannak.
+- milyen engedĂ©lyezĂ©si Ă©s naplĂłzĂˇsi szabĂˇly kell,
+- milyen security kockĂˇzatok vannak.
 
-Első verzióban főleg MCP readiness dokumentáció és skeleton javaslat készüljön, nem production-ready MCP integráció.
+ElsĹ‘ verziĂłban fĹ‘leg MCP readiness dokumentĂˇciĂł Ă©s skeleton javaslat kĂ©szĂĽljĂ¶n, nem production-ready MCP integrĂˇciĂł.
 
 ### 6. Eval & Red Team Pack
 
-Generál:
+GenerĂˇl:
 
-- normál teszteseteket,
+- normĂˇl teszteseteket,
 - edge case teszteket,
-- hallucination trap kérdéseket,
-- prompt injection próbákat,
-- adatkiáramlási teszteket,
+- hallucination trap kĂ©rdĂ©seket,
+- prompt injection prĂłbĂˇkat,
+- adatkiĂˇramlĂˇsi teszteket,
 - refusal/boundary teszteket,
 - consistency teszteket.
 
 ### 7. EU AI Act Readiness Pack
 
-Előszűri:
+ElĹ‘szĹ±ri:
 
-- provider/deployer szerepkört,
-- potenciális high-risk irányokat,
-- tiltott vagy érzékeny felhasználási jeleket,
-- transparency / disclosure kötelezettség jellegű kérdéseket,
-- emberi felügyelet meglétét,
-- AI-generált tartalom jelölésének szükségességét.
+- provider/deployer szerepkĂ¶rt,
+- potenciĂˇlis high-risk irĂˇnyokat,
+- tiltott vagy Ă©rzĂ©keny felhasznĂˇlĂˇsi jeleket,
+- transparency / disclosure kĂ¶telezettsĂ©g jellegĹ± kĂ©rdĂ©seket,
+- emberi felĂĽgyelet meglĂ©tĂ©t,
+- AI-generĂˇlt tartalom jelĂ¶lĂ©sĂ©nek szĂĽksĂ©gessĂ©gĂ©t.
 
-Fontos: a termék nem állíthatja, hogy jogi megfelelőséget igazol. A helyes állítás: **előzetes readiness és kérdéslista jogi review-hoz**.
+Fontos: a termĂ©k nem ĂˇllĂ­thatja, hogy jogi megfelelĹ‘sĂ©get igazol. A helyes ĂˇllĂ­tĂˇs: **elĹ‘zetes readiness Ă©s kĂ©rdĂ©slista jogi review-hoz**.
 
 ### 8. VerdictMesh Review Council
 
-Az AI2AI/VerdictMesh technológiára építve több nézőpontú review készülhet:
+Az AI2AI/VerdictMesh technolĂłgiĂˇra Ă©pĂ­tve tĂ¶bb nĂ©zĹ‘pontĂş review kĂ©szĂĽlhet:
 
 - QA reviewer,
 - Security red teamer,
@@ -172,26 +178,26 @@ Az AI2AI/VerdictMesh technológiára építve több nézőpontú review készül
 - Skeptical customer,
 - Final judge.
 
-Ez nem önálló „AI-k vitáznak” termék, hanem a ShipSeal döntési motorja.
+Ez nem Ă¶nĂˇllĂł â€žAI-k vitĂˇznakâ€ť termĂ©k, hanem a ShipSeal dĂ¶ntĂ©si motorja.
 
-## Versenyelőny
+## VersenyelĹ‘ny
 
-ShipSeal nem akar közvetlenül enterprise governance platform, LangSmith-szerű observability rendszer vagy jogi compliance tool lenni. A pozíció:
+ShipSeal nem akar kĂ¶zvetlenĂĽl enterprise governance platform, LangSmith-szerĹ± observability rendszer vagy jogi compliance tool lenni. A pozĂ­ciĂł:
 
-**az AI-projekt átadás előtti gyakorlati delivery packje kis AI-csapatoknak.**
+**az AI-projekt ĂˇtadĂˇs elĹ‘tti gyakorlati delivery packje kis AI-csapatoknak.**
 
-Ez a rés azért érdekes, mert a legtöbb megoldás vagy túl enterprise, vagy túl fejlesztői, vagy túl jogi. ShipSeal a gyakorlati átadási ponton segít.
+Ez a rĂ©s azĂ©rt Ă©rdekes, mert a legtĂ¶bb megoldĂˇs vagy tĂşl enterprise, vagy tĂşl fejlesztĹ‘i, vagy tĂşl jogi. ShipSeal a gyakorlati ĂˇtadĂˇsi ponton segĂ­t.
 
-## Hivatkozási alapok
+## HivatkozĂˇsi alapok
 
-A stratégia az alábbi, nyilvános és aktuális technológiai/jogi irányokra épít:
+A stratĂ©gia az alĂˇbbi, nyilvĂˇnos Ă©s aktuĂˇlis technolĂłgiai/jogi irĂˇnyokra Ă©pĂ­t:
 
 - EU AI Act: Regulation (EU) 2024/1689, risk-based AI rules; European Commission AI Act overview: https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai
 - European Commission AI Act Service Desk Compliance Checker: https://ai-act-service-desk.ec.europa.eu/en/eu-ai-act-compliance-checker
-- European Commission Article 50 transparency draft guidance / consultation, 2026. május: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
-- AGENTS.md nyílt formátum: https://agents.md/
-- Claude Code CLAUDE.md / memory dokumentáció: https://code.claude.com/docs/en/memory
-- Claude Code Skills dokumentáció: https://code.claude.com/docs/en/skills
-- Model Context Protocol dokumentáció: https://modelcontextprotocol.io/docs/getting-started/intro
+- European Commission Article 50 transparency draft guidance / consultation, 2026. mĂˇjus: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
+- AGENTS.md nyĂ­lt formĂˇtum: https://agents.md/
+- Claude Code CLAUDE.md / memory dokumentĂˇciĂł: https://code.claude.com/docs/en/memory
+- Claude Code Skills dokumentĂˇciĂł: https://code.claude.com/docs/en/skills
+- Model Context Protocol dokumentĂˇciĂł: https://modelcontextprotocol.io/docs/getting-started/intro
 
-Megjegyzés: az EU AI Act értelmezési részek nem minősülnek jogi tanácsadásnak. A termék kommunikációjában is ezt kell következetesen feltüntetni: előszűrés, readiness, dokumentáció-előkészítés és technikai/jogi kérdéslista készül, nem jogi szakvélemény.
+MegjegyzĂ©s: az EU AI Act Ă©rtelmezĂ©si rĂ©szek nem minĹ‘sĂĽlnek jogi tanĂˇcsadĂˇsnak. A termĂ©k kommunikĂˇciĂłjĂˇban is ezt kell kĂ¶vetkezetesen feltĂĽntetni: elĹ‘szĹ±rĂ©s, readiness, dokumentĂˇciĂł-elĹ‘kĂ©szĂ­tĂ©s Ă©s technikai/jogi kĂ©rdĂ©slista kĂ©szĂĽl, nem jogi szakvĂ©lemĂ©ny.

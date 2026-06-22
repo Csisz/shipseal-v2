@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # ShipSeal Hosted Demo Readiness
 
 This checklist is for preparing a public, hosted ShipSeal MVP demo on Vercel, Netlify, or a similar static hosting platform.
@@ -146,3 +152,4 @@ If server credentials are missing, the repository selector shows that listing is
 - Public GitHub URL import succeeds through the proxy or fails with a clear ZIP fallback message.
 - Delivery Pack ZIP downloads.
 - `CLIENT_HANDOFF_REPORT.html` opens and can be saved as PDF from the browser.
+

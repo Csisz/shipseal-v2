@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # Public GitHub Import Validation
 
 Use this checklist to validate the public GitHub URL import path for hosted demos and local demos.
@@ -80,3 +86,4 @@ This fallback is acceptable for the MVP. Browser-based public GitHub import can 
 - User-pasted tokens.
 - Private repository backend proxying. The current proxy is public-repo-only and documented in [GitHub Import Proxy Plan](GITHUB_IMPORT_PROXY_PLAN.md).
 - Server-side GitHub workers.
+

@@ -1,147 +1,153 @@
-# 05 - EU AI Act és jogi workstream
+﻿# DEPRECATED
 
-## Cél
+Superseded by:
 
-A ShipSeal EU AI Act modulja ne legyen jogi tanácsadó eszköz. A cél egy olyan előszűrő és dokumentáció-előkészítő funkció, amely segít AI fejlesztőknek és ügynökségeknek rendezni a kérdéseket, amelyeket egy jogász vagy compliance szakértő később ellenőrizhet.
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
 
-A feleség jogi szakértelme itt komoly előny lehet, de a termékben és marketingben óvatosan kell fogalmazni.
+# 05 - EU AI Act Ă©s jogi workstream
 
-## Ajánlott jogi pozicionálás
+## CĂ©l
 
-### Kerülendő állítások
+A ShipSeal EU AI Act modulja ne legyen jogi tanĂˇcsadĂł eszkĂ¶z. A cĂ©l egy olyan elĹ‘szĹ±rĹ‘ Ă©s dokumentĂˇciĂł-elĹ‘kĂ©szĂ­tĹ‘ funkciĂł, amely segĂ­t AI fejlesztĹ‘knek Ă©s ĂĽgynĂ¶ksĂ©geknek rendezni a kĂ©rdĂ©seket, amelyeket egy jogĂˇsz vagy compliance szakĂ©rtĹ‘ kĂ©sĹ‘bb ellenĹ‘rizhet.
 
-- „AI Act compliant minősítést adunk.”
-- „Jogi megfelelőséget igazolunk.”
-- „Megmondjuk, hogy high-risk-e a rendszered jogilag.”
-- „Kiváltjuk a jogi tanácsadást.”
+A felesĂ©g jogi szakĂ©rtelme itt komoly elĹ‘ny lehet, de a termĂ©kben Ă©s marketingben Ăłvatosan kell fogalmazni.
 
-### Használható állítások
+## AjĂˇnlott jogi pozicionĂˇlĂˇs
 
-- „AI Act readiness előszűrést készítünk.”
-- „Összegyűjtjük a jogi review-hoz szükséges technikai és működési információkat.”
-- „Transparency / disclosure javaslatokat készítünk.”
-- „Kérdéslistát adunk jogi ellenőrzéshez.”
-- „Nem jogi tanácsadás, hanem fejlesztői és termékoldali felkészültségi riport.”
+### KerĂĽlendĹ‘ ĂˇllĂ­tĂˇsok
 
-## Mit kell a jogi workstreamben tisztázni?
+- â€žAI Act compliant minĹ‘sĂ­tĂ©st adunk.â€ť
+- â€žJogi megfelelĹ‘sĂ©get igazolunk.â€ť
+- â€žMegmondjuk, hogy high-risk-e a rendszered jogilag.â€ť
+- â€žKivĂˇltjuk a jogi tanĂˇcsadĂˇst.â€ť
 
-### 1. Szerepkörök
+### HasznĂˇlhatĂł ĂˇllĂ­tĂˇsok
 
-- Provider, deployer, importer, distributor fogalmak gyakorlati különbsége.
-- Egy AI freelancer vagy ügynökség mikor provider?
-- Az ügyfél mikor deployer?
-- White-label fejlesztésnél ki milyen szerepet viselhet?
-- Magyar KKV-k esetén milyen tipikus szerződéses helyzetek vannak?
+- â€žAI Act readiness elĹ‘szĹ±rĂ©st kĂ©szĂ­tĂĽnk.â€ť
+- â€žĂ–sszegyĹ±jtjĂĽk a jogi review-hoz szĂĽksĂ©ges technikai Ă©s mĹ±kĂ¶dĂ©si informĂˇciĂłkat.â€ť
+- â€žTransparency / disclosure javaslatokat kĂ©szĂ­tĂĽnk.â€ť
+- â€žKĂ©rdĂ©slistĂˇt adunk jogi ellenĹ‘rzĂ©shez.â€ť
+- â€žNem jogi tanĂˇcsadĂˇs, hanem fejlesztĹ‘i Ă©s termĂ©koldali felkĂ©szĂĽltsĂ©gi riport.â€ť
 
-### 2. Kockázati kategóriák
+## Mit kell a jogi workstreamben tisztĂˇzni?
 
-- Tiltott AI gyakorlatok rövid, fejlesztőbarát magyarázata.
-- High-risk előszűrés Annex III témák alapján.
-- Mely use case-eket kell MVP-ben automatikusan „legal review required” jelzéssel ellátni?
-- Mikor lehet „minimal/limited risk” irányban kommunikálni?
+### 1. SzerepkĂ¶rĂ¶k
+
+- Provider, deployer, importer, distributor fogalmak gyakorlati kĂĽlĂ¶nbsĂ©ge.
+- Egy AI freelancer vagy ĂĽgynĂ¶ksĂ©g mikor provider?
+- Az ĂĽgyfĂ©l mikor deployer?
+- White-label fejlesztĂ©snĂ©l ki milyen szerepet viselhet?
+- Magyar KKV-k esetĂ©n milyen tipikus szerzĹ‘dĂ©ses helyzetek vannak?
+
+### 2. KockĂˇzati kategĂłriĂˇk
+
+- Tiltott AI gyakorlatok rĂ¶vid, fejlesztĹ‘barĂˇt magyarĂˇzata.
+- High-risk elĹ‘szĹ±rĂ©s Annex III tĂ©mĂˇk alapjĂˇn.
+- Mely use case-eket kell MVP-ben automatikusan â€žlegal review requiredâ€ť jelzĂ©ssel ellĂˇtni?
+- Mikor lehet â€žminimal/limited riskâ€ť irĂˇnyban kommunikĂˇlni?
 
 ### 3. Transparency / Article 50
 
-A 2026. májusi European Commission draft guidance alapján a transparency kötelezettségek különösen fontosak lehetnek. Tisztázandó:
+A 2026. mĂˇjusi European Commission draft guidance alapjĂˇn a transparency kĂ¶telezettsĂ©gek kĂĽlĂ¶nĂ¶sen fontosak lehetnek. TisztĂˇzandĂł:
 
-- Mikor kell jelezni, hogy a felhasználó AI rendszerrel beszél?
-- Milyen chatbot disclosure szöveg legyen ajánlott?
-- Mikor kell AI-generált tartalmat jelölni?
-- Mikor kell deepfake vagy manipulált tartalom disclosure?
-- Milyen „first interaction” / „first exposure” szövegek legyenek?
-- Magyar nyelvű mintaszövegek hogyan hangozzanak?
+- Mikor kell jelezni, hogy a felhasznĂˇlĂł AI rendszerrel beszĂ©l?
+- Milyen chatbot disclosure szĂ¶veg legyen ajĂˇnlott?
+- Mikor kell AI-generĂˇlt tartalmat jelĂ¶lni?
+- Mikor kell deepfake vagy manipulĂˇlt tartalom disclosure?
+- Milyen â€žfirst interactionâ€ť / â€žfirst exposureâ€ť szĂ¶vegek legyenek?
+- Magyar nyelvĹ± mintaszĂ¶vegek hogyan hangozzanak?
 
-### 4. Emberi felügyelet
+### 4. Emberi felĂĽgyelet
 
-- Mit jelenthet low-risk / limited-risk appoknál az emberi ellenőrzés?
-- Milyen döntéseket nem hozhat az AI önállóan?
-- Milyen területeken kell automatikus „human review required” jelzés?
-- Hogyan fogalmazzuk meg ezt ügyfélátadási riportban?
+- Mit jelenthet low-risk / limited-risk appoknĂˇl az emberi ellenĹ‘rzĂ©s?
+- Milyen dĂ¶ntĂ©seket nem hozhat az AI Ă¶nĂˇllĂłan?
+- Milyen terĂĽleteken kell automatikus â€žhuman review requiredâ€ť jelzĂ©s?
+- Hogyan fogalmazzuk meg ezt ĂĽgyfĂ©lĂˇtadĂˇsi riportban?
 
-### 5. Adatvédelem / GDPR kapcsolódás
+### 5. AdatvĂ©delem / GDPR kapcsolĂłdĂˇs
 
-Bár ez nem csak AI Act kérdés, a terméknek kérdeznie kell:
+BĂˇr ez nem csak AI Act kĂ©rdĂ©s, a termĂ©knek kĂ©rdeznie kell:
 
-- kezel-e személyes adatot,
-- kezel-e különleges adatot,
-- kerül-e adat külső AI providerhez,
-- van-e adatfeldolgozói viszony,
-- van-e törlési és retention policy,
-- van-e naplózás,
-- van-e adatminimalizálás.
+- kezel-e szemĂ©lyes adatot,
+- kezel-e kĂĽlĂ¶nleges adatot,
+- kerĂĽl-e adat kĂĽlsĹ‘ AI providerhez,
+- van-e adatfeldolgozĂłi viszony,
+- van-e tĂ¶rlĂ©si Ă©s retention policy,
+- van-e naplĂłzĂˇs,
+- van-e adatminimalizĂˇlĂˇs.
 
-### 6. Szerződéses és felelősségi keretek
+### 6. SzerzĹ‘dĂ©ses Ă©s felelĹ‘ssĂ©gi keretek
 
-- Mit vállalhat egy AI ügynökség az ügyfél felé?
-- Mit nem szabad ígérnie?
-- Milyen átadási disclaimer szükséges?
-- Hogyan jelöljük, hogy a riport pillanatfelvétel?
-- Hogyan kezeljük, hogy a jog változhat?
+- Mit vĂˇllalhat egy AI ĂĽgynĂ¶ksĂ©g az ĂĽgyfĂ©l felĂ©?
+- Mit nem szabad Ă­gĂ©rnie?
+- Milyen ĂˇtadĂˇsi disclaimer szĂĽksĂ©ges?
+- Hogyan jelĂ¶ljĂĽk, hogy a riport pillanatfelvĂ©tel?
+- Hogyan kezeljĂĽk, hogy a jog vĂˇltozhat?
 
-## Feleség / jogász által segíthető konkrét feladatok
+## FelesĂ©g / jogĂˇsz Ăˇltal segĂ­thetĹ‘ konkrĂ©t feladatok
 
-### A. Terméknyelvezet ellenőrzése
+### A. TermĂ©knyelvezet ellenĹ‘rzĂ©se
 
-Ellenőrizze:
+EllenĹ‘rizze:
 
-- landing page állításait,
-- pricing oldal állításait,
+- landing page ĂˇllĂ­tĂˇsait,
+- pricing oldal ĂˇllĂ­tĂˇsait,
 - report disclaimereket,
-- „not legal advice” megfogalmazást,
-- magyar és angol kockázati figyelmeztetéseket.
+- â€žnot legal adviceâ€ť megfogalmazĂˇst,
+- magyar Ă©s angol kockĂˇzati figyelmeztetĂ©seket.
 
-### B. AI Act kérdőív review
+### B. AI Act kĂ©rdĹ‘Ă­v review
 
-Segítsen kialakítani:
+SegĂ­tsen kialakĂ­tani:
 
-- provider/deployer kérdéssort,
-- high-risk előszűrő kérdéssort,
-- Article 50 transparency kérdéseket,
-- human oversight kérdéseket,
+- provider/deployer kĂ©rdĂ©ssort,
+- high-risk elĹ‘szĹ±rĹ‘ kĂ©rdĂ©ssort,
+- Article 50 transparency kĂ©rdĂ©seket,
+- human oversight kĂ©rdĂ©seket,
 - legal review required trigger pontokat.
 
-### C. Mintaszövegek
+### C. MintaszĂ¶vegek
 
-Készíthet / ellenőrizhet:
+KĂ©szĂ­thet / ellenĹ‘rizhet:
 
 - chatbot disclosure magyarul,
 - chatbot disclosure angolul,
-- AI-generated content jelölési szöveg,
-- ügyfélátadási disclaimer,
+- AI-generated content jelĂ¶lĂ©si szĂ¶veg,
+- ĂĽgyfĂ©lĂˇtadĂˇsi disclaimer,
 - report footer disclaimer,
-- Terms / privacy alap-szöveg váz.
+- Terms / privacy alap-szĂ¶veg vĂˇz.
 
 ### D. Red flag lista
 
-Segíthet meghatározni, mikor jelezzen a rendszer:
+SegĂ­thet meghatĂˇrozni, mikor jelezzen a rendszer:
 
-- „legal review strongly recommended”,
-- „do not ship before legal review”,
-- „high-risk possibility”,
-- „transparency notice missing”,
-- „personal data handling unclear”.
+- â€žlegal review strongly recommendedâ€ť,
+- â€ždo not ship before legal reviewâ€ť,
+- â€žhigh-risk possibilityâ€ť,
+- â€žtransparency notice missingâ€ť,
+- â€žpersonal data handling unclearâ€ť.
 
-### E. Magyar piaci sajátosságok
+### E. Magyar piaci sajĂˇtossĂˇgok
 
-Értelmezheti:
+Ă‰rtelmezheti:
 
-- magyar KKV-k számára milyen kommunikáció érthető,
-- hogyan kerülhető el a jogi tanácsadás látszata,
-- milyen felelősségi kizárások szükségesek,
-- milyen szerződéses modell javasolt founder-reviewed auditoknál.
+- magyar KKV-k szĂˇmĂˇra milyen kommunikĂˇciĂł Ă©rthetĹ‘,
+- hogyan kerĂĽlhetĹ‘ el a jogi tanĂˇcsadĂˇs lĂˇtszata,
+- milyen felelĹ‘ssĂ©gi kizĂˇrĂˇsok szĂĽksĂ©gesek,
+- milyen szerzĹ‘dĂ©ses modell javasolt founder-reviewed auditoknĂˇl.
 
-## Jogi inputból készülő ShipSeal outputok
+## Jogi inputbĂłl kĂ©szĂĽlĹ‘ ShipSeal outputok
 
 ### `AI_ACT_READINESS_CHECKLIST.md`
 
 Tartalom:
 
-- alkalmazás célja,
-- szerepkörök,
-- felhasználói kör,
+- alkalmazĂˇs cĂ©lja,
+- szerepkĂ¶rĂ¶k,
+- felhasznĂˇlĂłi kĂ¶r,
 - kezelt adatok,
-- kockázati előszűrés,
-- transparency kérdések,
+- kockĂˇzati elĹ‘szĹ±rĂ©s,
+- transparency kĂ©rdĂ©sek,
 - human oversight,
 - legal review triggers.
 
@@ -149,57 +155,57 @@ Tartalom:
 
 Tartalom:
 
-- rövid disclosure,
-- bővebb disclosure,
-- chatbot kezdőüzenet,
-- footer / help page szöveg,
-- AI-generated content jelölési sablon.
+- rĂ¶vid disclosure,
+- bĹ‘vebb disclosure,
+- chatbot kezdĹ‘ĂĽzenet,
+- footer / help page szĂ¶veg,
+- AI-generated content jelĂ¶lĂ©si sablon.
 
 ### `LEGAL_REVIEW_QUESTIONS.md`
 
 Tartalom:
 
-- jogásznak átadandó kérdések,
-- tisztázandó szerepkörök,
-- ügyféloldali döntések,
-- szerződéses felelősség,
-- adatvédelmi hiányok.
+- jogĂˇsznak ĂˇtadandĂł kĂ©rdĂ©sek,
+- tisztĂˇzandĂł szerepkĂ¶rĂ¶k,
+- ĂĽgyfĂ©loldali dĂ¶ntĂ©sek,
+- szerzĹ‘dĂ©ses felelĹ‘ssĂ©g,
+- adatvĂ©delmi hiĂˇnyok.
 
 ### `CLIENT_HANDOFF_LEGAL_NOTES.md`
 
 Tartalom:
 
-- mit vizsgáltunk,
-- mit nem vizsgáltunk,
+- mit vizsgĂˇltunk,
+- mit nem vizsgĂˇltunk,
 - mihez kell jogi review,
-- milyen ismert korlátok vannak.
+- milyen ismert korlĂˇtok vannak.
 
 ## Javasolt disclaimer sablon
 
-> Ez a riport technikai, termékoldali és előzetes AI Act readiness elemzés. Nem minősül jogi tanácsadásnak, jogi szakvéleménynek vagy hatósági megfelelőségi igazolásnak. A riport célja, hogy összegyűjtse az AI-rendszerrel kapcsolatos főbb kockázati, átláthatósági, emberi felügyeleti és dokumentációs kérdéseket, amelyeket szükség esetén jogi szakértővel kell ellenőriztetni.
+> Ez a riport technikai, termĂ©koldali Ă©s elĹ‘zetes AI Act readiness elemzĂ©s. Nem minĹ‘sĂĽl jogi tanĂˇcsadĂˇsnak, jogi szakvĂ©lemĂ©nynek vagy hatĂłsĂˇgi megfelelĹ‘sĂ©gi igazolĂˇsnak. A riport cĂ©lja, hogy Ă¶sszegyĹ±jtse az AI-rendszerrel kapcsolatos fĹ‘bb kockĂˇzati, ĂˇtlĂˇthatĂłsĂˇgi, emberi felĂĽgyeleti Ă©s dokumentĂˇciĂłs kĂ©rdĂ©seket, amelyeket szĂĽksĂ©g esetĂ©n jogi szakĂ©rtĹ‘vel kell ellenĹ‘riztetni.
 
-Angol változat:
+Angol vĂˇltozat:
 
 > This report is a technical, product and preliminary AI Act readiness assessment. It does not constitute legal advice, a legal opinion or a formal compliance certification. Its purpose is to organize the main risk, transparency, human oversight and documentation questions related to the AI system so they can be reviewed by a qualified legal professional where necessary.
 
-## Első jogi sprint feladatai
+## ElsĹ‘ jogi sprint feladatai
 
-1. AI Act role/risk kérdőív első változatának ellenőrzése.
-2. Transparency notice sablonok megírása magyarul és angolul.
-3. „Not legal advice” és report disclaimer jóváhagyása.
-4. High-risk red flag trigger lista készítése.
-5. Founder-reviewed audit szerződéses keretének előzetes vázlata.
+1. AI Act role/risk kĂ©rdĹ‘Ă­v elsĹ‘ vĂˇltozatĂˇnak ellenĹ‘rzĂ©se.
+2. Transparency notice sablonok megĂ­rĂˇsa magyarul Ă©s angolul.
+3. â€žNot legal adviceâ€ť Ă©s report disclaimer jĂłvĂˇhagyĂˇsa.
+4. High-risk red flag trigger lista kĂ©szĂ­tĂ©se.
+5. Founder-reviewed audit szerzĹ‘dĂ©ses keretĂ©nek elĹ‘zetes vĂˇzlata.
 
-## Hivatkozási alapok
+## HivatkozĂˇsi alapok
 
-A stratégia az alábbi, nyilvános és aktuális technológiai/jogi irányokra épít:
+A stratĂ©gia az alĂˇbbi, nyilvĂˇnos Ă©s aktuĂˇlis technolĂłgiai/jogi irĂˇnyokra Ă©pĂ­t:
 
 - EU AI Act: Regulation (EU) 2024/1689, risk-based AI rules; European Commission AI Act overview: https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai
 - European Commission AI Act Service Desk Compliance Checker: https://ai-act-service-desk.ec.europa.eu/en/eu-ai-act-compliance-checker
-- European Commission Article 50 transparency draft guidance / consultation, 2026. május: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
-- AGENTS.md nyílt formátum: https://agents.md/
-- Claude Code CLAUDE.md / memory dokumentáció: https://code.claude.com/docs/en/memory
-- Claude Code Skills dokumentáció: https://code.claude.com/docs/en/skills
-- Model Context Protocol dokumentáció: https://modelcontextprotocol.io/docs/getting-started/intro
+- European Commission Article 50 transparency draft guidance / consultation, 2026. mĂˇjus: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
+- AGENTS.md nyĂ­lt formĂˇtum: https://agents.md/
+- Claude Code CLAUDE.md / memory dokumentĂˇciĂł: https://code.claude.com/docs/en/memory
+- Claude Code Skills dokumentĂˇciĂł: https://code.claude.com/docs/en/skills
+- Model Context Protocol dokumentĂˇciĂł: https://modelcontextprotocol.io/docs/getting-started/intro
 
-Megjegyzés: az EU AI Act értelmezési részek nem minősülnek jogi tanácsadásnak. A termék kommunikációjában is ezt kell következetesen feltüntetni: előszűrés, readiness, dokumentáció-előkészítés és technikai/jogi kérdéslista készül, nem jogi szakvélemény.
+MegjegyzĂ©s: az EU AI Act Ă©rtelmezĂ©si rĂ©szek nem minĹ‘sĂĽlnek jogi tanĂˇcsadĂˇsnak. A termĂ©k kommunikĂˇciĂłjĂˇban is ezt kell kĂ¶vetkezetesen feltĂĽntetni: elĹ‘szĹ±rĂ©s, readiness, dokumentĂˇciĂł-elĹ‘kĂ©szĂ­tĂ©s Ă©s technikai/jogi kĂ©rdĂ©slista kĂ©szĂĽl, nem jogi szakvĂ©lemĂ©ny.

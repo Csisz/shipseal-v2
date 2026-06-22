@@ -1,33 +1,39 @@
-# 04 - Fejlesztés közbeni szükségletek és roadmap
+﻿# DEPRECATED
 
-## Mire lesz szükségünk a fejlesztés közben?
+Superseded by:
 
-A ShipSeal nem egyetlen komponensből áll. A sikerhez termék-, technikai, jogi, UX, sales és validációs döntések kellenek. Az alábbi lista azt rögzíti, mire lesz szükség a következő fejlesztési szakaszban.
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
 
-## 1. Termékdöntések
+# 04 - FejlesztĂ©s kĂ¶zbeni szĂĽksĂ©gletek Ă©s roadmap
 
-### Eldöntendő kérdések
+## Mire lesz szĂĽksĂ©gĂĽnk a fejlesztĂ©s kĂ¶zben?
 
-- Mi az első fizetős output pontos neve?
-- Starter report vagy Pro agency report legyen az első fizetős csomag?
-- White-label legyen-e már az MVP-ben?
-- EU AI Act readiness mennyire legyen központi üzenet?
-- Az első ICP AI freelancer, AI ügynökség vagy indie SaaS fejlesztő legyen?
-- Magyar vagy angol landing page induljon először?
+A ShipSeal nem egyetlen komponensbĹ‘l Ăˇll. A sikerhez termĂ©k-, technikai, jogi, UX, sales Ă©s validĂˇciĂłs dĂ¶ntĂ©sek kellenek. Az alĂˇbbi lista azt rĂ¶gzĂ­ti, mire lesz szĂĽksĂ©g a kĂ¶vetkezĹ‘ fejlesztĂ©si szakaszban.
+
+## 1. TermĂ©kdĂ¶ntĂ©sek
+
+### EldĂ¶ntendĹ‘ kĂ©rdĂ©sek
+
+- Mi az elsĹ‘ fizetĹ‘s output pontos neve?
+- Starter report vagy Pro agency report legyen az elsĹ‘ fizetĹ‘s csomag?
+- White-label legyen-e mĂˇr az MVP-ben?
+- EU AI Act readiness mennyire legyen kĂ¶zponti ĂĽzenet?
+- Az elsĹ‘ ICP AI freelancer, AI ĂĽgynĂ¶ksĂ©g vagy indie SaaS fejlesztĹ‘ legyen?
+- Magyar vagy angol landing page induljon elĹ‘szĂ¶r?
 
 ### Javaslat
 
-Első fizetős output neve:
+ElsĹ‘ fizetĹ‘s output neve:
 
 **ShipSeal Delivery Report**
 
-Első ICP:
+ElsĹ‘ ICP:
 
-**AI freelancerek és kis AI ügynökségek, akik ügyfélnek adnak át AI-appot.**
+**AI freelancerek Ă©s kis AI ĂĽgynĂ¶ksĂ©gek, akik ĂĽgyfĂ©lnek adnak Ăˇt AI-appot.**
 
-## 2. Output-specifikáció
+## 2. Output-specifikĂˇciĂł
 
-Az MVP előtt véglegesíteni kell, pontosan milyen fájlok készülnek.
+Az MVP elĹ‘tt vĂ©glegesĂ­teni kell, pontosan milyen fĂˇjlok kĂ©szĂĽlnek.
 
 ### Minimum output
 
@@ -47,80 +53,80 @@ Az MVP előtt véglegesíteni kell, pontosan milyen fájlok készülnek.
 - `EVAL_TEST_CASES.md`
 - `RED_TEAM_PROMPTS.md`
 - `CLIENT_HANDOFF_REPORT.md`
-- később PDF export.
+- kĂ©sĹ‘bb PDF export.
 
-## 3. Technikai szükségletek
+## 3. Technikai szĂĽksĂ©gletek
 
 ### Frontend
 
-- ShipSeal UI újrapozicionálása.
-- Intake form hozzáadása AI-app kontextushoz.
+- ShipSeal UI ĂşjrapozicionĂˇlĂˇsa.
+- Intake form hozzĂˇadĂˇsa AI-app kontextushoz.
 - Report preview UI.
 - Skills Pack tab.
 - EU AI Act readiness tab.
 - VerdictMesh / Review Council tab.
-- Export flow javítása.
-- Fizetés vagy várólista CTA.
+- Export flow javĂ­tĂˇsa.
+- FizetĂ©s vagy vĂˇrĂłlista CTA.
 
 ### Backend
 
-MVP-ben még lehet backend nélküli/félautomata, de 60 napon belül kelleni fog:
+MVP-ben mĂ©g lehet backend nĂ©lkĂĽli/fĂ©lautomata, de 60 napon belĂĽl kelleni fog:
 
-- provider API hívások server-side,
+- provider API hĂ­vĂˇsok server-side,
 - secret management,
 - rate limiting,
-- report job státusz,
+- report job stĂˇtusz,
 - artifact retention,
 - alap storage,
-- user/session kezelés.
+- user/session kezelĂ©s.
 
 ### Scanner
 
-- ZIP limit és file count limit megtartása.
-- Public GitHub import fallback javítása.
-- Repo context pack bővítése promptokkal és AI-app leírással.
-- Secret/sensitive file red flag bővítése.
-- Generated/vendor folder kezelés megtartása.
+- ZIP limit Ă©s file count limit megtartĂˇsa.
+- Public GitHub import fallback javĂ­tĂˇsa.
+- Repo context pack bĹ‘vĂ­tĂ©se promptokkal Ă©s AI-app leĂ­rĂˇssal.
+- Secret/sensitive file red flag bĹ‘vĂ­tĂ©se.
+- Generated/vendor folder kezelĂ©s megtartĂˇsa.
 
 ### Pack generator
 
-- Skills Pack generálás.
-- AI Act checklist generálás.
-- Red-team/eval pack generálás.
-- Client handoff report generálás.
-- White-label mezők.
+- Skills Pack generĂˇlĂˇs.
+- AI Act checklist generĂˇlĂˇs.
+- Red-team/eval pack generĂˇlĂˇs.
+- Client handoff report generĂˇlĂˇs.
+- White-label mezĹ‘k.
 
 ### Review Council
 
-- AI2AI service szűkítése ShipSeal szerepekre:
+- AI2AI service szĹ±kĂ­tĂ©se ShipSeal szerepekre:
   - QA Reviewer,
   - Security Reviewer,
   - EU AI Act Readiness Reviewer,
   - Product/Delivery Reviewer,
   - Skeptical Customer,
   - Final Judge.
-- Nem kell az összes régi scenario.
-- Költségbecslés és token limit kell.
+- Nem kell az Ă¶sszes rĂ©gi scenario.
+- KĂ¶ltsĂ©gbecslĂ©s Ă©s token limit kell.
 
-## 4. Infrastrukturális szükségletek
+## 4. InfrastrukturĂˇlis szĂĽksĂ©gletek
 
 ### MVP
 
 - Vercel/Netlify frontend deploy.
-- Backend nélkül vagy minimális backenddel indulás.
-- Minta riportok statikus exportként.
-- Analytics: Plausible, PostHog vagy egyszerű event log.
+- Backend nĂ©lkĂĽl vagy minimĂˇlis backenddel indulĂˇs.
+- Minta riportok statikus exportkĂ©nt.
+- Analytics: Plausible, PostHog vagy egyszerĹ± event log.
 - Form: Tally/Typeform/own form.
 
-### Fizetős validációhoz
+### FizetĹ‘s validĂˇciĂłhoz
 
 - Stripe vagy Lemon Squeezy.
 - Email capture.
 - Report delivery link.
 - Terms / privacy oldal.
-- „Not legal advice” disclaimer.
+- â€žNot legal adviceâ€ť disclaimer.
 
-### Később
+### KĂ©sĹ‘bb
 
 - Object storage ideiglenes uploadokhoz.
 - Queue / worker.
@@ -128,23 +134,23 @@ MVP-ben még lehet backend nélküli/félautomata, de 60 napon belül kelleni fo
 - GitHub App.
 - Auth + organizations.
 - Report history.
-- Self-hosted lehetőség.
+- Self-hosted lehetĹ‘sĂ©g.
 
-## 5. Adatvédelmi és biztonsági szükségletek
+## 5. AdatvĂ©delmi Ă©s biztonsĂˇgi szĂĽksĂ©gletek
 
-Mivel repo ZIP-eket, promptokat, üzleti dokumentációt és AI-app leírásokat kezelünk, különösen fontos:
+Mivel repo ZIP-eket, promptokat, ĂĽzleti dokumentĂˇciĂłt Ă©s AI-app leĂ­rĂˇsokat kezelĂĽnk, kĂĽlĂ¶nĂ¶sen fontos:
 
-- explicit user consent upload előtt,
+- explicit user consent upload elĹ‘tt,
 - retention policy,
 - local-first vagy short-lived artifact policy,
 - raw source ne menjen AI providerhez csak sanitized context pack,
 - secrets redaction,
 - no-code-execution guarantee,
 - audit log,
-- törlési lehetőség,
+- tĂ¶rlĂ©si lehetĹ‘sĂ©g,
 - privacy policy.
 
-## 6. Tesztelési szükségletek
+## 6. TesztelĂ©si szĂĽksĂ©gletek
 
 ### Automata
 
@@ -155,7 +161,7 @@ Mivel repo ZIP-eket, promptokat, üzleti dokumentációt és AI-app leírásokat
 - PDF/Markdown export tesztek,
 - API smoke tesztek.
 
-### Manuális
+### ManuĂˇlis
 
 - kis Next.js sample repo,
 - Python FastAPI sample,
@@ -172,73 +178,73 @@ Mivel repo ZIP-eket, promptokat, üzleti dokumentációt és AI-app leírásokat
 - Python backend smoke test
 - AI2AI regression subset
 
-## 7. Sales/validációs szükségletek
+## 7. Sales/validĂˇciĂłs szĂĽksĂ©gletek
 
 - 1 oldalas landing page.
 - 2 minta riport.
-- 1 demo videó.
-- 30 célzott megkeresési lista.
-- 5 interjú kérdéssor.
-- Fizetési ajánlat: 49 EUR / 149 EUR / founder-reviewed.
+- 1 demo videĂł.
+- 30 cĂ©lzott megkeresĂ©si lista.
+- 5 interjĂş kĂ©rdĂ©ssor.
+- FizetĂ©si ajĂˇnlat: 49 EUR / 149 EUR / founder-reviewed.
 
-## 8. Fejlesztési ütemezés
+## 8. FejlesztĂ©si ĂĽtemezĂ©s
 
-### Sprint 0 - projektindítás
+### Sprint 0 - projektindĂ­tĂˇs
 
-- Új repo / új projekt setup.
-- Források feltöltése.
-- Dokumentumok és scope rögzítése.
-- Döntés: agentready-hub legyen az alap.
+- Ăšj repo / Ăşj projekt setup.
+- ForrĂˇsok feltĂ¶ltĂ©se.
+- Dokumentumok Ă©s scope rĂ¶gzĂ­tĂ©se.
+- DĂ¶ntĂ©s: agentready-hub legyen az alap.
 
-### Sprint 1 - output-spec és UI reposition
+### Sprint 1 - output-spec Ă©s UI reposition
 
-- Új landing szöveg.
-- Új report struktúra.
+- Ăšj landing szĂ¶veg.
+- Ăšj report struktĂşra.
 - Intake form.
 - Report preview skeleton.
 
 ### Sprint 2 - Delivery Pack MVP
 
-- AGENTS/CLAUDE meglévő generátor finomítása.
-- Skills Pack generátor.
-- MCP pack megtartása/bővítése.
-- Eval/red-team pack generálás.
+- AGENTS/CLAUDE meglĂ©vĹ‘ generĂˇtor finomĂ­tĂˇsa.
+- Skills Pack generĂˇtor.
+- MCP pack megtartĂˇsa/bĹ‘vĂ­tĂ©se.
+- Eval/red-team pack generĂˇlĂˇs.
 
 ### Sprint 3 - AI Act readiness MVP
 
-- Role/risk intake kérdések.
+- Role/risk intake kĂ©rdĂ©sek.
 - Transparency checklist.
 - Disclaimer.
-- Ügyvéd review.
+- ĂśgyvĂ©d review.
 
 ### Sprint 4 - Review Council MVP
 
 - AI2AI backend adapter.
 - 5 szerep + final judge.
-- Council summary beemelése reportba.
+- Council summary beemelĂ©se reportba.
 
-### Sprint 5 - fizetős demo
+### Sprint 5 - fizetĹ‘s demo
 
 - PDF/Markdown export.
-- White-label mezők.
+- White-label mezĹ‘k.
 - Landing CTA.
-- Első fizetős riportok.
+- ElsĹ‘ fizetĹ‘s riportok.
 
 ## 9. Kill criteria
 
-Le kell állni vagy pivotálni, ha 60 napon belül:
+Le kell Ăˇllni vagy pivotĂˇlni, ha 60 napon belĂĽl:
 
-- 30 megkeresésből nincs legalább 3 erős érdeklődő,
-- senki nem fizetne 49 EUR-t sem egy reportért,
-- a célcsoport szerint az AGENTS/CLAUDE output önmagában elég és nem kell AI Act / report,
-- a jogi kommunikáció túl kockázatosnak bizonyul,
-- az output minősége nem jobb, mint egy sima ChatGPT prompt.
+- 30 megkeresĂ©sbĹ‘l nincs legalĂˇbb 3 erĹ‘s Ă©rdeklĹ‘dĹ‘,
+- senki nem fizetne 49 EUR-t sem egy reportĂ©rt,
+- a cĂ©lcsoport szerint az AGENTS/CLAUDE output Ă¶nmagĂˇban elĂ©g Ă©s nem kell AI Act / report,
+- a jogi kommunikĂˇciĂł tĂşl kockĂˇzatosnak bizonyul,
+- az output minĹ‘sĂ©ge nem jobb, mint egy sima ChatGPT prompt.
 
-## 10. Legfontosabb következő fejlesztői feladatok
+## 10. Legfontosabb kĂ¶vetkezĹ‘ fejlesztĹ‘i feladatok
 
-1. Új `CLIENT_HANDOFF_REPORT.md` sablon megírása.
-2. `AI_ACT_READINESS_CHECKLIST.md` output definiálása.
-3. `SKILL.md` generátor hozzáadása.
-4. ShipSeal frontend új landing copy.
-5. AI2AI Review Council szerepek beszűkítése.
-6. Minta AI-app alapján minta riport készítése.
+1. Ăšj `CLIENT_HANDOFF_REPORT.md` sablon megĂ­rĂˇsa.
+2. `AI_ACT_READINESS_CHECKLIST.md` output definiĂˇlĂˇsa.
+3. `SKILL.md` generĂˇtor hozzĂˇadĂˇsa.
+4. ShipSeal frontend Ăşj landing copy.
+5. AI2AI Review Council szerepek beszĹ±kĂ­tĂ©se.
+6. Minta AI-app alapjĂˇn minta riport kĂ©szĂ­tĂ©se.

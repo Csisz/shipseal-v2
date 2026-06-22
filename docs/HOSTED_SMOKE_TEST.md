@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # ShipSeal Hosted Smoke Test
 
 Use this checklist before sharing a public Vercel demo link.
@@ -70,3 +76,4 @@ Download the repository as ZIP from GitHub and upload it manually.
 - No GitHub App, OAuth, tokens, auth, payment, database, persistent storage, or server-side AI is included.
 - ZIP upload remains the stable fallback path.
 - The print-ready report is standalone HTML intended for browser Save as PDF.
+

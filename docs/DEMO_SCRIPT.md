@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # AgentReady Demo Script
 
 ## 3-5 Minute Product Demo
@@ -57,3 +63,4 @@ Download `score.json` or the Agent Pack ZIP.
 ### 10. Roadmap Close
 
 "The current MVP is local-first and safe. Next production phases would add backend workers, GitHub App private repo scanning, webhook-based rescans, PR readiness checks, and server-side AI provider integrations with sanitized context only."
+

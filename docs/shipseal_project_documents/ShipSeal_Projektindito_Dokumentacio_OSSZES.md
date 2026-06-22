@@ -1,58 +1,64 @@
-# ShipSeal projektindító dokumentáció
+﻿# DEPRECATED
 
-Frissítve: 2026-06-01
+Superseded by:
 
-Ez a dokumentum a ShipSeal projekt egységes, projektindító dokumentációja.
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
+# ShipSeal projektindĂ­tĂł dokumentĂˇciĂł
+
+FrissĂ­tve: 2026-06-01
+
+Ez a dokumentum a ShipSeal projekt egysĂ©ges, projektindĂ­tĂł dokumentĂˇciĂłja.
 
 ---
 
-# 00 - Új projekt kontextus és feltöltési instrukció
+# 00 - Ăšj projekt kontextus Ă©s feltĂ¶ltĂ©si instrukciĂł
 
-## Cél
+## CĂ©l
 
-Ebben az új projektben a ShipSeal nevű terméket szeretnénk kialakítani. A cél nem egy újabb általános AI app, hanem egy olyan AI-projekt átadás-előkészítő rendszer, amely AI prototípusokból agent-ready, tesztelhető, dokumentált és ügyfélnek átadható projektcsomagot készít.
+Ebben az Ăşj projektben a ShipSeal nevĹ± termĂ©ket szeretnĂ©nk kialakĂ­tani. A cĂ©l nem egy Ăşjabb ĂˇltalĂˇnos AI app, hanem egy olyan AI-projekt ĂˇtadĂˇs-elĹ‘kĂ©szĂ­tĹ‘ rendszer, amely AI prototĂ­pusokbĂłl agent-ready, tesztelhetĹ‘, dokumentĂˇlt Ă©s ĂĽgyfĂ©lnek ĂˇtadhatĂł projektcsomagot kĂ©szĂ­t.
 
-## Rövid termékdefiníció
+## RĂ¶vid termĂ©kdefinĂ­ciĂł
 
-ShipSeal átvizsgálja az AI-projekt forrásait, dokumentációját és működési leírását, majd elkészíti azokat a fejlesztési, tesztelési, agent-instruction, MCP-governance, EU AI Act readiness és ügyfélátadási dokumentumokat, amelyekre egy AI freelancernek, AI ügynökségnek vagy kis SaaS-fejlesztőnek szüksége van az ügyfélátadás előtt.
+ShipSeal ĂˇtvizsgĂˇlja az AI-projekt forrĂˇsait, dokumentĂˇciĂłjĂˇt Ă©s mĹ±kĂ¶dĂ©si leĂ­rĂˇsĂˇt, majd elkĂ©szĂ­ti azokat a fejlesztĂ©si, tesztelĂ©si, agent-instruction, MCP-governance, EU AI Act readiness Ă©s ĂĽgyfĂ©lĂˇtadĂˇsi dokumentumokat, amelyekre egy AI freelancernek, AI ĂĽgynĂ¶ksĂ©gnek vagy kis SaaS-fejlesztĹ‘nek szĂĽksĂ©ge van az ĂĽgyfĂ©lĂˇtadĂˇs elĹ‘tt.
 
-## Feltöltendő források
+## FeltĂ¶ltendĹ‘ forrĂˇsok
 
-Az új projektbe töltsük fel a következő ZIP-eket:
+Az Ăşj projektbe tĂ¶ltsĂĽk fel a kĂ¶vetkezĹ‘ ZIP-eket:
 
 1. `agentready-hub-main (1).zip`
-   - jelenlegi néven agentready-hub; a ShipSeal frontend és repo-szkenner alapja,
-   - AGENTS.md / CLAUDE.md / MCP governance / readiness report generálás,
+   - jelenlegi nĂ©ven agentready-hub; a ShipSeal frontend Ă©s repo-szkenner alapja,
+   - AGENTS.md / CLAUDE.md / MCP governance / readiness report generĂˇlĂˇs,
    - React + Vite + TypeScript + shadcn/ui alap.
 
 2. `ai2ai-main (1).zip`
    - multi-model Expert Council / AI Debate backend,
-   - Python CLI + opcionális FastAPI API,
-   - forrásbetöltés, evidence pack, független modellek, rebuttal, final judge, output contract, riportgenerálás.
+   - Python CLI + opcionĂˇlis FastAPI API,
+   - forrĂˇsbetĂ¶ltĂ©s, evidence pack, fĂĽggetlen modellek, rebuttal, final judge, output contract, riportgenerĂˇlĂˇs.
 
 3. `verdictmesh-main (1).zip`
-   - AI2AI frontend / VerdictMesh felület,
-   - Base44-exportált Vite/React frontend,
-   - AI2AI backendhez kapcsolható vizuális debate/council UI.
+   - AI2AI frontend / VerdictMesh felĂĽlet,
+   - Base44-exportĂˇlt Vite/React frontend,
+   - AI2AI backendhez kapcsolhatĂł vizuĂˇlis debate/council UI.
 
-## Új projektben használandó fő prompt
+## Ăšj projektben hasznĂˇlandĂł fĹ‘ prompt
 
-A következő szöveget lehet bemásolni az új projekt első üzeneteként:
+A kĂ¶vetkezĹ‘ szĂ¶veget lehet bemĂˇsolni az Ăşj projekt elsĹ‘ ĂĽzenetekĂ©nt:
 
-> A ShipSeal projektet szeretném továbbfejleszteni. A cél egy AI Project Delivery Pack Generator: AI-projektekből agent-ready fejlesztési fájlokat, Claude/Codex/agent instruction fájlokat, skilleket, MCP governance javaslatot, eval/red-team teszteket, EU AI Act readiness előszűrést és ügyfélnek átadható riportot készít. Feltöltöttem három meglévő félkész forrásprojektet: agentready-hub, ai2ai és verdictmesh. Kérlek, a források alapján segíts egységes architektúrát, MVP-t és fejlesztési roadmapet kialakítani. Ne kezeld őket három külön termékként; a A ShipSeal legyen a fő termék, az AI2AI/VerdictMesh pedig a Review Council / VerdictMesh döntési motor és frontend alapja.
+> A ShipSeal projektet szeretnĂ©m tovĂˇbbfejleszteni. A cĂ©l egy AI Project Delivery Pack Generator: AI-projektekbĹ‘l agent-ready fejlesztĂ©si fĂˇjlokat, Claude/Codex/agent instruction fĂˇjlokat, skilleket, MCP governance javaslatot, eval/red-team teszteket, EU AI Act readiness elĹ‘szĹ±rĂ©st Ă©s ĂĽgyfĂ©lnek ĂˇtadhatĂł riportot kĂ©szĂ­t. FeltĂ¶ltĂ¶ttem hĂˇrom meglĂ©vĹ‘ fĂ©lkĂ©sz forrĂˇsprojektet: agentready-hub, ai2ai Ă©s verdictmesh. KĂ©rlek, a forrĂˇsok alapjĂˇn segĂ­ts egysĂ©ges architektĂşrĂˇt, MVP-t Ă©s fejlesztĂ©si roadmapet kialakĂ­tani. Ne kezeld Ĺ‘ket hĂˇrom kĂĽlĂ¶n termĂ©kkĂ©nt; a A ShipSeal legyen a fĹ‘ termĂ©k, az AI2AI/VerdictMesh pedig a Review Council / VerdictMesh dĂ¶ntĂ©si motor Ă©s frontend alapja.
 
-## Fontos stratégiai döntések
+## Fontos stratĂ©giai dĂ¶ntĂ©sek
 
-- Nem OpenText-specifikus terméket építünk.
-- Nem jogi tanácsadó platformot építünk.
-- Nem általános AI governance enterprise platformot építünk.
-- Nem önálló AI2AI debate játékot építünk.
-- Nem csak AGENTS.md generátort építünk.
-- A fő termék: AI-projekt átadás-előkészítő és readiness csomag generátor.
+- Nem OpenText-specifikus termĂ©ket Ă©pĂ­tĂĽnk.
+- Nem jogi tanĂˇcsadĂł platformot Ă©pĂ­tĂĽnk.
+- Nem ĂˇltalĂˇnos AI governance enterprise platformot Ă©pĂ­tĂĽnk.
+- Nem Ă¶nĂˇllĂł AI2AI debate jĂˇtĂ©kot Ă©pĂ­tĂĽnk.
+- Nem csak AGENTS.md generĂˇtort Ă©pĂ­tĂĽnk.
+- A fĹ‘ termĂ©k: AI-projekt ĂˇtadĂˇs-elĹ‘kĂ©szĂ­tĹ‘ Ă©s readiness csomag generĂˇtor.
 
-## Első MVP célja
+## ElsĹ‘ MVP cĂ©lja
 
-Egy feltöltött ZIP vagy publikus GitHub repo alapján készüljön el:
+Egy feltĂ¶ltĂ¶tt ZIP vagy publikus GitHub repo alapjĂˇn kĂ©szĂĽljĂ¶n el:
 
 - ShipSeal score,
 - AGENTS.md,
@@ -63,116 +69,116 @@ Egy feltöltött ZIP vagy publikus GitHub repo alapján készüljön el:
 - 10 red-team prompt,
 - EU AI Act readiness checklist,
 - transparency notice draft,
-- white-label ügyfélátadási riport.
+- white-label ĂĽgyfĂ©lĂˇtadĂˇsi riport.
 ---
 
-# 01 - Cég- és termékleírás
+# 01 - CĂ©g- Ă©s termĂ©kleĂ­rĂˇs
 
-## Projekt- és terméknév
+## Projekt- Ă©s termĂ©knĂ©v
 
 **ShipSeal**  
-Lehetséges cégnév/márkanév: **ShipSeal Labs** vagy **ShipSeal AI**.
+LehetsĂ©ges cĂ©gnĂ©v/mĂˇrkanĂ©v: **ShipSeal Labs** vagy **ShipSeal AI**.
 
-A név jelentése ebben a kontextusban: a termék „lezárja” és átadásra alkalmassá teszi az AI-projektet, mint egy minőségi pecsét az ügyfélátadás előtt.
+A nĂ©v jelentĂ©se ebben a kontextusban: a termĂ©k â€žlezĂˇrjaâ€ť Ă©s ĂˇtadĂˇsra alkalmassĂˇ teszi az AI-projektet, mint egy minĹ‘sĂ©gi pecsĂ©t az ĂĽgyfĂ©lĂˇtadĂˇs elĹ‘tt.
 
-## Mit csinál a cégünk?
+## Mit csinĂˇl a cĂ©gĂĽnk?
 
-A ShipSeal olyan AI-projekt átadás-előkészítő és readiness platformot fejleszt, amely segít AI freelancereknek, AI ügynökségeknek, no-code/low-code buildereknek és kis SaaS csapatoknak eldönteni, hogy egy AI-alkalmazás készen áll-e ügyfélátadásra, pilotra vagy élesítésre.
+A ShipSeal olyan AI-projekt ĂˇtadĂˇs-elĹ‘kĂ©szĂ­tĹ‘ Ă©s readiness platformot fejleszt, amely segĂ­t AI freelancereknek, AI ĂĽgynĂ¶ksĂ©geknek, no-code/low-code buildereknek Ă©s kis SaaS csapatoknak eldĂ¶nteni, hogy egy AI-alkalmazĂˇs kĂ©szen Ăˇll-e ĂĽgyfĂ©lĂˇtadĂˇsra, pilotra vagy Ă©lesĂ­tĂ©sre.
 
-A rendszer nemcsak auditál, hanem konkrét átadási anyagokat is előállít:
+A rendszer nemcsak auditĂˇl, hanem konkrĂ©t ĂˇtadĂˇsi anyagokat is elĹ‘ĂˇllĂ­t:
 
-- agent instruction fájlokat (`AGENTS.md`, `CLAUDE.md`, Codex/Cursor/Windsurf promptok),
+- agent instruction fĂˇjlokat (`AGENTS.md`, `CLAUDE.md`, Codex/Cursor/Windsurf promptok),
 - Claude Code / agent skilleket (`SKILL.md` csomagok),
-- MCP readiness és governance javaslatot,
-- teszteseteket és red-team promptokat,
-- EU AI Act readiness előszűrést,
-- transparency notice / disclosure szövegtervezeteket,
-- ügyfélnek átadható, white-label PDF/Markdown riportot,
-- go/no-go döntést és javítási roadmapet.
+- MCP readiness Ă©s governance javaslatot,
+- teszteseteket Ă©s red-team promptokat,
+- EU AI Act readiness elĹ‘szĹ±rĂ©st,
+- transparency notice / disclosure szĂ¶vegtervezeteket,
+- ĂĽgyfĂ©lnek ĂˇtadhatĂł, white-label PDF/Markdown riportot,
+- go/no-go dĂ¶ntĂ©st Ă©s javĂ­tĂˇsi roadmapet.
 
-## Mi a fő probléma?
+## Mi a fĹ‘ problĂ©ma?
 
-A generatív AI miatt egyre több kis csapat és freelancer épít gyorsan AI-prototípusokat. A demók sokszor látványosak, de az átadás előtti állapot bizonytalan:
+A generatĂ­v AI miatt egyre tĂ¶bb kis csapat Ă©s freelancer Ă©pĂ­t gyorsan AI-prototĂ­pusokat. A demĂłk sokszor lĂˇtvĂˇnyosak, de az ĂˇtadĂˇs elĹ‘tti Ăˇllapot bizonytalan:
 
-- nincs rendes dokumentáció,
-- nincs agenteknek szóló projektkontekstus,
-- nincs tesztelési stratégia,
+- nincs rendes dokumentĂˇciĂł,
+- nincs agenteknek szĂłlĂł projektkontekstus,
+- nincs tesztelĂ©si stratĂ©gia,
 - nincs eval/red-team csomag,
-- nincs ügyfélnek átadható readiness riport,
-- nincs AI Act / transparency előszűrés,
-- nincs tiszta fejlesztési folytatási csomag,
-- nincs megválaszolva: „ezt oda merem adni az ügyfélnek?”
+- nincs ĂĽgyfĂ©lnek ĂˇtadhatĂł readiness riport,
+- nincs AI Act / transparency elĹ‘szĹ±rĂ©s,
+- nincs tiszta fejlesztĂ©si folytatĂˇsi csomag,
+- nincs megvĂˇlaszolva: â€žezt oda merem adni az ĂĽgyfĂ©lnek?â€ť
 
-A ShipSeal erre a résre épít.
+A ShipSeal erre a rĂ©sre Ă©pĂ­t.
 
-## Egy mondatos termékígéret
+## Egy mondatos termĂ©kĂ­gĂ©ret
 
-**ShipSeal átalakítja az AI-prototípust agent-ready, tesztelhető, dokumentált és ügyfélnek átadható projektcsomaggá.**
+**ShipSeal ĂˇtalakĂ­tja az AI-prototĂ­pust agent-ready, tesztelhetĹ‘, dokumentĂˇlt Ă©s ĂĽgyfĂ©lnek ĂˇtadhatĂł projektcsomaggĂˇ.**
 
-Angol landing page verzió:
+Angol landing page verziĂł:
 
 **Seal your AI project before you ship it: agent-ready, testable and client-ready.**
 
-## Célcsoport
+## CĂ©lcsoport
 
-### Elsődleges célcsoport
+### ElsĹ‘dleges cĂ©lcsoport
 
 - AI freelancerek,
-- kis AI ügynökségek,
+- kis AI ĂĽgynĂ¶ksĂ©gek,
 - no-code/low-code AI builderek,
-- prompt engineering / automation tanácsadók,
-- indie SaaS fejlesztők, akik AI-appot adnak át ügyfeleknek.
+- prompt engineering / automation tanĂˇcsadĂłk,
+- indie SaaS fejlesztĹ‘k, akik AI-appot adnak Ăˇt ĂĽgyfeleknek.
 
-### Másodlagos célcsoport
+### MĂˇsodlagos cĂ©lcsoport
 
-- KKV-k, akik AI-appot rendeltek és független readiness review-t szeretnének,
-- AI-képzést / workshopot tartó cégek,
-- fejlesztőcsapatok, akik AI coding agentekkel akarják továbbvinni a projektjeiket.
+- KKV-k, akik AI-appot rendeltek Ă©s fĂĽggetlen readiness review-t szeretnĂ©nek,
+- AI-kĂ©pzĂ©st / workshopot tartĂł cĂ©gek,
+- fejlesztĹ‘csapatok, akik AI coding agentekkel akarjĂˇk tovĂˇbbvinni a projektjeiket.
 
-## Miért fizetne ezért valaki?
+## MiĂ©rt fizetne ezĂ©rt valaki?
 
-A célcsoport nem elméleti megfelelőséget vásárol, hanem időt, bizalmat és professzionális átadási anyagot:
+A cĂ©lcsoport nem elmĂ©leti megfelelĹ‘sĂ©get vĂˇsĂˇrol, hanem idĹ‘t, bizalmat Ă©s professzionĂˇlis ĂˇtadĂˇsi anyagot:
 
-- kevesebb manuális dokumentálás,
-- gyorsabb ügyfélátadás,
-- profibb látszat és valós minőség,
-- kevesebb beégési kockázat,
-- előre megfogalmazott tesztek és red-team kérdések,
-- EU AI Act / transparency témában legalább előszűrt, nem jogi, de rendezett dokumentáció,
-- fejlesztési folytatás Claude Code / Codex / más agentek számára.
+- kevesebb manuĂˇlis dokumentĂˇlĂˇs,
+- gyorsabb ĂĽgyfĂ©lĂˇtadĂˇs,
+- profibb lĂˇtszat Ă©s valĂłs minĹ‘sĂ©g,
+- kevesebb beĂ©gĂ©si kockĂˇzat,
+- elĹ‘re megfogalmazott tesztek Ă©s red-team kĂ©rdĂ©sek,
+- EU AI Act / transparency tĂ©mĂˇban legalĂˇbb elĹ‘szĹ±rt, nem jogi, de rendezett dokumentĂˇciĂł,
+- fejlesztĂ©si folytatĂˇs Claude Code / Codex / mĂˇs agentek szĂˇmĂˇra.
 
-## Termékmodulok
+## TermĂ©kmodulok
 
 ### 1. Project Intake
 
-Bekéri:
+BekĂ©ri:
 
 - repo ZIP vagy GitHub URL,
-- AI-app célját,
-- célfelhasználókat,
-- kezelt adattípusokat,
-- használt modelleket,
+- AI-app cĂ©ljĂˇt,
+- cĂ©lfelhasznĂˇlĂłkat,
+- kezelt adattĂ­pusokat,
+- hasznĂˇlt modelleket,
 - promptokat,
-- példa outputokat,
-- emberi jóváhagyási pontokat,
-- EU/nem EU célpiacot,
-- ügyfélátadási kontextust.
+- pĂ©lda outputokat,
+- emberi jĂłvĂˇhagyĂˇsi pontokat,
+- EU/nem EU cĂ©lpiacot,
+- ĂĽgyfĂ©lĂˇtadĂˇsi kontextust.
 
 ### 2. Repository & Delivery Readiness Scanner
 
 Elemzi:
 
-- projektstruktúrát,
-- dokumentációt,
+- projektstruktĂşrĂˇt,
+- dokumentĂˇciĂłt,
 - build/test/lint jeleket,
-- meglévő agent instruction fájlokat,
-- `.env.example` és secret-kezelési jeleket,
-- repo méretét, vendor/generated tartalmakat,
-- működési parancsokat.
+- meglĂ©vĹ‘ agent instruction fĂˇjlokat,
+- `.env.example` Ă©s secret-kezelĂ©si jeleket,
+- repo mĂ©retĂ©t, vendor/generated tartalmakat,
+- mĹ±kĂ¶dĂ©si parancsokat.
 
 ### 3. Agent Pack Generator
 
-Generálja:
+GenerĂˇlja:
 
 - `AGENTS.md`,
 - `CLAUDE.md`,
@@ -184,7 +190,7 @@ Generálja:
 
 ### 4. Skills Pack Generator
 
-Generálja például:
+GenerĂˇlja pĂ©ldĂˇul:
 
 - `.claude/skills/code-review/SKILL.md`,
 - `.claude/skills/test-generation/SKILL.md`,
@@ -194,44 +200,44 @@ Generálja például:
 
 ### 5. MCP Readiness & Governance
 
-Nem vakon generál MCP szervert. Először eldönti:
+Nem vakon generĂˇl MCP szervert. ElĹ‘szĂ¶r eldĂ¶nti:
 
 - kell-e MCP,
-- milyen adatforrás / tool indokolja,
+- milyen adatforrĂˇs / tool indokolja,
 - read-only vagy write-capable legyen-e,
-- milyen engedélyezési és naplózási szabály kell,
-- milyen security kockázatok vannak.
+- milyen engedĂ©lyezĂ©si Ă©s naplĂłzĂˇsi szabĂˇly kell,
+- milyen security kockĂˇzatok vannak.
 
-Első verzióban főleg MCP readiness dokumentáció és skeleton javaslat készüljön, nem production-ready MCP integráció.
+ElsĹ‘ verziĂłban fĹ‘leg MCP readiness dokumentĂˇciĂł Ă©s skeleton javaslat kĂ©szĂĽljĂ¶n, nem production-ready MCP integrĂˇciĂł.
 
 ### 6. Eval & Red Team Pack
 
-Generál:
+GenerĂˇl:
 
-- normál teszteseteket,
+- normĂˇl teszteseteket,
 - edge case teszteket,
-- hallucination trap kérdéseket,
-- prompt injection próbákat,
-- adatkiáramlási teszteket,
+- hallucination trap kĂ©rdĂ©seket,
+- prompt injection prĂłbĂˇkat,
+- adatkiĂˇramlĂˇsi teszteket,
 - refusal/boundary teszteket,
 - consistency teszteket.
 
 ### 7. EU AI Act Readiness Pack
 
-Előszűri:
+ElĹ‘szĹ±ri:
 
-- provider/deployer szerepkört,
-- potenciális high-risk irányokat,
-- tiltott vagy érzékeny felhasználási jeleket,
-- transparency / disclosure kötelezettség jellegű kérdéseket,
-- emberi felügyelet meglétét,
-- AI-generált tartalom jelölésének szükségességét.
+- provider/deployer szerepkĂ¶rt,
+- potenciĂˇlis high-risk irĂˇnyokat,
+- tiltott vagy Ă©rzĂ©keny felhasznĂˇlĂˇsi jeleket,
+- transparency / disclosure kĂ¶telezettsĂ©g jellegĹ± kĂ©rdĂ©seket,
+- emberi felĂĽgyelet meglĂ©tĂ©t,
+- AI-generĂˇlt tartalom jelĂ¶lĂ©sĂ©nek szĂĽksĂ©gessĂ©gĂ©t.
 
-Fontos: a termék nem állíthatja, hogy jogi megfelelőséget igazol. A helyes állítás: **előzetes readiness és kérdéslista jogi review-hoz**.
+Fontos: a termĂ©k nem ĂˇllĂ­thatja, hogy jogi megfelelĹ‘sĂ©get igazol. A helyes ĂˇllĂ­tĂˇs: **elĹ‘zetes readiness Ă©s kĂ©rdĂ©slista jogi review-hoz**.
 
 ### 8. VerdictMesh Review Council
 
-Az AI2AI/VerdictMesh technológiára építve több nézőpontú review készülhet:
+Az AI2AI/VerdictMesh technolĂłgiĂˇra Ă©pĂ­tve tĂ¶bb nĂ©zĹ‘pontĂş review kĂ©szĂĽlhet:
 
 - QA reviewer,
 - Security red teamer,
@@ -240,81 +246,81 @@ Az AI2AI/VerdictMesh technológiára építve több nézőpontú review készül
 - Skeptical customer,
 - Final judge.
 
-Ez nem önálló „AI-k vitáznak” termék, hanem a ShipSeal döntési motorja.
+Ez nem Ă¶nĂˇllĂł â€žAI-k vitĂˇznakâ€ť termĂ©k, hanem a ShipSeal dĂ¶ntĂ©si motorja.
 
-## Versenyelőny
+## VersenyelĹ‘ny
 
-ShipSeal nem akar közvetlenül enterprise governance platform, LangSmith-szerű observability rendszer vagy jogi compliance tool lenni. A pozíció:
+ShipSeal nem akar kĂ¶zvetlenĂĽl enterprise governance platform, LangSmith-szerĹ± observability rendszer vagy jogi compliance tool lenni. A pozĂ­ciĂł:
 
-**az AI-projekt átadás előtti gyakorlati delivery packje kis AI-csapatoknak.**
+**az AI-projekt ĂˇtadĂˇs elĹ‘tti gyakorlati delivery packje kis AI-csapatoknak.**
 
-Ez a rés azért érdekes, mert a legtöbb megoldás vagy túl enterprise, vagy túl fejlesztői, vagy túl jogi. ShipSeal a gyakorlati átadási ponton segít.
+Ez a rĂ©s azĂ©rt Ă©rdekes, mert a legtĂ¶bb megoldĂˇs vagy tĂşl enterprise, vagy tĂşl fejlesztĹ‘i, vagy tĂşl jogi. ShipSeal a gyakorlati ĂˇtadĂˇsi ponton segĂ­t.
 
-## Hivatkozási alapok
+## HivatkozĂˇsi alapok
 
-A stratégia az alábbi, nyilvános és aktuális technológiai/jogi irányokra épít:
+A stratĂ©gia az alĂˇbbi, nyilvĂˇnos Ă©s aktuĂˇlis technolĂłgiai/jogi irĂˇnyokra Ă©pĂ­t:
 
 - EU AI Act: Regulation (EU) 2024/1689, risk-based AI rules; European Commission AI Act overview: https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai
 - European Commission AI Act Service Desk Compliance Checker: https://ai-act-service-desk.ec.europa.eu/en/eu-ai-act-compliance-checker
-- European Commission Article 50 transparency draft guidance / consultation, 2026. május: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
-- AGENTS.md nyílt formátum: https://agents.md/
-- Claude Code CLAUDE.md / memory dokumentáció: https://code.claude.com/docs/en/memory
-- Claude Code Skills dokumentáció: https://code.claude.com/docs/en/skills
-- Model Context Protocol dokumentáció: https://modelcontextprotocol.io/docs/getting-started/intro
+- European Commission Article 50 transparency draft guidance / consultation, 2026. mĂˇjus: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
+- AGENTS.md nyĂ­lt formĂˇtum: https://agents.md/
+- Claude Code CLAUDE.md / memory dokumentĂˇciĂł: https://code.claude.com/docs/en/memory
+- Claude Code Skills dokumentĂˇciĂł: https://code.claude.com/docs/en/skills
+- Model Context Protocol dokumentĂˇciĂł: https://modelcontextprotocol.io/docs/getting-started/intro
 
-Megjegyzés: az EU AI Act értelmezési részek nem minősülnek jogi tanácsadásnak. A termék kommunikációjában is ezt kell következetesen feltüntetni: előszűrés, readiness, dokumentáció-előkészítés és technikai/jogi kérdéslista készül, nem jogi szakvélemény.
+MegjegyzĂ©s: az EU AI Act Ă©rtelmezĂ©si rĂ©szek nem minĹ‘sĂĽlnek jogi tanĂˇcsadĂˇsnak. A termĂ©k kommunikĂˇciĂłjĂˇban is ezt kell kĂ¶vetkezetesen feltĂĽntetni: elĹ‘szĹ±rĂ©s, readiness, dokumentĂˇciĂł-elĹ‘kĂ©szĂ­tĂ©s Ă©s technikai/jogi kĂ©rdĂ©slista kĂ©szĂĽl, nem jogi szakvĂ©lemĂ©ny.
 ---
 
-# 02 - Üzleti és megvalósítási terv
+# 02 - Ăśzleti Ă©s megvalĂłsĂ­tĂˇsi terv
 
-## Vezetői összefoglaló
+## VezetĹ‘i Ă¶sszefoglalĂł
 
-A ShipSeal célja, hogy a gyorsan készülő AI-prototípusokból ügyfélnek átadható, agent-ready és előzetesen kockázatkezelt projektcsomagot készítsen. A termék elsődleges vevői AI freelancerek és kis AI-ügynökségek, akik ügyfeleknek építenek chatbotokat, RAG rendszereket, dokumentum-AI eszközöket, belső asszisztenseket vagy no-code/low-code AI automatizációkat.
+A ShipSeal cĂ©lja, hogy a gyorsan kĂ©szĂĽlĹ‘ AI-prototĂ­pusokbĂłl ĂĽgyfĂ©lnek ĂˇtadhatĂł, agent-ready Ă©s elĹ‘zetesen kockĂˇzatkezelt projektcsomagot kĂ©szĂ­tsen. A termĂ©k elsĹ‘dleges vevĹ‘i AI freelancerek Ă©s kis AI-ĂĽgynĂ¶ksĂ©gek, akik ĂĽgyfeleknek Ă©pĂ­tenek chatbotokat, RAG rendszereket, dokumentum-AI eszkĂ¶zĂ¶ket, belsĹ‘ asszisztenseket vagy no-code/low-code AI automatizĂˇciĂłkat.
 
-Az első üzleti cél nem nagyvállalati SaaS, hanem fizetős, gyorsan validálható riport- és delivery-pack szolgáltatás. A szoftver fokozatosan nő ki ebből: először automatikus riportgenerátor, utána white-label ügynökségi csomag, majd később csapatdashboard, GitHub App, backend worker, fizetés, audit history és API.
+Az elsĹ‘ ĂĽzleti cĂ©l nem nagyvĂˇllalati SaaS, hanem fizetĹ‘s, gyorsan validĂˇlhatĂł riport- Ă©s delivery-pack szolgĂˇltatĂˇs. A szoftver fokozatosan nĹ‘ ki ebbĹ‘l: elĹ‘szĂ¶r automatikus riportgenerĂˇtor, utĂˇna white-label ĂĽgynĂ¶ksĂ©gi csomag, majd kĂ©sĹ‘bb csapatdashboard, GitHub App, backend worker, fizetĂ©s, audit history Ă©s API.
 
-## Termékpozicionálás
+## TermĂ©kpozicionĂˇlĂˇs
 
-### Rövid üzenet
+### RĂ¶vid ĂĽzenet
 
-**Mielőtt átadod az AI-appodat, tedd agent-readyvé, tesztelhetővé és dokumentáltan ügyfélképessé.**
+**MielĹ‘tt Ăˇtadod az AI-appodat, tedd agent-readyvĂ©, tesztelhetĹ‘vĂ© Ă©s dokumentĂˇltan ĂĽgyfĂ©lkĂ©pessĂ©.**
 
-### Angol verzió
+### Angol verziĂł
 
 **Before you ship an AI app, seal it with an agent-ready delivery pack.**
 
 ### Mit nem mondunk?
 
-- Nem mondjuk, hogy teljes jogi megfelelőséget igazolunk.
-- Nem mondjuk, hogy high-risk jogi minősítést adunk.
-- Nem mondjuk, hogy production security auditot végzünk.
-- Nem mondjuk, hogy minden MCP szerver biztonságosan generálható automatikusan.
+- Nem mondjuk, hogy teljes jogi megfelelĹ‘sĂ©get igazolunk.
+- Nem mondjuk, hogy high-risk jogi minĹ‘sĂ­tĂ©st adunk.
+- Nem mondjuk, hogy production security auditot vĂ©gzĂĽnk.
+- Nem mondjuk, hogy minden MCP szerver biztonsĂˇgosan generĂˇlhatĂł automatikusan.
 
 ### Mit mondunk?
 
 - Readiness reportot adunk.
-- Fejlesztési és átadási dokumentációt generálunk.
-- Teszteseteket és red-team promptokat készítünk.
-- EU AI Act transparency és risk kérdésekhez előzetes checklistet adunk.
-- Jogi review-hoz előkészítjük az információkat.
+- FejlesztĂ©si Ă©s ĂˇtadĂˇsi dokumentĂˇciĂłt generĂˇlunk.
+- Teszteseteket Ă©s red-team promptokat kĂ©szĂ­tĂĽnk.
+- EU AI Act transparency Ă©s risk kĂ©rdĂ©sekhez elĹ‘zetes checklistet adunk.
+- Jogi review-hoz elĹ‘kĂ©szĂ­tjĂĽk az informĂˇciĂłkat.
 
-## Piaci hipotézis
+## Piaci hipotĂ©zis
 
-Az AI freelancerek és kis ügynökségek egyre gyakrabban adnak át AI-prototípusokat, de az átadás minősége sokszor ad hoc. Ha a ShipSeal képes 30-60 percnyi dokumentációs és review munkát 5-10 percre csökkenteni, valamint a kész anyag ügyfél felé professzionálisabbá teszi a szállítást, akkor a célcsoport fizethet érte.
+Az AI freelancerek Ă©s kis ĂĽgynĂ¶ksĂ©gek egyre gyakrabban adnak Ăˇt AI-prototĂ­pusokat, de az ĂˇtadĂˇs minĹ‘sĂ©ge sokszor ad hoc. Ha a ShipSeal kĂ©pes 30-60 percnyi dokumentĂˇciĂłs Ă©s review munkĂˇt 5-10 percre csĂ¶kkenteni, valamint a kĂ©sz anyag ĂĽgyfĂ©l felĂ© professzionĂˇlisabbĂˇ teszi a szĂˇllĂ­tĂˇst, akkor a cĂ©lcsoport fizethet Ă©rte.
 
-## Első fizetős ajánlat
+## ElsĹ‘ fizetĹ‘s ajĂˇnlat
 
 ### ShipSeal Delivery Report
 
 Input:
 
 - repo ZIP vagy GitHub URL,
-- AI-app leírás,
-- célfelhasználók,
+- AI-app leĂ­rĂˇs,
+- cĂ©lfelhasznĂˇlĂłk,
 - promptok / system prompt,
 - kezelt adatok,
-- példa outputok,
-- ügyfélátadási cél.
+- pĂ©lda outputok,
+- ĂĽgyfĂ©lĂˇtadĂˇsi cĂ©l.
 
 Output:
 
@@ -328,157 +334,157 @@ Output:
 - transparency notice draft,
 - white-label client handoff report.
 
-## Árazási javaslat
+## ĂrazĂˇsi javaslat
 
-| Csomag | Ár | Tartalom | Cél |
+| Csomag | Ăr | Tartalom | CĂ©l |
 |---|---:|---|---|
-| Free preview | 0 EUR | readiness preview, 5 javaslat, 5 teszteset | lead generálás |
-| Starter report | 49 EUR | AGENTS.md, CLAUDE.md, 30 teszteset, mini AI Act checklist | első fizetős validáció |
-| Pro agency report | 149 EUR | white-label report, skillek, red-team pack, MCP pack | AI ügynökségek |
-| Founder-reviewed audit | 499-999 EUR | manuális szakértői review + 60 perc konzultáció | első komoly bevétel |
+| Free preview | 0 EUR | readiness preview, 5 javaslat, 5 teszteset | lead generĂˇlĂˇs |
+| Starter report | 49 EUR | AGENTS.md, CLAUDE.md, 30 teszteset, mini AI Act checklist | elsĹ‘ fizetĹ‘s validĂˇciĂł |
+| Pro agency report | 149 EUR | white-label report, skillek, red-team pack, MCP pack | AI ĂĽgynĂ¶ksĂ©gek |
+| Founder-reviewed audit | 499-999 EUR | manuĂˇlis szakĂ©rtĹ‘i review + 60 perc konzultĂˇciĂł | elsĹ‘ komoly bevĂ©tel |
 
-Magyar validációs árak:
+Magyar validĂˇciĂłs Ăˇrak:
 
-| Csomag | Ár |
+| Csomag | Ăr |
 |---|---:|
-| Első riport | 19 900 Ft |
+| ElsĹ‘ riport | 19 900 Ft |
 | White-label riport | 79 000 Ft |
 | Founder-reviewed audit | 149 000-299 000 Ft |
 
-## 30/60/90 napos megvalósítási terv
+## 30/60/90 napos megvalĂłsĂ­tĂˇsi terv
 
-### Első 30 nap - fizetős validációra alkalmas csomag
+### ElsĹ‘ 30 nap - fizetĹ‘s validĂˇciĂłra alkalmas csomag
 
 Feladatok:
 
-1. Új repo létrehozása az egységes ShipSeal irányhoz.
-2. A meglévő agentready-hub frontend ShipSeal irányú megtisztítása és új pozicionálása.
-3. Az első output-specifikáció véglegesítése.
-4. Statikus / félautomata ShipSeal Delivery Report generálása.
-5. Minta riport készítése 1-2 saját AI-projekt alapján.
-6. Landing page + fizetési érdeklődési CTA.
-7. 20-30 célzott megkeresés AI freelancereknek / kis ügynökségeknek.
+1. Ăšj repo lĂ©trehozĂˇsa az egysĂ©ges ShipSeal irĂˇnyhoz.
+2. A meglĂ©vĹ‘ agentready-hub frontend ShipSeal irĂˇnyĂş megtisztĂ­tĂˇsa Ă©s Ăşj pozicionĂˇlĂˇsa.
+3. Az elsĹ‘ output-specifikĂˇciĂł vĂ©glegesĂ­tĂ©se.
+4. Statikus / fĂ©lautomata ShipSeal Delivery Report generĂˇlĂˇsa.
+5. Minta riport kĂ©szĂ­tĂ©se 1-2 sajĂˇt AI-projekt alapjĂˇn.
+6. Landing page + fizetĂ©si Ă©rdeklĹ‘dĂ©si CTA.
+7. 20-30 cĂ©lzott megkeresĂ©s AI freelancereknek / kis ĂĽgynĂ¶ksĂ©geknek.
 
-30. napi mérőszámok:
+30. napi mĂ©rĹ‘szĂˇmok:
 
-- 1 működő demo,
+- 1 mĹ±kĂ¶dĹ‘ demo,
 - 2 minta riport,
-- 20 megkeresés,
-- 5 komoly visszajelzés,
-- legalább 1 fizetési szándék vagy fizetős pilot.
+- 20 megkeresĂ©s,
+- 5 komoly visszajelzĂ©s,
+- legalĂˇbb 1 fizetĂ©si szĂˇndĂ©k vagy fizetĹ‘s pilot.
 
-### 60 nap - működő MVP
+### 60 nap - mĹ±kĂ¶dĹ‘ MVP
 
 Feladatok:
 
-1. Repo scanner + intake form összekötése.
-2. `AGENTS.md`, `CLAUDE.md`, skillek és MCP pack generálás stabilizálása.
+1. Repo scanner + intake form Ă¶sszekĂ¶tĂ©se.
+2. `AGENTS.md`, `CLAUDE.md`, skillek Ă©s MCP pack generĂˇlĂˇs stabilizĂˇlĂˇsa.
 3. PDF/Markdown report export.
-4. AI2AI/VerdictMesh Review Council első integrációja: QA, security, compliance, skeptical customer, final judge.
-5. EU AI Act readiness checklist első verziója jogi review-val.
+4. AI2AI/VerdictMesh Review Council elsĹ‘ integrĂˇciĂłja: QA, security, compliance, skeptical customer, final judge.
+5. EU AI Act readiness checklist elsĹ‘ verziĂłja jogi review-val.
 6. White-label report sablon.
 
-60. napi mérőszámok:
+60. napi mĂ©rĹ‘szĂˇmok:
 
-- 3 fizetős riport vagy founder-reviewed audit,
-- 1 ügynökségi partnerjelölt,
-- 5 letöltött/átadott report,
-- egyértelmű visszajelzés arról, melyik modulért fizetnének.
+- 3 fizetĹ‘s riport vagy founder-reviewed audit,
+- 1 ĂĽgynĂ¶ksĂ©gi partnerjelĂ¶lt,
+- 5 letĂ¶ltĂ¶tt/Ăˇtadott report,
+- egyĂ©rtelmĹ± visszajelzĂ©s arrĂłl, melyik modulĂ©rt fizetnĂ©nek.
 
-### 90 nap - fizetős pilot és termékdöntés
+### 90 nap - fizetĹ‘s pilot Ă©s termĂ©kdĂ¶ntĂ©s
 
 Feladatok:
 
-1. Fizetési integráció.
-2. Egyszerű account / report history.
-3. Job queue vagy backend worker döntés előkészítése.
-4. GitHub public import stabilizálása, private repo későbbre.
-5. Pro csomag kiadása 5-10 fizetős ügyfélnek.
-6. Roadmap döntés: agency report, EU AI Act readiness vagy TestBench legyen-e a vezető értékajánlat.
+1. FizetĂ©si integrĂˇciĂł.
+2. EgyszerĹ± account / report history.
+3. Job queue vagy backend worker dĂ¶ntĂ©s elĹ‘kĂ©szĂ­tĂ©se.
+4. GitHub public import stabilizĂˇlĂˇsa, private repo kĂ©sĹ‘bbre.
+5. Pro csomag kiadĂˇsa 5-10 fizetĹ‘s ĂĽgyfĂ©lnek.
+6. Roadmap dĂ¶ntĂ©s: agency report, EU AI Act readiness vagy TestBench legyen-e a vezetĹ‘ Ă©rtĂ©kajĂˇnlat.
 
-90. napi mérőszámok:
+90. napi mĂ©rĹ‘szĂˇmok:
 
-- 5-10 fizető ügyfél vagy legalább 1000 EUR bevételi validáció,
+- 5-10 fizetĹ‘ ĂĽgyfĂ©l vagy legalĂˇbb 1000 EUR bevĂ©teli validĂˇciĂł,
 - 3 testimonial,
-- legalább 30% visszatérő használati szándék ügynökségeknél,
-- világos döntés a következő 3 hónap fókuszáról.
+- legalĂˇbb 30% visszatĂ©rĹ‘ hasznĂˇlati szĂˇndĂ©k ĂĽgynĂ¶ksĂ©geknĂ©l,
+- vilĂˇgos dĂ¶ntĂ©s a kĂ¶vetkezĹ‘ 3 hĂłnap fĂłkuszĂˇrĂłl.
 
-## Fejlesztési stratégia
+## FejlesztĂ©si stratĂ©gia
 
-### Első elv
+### ElsĹ‘ elv
 
-Nem teljes platformot építünk, hanem átadható outputot.
+Nem teljes platformot Ă©pĂ­tĂĽnk, hanem ĂˇtadhatĂł outputot.
 
-### Második elv
+### MĂˇsodik elv
 
-A readiness score determinisztikus és auditálható legyen. Az AI magyarázhat, gazdagíthat, javasolhat, de ne írja felül a kritikus blokkolókat.
+A readiness score determinisztikus Ă©s auditĂˇlhatĂł legyen. Az AI magyarĂˇzhat, gazdagĂ­that, javasolhat, de ne Ă­rja felĂĽl a kritikus blokkolĂłkat.
 
 ### Harmadik elv
 
-A jogi modul mindig előszűrés. A termék jogi kérdéslistát és dokumentációs alapot készít, nem jogi szakvéleményt.
+A jogi modul mindig elĹ‘szĹ±rĂ©s. A termĂ©k jogi kĂ©rdĂ©slistĂˇt Ă©s dokumentĂˇciĂłs alapot kĂ©szĂ­t, nem jogi szakvĂ©lemĂ©nyt.
 
 ### Negyedik elv
 
-A VerdictMesh multi-agent council csak ott fusson, ahol értéket ad: go/no-go, compliance uncertainty, high-risk signal, ügyfélátadási döntés.
+A VerdictMesh multi-agent council csak ott fusson, ahol Ă©rtĂ©ket ad: go/no-go, compliance uncertainty, high-risk signal, ĂĽgyfĂ©lĂˇtadĂˇsi dĂ¶ntĂ©s.
 
-## Értékesítési terv
+## Ă‰rtĂ©kesĂ­tĂ©si terv
 
-### Első célzott megkeresések
+### ElsĹ‘ cĂ©lzott megkeresĂ©sek
 
 - AI freelancerek LinkedInen,
-- magyar és nemzetközi no-code/AI ügynökségek,
-- AI automatizációs tanácsadók,
-- indie SaaS fejlesztők,
-- AI workshop oktatók.
+- magyar Ă©s nemzetkĂ¶zi no-code/AI ĂĽgynĂ¶ksĂ©gek,
+- AI automatizĂˇciĂłs tanĂˇcsadĂłk,
+- indie SaaS fejlesztĹ‘k,
+- AI workshop oktatĂłk.
 
-### Tesztkérdések
+### TesztkĂ©rdĂ©sek
 
-- Adtál már át AI-appot ügyfélnek?
-- Volt-e kérdés a tesztelésről, adatvédelemről, EU AI Actről?
-- Készült-e átadási dokumentáció?
-- Használnád-e, ha 10 perc alatt generálna egy white-label átadási riportot?
-- Fizetnél-e 49/149 EUR-t egy ilyen reportért?
+- AdtĂˇl mĂˇr Ăˇt AI-appot ĂĽgyfĂ©lnek?
+- Volt-e kĂ©rdĂ©s a tesztelĂ©srĹ‘l, adatvĂ©delemrĹ‘l, EU AI ActrĹ‘l?
+- KĂ©szĂĽlt-e ĂˇtadĂˇsi dokumentĂˇciĂł?
+- HasznĂˇlnĂˇd-e, ha 10 perc alatt generĂˇlna egy white-label ĂˇtadĂˇsi riportot?
+- FizetnĂ©l-e 49/149 EUR-t egy ilyen reportĂ©rt?
 
-## Kockázatok
+## KockĂˇzatok
 
-| Kockázat | Mitigáció |
+| KockĂˇzat | MitigĂˇciĂł |
 |---|---|
-| Túl széles scope | MVP csak report + pack generálás |
-| Jogi tanácsadásnak tűnik | következetes „readiness / előszűrés / nem jogi tanács” kommunikáció |
-| AI output pontatlan | determinisztikus szabályok + human review + evidence pack |
-| MCP túl komplex / biztonsági kockázatos | első verzióban readiness és skeleton, nem automatikus production MCP |
-| Versenytársak gyorsak | fókusz: agency white-label handoff report, nem enterprise GRC |
+| TĂşl szĂ©les scope | MVP csak report + pack generĂˇlĂˇs |
+| Jogi tanĂˇcsadĂˇsnak tĹ±nik | kĂ¶vetkezetes â€žreadiness / elĹ‘szĹ±rĂ©s / nem jogi tanĂˇcsâ€ť kommunikĂˇciĂł |
+| AI output pontatlan | determinisztikus szabĂˇlyok + human review + evidence pack |
+| MCP tĂşl komplex / biztonsĂˇgi kockĂˇzatos | elsĹ‘ verziĂłban readiness Ă©s skeleton, nem automatikus production MCP |
+| VersenytĂˇrsak gyorsak | fĂłkusz: agency white-label handoff report, nem enterprise GRC |
 
-## Hivatkozási alapok
+## HivatkozĂˇsi alapok
 
-A stratégia az alábbi, nyilvános és aktuális technológiai/jogi irányokra épít:
+A stratĂ©gia az alĂˇbbi, nyilvĂˇnos Ă©s aktuĂˇlis technolĂłgiai/jogi irĂˇnyokra Ă©pĂ­t:
 
 - EU AI Act: Regulation (EU) 2024/1689, risk-based AI rules; European Commission AI Act overview: https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai
 - European Commission AI Act Service Desk Compliance Checker: https://ai-act-service-desk.ec.europa.eu/en/eu-ai-act-compliance-checker
-- European Commission Article 50 transparency draft guidance / consultation, 2026. május: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
-- AGENTS.md nyílt formátum: https://agents.md/
-- Claude Code CLAUDE.md / memory dokumentáció: https://code.claude.com/docs/en/memory
-- Claude Code Skills dokumentáció: https://code.claude.com/docs/en/skills
-- Model Context Protocol dokumentáció: https://modelcontextprotocol.io/docs/getting-started/intro
+- European Commission Article 50 transparency draft guidance / consultation, 2026. mĂˇjus: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
+- AGENTS.md nyĂ­lt formĂˇtum: https://agents.md/
+- Claude Code CLAUDE.md / memory dokumentĂˇciĂł: https://code.claude.com/docs/en/memory
+- Claude Code Skills dokumentĂˇciĂł: https://code.claude.com/docs/en/skills
+- Model Context Protocol dokumentĂˇciĂł: https://modelcontextprotocol.io/docs/getting-started/intro
 
-Megjegyzés: az EU AI Act értelmezési részek nem minősülnek jogi tanácsadásnak. A termék kommunikációjában is ezt kell következetesen feltüntetni: előszűrés, readiness, dokumentáció-előkészítés és technikai/jogi kérdéslista készül, nem jogi szakvélemény.
+MegjegyzĂ©s: az EU AI Act Ă©rtelmezĂ©si rĂ©szek nem minĹ‘sĂĽlnek jogi tanĂˇcsadĂˇsnak. A termĂ©k kommunikĂˇciĂłjĂˇban is ezt kell kĂ¶vetkezetesen feltĂĽntetni: elĹ‘szĹ±rĂ©s, readiness, dokumentĂˇciĂł-elĹ‘kĂ©szĂ­tĂ©s Ă©s technikai/jogi kĂ©rdĂ©slista kĂ©szĂĽl, nem jogi szakvĂ©lemĂ©ny.
 ---
 
-# 03 - Forrásleltár a csatolt ZIP-ek alapján
+# 03 - ForrĂˇsleltĂˇr a csatolt ZIP-ek alapjĂˇn
 
-## Áttekintés
+## ĂttekintĂ©s
 
-**Névkezelés:** a feltöltött forrásokban még előfordulhat az `AgentReady`, `agentready-hub`, `AI2AI` és `VerdictMesh` név. Ezek fejlesztési eredetként megmaradhatnak, de a végtermék és a dokumentáció már **ShipSeal** néven fut.
+**NĂ©vkezelĂ©s:** a feltĂ¶ltĂ¶tt forrĂˇsokban mĂ©g elĹ‘fordulhat az `AgentReady`, `agentready-hub`, `AI2AI` Ă©s `VerdictMesh` nĂ©v. Ezek fejlesztĂ©si eredetkĂ©nt megmaradhatnak, de a vĂ©gtermĂ©k Ă©s a dokumentĂˇciĂł mĂˇr **ShipSeal** nĂ©ven fut.
 
-A jelenlegi források három különálló, de összeépíthető félkész projektet tartalmaznak. Ezeket nem érdemes önálló termékként továbbvinni, hanem egy egységes ShipSeal termék komponenseiként.
+A jelenlegi forrĂˇsok hĂˇrom kĂĽlĂ¶nĂˇllĂł, de Ă¶sszeĂ©pĂ­thetĹ‘ fĂ©lkĂ©sz projektet tartalmaznak. Ezeket nem Ă©rdemes Ă¶nĂˇllĂł termĂ©kkĂ©nt tovĂˇbbvinni, hanem egy egysĂ©ges ShipSeal termĂ©k komponenseikĂ©nt.
 
 ## 1. agentready-hub-main
 
 ### Jelenlegi szerep
 
-Ez a legközelebb áll a végső ShipSeal termékhez. Egy React/Vite/shadcn alapú lokális webapp, amely repository ZIP-et vagy publikus GitHub repót elemez, ShipSeal Readiness Score-t számol, blokkolókat jelez, és átadási fájlokat generál.
+Ez a legkĂ¶zelebb Ăˇll a vĂ©gsĹ‘ ShipSeal termĂ©khez. Egy React/Vite/shadcn alapĂş lokĂˇlis webapp, amely repository ZIP-et vagy publikus GitHub repĂłt elemez, ShipSeal Readiness Score-t szĂˇmol, blokkolĂłkat jelez, Ă©s ĂˇtadĂˇsi fĂˇjlokat generĂˇl.
 
-### Technológia
+### TechnolĂłgia
 
 - React
 - Vite
@@ -489,14 +495,14 @@ Ez a legközelebb áll a végső ShipSeal termékhez. Egy React/Vite/shadcn alap
 - Tailwind
 - localStorage metadata history
 
-### Már működő képességek a README és kód alapján
+### MĂˇr mĹ±kĂ¶dĹ‘ kĂ©pessĂ©gek a README Ă©s kĂłd alapjĂˇn
 
-- ZIP upload scanning böngészőben.
-- Publikus GitHub repo import próbálkozás böngészőből.
-- Manuális ZIP fallback.
+- ZIP upload scanning bĂ¶ngĂ©szĹ‘ben.
+- Publikus GitHub repo import prĂłbĂˇlkozĂˇs bĂ¶ngĂ©szĹ‘bĹ‘l.
+- ManuĂˇlis ZIP fallback.
 - Determinisztikus readiness score.
 - Critical blocker logika.
-- AI readiness narrative lokális, template-alapú providerrel.
+- AI readiness narrative lokĂˇlis, template-alapĂş providerrel.
 - Agent Pack export.
 - MCP Governance Pack export.
 - Sanitized Repo Context Pack export.
@@ -504,9 +510,9 @@ Ez a legközelebb áll a végső ShipSeal termékhez. Egy React/Vite/shadcn alap
 - Metadata-only recent scan history.
 - No-code-execution safety elv.
 
-### Generált fájlok
+### GenerĂˇlt fĂˇjlok
 
-A kódban és export logikában az alábbi Agent Pack fájlok szerepelnek:
+A kĂłdban Ă©s export logikĂˇban az alĂˇbbi Agent Pack fĂˇjlok szerepelnek:
 
 - `AGENTS.md`
 - `CLAUDE.md`
@@ -529,32 +535,32 @@ A context packban:
 - `REPO_CONTEXT_PACK.md`
 - `repo-context-pack.json`
 
-### Erősségek
+### ErĹ‘ssĂ©gek
 
-- Már van termékszerű frontend.
-- Már termékszerű frontendként használható, de márkanév szerint át kell nevezni ShipSealre.
-- A lokális/privát scanning jó privacy üzenet.
-- Determinisztikus scoring jó alap a bizalomhoz.
-- Exportálható outputok már vannak.
-- MCP governance irány már megjelent.
+- MĂˇr van termĂ©kszerĹ± frontend.
+- MĂˇr termĂ©kszerĹ± frontendkĂ©nt hasznĂˇlhatĂł, de mĂˇrkanĂ©v szerint Ăˇt kell nevezni ShipSealre.
+- A lokĂˇlis/privĂˇt scanning jĂł privacy ĂĽzenet.
+- Determinisztikus scoring jĂł alap a bizalomhoz.
+- ExportĂˇlhatĂł outputok mĂˇr vannak.
+- MCP governance irĂˇny mĂˇr megjelent.
 
-### Hiányosságok
+### HiĂˇnyossĂˇgok
 
 - Nincs backend.
 - Nincs auth.
-- Nincs fizetés.
-- Nincs adatbázis.
+- Nincs fizetĂ©s.
+- Nincs adatbĂˇzis.
 - Nincs private repo GitHub App.
-- Nincs valódi AI provider integráció.
+- Nincs valĂłdi AI provider integrĂˇciĂł.
 - Nincs PDF report export.
 - Nincs EU AI Act readiness modul.
-- Nincs Skills Pack generálás.
-- Nincs VerdictMesh / Review Council integráció.
-- A scoring jelenleg főleg repo metadata és file presence jellegű, nem valódi futtatott teszt.
+- Nincs Skills Pack generĂˇlĂˇs.
+- Nincs VerdictMesh / Review Council integrĂˇciĂł.
+- A scoring jelenleg fĹ‘leg repo metadata Ă©s file presence jellegĹ±, nem valĂłdi futtatott teszt.
 
-### Mit használjunk fel belőle?
+### Mit hasznĂˇljunk fel belĹ‘le?
 
-Ezt vegyük alap frontendnek és első scanner engine-nek. A meglévő pack-generálást bővítsük:
+Ezt vegyĂĽk alap frontendnek Ă©s elsĹ‘ scanner engine-nek. A meglĂ©vĹ‘ pack-generĂˇlĂˇst bĹ‘vĂ­tsĂĽk:
 
 - Skills Pack,
 - AI Act readiness,
@@ -567,25 +573,25 @@ Ezt vegyük alap frontendnek és első scanner engine-nek. A meglévő pack-gene
 
 ### Jelenlegi szerep
 
-Ez egy Python alapú multi-model Expert Council / AI Debate rendszer. Több AI modellt szervez strukturált vitába, majd végső szintézist, meeting reportot, transcriptet, docx/markdown outputokat készít.
+Ez egy Python alapĂş multi-model Expert Council / AI Debate rendszer. TĂ¶bb AI modellt szervez strukturĂˇlt vitĂˇba, majd vĂ©gsĹ‘ szintĂ©zist, meeting reportot, transcriptet, docx/markdown outputokat kĂ©szĂ­t.
 
-### Technológia
+### TechnolĂłgia
 
 - Python
-- opcionális FastAPI / Uvicorn API
+- opcionĂˇlis FastAPI / Uvicorn API
 - provider adapterek: OpenAI, Anthropic, Gemini, OpenAI-compatible
-- modularizált `ai2ai/` package
-- CLI belépési pont: `ai_debate.py`
+- modularizĂˇlt `ai2ai/` package
+- CLI belĂ©pĂ©si pont: `ai_debate.py`
 - output contracts
 - regression test logika
 
-### Már működő / dokumentált képességek
+### MĂˇr mĹ±kĂ¶dĹ‘ / dokumentĂˇlt kĂ©pessĂ©gek
 
-- Forrásanyagok betöltése: ZIP, folder, docx, pdf, markdown, code, json, yaml, képek.
-- Evidence Pack készítés.
-- Független modellvélemények.
+- ForrĂˇsanyagok betĂ¶ltĂ©se: ZIP, folder, docx, pdf, markdown, code, json, yaml, kĂ©pek.
+- Evidence Pack kĂ©szĂ­tĂ©s.
+- FĂĽggetlen modellvĂ©lemĂ©nyek.
 - Issue Matrix.
-- Célzott rebuttal.
+- CĂ©lzott rebuttal.
 - Revision JSON.
 - Final Judge.
 - Contract-aware synthesis.
@@ -593,27 +599,27 @@ Ez egy Python alapú multi-model Expert Council / AI Debate rendszer. Több AI m
 - Meeting report.
 - Transcript.
 - Debate log.
-- Opcionális API réteg.
+- OpcionĂˇlis API rĂ©teg.
 - Regression test pipeline.
 
-### Erősségek
+### ErĹ‘ssĂ©gek
 
-- Ez adhatja a ShipSeal Review Council / VerdictMesh motorját.
-- Már megvan a többfázisú gondolkodási logika.
-- Jó a szerepalapú review-ra: QA, security, compliance, business, skeptical customer.
-- Jó output-szerkezetekhez és dokumentumgeneráláshoz.
-- Már van modularizált backend alap.
+- Ez adhatja a ShipSeal Review Council / VerdictMesh motorjĂˇt.
+- MĂˇr megvan a tĂ¶bbfĂˇzisĂş gondolkodĂˇsi logika.
+- JĂł a szerepalapĂş review-ra: QA, security, compliance, business, skeptical customer.
+- JĂł output-szerkezetekhez Ă©s dokumentumgenerĂˇlĂˇshoz.
+- MĂˇr van modularizĂˇlt backend alap.
 
-### Hiányosságok
+### HiĂˇnyossĂˇgok
 
-- Nagyon nagy CLI file is jelen van (`ai2ai/cli.py` jelentős méretű), további tisztítás kellhet.
-- Provider adapterek részben stub/korai állapotúak lehetnek.
-- Nem ShipSeal-specifikus még.
-- Az API opcionális, nem production backend.
+- Nagyon nagy CLI file is jelen van (`ai2ai/cli.py` jelentĹ‘s mĂ©retĹ±), tovĂˇbbi tisztĂ­tĂˇs kellhet.
+- Provider adapterek rĂ©szben stub/korai ĂˇllapotĂşak lehetnek.
+- Nem ShipSeal-specifikus mĂ©g.
+- Az API opcionĂˇlis, nem production backend.
 - Auth, queue, storage, billing nincs.
-- Nem közvetlenül UI-barát report engine.
+- Nem kĂ¶zvetlenĂĽl UI-barĂˇt report engine.
 
-### Mit használjunk fel belőle?
+### Mit hasznĂˇljunk fel belĹ‘le?
 
 Az AI2AI legyen a ShipSeal egyik backend modulja:
 
@@ -623,32 +629,32 @@ Az AI2AI legyen a ShipSeal egyik backend modulja:
 - `FinalJudge`,
 - `ReportSynthesizer`.
 
-A meglévő debate logikát szűkíteni kell ShipSeal célokra. Nem kell minden scenario az MVP-be.
+A meglĂ©vĹ‘ debate logikĂˇt szĹ±kĂ­teni kell ShipSeal cĂ©lokra. Nem kell minden scenario az MVP-be.
 
 ## 3. verdictmesh-main
 
 ### Jelenlegi szerep
 
-Ez egy Base44-exportált Vite/React frontend, amely a lokális AI2AI backendhez tud kapcsolódni. A célja a modellek közötti debate / council folyamat vizuális megjelenítése.
+Ez egy Base44-exportĂˇlt Vite/React frontend, amely a lokĂˇlis AI2AI backendhez tud kapcsolĂłdni. A cĂ©lja a modellek kĂ¶zĂ¶tti debate / council folyamat vizuĂˇlis megjelenĂ­tĂ©se.
 
-### Technológia
+### TechnolĂłgia
 
 - React
 - Vite
 - JavaScript / JSX
-- Base44 SDK opcionálisan
+- Base44 SDK opcionĂˇlisan
 - Tailwind / shadcn/Radix UI
 - Framer Motion
 - React Markdown
 - jspdf / html2canvas dependency is jelen van
 - API client: `src/api/ai2aiClient.js`
 
-### Már meglévő képességek
+### MĂˇr meglĂ©vĹ‘ kĂ©pessĂ©gek
 
-- Launch képernyő backend vagy demo móddal.
-- AI2AI API integráció.
-- Verdict oldal, amely session metadata, validation status, artifact path és synthesis output megjelenítésére alkalmas.
-- Vizuális council/debate komponensek:
+- Launch kĂ©pernyĹ‘ backend vagy demo mĂłddal.
+- AI2AI API integrĂˇciĂł.
+- Verdict oldal, amely session metadata, validation status, artifact path Ă©s synthesis output megjelenĂ­tĂ©sĂ©re alkalmas.
+- VizuĂˇlis council/debate komponensek:
   - CouncilChatFeed,
   - CouncilCompletionCard,
   - CouncilRightRail,
@@ -659,36 +665,36 @@ Ez egy Base44-exportált Vite/React frontend, amely a lokális AI2AI backendhez 
   - LiveModelCard,
   - LiveTranscript.
 
-### Erősségek
+### ErĹ‘ssĂ©gek
 
-- Látványos UI alap a Review Council funkcióhoz.
-- Már kapcsolódik az AI2AI backendhez.
-- Jó demoérték: megmutatja, hogy több szerep értékeli a projektet.
-- A VerdictMesh név használható belső motornévként.
+- LĂˇtvĂˇnyos UI alap a Review Council funkciĂłhoz.
+- MĂˇr kapcsolĂłdik az AI2AI backendhez.
+- JĂł demoĂ©rtĂ©k: megmutatja, hogy tĂ¶bb szerep Ă©rtĂ©keli a projektet.
+- A VerdictMesh nĂ©v hasznĂˇlhatĂł belsĹ‘ motornĂ©vkĂ©nt.
 
-### Hiányosságok
+### HiĂˇnyossĂˇgok
 
-- Base44-exportált, tisztításra szorulhat.
-- JavaScript, miközben ShipSeal TypeScript; egységesítés kell.
-- Külön frontendként nem célszerű továbbvinni.
-- Auth/demo flow és Base44 maradványok termékbe emelés előtt rendezendők.
-- Nincs közös design system a ShipSeal frontenddel.
+- Base44-exportĂˇlt, tisztĂ­tĂˇsra szorulhat.
+- JavaScript, mikĂ¶zben ShipSeal TypeScript; egysĂ©gesĂ­tĂ©s kell.
+- KĂĽlĂ¶n frontendkĂ©nt nem cĂ©lszerĹ± tovĂˇbbvinni.
+- Auth/demo flow Ă©s Base44 maradvĂˇnyok termĂ©kbe emelĂ©s elĹ‘tt rendezendĹ‘k.
+- Nincs kĂ¶zĂ¶s design system a ShipSeal frontenddel.
 
-### Mit használjunk fel belőle?
+### Mit hasznĂˇljunk fel belĹ‘le?
 
-Nem önálló termékként. Használjuk:
+Nem Ă¶nĂˇllĂł termĂ©kkĂ©nt. HasznĂˇljuk:
 
-- Review Council vizualizációs komponensek inspirációjaként,
-- Verdict oldal alapgondolatként,
-- AI2AI API client mintaként,
-- élő debate / council demo UI részleteként.
+- Review Council vizualizĂˇciĂłs komponensek inspirĂˇciĂłjakĂ©nt,
+- Verdict oldal alapgondolatkĂ©nt,
+- AI2AI API client mintakĂ©nt,
+- Ă©lĹ‘ debate / council demo UI rĂ©szletekĂ©nt.
 
-## Összesített komponens-térkép
+## Ă–sszesĂ­tett komponens-tĂ©rkĂ©p
 
-| Végső ShipSeal modul | Felhasználható forrás |
+| VĂ©gsĹ‘ ShipSeal modul | FelhasznĂˇlhatĂł forrĂˇs |
 |---|---|
 | Repo scanner | agentready-hub |
-| Agent Pack generátor | agentready-hub |
+| Agent Pack generĂˇtor | agentready-hub |
 | MCP Governance Pack | agentready-hub |
 | Repo Context Pack | agentready-hub |
 | Review Council / multi-agent review | ai2ai-main |
@@ -696,21 +702,21 @@ Nem önálló termékként. Használjuk:
 | Final Judge / synthesis | ai2ai-main |
 | Debate / council visual UI | verdictmesh-main |
 | Backend API minta | ai2ai-main + verdictmesh-main |
-| Product landing és upload UI | agentready-hub |
+| Product landing Ă©s upload UI | agentready-hub |
 
-## Javasolt új repo-struktúra
+## Javasolt Ăşj repo-struktĂşra
 
 ```text
 shipseal/
   apps/
     web/                    # ShipSeal frontend, TypeScript, Vite/React
-    api/                    # FastAPI vagy Node backend később
+    api/                    # FastAPI vagy Node backend kĂ©sĹ‘bb
   packages/
-    scanner/                # repo scanner és scoring
+    scanner/                # repo scanner Ă©s scoring
     pack-generator/         # AGENTS, CLAUDE, skills, MCP, reports
-    review-council/         # AI2AI/VerdictMesh logika szűkítve
+    review-council/         # AI2AI/VerdictMesh logika szĹ±kĂ­tve
     ai-act-readiness/       # checklist, questions, transparency drafts
-    report-renderer/        # Markdown/PDF/DOCX export később
+    report-renderer/        # Markdown/PDF/DOCX export kĂ©sĹ‘bb
   docs/
     product/
     architecture/
@@ -721,50 +727,50 @@ shipseal/
     sample-reports/
 ```
 
-## Első migrációs döntés
+## ElsĹ‘ migrĂˇciĂłs dĂ¶ntĂ©s
 
-A leggyorsabb út: ne monorepo-migrációval kezdjünk. Először az `agentready-hub` repót vigyük tovább új branchben, és importáljunk be belőle funkciókat:
+A leggyorsabb Ăşt: ne monorepo-migrĂˇciĂłval kezdjĂĽnk. ElĹ‘szĂ¶r az `agentready-hub` repĂłt vigyĂĽk tovĂˇbb Ăşj branchben, Ă©s importĂˇljunk be belĹ‘le funkciĂłkat:
 
-1. Az agentready-hub frontend marad az alap, ShipSealre átnevezve.
-2. AI2AI-t külön backend service-ként kapcsoljuk.
-3. VerdictMesh komponenseket csak később emeljük át.
-4. A report output-spec legyen előbb kész, mint a nagy architektúra.
+1. Az agentready-hub frontend marad az alap, ShipSealre Ăˇtnevezve.
+2. AI2AI-t kĂĽlĂ¶n backend service-kĂ©nt kapcsoljuk.
+3. VerdictMesh komponenseket csak kĂ©sĹ‘bb emeljĂĽk Ăˇt.
+4. A report output-spec legyen elĹ‘bb kĂ©sz, mint a nagy architektĂşra.
 
-## Statikus vizsgálat korlátja
+## Statikus vizsgĂˇlat korlĂˇtja
 
-A ZIP-eket forrás- és dokumentációszinten néztük át. Buildet, tesztet, dependency auditot és runtime futtatást ebben a dokumentumkészítési lépésben nem végeztünk. A következő fejlesztési lépésben külön technikai smoke test szükséges.
+A ZIP-eket forrĂˇs- Ă©s dokumentĂˇciĂłszinten nĂ©ztĂĽk Ăˇt. Buildet, tesztet, dependency auditot Ă©s runtime futtatĂˇst ebben a dokumentumkĂ©szĂ­tĂ©si lĂ©pĂ©sben nem vĂ©geztĂĽnk. A kĂ¶vetkezĹ‘ fejlesztĂ©si lĂ©pĂ©sben kĂĽlĂ¶n technikai smoke test szĂĽksĂ©ges.
 ---
 
-# 04 - Fejlesztés közbeni szükségletek és roadmap
+# 04 - FejlesztĂ©s kĂ¶zbeni szĂĽksĂ©gletek Ă©s roadmap
 
-## Mire lesz szükségünk a fejlesztés közben?
+## Mire lesz szĂĽksĂ©gĂĽnk a fejlesztĂ©s kĂ¶zben?
 
-A ShipSeal nem egyetlen komponensből áll. A sikerhez termék-, technikai, jogi, UX, sales és validációs döntések kellenek. Az alábbi lista azt rögzíti, mire lesz szükség a következő fejlesztési szakaszban.
+A ShipSeal nem egyetlen komponensbĹ‘l Ăˇll. A sikerhez termĂ©k-, technikai, jogi, UX, sales Ă©s validĂˇciĂłs dĂ¶ntĂ©sek kellenek. Az alĂˇbbi lista azt rĂ¶gzĂ­ti, mire lesz szĂĽksĂ©g a kĂ¶vetkezĹ‘ fejlesztĂ©si szakaszban.
 
-## 1. Termékdöntések
+## 1. TermĂ©kdĂ¶ntĂ©sek
 
-### Eldöntendő kérdések
+### EldĂ¶ntendĹ‘ kĂ©rdĂ©sek
 
-- Mi az első fizetős output pontos neve?
-- Starter report vagy Pro agency report legyen az első fizetős csomag?
-- White-label legyen-e már az MVP-ben?
-- EU AI Act readiness mennyire legyen központi üzenet?
-- Az első ICP AI freelancer, AI ügynökség vagy indie SaaS fejlesztő legyen?
-- Magyar vagy angol landing page induljon először?
+- Mi az elsĹ‘ fizetĹ‘s output pontos neve?
+- Starter report vagy Pro agency report legyen az elsĹ‘ fizetĹ‘s csomag?
+- White-label legyen-e mĂˇr az MVP-ben?
+- EU AI Act readiness mennyire legyen kĂ¶zponti ĂĽzenet?
+- Az elsĹ‘ ICP AI freelancer, AI ĂĽgynĂ¶ksĂ©g vagy indie SaaS fejlesztĹ‘ legyen?
+- Magyar vagy angol landing page induljon elĹ‘szĂ¶r?
 
 ### Javaslat
 
-Első fizetős output neve:
+ElsĹ‘ fizetĹ‘s output neve:
 
 **ShipSeal Delivery Report**
 
-Első ICP:
+ElsĹ‘ ICP:
 
-**AI freelancerek és kis AI ügynökségek, akik ügyfélnek adnak át AI-appot.**
+**AI freelancerek Ă©s kis AI ĂĽgynĂ¶ksĂ©gek, akik ĂĽgyfĂ©lnek adnak Ăˇt AI-appot.**
 
-## 2. Output-specifikáció
+## 2. Output-specifikĂˇciĂł
 
-Az MVP előtt véglegesíteni kell, pontosan milyen fájlok készülnek.
+Az MVP elĹ‘tt vĂ©glegesĂ­teni kell, pontosan milyen fĂˇjlok kĂ©szĂĽlnek.
 
 ### Minimum output
 
@@ -784,80 +790,80 @@ Az MVP előtt véglegesíteni kell, pontosan milyen fájlok készülnek.
 - `EVAL_TEST_CASES.md`
 - `RED_TEAM_PROMPTS.md`
 - `CLIENT_HANDOFF_REPORT.md`
-- később PDF export.
+- kĂ©sĹ‘bb PDF export.
 
-## 3. Technikai szükségletek
+## 3. Technikai szĂĽksĂ©gletek
 
 ### Frontend
 
-- ShipSeal UI újrapozicionálása.
-- Intake form hozzáadása AI-app kontextushoz.
+- ShipSeal UI ĂşjrapozicionĂˇlĂˇsa.
+- Intake form hozzĂˇadĂˇsa AI-app kontextushoz.
 - Report preview UI.
 - Skills Pack tab.
 - EU AI Act readiness tab.
 - VerdictMesh / Review Council tab.
-- Export flow javítása.
-- Fizetés vagy várólista CTA.
+- Export flow javĂ­tĂˇsa.
+- FizetĂ©s vagy vĂˇrĂłlista CTA.
 
 ### Backend
 
-MVP-ben még lehet backend nélküli/félautomata, de 60 napon belül kelleni fog:
+MVP-ben mĂ©g lehet backend nĂ©lkĂĽli/fĂ©lautomata, de 60 napon belĂĽl kelleni fog:
 
-- provider API hívások server-side,
+- provider API hĂ­vĂˇsok server-side,
 - secret management,
 - rate limiting,
-- report job státusz,
+- report job stĂˇtusz,
 - artifact retention,
 - alap storage,
-- user/session kezelés.
+- user/session kezelĂ©s.
 
 ### Scanner
 
-- ZIP limit és file count limit megtartása.
-- Public GitHub import fallback javítása.
-- Repo context pack bővítése promptokkal és AI-app leírással.
-- Secret/sensitive file red flag bővítése.
-- Generated/vendor folder kezelés megtartása.
+- ZIP limit Ă©s file count limit megtartĂˇsa.
+- Public GitHub import fallback javĂ­tĂˇsa.
+- Repo context pack bĹ‘vĂ­tĂ©se promptokkal Ă©s AI-app leĂ­rĂˇssal.
+- Secret/sensitive file red flag bĹ‘vĂ­tĂ©se.
+- Generated/vendor folder kezelĂ©s megtartĂˇsa.
 
 ### Pack generator
 
-- Skills Pack generálás.
-- AI Act checklist generálás.
-- Red-team/eval pack generálás.
-- Client handoff report generálás.
-- White-label mezők.
+- Skills Pack generĂˇlĂˇs.
+- AI Act checklist generĂˇlĂˇs.
+- Red-team/eval pack generĂˇlĂˇs.
+- Client handoff report generĂˇlĂˇs.
+- White-label mezĹ‘k.
 
 ### Review Council
 
-- AI2AI service szűkítése ShipSeal szerepekre:
+- AI2AI service szĹ±kĂ­tĂ©se ShipSeal szerepekre:
   - QA Reviewer,
   - Security Reviewer,
   - EU AI Act Readiness Reviewer,
   - Product/Delivery Reviewer,
   - Skeptical Customer,
   - Final Judge.
-- Nem kell az összes régi scenario.
-- Költségbecslés és token limit kell.
+- Nem kell az Ă¶sszes rĂ©gi scenario.
+- KĂ¶ltsĂ©gbecslĂ©s Ă©s token limit kell.
 
-## 4. Infrastrukturális szükségletek
+## 4. InfrastrukturĂˇlis szĂĽksĂ©gletek
 
 ### MVP
 
 - Vercel/Netlify frontend deploy.
-- Backend nélkül vagy minimális backenddel indulás.
-- Minta riportok statikus exportként.
-- Analytics: Plausible, PostHog vagy egyszerű event log.
+- Backend nĂ©lkĂĽl vagy minimĂˇlis backenddel indulĂˇs.
+- Minta riportok statikus exportkĂ©nt.
+- Analytics: Plausible, PostHog vagy egyszerĹ± event log.
 - Form: Tally/Typeform/own form.
 
-### Fizetős validációhoz
+### FizetĹ‘s validĂˇciĂłhoz
 
 - Stripe vagy Lemon Squeezy.
 - Email capture.
 - Report delivery link.
 - Terms / privacy oldal.
-- „Not legal advice” disclaimer.
+- â€žNot legal adviceâ€ť disclaimer.
 
-### Később
+### KĂ©sĹ‘bb
 
 - Object storage ideiglenes uploadokhoz.
 - Queue / worker.
@@ -865,23 +871,23 @@ MVP-ben még lehet backend nélküli/félautomata, de 60 napon belül kelleni fo
 - GitHub App.
 - Auth + organizations.
 - Report history.
-- Self-hosted lehetőség.
+- Self-hosted lehetĹ‘sĂ©g.
 
-## 5. Adatvédelmi és biztonsági szükségletek
+## 5. AdatvĂ©delmi Ă©s biztonsĂˇgi szĂĽksĂ©gletek
 
-Mivel repo ZIP-eket, promptokat, üzleti dokumentációt és AI-app leírásokat kezelünk, különösen fontos:
+Mivel repo ZIP-eket, promptokat, ĂĽzleti dokumentĂˇciĂłt Ă©s AI-app leĂ­rĂˇsokat kezelĂĽnk, kĂĽlĂ¶nĂ¶sen fontos:
 
-- explicit user consent upload előtt,
+- explicit user consent upload elĹ‘tt,
 - retention policy,
 - local-first vagy short-lived artifact policy,
 - raw source ne menjen AI providerhez csak sanitized context pack,
 - secrets redaction,
 - no-code-execution guarantee,
 - audit log,
-- törlési lehetőség,
+- tĂ¶rlĂ©si lehetĹ‘sĂ©g,
 - privacy policy.
 
-## 6. Tesztelési szükségletek
+## 6. TesztelĂ©si szĂĽksĂ©gletek
 
 ### Automata
 
@@ -892,7 +898,7 @@ Mivel repo ZIP-eket, promptokat, üzleti dokumentációt és AI-app leírásokat
 - PDF/Markdown export tesztek,
 - API smoke tesztek.
 
-### Manuális
+### ManuĂˇlis
 
 - kis Next.js sample repo,
 - Python FastAPI sample,
@@ -909,222 +915,222 @@ Mivel repo ZIP-eket, promptokat, üzleti dokumentációt és AI-app leírásokat
 - Python backend smoke test
 - AI2AI regression subset
 
-## 7. Sales/validációs szükségletek
+## 7. Sales/validĂˇciĂłs szĂĽksĂ©gletek
 
 - 1 oldalas landing page.
 - 2 minta riport.
-- 1 demo videó.
-- 30 célzott megkeresési lista.
-- 5 interjú kérdéssor.
-- Fizetési ajánlat: 49 EUR / 149 EUR / founder-reviewed.
+- 1 demo videĂł.
+- 30 cĂ©lzott megkeresĂ©si lista.
+- 5 interjĂş kĂ©rdĂ©ssor.
+- FizetĂ©si ajĂˇnlat: 49 EUR / 149 EUR / founder-reviewed.
 
-## 8. Fejlesztési ütemezés
+## 8. FejlesztĂ©si ĂĽtemezĂ©s
 
-### Sprint 0 - projektindítás
+### Sprint 0 - projektindĂ­tĂˇs
 
-- Új repo / új projekt setup.
-- Források feltöltése.
-- Dokumentumok és scope rögzítése.
-- Döntés: agentready-hub legyen az alap.
+- Ăšj repo / Ăşj projekt setup.
+- ForrĂˇsok feltĂ¶ltĂ©se.
+- Dokumentumok Ă©s scope rĂ¶gzĂ­tĂ©se.
+- DĂ¶ntĂ©s: agentready-hub legyen az alap.
 
-### Sprint 1 - output-spec és UI reposition
+### Sprint 1 - output-spec Ă©s UI reposition
 
-- Új landing szöveg.
-- Új report struktúra.
+- Ăšj landing szĂ¶veg.
+- Ăšj report struktĂşra.
 - Intake form.
 - Report preview skeleton.
 
 ### Sprint 2 - Delivery Pack MVP
 
-- AGENTS/CLAUDE meglévő generátor finomítása.
-- Skills Pack generátor.
-- MCP pack megtartása/bővítése.
-- Eval/red-team pack generálás.
+- AGENTS/CLAUDE meglĂ©vĹ‘ generĂˇtor finomĂ­tĂˇsa.
+- Skills Pack generĂˇtor.
+- MCP pack megtartĂˇsa/bĹ‘vĂ­tĂ©se.
+- Eval/red-team pack generĂˇlĂˇs.
 
 ### Sprint 3 - AI Act readiness MVP
 
-- Role/risk intake kérdések.
+- Role/risk intake kĂ©rdĂ©sek.
 - Transparency checklist.
 - Disclaimer.
-- Ügyvéd review.
+- ĂśgyvĂ©d review.
 
 ### Sprint 4 - Review Council MVP
 
 - AI2AI backend adapter.
 - 5 szerep + final judge.
-- Council summary beemelése reportba.
+- Council summary beemelĂ©se reportba.
 
-### Sprint 5 - fizetős demo
+### Sprint 5 - fizetĹ‘s demo
 
 - PDF/Markdown export.
-- White-label mezők.
+- White-label mezĹ‘k.
 - Landing CTA.
-- Első fizetős riportok.
+- ElsĹ‘ fizetĹ‘s riportok.
 
 ## 9. Kill criteria
 
-Le kell állni vagy pivotálni, ha 60 napon belül:
+Le kell Ăˇllni vagy pivotĂˇlni, ha 60 napon belĂĽl:
 
-- 30 megkeresésből nincs legalább 3 erős érdeklődő,
-- senki nem fizetne 49 EUR-t sem egy reportért,
-- a célcsoport szerint az AGENTS/CLAUDE output önmagában elég és nem kell AI Act / report,
-- a jogi kommunikáció túl kockázatosnak bizonyul,
-- az output minősége nem jobb, mint egy sima ChatGPT prompt.
+- 30 megkeresĂ©sbĹ‘l nincs legalĂˇbb 3 erĹ‘s Ă©rdeklĹ‘dĹ‘,
+- senki nem fizetne 49 EUR-t sem egy reportĂ©rt,
+- a cĂ©lcsoport szerint az AGENTS/CLAUDE output Ă¶nmagĂˇban elĂ©g Ă©s nem kell AI Act / report,
+- a jogi kommunikĂˇciĂł tĂşl kockĂˇzatosnak bizonyul,
+- az output minĹ‘sĂ©ge nem jobb, mint egy sima ChatGPT prompt.
 
-## 10. Legfontosabb következő fejlesztői feladatok
+## 10. Legfontosabb kĂ¶vetkezĹ‘ fejlesztĹ‘i feladatok
 
-1. Új `CLIENT_HANDOFF_REPORT.md` sablon megírása.
-2. `AI_ACT_READINESS_CHECKLIST.md` output definiálása.
-3. `SKILL.md` generátor hozzáadása.
-4. ShipSeal frontend új landing copy.
-5. AI2AI Review Council szerepek beszűkítése.
-6. Minta AI-app alapján minta riport készítése.
+1. Ăšj `CLIENT_HANDOFF_REPORT.md` sablon megĂ­rĂˇsa.
+2. `AI_ACT_READINESS_CHECKLIST.md` output definiĂˇlĂˇsa.
+3. `SKILL.md` generĂˇtor hozzĂˇadĂˇsa.
+4. ShipSeal frontend Ăşj landing copy.
+5. AI2AI Review Council szerepek beszĹ±kĂ­tĂ©se.
+6. Minta AI-app alapjĂˇn minta riport kĂ©szĂ­tĂ©se.
 ---
 
-# 05 - EU AI Act és jogi workstream
+# 05 - EU AI Act Ă©s jogi workstream
 
-## Cél
+## CĂ©l
 
-A ShipSeal EU AI Act modulja ne legyen jogi tanácsadó eszköz. A cél egy olyan előszűrő és dokumentáció-előkészítő funkció, amely segít AI fejlesztőknek és ügynökségeknek rendezni a kérdéseket, amelyeket egy jogász vagy compliance szakértő később ellenőrizhet.
+A ShipSeal EU AI Act modulja ne legyen jogi tanĂˇcsadĂł eszkĂ¶z. A cĂ©l egy olyan elĹ‘szĹ±rĹ‘ Ă©s dokumentĂˇciĂł-elĹ‘kĂ©szĂ­tĹ‘ funkciĂł, amely segĂ­t AI fejlesztĹ‘knek Ă©s ĂĽgynĂ¶ksĂ©geknek rendezni a kĂ©rdĂ©seket, amelyeket egy jogĂˇsz vagy compliance szakĂ©rtĹ‘ kĂ©sĹ‘bb ellenĹ‘rizhet.
 
-A feleség jogi szakértelme itt komoly előny lehet, de a termékben és marketingben óvatosan kell fogalmazni.
+A felesĂ©g jogi szakĂ©rtelme itt komoly elĹ‘ny lehet, de a termĂ©kben Ă©s marketingben Ăłvatosan kell fogalmazni.
 
-## Ajánlott jogi pozicionálás
+## AjĂˇnlott jogi pozicionĂˇlĂˇs
 
-### Kerülendő állítások
+### KerĂĽlendĹ‘ ĂˇllĂ­tĂˇsok
 
-- „AI Act compliant minősítést adunk.”
-- „Jogi megfelelőséget igazolunk.”
-- „Megmondjuk, hogy high-risk-e a rendszered jogilag.”
-- „Kiváltjuk a jogi tanácsadást.”
+- â€žAI Act compliant minĹ‘sĂ­tĂ©st adunk.â€ť
+- â€žJogi megfelelĹ‘sĂ©get igazolunk.â€ť
+- â€žMegmondjuk, hogy high-risk-e a rendszered jogilag.â€ť
+- â€žKivĂˇltjuk a jogi tanĂˇcsadĂˇst.â€ť
 
-### Használható állítások
+### HasznĂˇlhatĂł ĂˇllĂ­tĂˇsok
 
-- „AI Act readiness előszűrést készítünk.”
-- „Összegyűjtjük a jogi review-hoz szükséges technikai és működési információkat.”
-- „Transparency / disclosure javaslatokat készítünk.”
-- „Kérdéslistát adunk jogi ellenőrzéshez.”
-- „Nem jogi tanácsadás, hanem fejlesztői és termékoldali felkészültségi riport.”
+- â€žAI Act readiness elĹ‘szĹ±rĂ©st kĂ©szĂ­tĂĽnk.â€ť
+- â€žĂ–sszegyĹ±jtjĂĽk a jogi review-hoz szĂĽksĂ©ges technikai Ă©s mĹ±kĂ¶dĂ©si informĂˇciĂłkat.â€ť
+- â€žTransparency / disclosure javaslatokat kĂ©szĂ­tĂĽnk.â€ť
+- â€žKĂ©rdĂ©slistĂˇt adunk jogi ellenĹ‘rzĂ©shez.â€ť
+- â€žNem jogi tanĂˇcsadĂˇs, hanem fejlesztĹ‘i Ă©s termĂ©koldali felkĂ©szĂĽltsĂ©gi riport.â€ť
 
-## Mit kell a jogi workstreamben tisztázni?
+## Mit kell a jogi workstreamben tisztĂˇzni?
 
-### 1. Szerepkörök
+### 1. SzerepkĂ¶rĂ¶k
 
-- Provider, deployer, importer, distributor fogalmak gyakorlati különbsége.
-- Egy AI freelancer vagy ügynökség mikor provider?
-- Az ügyfél mikor deployer?
-- White-label fejlesztésnél ki milyen szerepet viselhet?
-- Magyar KKV-k esetén milyen tipikus szerződéses helyzetek vannak?
+- Provider, deployer, importer, distributor fogalmak gyakorlati kĂĽlĂ¶nbsĂ©ge.
+- Egy AI freelancer vagy ĂĽgynĂ¶ksĂ©g mikor provider?
+- Az ĂĽgyfĂ©l mikor deployer?
+- White-label fejlesztĂ©snĂ©l ki milyen szerepet viselhet?
+- Magyar KKV-k esetĂ©n milyen tipikus szerzĹ‘dĂ©ses helyzetek vannak?
 
-### 2. Kockázati kategóriák
+### 2. KockĂˇzati kategĂłriĂˇk
 
-- Tiltott AI gyakorlatok rövid, fejlesztőbarát magyarázata.
-- High-risk előszűrés Annex III témák alapján.
-- Mely use case-eket kell MVP-ben automatikusan „legal review required” jelzéssel ellátni?
-- Mikor lehet „minimal/limited risk” irányban kommunikálni?
+- Tiltott AI gyakorlatok rĂ¶vid, fejlesztĹ‘barĂˇt magyarĂˇzata.
+- High-risk elĹ‘szĹ±rĂ©s Annex III tĂ©mĂˇk alapjĂˇn.
+- Mely use case-eket kell MVP-ben automatikusan â€žlegal review requiredâ€ť jelzĂ©ssel ellĂˇtni?
+- Mikor lehet â€žminimal/limited riskâ€ť irĂˇnyban kommunikĂˇlni?
 
 ### 3. Transparency / Article 50
 
-A 2026. májusi European Commission draft guidance alapján a transparency kötelezettségek különösen fontosak lehetnek. Tisztázandó:
+A 2026. mĂˇjusi European Commission draft guidance alapjĂˇn a transparency kĂ¶telezettsĂ©gek kĂĽlĂ¶nĂ¶sen fontosak lehetnek. TisztĂˇzandĂł:
 
-- Mikor kell jelezni, hogy a felhasználó AI rendszerrel beszél?
-- Milyen chatbot disclosure szöveg legyen ajánlott?
-- Mikor kell AI-generált tartalmat jelölni?
-- Mikor kell deepfake vagy manipulált tartalom disclosure?
-- Milyen „first interaction” / „first exposure” szövegek legyenek?
-- Magyar nyelvű mintaszövegek hogyan hangozzanak?
+- Mikor kell jelezni, hogy a felhasznĂˇlĂł AI rendszerrel beszĂ©l?
+- Milyen chatbot disclosure szĂ¶veg legyen ajĂˇnlott?
+- Mikor kell AI-generĂˇlt tartalmat jelĂ¶lni?
+- Mikor kell deepfake vagy manipulĂˇlt tartalom disclosure?
+- Milyen â€žfirst interactionâ€ť / â€žfirst exposureâ€ť szĂ¶vegek legyenek?
+- Magyar nyelvĹ± mintaszĂ¶vegek hogyan hangozzanak?
 
-### 4. Emberi felügyelet
+### 4. Emberi felĂĽgyelet
 
-- Mit jelenthet low-risk / limited-risk appoknál az emberi ellenőrzés?
-- Milyen döntéseket nem hozhat az AI önállóan?
-- Milyen területeken kell automatikus „human review required” jelzés?
-- Hogyan fogalmazzuk meg ezt ügyfélátadási riportban?
+- Mit jelenthet low-risk / limited-risk appoknĂˇl az emberi ellenĹ‘rzĂ©s?
+- Milyen dĂ¶ntĂ©seket nem hozhat az AI Ă¶nĂˇllĂłan?
+- Milyen terĂĽleteken kell automatikus â€žhuman review requiredâ€ť jelzĂ©s?
+- Hogyan fogalmazzuk meg ezt ĂĽgyfĂ©lĂˇtadĂˇsi riportban?
 
-### 5. Adatvédelem / GDPR kapcsolódás
+### 5. AdatvĂ©delem / GDPR kapcsolĂłdĂˇs
 
-Bár ez nem csak AI Act kérdés, a terméknek kérdeznie kell:
+BĂˇr ez nem csak AI Act kĂ©rdĂ©s, a termĂ©knek kĂ©rdeznie kell:
 
-- kezel-e személyes adatot,
-- kezel-e különleges adatot,
-- kerül-e adat külső AI providerhez,
-- van-e adatfeldolgozói viszony,
-- van-e törlési és retention policy,
-- van-e naplózás,
-- van-e adatminimalizálás.
+- kezel-e szemĂ©lyes adatot,
+- kezel-e kĂĽlĂ¶nleges adatot,
+- kerĂĽl-e adat kĂĽlsĹ‘ AI providerhez,
+- van-e adatfeldolgozĂłi viszony,
+- van-e tĂ¶rlĂ©si Ă©s retention policy,
+- van-e naplĂłzĂˇs,
+- van-e adatminimalizĂˇlĂˇs.
 
-### 6. Szerződéses és felelősségi keretek
+### 6. SzerzĹ‘dĂ©ses Ă©s felelĹ‘ssĂ©gi keretek
 
-- Mit vállalhat egy AI ügynökség az ügyfél felé?
-- Mit nem szabad ígérnie?
-- Milyen átadási disclaimer szükséges?
-- Hogyan jelöljük, hogy a riport pillanatfelvétel?
-- Hogyan kezeljük, hogy a jog változhat?
+- Mit vĂˇllalhat egy AI ĂĽgynĂ¶ksĂ©g az ĂĽgyfĂ©l felĂ©?
+- Mit nem szabad Ă­gĂ©rnie?
+- Milyen ĂˇtadĂˇsi disclaimer szĂĽksĂ©ges?
+- Hogyan jelĂ¶ljĂĽk, hogy a riport pillanatfelvĂ©tel?
+- Hogyan kezeljĂĽk, hogy a jog vĂˇltozhat?
 
-## Feleség / jogász által segíthető konkrét feladatok
+## FelesĂ©g / jogĂˇsz Ăˇltal segĂ­thetĹ‘ konkrĂ©t feladatok
 
-### A. Terméknyelvezet ellenőrzése
+### A. TermĂ©knyelvezet ellenĹ‘rzĂ©se
 
-Ellenőrizze:
+EllenĹ‘rizze:
 
-- landing page állításait,
-- pricing oldal állításait,
+- landing page ĂˇllĂ­tĂˇsait,
+- pricing oldal ĂˇllĂ­tĂˇsait,
 - report disclaimereket,
-- „not legal advice” megfogalmazást,
-- magyar és angol kockázati figyelmeztetéseket.
+- â€žnot legal adviceâ€ť megfogalmazĂˇst,
+- magyar Ă©s angol kockĂˇzati figyelmeztetĂ©seket.
 
-### B. AI Act kérdőív review
+### B. AI Act kĂ©rdĹ‘Ă­v review
 
-Segítsen kialakítani:
+SegĂ­tsen kialakĂ­tani:
 
-- provider/deployer kérdéssort,
-- high-risk előszűrő kérdéssort,
-- Article 50 transparency kérdéseket,
-- human oversight kérdéseket,
+- provider/deployer kĂ©rdĂ©ssort,
+- high-risk elĹ‘szĹ±rĹ‘ kĂ©rdĂ©ssort,
+- Article 50 transparency kĂ©rdĂ©seket,
+- human oversight kĂ©rdĂ©seket,
 - legal review required trigger pontokat.
 
-### C. Mintaszövegek
+### C. MintaszĂ¶vegek
 
-Készíthet / ellenőrizhet:
+KĂ©szĂ­thet / ellenĹ‘rizhet:
 
 - chatbot disclosure magyarul,
 - chatbot disclosure angolul,
-- AI-generated content jelölési szöveg,
-- ügyfélátadási disclaimer,
+- AI-generated content jelĂ¶lĂ©si szĂ¶veg,
+- ĂĽgyfĂ©lĂˇtadĂˇsi disclaimer,
 - report footer disclaimer,
-- Terms / privacy alap-szöveg váz.
+- Terms / privacy alap-szĂ¶veg vĂˇz.
 
 ### D. Red flag lista
 
-Segíthet meghatározni, mikor jelezzen a rendszer:
+SegĂ­thet meghatĂˇrozni, mikor jelezzen a rendszer:
 
-- „legal review strongly recommended”,
-- „do not ship before legal review”,
-- „high-risk possibility”,
-- „transparency notice missing”,
-- „personal data handling unclear”.
+- â€žlegal review strongly recommendedâ€ť,
+- â€ždo not ship before legal reviewâ€ť,
+- â€žhigh-risk possibilityâ€ť,
+- â€žtransparency notice missingâ€ť,
+- â€žpersonal data handling unclearâ€ť.
 
-### E. Magyar piaci sajátosságok
+### E. Magyar piaci sajĂˇtossĂˇgok
 
-Értelmezheti:
+Ă‰rtelmezheti:
 
-- magyar KKV-k számára milyen kommunikáció érthető,
-- hogyan kerülhető el a jogi tanácsadás látszata,
-- milyen felelősségi kizárások szükségesek,
-- milyen szerződéses modell javasolt founder-reviewed auditoknál.
+- magyar KKV-k szĂˇmĂˇra milyen kommunikĂˇciĂł Ă©rthetĹ‘,
+- hogyan kerĂĽlhetĹ‘ el a jogi tanĂˇcsadĂˇs lĂˇtszata,
+- milyen felelĹ‘ssĂ©gi kizĂˇrĂˇsok szĂĽksĂ©gesek,
+- milyen szerzĹ‘dĂ©ses modell javasolt founder-reviewed auditoknĂˇl.
 
-## Jogi inputból készülő ShipSeal outputok
+## Jogi inputbĂłl kĂ©szĂĽlĹ‘ ShipSeal outputok
 
 ### `AI_ACT_READINESS_CHECKLIST.md`
 
 Tartalom:
 
-- alkalmazás célja,
-- szerepkörök,
-- felhasználói kör,
+- alkalmazĂˇs cĂ©lja,
+- szerepkĂ¶rĂ¶k,
+- felhasznĂˇlĂłi kĂ¶r,
 - kezelt adatok,
-- kockázati előszűrés,
-- transparency kérdések,
+- kockĂˇzati elĹ‘szĹ±rĂ©s,
+- transparency kĂ©rdĂ©sek,
 - human oversight,
 - legal review triggers.
 
@@ -1132,95 +1138,95 @@ Tartalom:
 
 Tartalom:
 
-- rövid disclosure,
-- bővebb disclosure,
-- chatbot kezdőüzenet,
-- footer / help page szöveg,
-- AI-generated content jelölési sablon.
+- rĂ¶vid disclosure,
+- bĹ‘vebb disclosure,
+- chatbot kezdĹ‘ĂĽzenet,
+- footer / help page szĂ¶veg,
+- AI-generated content jelĂ¶lĂ©si sablon.
 
 ### `LEGAL_REVIEW_QUESTIONS.md`
 
 Tartalom:
 
-- jogásznak átadandó kérdések,
-- tisztázandó szerepkörök,
-- ügyféloldali döntések,
-- szerződéses felelősség,
-- adatvédelmi hiányok.
+- jogĂˇsznak ĂˇtadandĂł kĂ©rdĂ©sek,
+- tisztĂˇzandĂł szerepkĂ¶rĂ¶k,
+- ĂĽgyfĂ©loldali dĂ¶ntĂ©sek,
+- szerzĹ‘dĂ©ses felelĹ‘ssĂ©g,
+- adatvĂ©delmi hiĂˇnyok.
 
 ### `CLIENT_HANDOFF_LEGAL_NOTES.md`
 
 Tartalom:
 
-- mit vizsgáltunk,
-- mit nem vizsgáltunk,
+- mit vizsgĂˇltunk,
+- mit nem vizsgĂˇltunk,
 - mihez kell jogi review,
-- milyen ismert korlátok vannak.
+- milyen ismert korlĂˇtok vannak.
 
 ## Javasolt disclaimer sablon
 
-> Ez a riport technikai, termékoldali és előzetes AI Act readiness elemzés. Nem minősül jogi tanácsadásnak, jogi szakvéleménynek vagy hatósági megfelelőségi igazolásnak. A riport célja, hogy összegyűjtse az AI-rendszerrel kapcsolatos főbb kockázati, átláthatósági, emberi felügyeleti és dokumentációs kérdéseket, amelyeket szükség esetén jogi szakértővel kell ellenőriztetni.
+> Ez a riport technikai, termĂ©koldali Ă©s elĹ‘zetes AI Act readiness elemzĂ©s. Nem minĹ‘sĂĽl jogi tanĂˇcsadĂˇsnak, jogi szakvĂ©lemĂ©nynek vagy hatĂłsĂˇgi megfelelĹ‘sĂ©gi igazolĂˇsnak. A riport cĂ©lja, hogy Ă¶sszegyĹ±jtse az AI-rendszerrel kapcsolatos fĹ‘bb kockĂˇzati, ĂˇtlĂˇthatĂłsĂˇgi, emberi felĂĽgyeleti Ă©s dokumentĂˇciĂłs kĂ©rdĂ©seket, amelyeket szĂĽksĂ©g esetĂ©n jogi szakĂ©rtĹ‘vel kell ellenĹ‘riztetni.
 
-Angol változat:
+Angol vĂˇltozat:
 
 > This report is a technical, product and preliminary AI Act readiness assessment. It does not constitute legal advice, a legal opinion or a formal compliance certification. Its purpose is to organize the main risk, transparency, human oversight and documentation questions related to the AI system so they can be reviewed by a qualified legal professional where necessary.
 
-## Első jogi sprint feladatai
+## ElsĹ‘ jogi sprint feladatai
 
-1. AI Act role/risk kérdőív első változatának ellenőrzése.
-2. Transparency notice sablonok megírása magyarul és angolul.
-3. „Not legal advice” és report disclaimer jóváhagyása.
-4. High-risk red flag trigger lista készítése.
-5. Founder-reviewed audit szerződéses keretének előzetes vázlata.
+1. AI Act role/risk kĂ©rdĹ‘Ă­v elsĹ‘ vĂˇltozatĂˇnak ellenĹ‘rzĂ©se.
+2. Transparency notice sablonok megĂ­rĂˇsa magyarul Ă©s angolul.
+3. â€žNot legal adviceâ€ť Ă©s report disclaimer jĂłvĂˇhagyĂˇsa.
+4. High-risk red flag trigger lista kĂ©szĂ­tĂ©se.
+5. Founder-reviewed audit szerzĹ‘dĂ©ses keretĂ©nek elĹ‘zetes vĂˇzlata.
 
-## Hivatkozási alapok
+## HivatkozĂˇsi alapok
 
-A stratégia az alábbi, nyilvános és aktuális technológiai/jogi irányokra épít:
+A stratĂ©gia az alĂˇbbi, nyilvĂˇnos Ă©s aktuĂˇlis technolĂłgiai/jogi irĂˇnyokra Ă©pĂ­t:
 
 - EU AI Act: Regulation (EU) 2024/1689, risk-based AI rules; European Commission AI Act overview: https://digital-strategy.ec.europa.eu/en/policies/regulatory-framework-ai
 - European Commission AI Act Service Desk Compliance Checker: https://ai-act-service-desk.ec.europa.eu/en/eu-ai-act-compliance-checker
-- European Commission Article 50 transparency draft guidance / consultation, 2026. május: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
-- AGENTS.md nyílt formátum: https://agents.md/
-- Claude Code CLAUDE.md / memory dokumentáció: https://code.claude.com/docs/en/memory
-- Claude Code Skills dokumentáció: https://code.claude.com/docs/en/skills
-- Model Context Protocol dokumentáció: https://modelcontextprotocol.io/docs/getting-started/intro
+- European Commission Article 50 transparency draft guidance / consultation, 2026. mĂˇjus: https://digital-strategy.ec.europa.eu/en/consultations/consultation-draft-guidelines-transparency-obligations-under-ai-act
+- AGENTS.md nyĂ­lt formĂˇtum: https://agents.md/
+- Claude Code CLAUDE.md / memory dokumentĂˇciĂł: https://code.claude.com/docs/en/memory
+- Claude Code Skills dokumentĂˇciĂł: https://code.claude.com/docs/en/skills
+- Model Context Protocol dokumentĂˇciĂł: https://modelcontextprotocol.io/docs/getting-started/intro
 
-Megjegyzés: az EU AI Act értelmezési részek nem minősülnek jogi tanácsadásnak. A termék kommunikációjában is ezt kell következetesen feltüntetni: előszűrés, readiness, dokumentáció-előkészítés és technikai/jogi kérdéslista készül, nem jogi szakvélemény.
+MegjegyzĂ©s: az EU AI Act Ă©rtelmezĂ©si rĂ©szek nem minĹ‘sĂĽlnek jogi tanĂˇcsadĂˇsnak. A termĂ©k kommunikĂˇciĂłjĂˇban is ezt kell kĂ¶vetkezetesen feltĂĽntetni: elĹ‘szĹ±rĂ©s, readiness, dokumentĂˇciĂł-elĹ‘kĂ©szĂ­tĂ©s Ă©s technikai/jogi kĂ©rdĂ©slista kĂ©szĂĽl, nem jogi szakvĂ©lemĂ©ny.
 ---
 
-# 06 - ShipSeal MVP output specifikáció
+# 06 - ShipSeal MVP output specifikĂˇciĂł
 
-## MVP cél
+## MVP cĂ©l
 
-A felhasználó feltölt egy repo ZIP-et vagy megad egy publikus GitHub URL-t, majd kitölt egy rövid AI-app kontextus kérdőívet. A ShipSeal ebből elkészít egy letölthető Delivery Pack csomagot.
+A felhasznĂˇlĂł feltĂ¶lt egy repo ZIP-et vagy megad egy publikus GitHub URL-t, majd kitĂ¶lt egy rĂ¶vid AI-app kontextus kĂ©rdĹ‘Ă­vet. A ShipSeal ebbĹ‘l elkĂ©szĂ­t egy letĂ¶lthetĹ‘ Delivery Pack csomagot.
 
 ## Inputok
 
-### Kötelező
+### KĂ¶telezĹ‘
 
 - Projekt neve
 - Repo ZIP vagy GitHub URL
-- AI-app rövid leírása
-- Célfelhasználó
-- Mire használják az AI-t?
-- Kezel-e személyes adatot?
-- Használ-e generatív AI outputot ügyfél/felhasználó felé?
-- Van-e emberi jóváhagyás?
-- EU-ban használják-e?
+- AI-app rĂ¶vid leĂ­rĂˇsa
+- CĂ©lfelhasznĂˇlĂł
+- Mire hasznĂˇljĂˇk az AI-t?
+- Kezel-e szemĂ©lyes adatot?
+- HasznĂˇl-e generatĂ­v AI outputot ĂĽgyfĂ©l/felhasznĂˇlĂł felĂ©?
+- Van-e emberi jĂłvĂˇhagyĂˇs?
+- EU-ban hasznĂˇljĂˇk-e?
 
-### Opcionális
+### OpcionĂˇlis
 
 - System prompt
-- Példa user promptok
-- Példa válaszok
-- Használt modellek
-- Használt AI provider
-- RAG / dokumentumfeltöltés leírása
+- PĂ©lda user promptok
+- PĂ©lda vĂˇlaszok
+- HasznĂˇlt modellek
+- HasznĂˇlt AI provider
+- RAG / dokumentumfeltĂ¶ltĂ©s leĂ­rĂˇsa
 - API endpoint / demo URL
-- Ügyfél neve
-- Ügynökség neve / logó
+- ĂśgyfĂ©l neve
+- ĂśgynĂ¶ksĂ©g neve / logĂł
 
-## Outputcsomag struktúra
+## Outputcsomag struktĂşra
 
 ```text
 shipseal-delivery-pack-[project]/
@@ -1259,22 +1265,22 @@ shipseal-delivery-pack-[project]/
   score.json
 ```
 
-## Readiness score dimenziók
+## Readiness score dimenziĂłk
 
 ### 1. Agent readiness
 
 - van-e README,
-- van-e setup/run/test információ,
+- van-e setup/run/test informĂˇciĂł,
 - van-e AGENTS/CLAUDE/Cursor/Codex instruction,
-- egyértelmű-e a repo struktúra,
-- biztonságos-e agentekkel dolgozni.
+- egyĂ©rtelmĹ±-e a repo struktĂşra,
+- biztonsĂˇgos-e agentekkel dolgozni.
 
 ### 2. Delivery readiness
 
-- átadható-e ügyfélnek,
-- van-e dokumentáció,
-- van-e ismert korlátlista,
-- van-e tesztelési bizonyíték,
+- ĂˇtadhatĂł-e ĂĽgyfĂ©lnek,
+- van-e dokumentĂˇciĂł,
+- van-e ismert korlĂˇtlista,
+- van-e tesztelĂ©si bizonyĂ­tĂ©k,
 - van-e roadmap.
 
 ### 3. Eval readiness
@@ -1282,123 +1288,123 @@ shipseal-delivery-pack-[project]/
 - vannak-e tesztesetek,
 - van-e red-team prompt,
 - van-e hallucination / injection / boundary teszt,
-- van-e manuális validáció.
+- van-e manuĂˇlis validĂˇciĂł.
 
 ### 4. MCP readiness
 
 - indokolt-e MCP,
 - milyen tool/data source kell,
-- mennyire kockázatos,
+- mennyire kockĂˇzatos,
 - van-e allowlist,
 - van-e audit log javaslat.
 
 ### 5. EU AI Act readiness
 
-- EU-ban használják-e,
-- AI interaction disclosure szükséges-e,
-- generált tartalom jelölése szükséges-e,
-- high-risk lehetőség van-e,
+- EU-ban hasznĂˇljĂˇk-e,
+- AI interaction disclosure szĂĽksĂ©ges-e,
+- generĂˇlt tartalom jelĂ¶lĂ©se szĂĽksĂ©ges-e,
+- high-risk lehetĹ‘sĂ©g van-e,
 - human oversight megvan-e,
-- jogi review trigger aktiválódik-e.
+- jogi review trigger aktivĂˇlĂłdik-e.
 
-## Go / no-go kategóriák
+## Go / no-go kategĂłriĂˇk
 
-- **Ready for internal development** - agentekkel továbbfejleszthető, de ügyfélnek még nem adható.
-- **Ready for demo** - demózható, de nincs teljes átadási dokumentáció.
-- **Ready for client pilot** - korlátozott ügyfél pilotra alkalmas human review-val.
-- **Not ready** - kritikus technikai/dokumentációs/compliance hiány.
-- **Legal review required** - jogi ellenőrzés nélkül nem javasolt élesítés/átadás.
+- **Ready for internal development** - agentekkel tovĂˇbbfejleszthetĹ‘, de ĂĽgyfĂ©lnek mĂ©g nem adhatĂł.
+- **Ready for demo** - demĂłzhatĂł, de nincs teljes ĂˇtadĂˇsi dokumentĂˇciĂł.
+- **Ready for client pilot** - korlĂˇtozott ĂĽgyfĂ©l pilotra alkalmas human review-val.
+- **Not ready** - kritikus technikai/dokumentĂˇciĂłs/compliance hiĂˇny.
+- **Legal review required** - jogi ellenĹ‘rzĂ©s nĂ©lkĂĽl nem javasolt Ă©lesĂ­tĂ©s/ĂˇtadĂˇs.
 
 ## Review Council szerepek
 
 ### QA Reviewer
 
-Vizsgálja:
+VizsgĂˇlja:
 
-- tesztelhetőség,
+- tesztelhetĹ‘sĂ©g,
 - edge case-ek,
-- regressziós kockázat,
-- output stabilitás.
+- regressziĂłs kockĂˇzat,
+- output stabilitĂˇs.
 
 ### Security Reviewer
 
-Vizsgálja:
+VizsgĂˇlja:
 
 - secret leakage,
 - prompt injection,
-- adatkiáramlás,
-- túl széles MCP/tool hozzáférés.
+- adatkiĂˇramlĂˇs,
+- tĂşl szĂ©les MCP/tool hozzĂˇfĂ©rĂ©s.
 
 ### EU AI Act Readiness Reviewer
 
-Vizsgálja:
+VizsgĂˇlja:
 
 - transparency,
-- szerepkör,
+- szerepkĂ¶r,
 - high-risk signal,
 - human oversight,
 - legal review triggers.
 
 ### Product/Delivery Reviewer
 
-Vizsgálja:
+VizsgĂˇlja:
 
-- érthető termékígéret,
-- ügyfélátadási minőség,
-- hiányzó dokumentáció,
-- roadmap realitás.
+- Ă©rthetĹ‘ termĂ©kĂ­gĂ©ret,
+- ĂĽgyfĂ©lĂˇtadĂˇsi minĹ‘sĂ©g,
+- hiĂˇnyzĂł dokumentĂˇciĂł,
+- roadmap realitĂˇs.
 
 ### Skeptical Customer
 
-Vizsgálja:
+VizsgĂˇlja:
 
-- miben nem bízná az ügyfél,
-- milyen kérdéseket tenne fel,
-- mi hiányzik ahhoz, hogy átvegye.
+- miben nem bĂ­znĂˇ az ĂĽgyfĂ©l,
+- milyen kĂ©rdĂ©seket tenne fel,
+- mi hiĂˇnyzik ahhoz, hogy Ăˇtvegye.
 
 ### Final Judge
 
-Összesíti:
+Ă–sszesĂ­ti:
 
 - readiness score,
-- fő kockázatok,
+- fĹ‘ kockĂˇzatok,
 - go/no-go,
-- következő javítások.
+- kĂ¶vetkezĹ‘ javĂ­tĂˇsok.
 
-## Első demo scenario
+## ElsĹ‘ demo scenario
 
-Töltsünk fel egy saját AI miniappot, például:
+TĂ¶ltsĂĽnk fel egy sajĂˇt AI miniappot, pĂ©ldĂˇul:
 
 - AI chatbot,
 - RAG dokumentumasszisztens,
 - AI_COMP egyik modulja,
 - VerdictMesh frontend,
-- ShipSeal saját repo.
+- ShipSeal sajĂˇt repo.
 
-A demo végén legyen letölthető egy Delivery Pack ZIP.
+A demo vĂ©gĂ©n legyen letĂ¶lthetĹ‘ egy Delivery Pack ZIP.
 
-## MVP elfogadási kritérium
+## MVP elfogadĂˇsi kritĂ©rium
 
-Az MVP akkor jó, ha egy AI freelancer ezt mondaná:
+Az MVP akkor jĂł, ha egy AI freelancer ezt mondanĂˇ:
 
-> Ezt a csomagot tényleg be tudom tenni az ügyfélátadás mellé, és jobb színben tünteti fel a munkámat.
+> Ezt a csomagot tĂ©nyleg be tudom tenni az ĂĽgyfĂ©lĂˇtadĂˇs mellĂ©, Ă©s jobb szĂ­nben tĂĽnteti fel a munkĂˇmat.
 ---
 
-# 07 - Fejlesztési kezdőpont és első sprintek
+# 07 - FejlesztĂ©si kezdĹ‘pont Ă©s elsĹ‘ sprintek
 
-## Rövid döntés
+## RĂ¶vid dĂ¶ntĂ©s
 
-A fejlesztést **nem** az AI2AI/VerdictMesh integrációval és nem teljes monorepo-átalakítással érdemes kezdeni.
+A fejlesztĂ©st **nem** az AI2AI/VerdictMesh integrĂˇciĂłval Ă©s nem teljes monorepo-ĂˇtalakĂ­tĂˇssal Ă©rdemes kezdeni.
 
-A leggyorsabb eladható irány:
+A leggyorsabb eladhatĂł irĂˇny:
 
-**az `agentready-hub-main` frontendből készítsünk ShipSeal MVP-t, és először a Delivery Pack exportot tegyük teljessé.**
+**az `agentready-hub-main` frontendbĹ‘l kĂ©szĂ­tsĂĽnk ShipSeal MVP-t, Ă©s elĹ‘szĂ¶r a Delivery Pack exportot tegyĂĽk teljessĂ©.**
 
-Ez azért a legjobb kezdőpont, mert már van működő React/Vite/TypeScript felület, ZIP-feltöltés, repo-szkenner, readiness scoring és ZIP export. A hiányzó érték most nem a látványos council UI, hanem az, hogy a kimeneti csomag pontosan azt adja, amit az első fizetős ügyfélnek oda lehet adni.
+Ez azĂ©rt a legjobb kezdĹ‘pont, mert mĂˇr van mĹ±kĂ¶dĹ‘ React/Vite/TypeScript felĂĽlet, ZIP-feltĂ¶ltĂ©s, repo-szkenner, readiness scoring Ă©s ZIP export. A hiĂˇnyzĂł Ă©rtĂ©k most nem a lĂˇtvĂˇnyos council UI, hanem az, hogy a kimeneti csomag pontosan azt adja, amit az elsĹ‘ fizetĹ‘s ĂĽgyfĂ©lnek oda lehet adni.
 
-## Első fejlesztési cél
+## ElsĹ‘ fejlesztĂ©si cĂ©l
 
-Az első működő ShipSeal MVP egy ZIP vagy publikus GitHub repo alapján generáljon egy letölthető csomagot:
+Az elsĹ‘ mĹ±kĂ¶dĹ‘ ShipSeal MVP egy ZIP vagy publikus GitHub repo alapjĂˇn generĂˇljon egy letĂ¶lthetĹ‘ csomagot:
 
 ```text
 shipseal-delivery-pack-[project]/
@@ -1412,25 +1418,25 @@ shipseal-delivery-pack-[project]/
   score.json
 ```
 
-## Első branch
+## ElsĹ‘ branch
 
-Javasolt branch név:
+Javasolt branch nĂ©v:
 
 ```bash
 git checkout -b shipseal-mvp-delivery-pack
 ```
 
-## 1. lépés - Rebrand és technikai alap tisztítása
+## 1. lĂ©pĂ©s - Rebrand Ă©s technikai alap tisztĂ­tĂˇsa
 
 Feladatok:
 
-- UI szövegek átírása AgentReadyről ShipSealre.
-- Export ZIP fájlnevek átírása `shipseal-agent-pack-*` vagy `shipseal-delivery-pack-*` formára.
-- README és docs alap átnevezése.
-- Tesztek frissítése az új fájlnevekre.
-- A régi forrásnevek megőrzése csak belső technikai referenciaként.
+- UI szĂ¶vegek ĂˇtĂ­rĂˇsa AgentReadyrĹ‘l ShipSealre.
+- Export ZIP fĂˇjlnevek ĂˇtĂ­rĂˇsa `shipseal-agent-pack-*` vagy `shipseal-delivery-pack-*` formĂˇra.
+- README Ă©s docs alap ĂˇtnevezĂ©se.
+- Tesztek frissĂ­tĂ©se az Ăşj fĂˇjlnevekre.
+- A rĂ©gi forrĂˇsnevek megĹ‘rzĂ©se csak belsĹ‘ technikai referenciakĂ©nt.
 
-Elsőként ellenőrizendő fájlok az `agentready-hub-main` forrásban:
+ElsĹ‘kĂ©nt ellenĹ‘rizendĹ‘ fĂˇjlok az `agentready-hub-main` forrĂˇsban:
 
 ```text
 src/lib/exports.ts
@@ -1444,9 +1450,9 @@ README.md
 docs/
 ```
 
-## 2. lépés - Delivery Pack output contract
+## 2. lĂ©pĂ©s - Delivery Pack output contract
 
-Hozzunk létre egy explicit output szerződést, például:
+Hozzunk lĂ©tre egy explicit output szerzĹ‘dĂ©st, pĂ©ldĂˇul:
 
 ```text
 src/lib/deliveryPack/manifest.ts
@@ -1454,9 +1460,9 @@ src/lib/deliveryPack/generators.ts
 src/lib/deliveryPack/types.ts
 ```
 
-A manifest mondja meg, hogy pontosan milyen fájlokat kell generálni. Ez azért fontos, mert innentől minden fejlesztés ehhez mérhető.
+A manifest mondja meg, hogy pontosan milyen fĂˇjlokat kell generĂˇlni. Ez azĂ©rt fontos, mert innentĹ‘l minden fejlesztĂ©s ehhez mĂ©rhetĹ‘.
 
-Minimum generálandó fájlok:
+Minimum generĂˇlandĂł fĂˇjlok:
 
 - `AGENTS.md`
 - `CLAUDE.md`
@@ -1481,102 +1487,102 @@ Minimum generálandó fájlok:
 - `repo-context-pack.json`
 - `score.json`
 
-## 3. lépés - Intake form hozzáadása
+## 3. lĂ©pĂ©s - Intake form hozzĂˇadĂˇsa
 
-A repo önmagában nem elég az EU AI Act és ügyfélátadási riporthoz. Kell egy rövid kérdőív.
+A repo Ă¶nmagĂˇban nem elĂ©g az EU AI Act Ă©s ĂĽgyfĂ©lĂˇtadĂˇsi riporthoz. Kell egy rĂ¶vid kĂ©rdĹ‘Ă­v.
 
-Első MVP mezők:
+ElsĹ‘ MVP mezĹ‘k:
 
 - projekt neve,
-- AI-app rövid leírása,
-- célfelhasználó,
-- mire használják az AI-t,
-- EU-ban használják-e,
-- kezel-e személyes adatot,
-- generál-e tartalmat végfelhasználónak,
-- van-e emberi jóváhagyás,
-- használt AI provider / modell,
-- ügyfél neve opcionálisan,
-- ügynökség neve opcionálisan.
+- AI-app rĂ¶vid leĂ­rĂˇsa,
+- cĂ©lfelhasznĂˇlĂł,
+- mire hasznĂˇljĂˇk az AI-t,
+- EU-ban hasznĂˇljĂˇk-e,
+- kezel-e szemĂ©lyes adatot,
+- generĂˇl-e tartalmat vĂ©gfelhasznĂˇlĂłnak,
+- van-e emberi jĂłvĂˇhagyĂˇs,
+- hasznĂˇlt AI provider / modell,
+- ĂĽgyfĂ©l neve opcionĂˇlisan,
+- ĂĽgynĂ¶ksĂ©g neve opcionĂˇlisan.
 
-## 4. lépés - Hiányzó generátorok megírása
+## 4. lĂ©pĂ©s - HiĂˇnyzĂł generĂˇtorok megĂ­rĂˇsa
 
-A jelenlegi forrás már tud agent pack és MCP jellegű anyagokat generálni. A ShipSeal MVP-hez a legfontosabb hiányzó generátorok:
+A jelenlegi forrĂˇs mĂˇr tud agent pack Ă©s MCP jellegĹ± anyagokat generĂˇlni. A ShipSeal MVP-hez a legfontosabb hiĂˇnyzĂł generĂˇtorok:
 
 1. `AI_ACT_READINESS_CHECKLIST.md`
 2. `TRANSPARENCY_NOTICE_DRAFT.md`
 3. `LEGAL_REVIEW_QUESTIONS.md`
-4. `EVAL_TEST_CASES.md` - legalább 30 teszteset
-5. `RED_TEAM_PROMPTS.md` - legalább 10 red-team prompt
+4. `EVAL_TEST_CASES.md` - legalĂˇbb 30 teszteset
+5. `RED_TEAM_PROMPTS.md` - legalĂˇbb 10 red-team prompt
 6. `CLIENT_HANDOFF_REPORT.md`
 7. `EXECUTIVE_SUMMARY.md`
 8. `NEXT_STEPS_ROADMAP.md`
 9. `02-skills/*/SKILL.md` csomagok
 
-## 5. lépés - Tesztek és elfogadási feltételek
+## 5. lĂ©pĂ©s - Tesztek Ă©s elfogadĂˇsi feltĂ©telek
 
-Első MVP elfogadási kritérium:
+ElsĹ‘ MVP elfogadĂˇsi kritĂ©rium:
 
-- ZIP feltöltés után lefut a scan.
-- Látszik a ShipSeal score.
-- A felhasználó ki tud tölteni egy rövid intake formot.
-- Egy gombbal letölthető a teljes `shipseal-delivery-pack` ZIP.
-- A ZIP-ben minden kötelező fájl benne van.
-- A teszt ellenőrzi a fájlneveket, a mappastruktúrát és a minimum tartalmi elemeket.
+- ZIP feltĂ¶ltĂ©s utĂˇn lefut a scan.
+- LĂˇtszik a ShipSeal score.
+- A felhasznĂˇlĂł ki tud tĂ¶lteni egy rĂ¶vid intake formot.
+- Egy gombbal letĂ¶lthetĹ‘ a teljes `shipseal-delivery-pack` ZIP.
+- A ZIP-ben minden kĂ¶telezĹ‘ fĂˇjl benne van.
+- A teszt ellenĹ‘rzi a fĂˇjlneveket, a mappastruktĂşrĂˇt Ă©s a minimum tartalmi elemeket.
 
-Javasolt első teszt:
+Javasolt elsĹ‘ teszt:
 
 ```text
 src/test/deliveryPack.test.ts
 ```
 
-## Mit ne most csináljunk?
+## Mit ne most csinĂˇljunk?
 
-Az első MVP előtt ne ezzel kezdjünk:
+Az elsĹ‘ MVP elĹ‘tt ne ezzel kezdjĂĽnk:
 
-- teljes monorepo migráció,
-- auth/fizetés,
+- teljes monorepo migrĂˇciĂł,
+- auth/fizetĂ©s,
 - private GitHub App,
-- teljes AI2AI multi-model integráció,
-- VerdictMesh UI teljes beolvasztása,
-- automatikus jogi minősítés,
+- teljes AI2AI multi-model integrĂˇciĂł,
+- VerdictMesh UI teljes beolvasztĂˇsa,
+- automatikus jogi minĹ‘sĂ­tĂ©s,
 - enterprise dashboard.
 
-Ezek fontosak lehetnek később, de most lassítanák az első eladható verziót.
+Ezek fontosak lehetnek kĂ©sĹ‘bb, de most lassĂ­tanĂˇk az elsĹ‘ eladhatĂł verziĂłt.
 
-## 30 napos fejlesztési sorrend
+## 30 napos fejlesztĂ©si sorrend
 
-### 1. hét
+### 1. hĂ©t
 
 - Rebrand ShipSealre.
 - Delivery Pack manifest.
-- Export ZIP struktúra.
-- Tesztek frissítése.
+- Export ZIP struktĂşra.
+- Tesztek frissĂ­tĂ©se.
 
-### 2. hét
+### 2. hĂ©t
 
 - Intake form.
-- AI Act checklist generátor.
-- Transparency notice generátor.
-- Legal review questions generátor.
+- AI Act checklist generĂˇtor.
+- Transparency notice generĂˇtor.
+- Legal review questions generĂˇtor.
 
-### 3. hét
+### 3. hĂ©t
 
-- 30 eval teszteset generátor.
-- 10 red-team prompt generátor.
-- SKILL.md generátorok.
+- 30 eval teszteset generĂˇtor.
+- 10 red-team prompt generĂˇtor.
+- SKILL.md generĂˇtorok.
 - Client handoff report v1.
 
-### 4. hét
+### 4. hĂ©t
 
 - Report preview UI.
-- White-label mezők.
-- Letölthető teljes csomag.
-- 3 minta repo alapján manuális validáció.
+- White-label mezĹ‘k.
+- LetĂ¶lthetĹ‘ teljes csomag.
+- 3 minta repo alapjĂˇn manuĂˇlis validĂˇciĂł.
 
-## Következő konkrét parancs
+## KĂ¶vetkezĹ‘ konkrĂ©t parancs
 
-A fejlesztést ezzel érdemes indítani a lokális forrásban:
+A fejlesztĂ©st ezzel Ă©rdemes indĂ­tani a lokĂˇlis forrĂˇsban:
 
 ```bash
 cd agentready-hub-main
@@ -1586,4 +1592,5 @@ npm run test
 npm run build
 ```
 
-Ha ez lefut, akkor az első kódmódosítás a `src/lib/exports.ts` és a hozzá kapcsolódó teszt legyen, hogy az exportált ZIP neve és struktúrája már ShipSeal irányba menjen.
+Ha ez lefut, akkor az elsĹ‘ kĂłdmĂłdosĂ­tĂˇs a `src/lib/exports.ts` Ă©s a hozzĂˇ kapcsolĂłdĂł teszt legyen, hogy az exportĂˇlt ZIP neve Ă©s struktĂşrĂˇja mĂˇr ShipSeal irĂˇnyba menjen.
+

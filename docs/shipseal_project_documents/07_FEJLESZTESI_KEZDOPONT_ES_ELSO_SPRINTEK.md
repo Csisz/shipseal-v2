@@ -1,18 +1,24 @@
-# 07 - Fejlesztési kezdőpont és első sprintek
+﻿# DEPRECATED
 
-## Rövid döntés
+Superseded by:
 
-A fejlesztést **nem** az AI2AI/VerdictMesh integrációval és nem teljes monorepo-átalakítással érdemes kezdeni.
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
 
-A leggyorsabb eladható irány:
+# 07 - FejlesztĂ©si kezdĹ‘pont Ă©s elsĹ‘ sprintek
 
-**az `agentready-hub-main` frontendből készítsünk ShipSeal MVP-t, és először a Delivery Pack exportot tegyük teljessé.**
+## RĂ¶vid dĂ¶ntĂ©s
 
-Ez azért a legjobb kezdőpont, mert már van működő React/Vite/TypeScript felület, ZIP-feltöltés, repo-szkenner, readiness scoring és ZIP export. A hiányzó érték most nem a látványos council UI, hanem az, hogy a kimeneti csomag pontosan azt adja, amit az első fizetős ügyfélnek oda lehet adni.
+A fejlesztĂ©st **nem** az AI2AI/VerdictMesh integrĂˇciĂłval Ă©s nem teljes monorepo-ĂˇtalakĂ­tĂˇssal Ă©rdemes kezdeni.
 
-## Első fejlesztési cél
+A leggyorsabb eladhatĂł irĂˇny:
 
-Az első működő ShipSeal MVP egy ZIP vagy publikus GitHub repo alapján generáljon egy letölthető csomagot:
+**az `agentready-hub-main` frontendbĹ‘l kĂ©szĂ­tsĂĽnk ShipSeal MVP-t, Ă©s elĹ‘szĂ¶r a Delivery Pack exportot tegyĂĽk teljessĂ©.**
+
+Ez azĂ©rt a legjobb kezdĹ‘pont, mert mĂˇr van mĹ±kĂ¶dĹ‘ React/Vite/TypeScript felĂĽlet, ZIP-feltĂ¶ltĂ©s, repo-szkenner, readiness scoring Ă©s ZIP export. A hiĂˇnyzĂł Ă©rtĂ©k most nem a lĂˇtvĂˇnyos council UI, hanem az, hogy a kimeneti csomag pontosan azt adja, amit az elsĹ‘ fizetĹ‘s ĂĽgyfĂ©lnek oda lehet adni.
+
+## ElsĹ‘ fejlesztĂ©si cĂ©l
+
+Az elsĹ‘ mĹ±kĂ¶dĹ‘ ShipSeal MVP egy ZIP vagy publikus GitHub repo alapjĂˇn generĂˇljon egy letĂ¶lthetĹ‘ csomagot:
 
 ```text
 shipseal-delivery-pack-[project]/
@@ -26,25 +32,25 @@ shipseal-delivery-pack-[project]/
   score.json
 ```
 
-## Első branch
+## ElsĹ‘ branch
 
-Javasolt branch név:
+Javasolt branch nĂ©v:
 
 ```bash
 git checkout -b shipseal-mvp-delivery-pack
 ```
 
-## 1. lépés - Rebrand és technikai alap tisztítása
+## 1. lĂ©pĂ©s - Rebrand Ă©s technikai alap tisztĂ­tĂˇsa
 
 Feladatok:
 
-- UI szövegek átírása AgentReadyről ShipSealre.
-- Export ZIP fájlnevek átírása `shipseal-agent-pack-*` vagy `shipseal-delivery-pack-*` formára.
-- README és docs alap átnevezése.
-- Tesztek frissítése az új fájlnevekre.
-- A régi forrásnevek megőrzése csak belső technikai referenciaként.
+- UI szĂ¶vegek ĂˇtĂ­rĂˇsa AgentReadyrĹ‘l ShipSealre.
+- Export ZIP fĂˇjlnevek ĂˇtĂ­rĂˇsa `shipseal-agent-pack-*` vagy `shipseal-delivery-pack-*` formĂˇra.
+- README Ă©s docs alap ĂˇtnevezĂ©se.
+- Tesztek frissĂ­tĂ©se az Ăşj fĂˇjlnevekre.
+- A rĂ©gi forrĂˇsnevek megĹ‘rzĂ©se csak belsĹ‘ technikai referenciakĂ©nt.
 
-Elsőként ellenőrizendő fájlok az `agentready-hub-main` forrásban:
+ElsĹ‘kĂ©nt ellenĹ‘rizendĹ‘ fĂˇjlok az `agentready-hub-main` forrĂˇsban:
 
 ```text
 src/lib/exports.ts
@@ -58,9 +64,9 @@ README.md
 docs/
 ```
 
-## 2. lépés - Delivery Pack output contract
+## 2. lĂ©pĂ©s - Delivery Pack output contract
 
-Hozzunk létre egy explicit output szerződést, például:
+Hozzunk lĂ©tre egy explicit output szerzĹ‘dĂ©st, pĂ©ldĂˇul:
 
 ```text
 src/lib/deliveryPack/manifest.ts
@@ -68,9 +74,9 @@ src/lib/deliveryPack/generators.ts
 src/lib/deliveryPack/types.ts
 ```
 
-A manifest mondja meg, hogy pontosan milyen fájlokat kell generálni. Ez azért fontos, mert innentől minden fejlesztés ehhez mérhető.
+A manifest mondja meg, hogy pontosan milyen fĂˇjlokat kell generĂˇlni. Ez azĂ©rt fontos, mert innentĹ‘l minden fejlesztĂ©s ehhez mĂ©rhetĹ‘.
 
-Minimum generálandó fájlok:
+Minimum generĂˇlandĂł fĂˇjlok:
 
 - `AGENTS.md`
 - `CLAUDE.md`
@@ -95,102 +101,102 @@ Minimum generálandó fájlok:
 - `repo-context-pack.json`
 - `score.json`
 
-## 3. lépés - Intake form hozzáadása
+## 3. lĂ©pĂ©s - Intake form hozzĂˇadĂˇsa
 
-A repo önmagában nem elég az EU AI Act és ügyfélátadási riporthoz. Kell egy rövid kérdőív.
+A repo Ă¶nmagĂˇban nem elĂ©g az EU AI Act Ă©s ĂĽgyfĂ©lĂˇtadĂˇsi riporthoz. Kell egy rĂ¶vid kĂ©rdĹ‘Ă­v.
 
-Első MVP mezők:
+ElsĹ‘ MVP mezĹ‘k:
 
 - projekt neve,
-- AI-app rövid leírása,
-- célfelhasználó,
-- mire használják az AI-t,
-- EU-ban használják-e,
-- kezel-e személyes adatot,
-- generál-e tartalmat végfelhasználónak,
-- van-e emberi jóváhagyás,
-- használt AI provider / modell,
-- ügyfél neve opcionálisan,
-- ügynökség neve opcionálisan.
+- AI-app rĂ¶vid leĂ­rĂˇsa,
+- cĂ©lfelhasznĂˇlĂł,
+- mire hasznĂˇljĂˇk az AI-t,
+- EU-ban hasznĂˇljĂˇk-e,
+- kezel-e szemĂ©lyes adatot,
+- generĂˇl-e tartalmat vĂ©gfelhasznĂˇlĂłnak,
+- van-e emberi jĂłvĂˇhagyĂˇs,
+- hasznĂˇlt AI provider / modell,
+- ĂĽgyfĂ©l neve opcionĂˇlisan,
+- ĂĽgynĂ¶ksĂ©g neve opcionĂˇlisan.
 
-## 4. lépés - Hiányzó generátorok megírása
+## 4. lĂ©pĂ©s - HiĂˇnyzĂł generĂˇtorok megĂ­rĂˇsa
 
-A jelenlegi forrás már tud agent pack és MCP jellegű anyagokat generálni. A ShipSeal MVP-hez a legfontosabb hiányzó generátorok:
+A jelenlegi forrĂˇs mĂˇr tud agent pack Ă©s MCP jellegĹ± anyagokat generĂˇlni. A ShipSeal MVP-hez a legfontosabb hiĂˇnyzĂł generĂˇtorok:
 
 1. `AI_ACT_READINESS_CHECKLIST.md`
 2. `TRANSPARENCY_NOTICE_DRAFT.md`
 3. `LEGAL_REVIEW_QUESTIONS.md`
-4. `EVAL_TEST_CASES.md` - legalább 30 teszteset
-5. `RED_TEAM_PROMPTS.md` - legalább 10 red-team prompt
+4. `EVAL_TEST_CASES.md` - legalĂˇbb 30 teszteset
+5. `RED_TEAM_PROMPTS.md` - legalĂˇbb 10 red-team prompt
 6. `CLIENT_HANDOFF_REPORT.md`
 7. `EXECUTIVE_SUMMARY.md`
 8. `NEXT_STEPS_ROADMAP.md`
 9. `02-skills/*/SKILL.md` csomagok
 
-## 5. lépés - Tesztek és elfogadási feltételek
+## 5. lĂ©pĂ©s - Tesztek Ă©s elfogadĂˇsi feltĂ©telek
 
-Első MVP elfogadási kritérium:
+ElsĹ‘ MVP elfogadĂˇsi kritĂ©rium:
 
-- ZIP feltöltés után lefut a scan.
-- Látszik a ShipSeal score.
-- A felhasználó ki tud tölteni egy rövid intake formot.
-- Egy gombbal letölthető a teljes `shipseal-delivery-pack` ZIP.
-- A ZIP-ben minden kötelező fájl benne van.
-- A teszt ellenőrzi a fájlneveket, a mappastruktúrát és a minimum tartalmi elemeket.
+- ZIP feltĂ¶ltĂ©s utĂˇn lefut a scan.
+- LĂˇtszik a ShipSeal score.
+- A felhasznĂˇlĂł ki tud tĂ¶lteni egy rĂ¶vid intake formot.
+- Egy gombbal letĂ¶lthetĹ‘ a teljes `shipseal-delivery-pack` ZIP.
+- A ZIP-ben minden kĂ¶telezĹ‘ fĂˇjl benne van.
+- A teszt ellenĹ‘rzi a fĂˇjlneveket, a mappastruktĂşrĂˇt Ă©s a minimum tartalmi elemeket.
 
-Javasolt első teszt:
+Javasolt elsĹ‘ teszt:
 
 ```text
 src/test/deliveryPack.test.ts
 ```
 
-## Mit ne most csináljunk?
+## Mit ne most csinĂˇljunk?
 
-Az első MVP előtt ne ezzel kezdjünk:
+Az elsĹ‘ MVP elĹ‘tt ne ezzel kezdjĂĽnk:
 
-- teljes monorepo migráció,
-- auth/fizetés,
+- teljes monorepo migrĂˇciĂł,
+- auth/fizetĂ©s,
 - private GitHub App,
-- teljes AI2AI multi-model integráció,
-- VerdictMesh UI teljes beolvasztása,
-- automatikus jogi minősítés,
+- teljes AI2AI multi-model integrĂˇciĂł,
+- VerdictMesh UI teljes beolvasztĂˇsa,
+- automatikus jogi minĹ‘sĂ­tĂ©s,
 - enterprise dashboard.
 
-Ezek fontosak lehetnek később, de most lassítanák az első eladható verziót.
+Ezek fontosak lehetnek kĂ©sĹ‘bb, de most lassĂ­tanĂˇk az elsĹ‘ eladhatĂł verziĂłt.
 
-## 30 napos fejlesztési sorrend
+## 30 napos fejlesztĂ©si sorrend
 
-### 1. hét
+### 1. hĂ©t
 
 - Rebrand ShipSealre.
 - Delivery Pack manifest.
-- Export ZIP struktúra.
-- Tesztek frissítése.
+- Export ZIP struktĂşra.
+- Tesztek frissĂ­tĂ©se.
 
-### 2. hét
+### 2. hĂ©t
 
 - Intake form.
-- AI Act checklist generátor.
-- Transparency notice generátor.
-- Legal review questions generátor.
+- AI Act checklist generĂˇtor.
+- Transparency notice generĂˇtor.
+- Legal review questions generĂˇtor.
 
-### 3. hét
+### 3. hĂ©t
 
-- 30 eval teszteset generátor.
-- 10 red-team prompt generátor.
-- SKILL.md generátorok.
+- 30 eval teszteset generĂˇtor.
+- 10 red-team prompt generĂˇtor.
+- SKILL.md generĂˇtorok.
 - Client handoff report v1.
 
-### 4. hét
+### 4. hĂ©t
 
 - Report preview UI.
-- White-label mezők.
-- Letölthető teljes csomag.
-- 3 minta repo alapján manuális validáció.
+- White-label mezĹ‘k.
+- LetĂ¶lthetĹ‘ teljes csomag.
+- 3 minta repo alapjĂˇn manuĂˇlis validĂˇciĂł.
 
-## Következő konkrét parancs
+## KĂ¶vetkezĹ‘ konkrĂ©t parancs
 
-A fejlesztést ezzel érdemes indítani a lokális forrásban:
+A fejlesztĂ©st ezzel Ă©rdemes indĂ­tani a lokĂˇlis forrĂˇsban:
 
 ```bash
 cd agentready-hub-main
@@ -200,4 +206,5 @@ npm run test
 npm run build
 ```
 
-Ha ez lefut, akkor az első kódmódosítás a `src/lib/exports.ts` és a hozzá kapcsolódó teszt legyen, hogy az exportált ZIP neve és struktúrája már ShipSeal irányba menjen.
+Ha ez lefut, akkor az elsĹ‘ kĂłdmĂłdosĂ­tĂˇs a `src/lib/exports.ts` Ă©s a hozzĂˇ kapcsolĂłdĂł teszt legyen, hogy az exportĂˇlt ZIP neve Ă©s struktĂşrĂˇja mĂˇr ShipSeal irĂˇnyba menjen.
+

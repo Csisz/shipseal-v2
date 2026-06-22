@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # Create Readiness PR Plan
 
 Create Readiness PR is the ShipSeal workflow for proposing repository-ready files through a reviewed pull request.
@@ -163,3 +169,4 @@ Then open a Pull Request on GitHub.
 5. Add richer PR body with scan summary and readiness impact.
 6. Add audit logging for connect, scan, branch, file write, and PR events.
 7. Merge only after an explicit human decision.
+

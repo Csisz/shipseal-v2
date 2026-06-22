@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # AgentReady Production Roadmap
 
 ## 1. Local MVP
@@ -100,3 +106,4 @@
 
 - Package scanner workers and policy engine for private deployment.
 - Support enterprise storage, identity, and network boundaries.
+

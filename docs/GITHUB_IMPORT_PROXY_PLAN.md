@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # GitHub Import Proxy Plan
 
 ShipSeal currently supports ZIP upload as the most reliable local MVP path. Public GitHub URL import is useful for demos, but a browser-only app cannot reliably fetch repository archives from `codeload.github.com` because GitHub archive downloads may be blocked by browser CORS policy, redirects, network policy, or response headers outside ShipSeal's control.
@@ -55,3 +61,4 @@ The code is prepared with:
 - A minimal Vercel-compatible endpoint at `api/github-archive.ts`.
 
 This is still an MVP endpoint. It is public-repo-only, tokenless, and not a GitHub App.
+

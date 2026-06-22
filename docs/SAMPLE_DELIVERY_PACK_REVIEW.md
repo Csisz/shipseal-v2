@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # Sample Delivery Pack Review
 
 Use this review guide to dogfood the ShipSeal MVP sample output before showing it to a client, AI freelancer, or agency partner.
@@ -108,3 +114,4 @@ npm run build
 ```
 
 The sample-specific assertions live in `src/test/sampleDeliveryPack.test.ts`.
+

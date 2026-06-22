@@ -1,36 +1,42 @@
-# 06 - ShipSeal MVP output specifikáció
+﻿# DEPRECATED
 
-## MVP cél
+Superseded by:
 
-A felhasználó feltölt egy repo ZIP-et vagy megad egy publikus GitHub URL-t, majd kitölt egy rövid AI-app kontextus kérdőívet. A ShipSeal ebből elkészít egy letölthető Delivery Pack csomagot.
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
+# 06 - ShipSeal MVP output specifikĂˇciĂł
+
+## MVP cĂ©l
+
+A felhasznĂˇlĂł feltĂ¶lt egy repo ZIP-et vagy megad egy publikus GitHub URL-t, majd kitĂ¶lt egy rĂ¶vid AI-app kontextus kĂ©rdĹ‘Ă­vet. A ShipSeal ebbĹ‘l elkĂ©szĂ­t egy letĂ¶lthetĹ‘ Delivery Pack csomagot.
 
 ## Inputok
 
-### Kötelező
+### KĂ¶telezĹ‘
 
 - Projekt neve
 - Repo ZIP vagy GitHub URL
-- AI-app rövid leírása
-- Célfelhasználó
-- Mire használják az AI-t?
-- Kezel-e személyes adatot?
-- Használ-e generatív AI outputot ügyfél/felhasználó felé?
-- Van-e emberi jóváhagyás?
-- EU-ban használják-e?
+- AI-app rĂ¶vid leĂ­rĂˇsa
+- CĂ©lfelhasznĂˇlĂł
+- Mire hasznĂˇljĂˇk az AI-t?
+- Kezel-e szemĂ©lyes adatot?
+- HasznĂˇl-e generatĂ­v AI outputot ĂĽgyfĂ©l/felhasznĂˇlĂł felĂ©?
+- Van-e emberi jĂłvĂˇhagyĂˇs?
+- EU-ban hasznĂˇljĂˇk-e?
 
-### Opcionális
+### OpcionĂˇlis
 
 - System prompt
-- Példa user promptok
-- Példa válaszok
-- Használt modellek
-- Használt AI provider
-- RAG / dokumentumfeltöltés leírása
+- PĂ©lda user promptok
+- PĂ©lda vĂˇlaszok
+- HasznĂˇlt modellek
+- HasznĂˇlt AI provider
+- RAG / dokumentumfeltĂ¶ltĂ©s leĂ­rĂˇsa
 - API endpoint / demo URL
-- Ügyfél neve
-- Ügynökség neve / logó
+- ĂśgyfĂ©l neve
+- ĂśgynĂ¶ksĂ©g neve / logĂł
 
-## Outputcsomag struktúra
+## Outputcsomag struktĂşra
 
 ```text
 shipseal-delivery-pack-[project]/
@@ -69,22 +75,22 @@ shipseal-delivery-pack-[project]/
   score.json
 ```
 
-## Readiness score dimenziók
+## Readiness score dimenziĂłk
 
 ### 1. Agent readiness
 
 - van-e README,
-- van-e setup/run/test információ,
+- van-e setup/run/test informĂˇciĂł,
 - van-e AGENTS/CLAUDE/Cursor/Codex instruction,
-- egyértelmű-e a repo struktúra,
-- biztonságos-e agentekkel dolgozni.
+- egyĂ©rtelmĹ±-e a repo struktĂşra,
+- biztonsĂˇgos-e agentekkel dolgozni.
 
 ### 2. Delivery readiness
 
-- átadható-e ügyfélnek,
-- van-e dokumentáció,
-- van-e ismert korlátlista,
-- van-e tesztelési bizonyíték,
+- ĂˇtadhatĂł-e ĂĽgyfĂ©lnek,
+- van-e dokumentĂˇciĂł,
+- van-e ismert korlĂˇtlista,
+- van-e tesztelĂ©si bizonyĂ­tĂ©k,
 - van-e roadmap.
 
 ### 3. Eval readiness
@@ -92,103 +98,103 @@ shipseal-delivery-pack-[project]/
 - vannak-e tesztesetek,
 - van-e red-team prompt,
 - van-e hallucination / injection / boundary teszt,
-- van-e manuális validáció.
+- van-e manuĂˇlis validĂˇciĂł.
 
 ### 4. MCP readiness
 
 - indokolt-e MCP,
 - milyen tool/data source kell,
-- mennyire kockázatos,
+- mennyire kockĂˇzatos,
 - van-e allowlist,
 - van-e audit log javaslat.
 
 ### 5. EU AI Act readiness
 
-- EU-ban használják-e,
-- AI interaction disclosure szükséges-e,
-- generált tartalom jelölése szükséges-e,
-- high-risk lehetőség van-e,
+- EU-ban hasznĂˇljĂˇk-e,
+- AI interaction disclosure szĂĽksĂ©ges-e,
+- generĂˇlt tartalom jelĂ¶lĂ©se szĂĽksĂ©ges-e,
+- high-risk lehetĹ‘sĂ©g van-e,
 - human oversight megvan-e,
-- jogi review trigger aktiválódik-e.
+- jogi review trigger aktivĂˇlĂłdik-e.
 
-## Go / no-go kategóriák
+## Go / no-go kategĂłriĂˇk
 
-- **Ready for internal development** - agentekkel továbbfejleszthető, de ügyfélnek még nem adható.
-- **Ready for demo** - demózható, de nincs teljes átadási dokumentáció.
-- **Ready for client pilot** - korlátozott ügyfél pilotra alkalmas human review-val.
-- **Not ready** - kritikus technikai/dokumentációs/compliance hiány.
-- **Legal review required** - jogi ellenőrzés nélkül nem javasolt élesítés/átadás.
+- **Ready for internal development** - agentekkel tovĂˇbbfejleszthetĹ‘, de ĂĽgyfĂ©lnek mĂ©g nem adhatĂł.
+- **Ready for demo** - demĂłzhatĂł, de nincs teljes ĂˇtadĂˇsi dokumentĂˇciĂł.
+- **Ready for client pilot** - korlĂˇtozott ĂĽgyfĂ©l pilotra alkalmas human review-val.
+- **Not ready** - kritikus technikai/dokumentĂˇciĂłs/compliance hiĂˇny.
+- **Legal review required** - jogi ellenĹ‘rzĂ©s nĂ©lkĂĽl nem javasolt Ă©lesĂ­tĂ©s/ĂˇtadĂˇs.
 
 ## Review Council szerepek
 
 ### QA Reviewer
 
-Vizsgálja:
+VizsgĂˇlja:
 
-- tesztelhetőség,
+- tesztelhetĹ‘sĂ©g,
 - edge case-ek,
-- regressziós kockázat,
-- output stabilitás.
+- regressziĂłs kockĂˇzat,
+- output stabilitĂˇs.
 
 ### Security Reviewer
 
-Vizsgálja:
+VizsgĂˇlja:
 
 - secret leakage,
 - prompt injection,
-- adatkiáramlás,
-- túl széles MCP/tool hozzáférés.
+- adatkiĂˇramlĂˇs,
+- tĂşl szĂ©les MCP/tool hozzĂˇfĂ©rĂ©s.
 
 ### EU AI Act Readiness Reviewer
 
-Vizsgálja:
+VizsgĂˇlja:
 
 - transparency,
-- szerepkör,
+- szerepkĂ¶r,
 - high-risk signal,
 - human oversight,
 - legal review triggers.
 
 ### Product/Delivery Reviewer
 
-Vizsgálja:
+VizsgĂˇlja:
 
-- érthető termékígéret,
-- ügyfélátadási minőség,
-- hiányzó dokumentáció,
-- roadmap realitás.
+- Ă©rthetĹ‘ termĂ©kĂ­gĂ©ret,
+- ĂĽgyfĂ©lĂˇtadĂˇsi minĹ‘sĂ©g,
+- hiĂˇnyzĂł dokumentĂˇciĂł,
+- roadmap realitĂˇs.
 
 ### Skeptical Customer
 
-Vizsgálja:
+VizsgĂˇlja:
 
-- miben nem bízná az ügyfél,
-- milyen kérdéseket tenne fel,
-- mi hiányzik ahhoz, hogy átvegye.
+- miben nem bĂ­znĂˇ az ĂĽgyfĂ©l,
+- milyen kĂ©rdĂ©seket tenne fel,
+- mi hiĂˇnyzik ahhoz, hogy Ăˇtvegye.
 
 ### Final Judge
 
-Összesíti:
+Ă–sszesĂ­ti:
 
 - readiness score,
-- fő kockázatok,
+- fĹ‘ kockĂˇzatok,
 - go/no-go,
-- következő javítások.
+- kĂ¶vetkezĹ‘ javĂ­tĂˇsok.
 
-## Első demo scenario
+## ElsĹ‘ demo scenario
 
-Töltsünk fel egy saját AI miniappot, például:
+TĂ¶ltsĂĽnk fel egy sajĂˇt AI miniappot, pĂ©ldĂˇul:
 
 - AI chatbot,
 - RAG dokumentumasszisztens,
 - AI_COMP egyik modulja,
 - VerdictMesh frontend,
-- ShipSeal saját repo.
+- ShipSeal sajĂˇt repo.
 
-A demo végén legyen letölthető egy Delivery Pack ZIP.
+A demo vĂ©gĂ©n legyen letĂ¶lthetĹ‘ egy Delivery Pack ZIP.
 
-## MVP elfogadási kritérium
+## MVP elfogadĂˇsi kritĂ©rium
 
-Az MVP akkor jó, ha egy AI freelancer ezt mondaná:
+Az MVP akkor jĂł, ha egy AI freelancer ezt mondanĂˇ:
 
-> Ezt a csomagot tényleg be tudom tenni az ügyfélátadás mellé, és jobb színben tünteti fel a munkámat.
+> Ezt a csomagot tĂ©nyleg be tudom tenni az ĂĽgyfĂ©lĂˇtadĂˇs mellĂ©, Ă©s jobb szĂ­nben tĂĽnteti fel a munkĂˇmat.

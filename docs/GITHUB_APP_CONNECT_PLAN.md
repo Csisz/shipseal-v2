@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # GitHub App Connect Plan
 
 ShipSeal's ideal production source flow should be:
@@ -139,3 +145,4 @@ The current codebase uses these API route locations:
 `/api/github-app/create-readiness-pr` creates a `shipseal/...` branch, writes the Readiness Fix Pack files, and opens a Pull Request with the installation token. It rejects direct target branches such as `main`, `master`, `develop`, and `trunk`, and it never returns the installation token.
 
 The next milestone should harden callback/session state, improve private repository scanning UX, add PR conflict reuse/update behavior, and add audit logging.
+

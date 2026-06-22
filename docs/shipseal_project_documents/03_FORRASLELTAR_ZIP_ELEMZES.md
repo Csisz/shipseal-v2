@@ -1,18 +1,24 @@
-# 03 - Forrásleltár a csatolt ZIP-ek alapján
+﻿# DEPRECATED
 
-## Áttekintés
+Superseded by:
 
-**Névkezelés:** a feltöltött forrásokban még előfordulhat az `AgentReady`, `agentready-hub`, `AI2AI` és `VerdictMesh` név. Ezek fejlesztési eredetként megmaradhatnak, de a végtermék és a dokumentáció már **ShipSeal** néven fut.
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
 
-A jelenlegi források három különálló, de összeépíthető félkész projektet tartalmaznak. Ezeket nem érdemes önálló termékként továbbvinni, hanem egy egységes ShipSeal termék komponenseiként.
+# 03 - ForrĂˇsleltĂˇr a csatolt ZIP-ek alapjĂˇn
+
+## ĂttekintĂ©s
+
+**NĂ©vkezelĂ©s:** a feltĂ¶ltĂ¶tt forrĂˇsokban mĂ©g elĹ‘fordulhat az `AgentReady`, `agentready-hub`, `AI2AI` Ă©s `VerdictMesh` nĂ©v. Ezek fejlesztĂ©si eredetkĂ©nt megmaradhatnak, de a vĂ©gtermĂ©k Ă©s a dokumentĂˇciĂł mĂˇr **ShipSeal** nĂ©ven fut.
+
+A jelenlegi forrĂˇsok hĂˇrom kĂĽlĂ¶nĂˇllĂł, de Ă¶sszeĂ©pĂ­thetĹ‘ fĂ©lkĂ©sz projektet tartalmaznak. Ezeket nem Ă©rdemes Ă¶nĂˇllĂł termĂ©kkĂ©nt tovĂˇbbvinni, hanem egy egysĂ©ges ShipSeal termĂ©k komponenseikĂ©nt.
 
 ## 1. agentready-hub-main
 
 ### Jelenlegi szerep
 
-Ez a legközelebb áll a végső ShipSeal termékhez. Egy React/Vite/shadcn alapú lokális webapp, amely repository ZIP-et vagy publikus GitHub repót elemez, ShipSeal Readiness Score-t számol, blokkolókat jelez, és átadási fájlokat generál.
+Ez a legkĂ¶zelebb Ăˇll a vĂ©gsĹ‘ ShipSeal termĂ©khez. Egy React/Vite/shadcn alapĂş lokĂˇlis webapp, amely repository ZIP-et vagy publikus GitHub repĂłt elemez, ShipSeal Readiness Score-t szĂˇmol, blokkolĂłkat jelez, Ă©s ĂˇtadĂˇsi fĂˇjlokat generĂˇl.
 
-### Technológia
+### TechnolĂłgia
 
 - React
 - Vite
@@ -23,14 +29,14 @@ Ez a legközelebb áll a végső ShipSeal termékhez. Egy React/Vite/shadcn alap
 - Tailwind
 - localStorage metadata history
 
-### Már működő képességek a README és kód alapján
+### MĂˇr mĹ±kĂ¶dĹ‘ kĂ©pessĂ©gek a README Ă©s kĂłd alapjĂˇn
 
-- ZIP upload scanning böngészőben.
-- Publikus GitHub repo import próbálkozás böngészőből.
-- Manuális ZIP fallback.
+- ZIP upload scanning bĂ¶ngĂ©szĹ‘ben.
+- Publikus GitHub repo import prĂłbĂˇlkozĂˇs bĂ¶ngĂ©szĹ‘bĹ‘l.
+- ManuĂˇlis ZIP fallback.
 - Determinisztikus readiness score.
 - Critical blocker logika.
-- AI readiness narrative lokális, template-alapú providerrel.
+- AI readiness narrative lokĂˇlis, template-alapĂş providerrel.
 - Agent Pack export.
 - MCP Governance Pack export.
 - Sanitized Repo Context Pack export.
@@ -38,9 +44,9 @@ Ez a legközelebb áll a végső ShipSeal termékhez. Egy React/Vite/shadcn alap
 - Metadata-only recent scan history.
 - No-code-execution safety elv.
 
-### Generált fájlok
+### GenerĂˇlt fĂˇjlok
 
-A kódban és export logikában az alábbi Agent Pack fájlok szerepelnek:
+A kĂłdban Ă©s export logikĂˇban az alĂˇbbi Agent Pack fĂˇjlok szerepelnek:
 
 - `AGENTS.md`
 - `CLAUDE.md`
@@ -63,32 +69,32 @@ A context packban:
 - `REPO_CONTEXT_PACK.md`
 - `repo-context-pack.json`
 
-### Erősségek
+### ErĹ‘ssĂ©gek
 
-- Már van termékszerű frontend.
-- Már termékszerű frontendként használható, de márkanév szerint át kell nevezni ShipSealre.
-- A lokális/privát scanning jó privacy üzenet.
-- Determinisztikus scoring jó alap a bizalomhoz.
-- Exportálható outputok már vannak.
-- MCP governance irány már megjelent.
+- MĂˇr van termĂ©kszerĹ± frontend.
+- MĂˇr termĂ©kszerĹ± frontendkĂ©nt hasznĂˇlhatĂł, de mĂˇrkanĂ©v szerint Ăˇt kell nevezni ShipSealre.
+- A lokĂˇlis/privĂˇt scanning jĂł privacy ĂĽzenet.
+- Determinisztikus scoring jĂł alap a bizalomhoz.
+- ExportĂˇlhatĂł outputok mĂˇr vannak.
+- MCP governance irĂˇny mĂˇr megjelent.
 
-### Hiányosságok
+### HiĂˇnyossĂˇgok
 
 - Nincs backend.
 - Nincs auth.
-- Nincs fizetés.
-- Nincs adatbázis.
+- Nincs fizetĂ©s.
+- Nincs adatbĂˇzis.
 - Nincs private repo GitHub App.
-- Nincs valódi AI provider integráció.
+- Nincs valĂłdi AI provider integrĂˇciĂł.
 - Nincs PDF report export.
 - Nincs EU AI Act readiness modul.
-- Nincs Skills Pack generálás.
-- Nincs VerdictMesh / Review Council integráció.
-- A scoring jelenleg főleg repo metadata és file presence jellegű, nem valódi futtatott teszt.
+- Nincs Skills Pack generĂˇlĂˇs.
+- Nincs VerdictMesh / Review Council integrĂˇciĂł.
+- A scoring jelenleg fĹ‘leg repo metadata Ă©s file presence jellegĹ±, nem valĂłdi futtatott teszt.
 
-### Mit használjunk fel belőle?
+### Mit hasznĂˇljunk fel belĹ‘le?
 
-Ezt vegyük alap frontendnek és első scanner engine-nek. A meglévő pack-generálást bővítsük:
+Ezt vegyĂĽk alap frontendnek Ă©s elsĹ‘ scanner engine-nek. A meglĂ©vĹ‘ pack-generĂˇlĂˇst bĹ‘vĂ­tsĂĽk:
 
 - Skills Pack,
 - AI Act readiness,
@@ -101,25 +107,25 @@ Ezt vegyük alap frontendnek és első scanner engine-nek. A meglévő pack-gene
 
 ### Jelenlegi szerep
 
-Ez egy Python alapú multi-model Expert Council / AI Debate rendszer. Több AI modellt szervez strukturált vitába, majd végső szintézist, meeting reportot, transcriptet, docx/markdown outputokat készít.
+Ez egy Python alapĂş multi-model Expert Council / AI Debate rendszer. TĂ¶bb AI modellt szervez strukturĂˇlt vitĂˇba, majd vĂ©gsĹ‘ szintĂ©zist, meeting reportot, transcriptet, docx/markdown outputokat kĂ©szĂ­t.
 
-### Technológia
+### TechnolĂłgia
 
 - Python
-- opcionális FastAPI / Uvicorn API
+- opcionĂˇlis FastAPI / Uvicorn API
 - provider adapterek: OpenAI, Anthropic, Gemini, OpenAI-compatible
-- modularizált `ai2ai/` package
-- CLI belépési pont: `ai_debate.py`
+- modularizĂˇlt `ai2ai/` package
+- CLI belĂ©pĂ©si pont: `ai_debate.py`
 - output contracts
 - regression test logika
 
-### Már működő / dokumentált képességek
+### MĂˇr mĹ±kĂ¶dĹ‘ / dokumentĂˇlt kĂ©pessĂ©gek
 
-- Forrásanyagok betöltése: ZIP, folder, docx, pdf, markdown, code, json, yaml, képek.
-- Evidence Pack készítés.
-- Független modellvélemények.
+- ForrĂˇsanyagok betĂ¶ltĂ©se: ZIP, folder, docx, pdf, markdown, code, json, yaml, kĂ©pek.
+- Evidence Pack kĂ©szĂ­tĂ©s.
+- FĂĽggetlen modellvĂ©lemĂ©nyek.
 - Issue Matrix.
-- Célzott rebuttal.
+- CĂ©lzott rebuttal.
 - Revision JSON.
 - Final Judge.
 - Contract-aware synthesis.
@@ -127,27 +133,27 @@ Ez egy Python alapú multi-model Expert Council / AI Debate rendszer. Több AI m
 - Meeting report.
 - Transcript.
 - Debate log.
-- Opcionális API réteg.
+- OpcionĂˇlis API rĂ©teg.
 - Regression test pipeline.
 
-### Erősségek
+### ErĹ‘ssĂ©gek
 
-- Ez adhatja a ShipSeal Review Council / VerdictMesh motorját.
-- Már megvan a többfázisú gondolkodási logika.
-- Jó a szerepalapú review-ra: QA, security, compliance, business, skeptical customer.
-- Jó output-szerkezetekhez és dokumentumgeneráláshoz.
-- Már van modularizált backend alap.
+- Ez adhatja a ShipSeal Review Council / VerdictMesh motorjĂˇt.
+- MĂˇr megvan a tĂ¶bbfĂˇzisĂş gondolkodĂˇsi logika.
+- JĂł a szerepalapĂş review-ra: QA, security, compliance, business, skeptical customer.
+- JĂł output-szerkezetekhez Ă©s dokumentumgenerĂˇlĂˇshoz.
+- MĂˇr van modularizĂˇlt backend alap.
 
-### Hiányosságok
+### HiĂˇnyossĂˇgok
 
-- Nagyon nagy CLI file is jelen van (`ai2ai/cli.py` jelentős méretű), további tisztítás kellhet.
-- Provider adapterek részben stub/korai állapotúak lehetnek.
-- Nem ShipSeal-specifikus még.
-- Az API opcionális, nem production backend.
+- Nagyon nagy CLI file is jelen van (`ai2ai/cli.py` jelentĹ‘s mĂ©retĹ±), tovĂˇbbi tisztĂ­tĂˇs kellhet.
+- Provider adapterek rĂ©szben stub/korai ĂˇllapotĂşak lehetnek.
+- Nem ShipSeal-specifikus mĂ©g.
+- Az API opcionĂˇlis, nem production backend.
 - Auth, queue, storage, billing nincs.
-- Nem közvetlenül UI-barát report engine.
+- Nem kĂ¶zvetlenĂĽl UI-barĂˇt report engine.
 
-### Mit használjunk fel belőle?
+### Mit hasznĂˇljunk fel belĹ‘le?
 
 Az AI2AI legyen a ShipSeal egyik backend modulja:
 
@@ -157,32 +163,32 @@ Az AI2AI legyen a ShipSeal egyik backend modulja:
 - `FinalJudge`,
 - `ReportSynthesizer`.
 
-A meglévő debate logikát szűkíteni kell ShipSeal célokra. Nem kell minden scenario az MVP-be.
+A meglĂ©vĹ‘ debate logikĂˇt szĹ±kĂ­teni kell ShipSeal cĂ©lokra. Nem kell minden scenario az MVP-be.
 
 ## 3. verdictmesh-main
 
 ### Jelenlegi szerep
 
-Ez egy Base44-exportált Vite/React frontend, amely a lokális AI2AI backendhez tud kapcsolódni. A célja a modellek közötti debate / council folyamat vizuális megjelenítése.
+Ez egy Base44-exportĂˇlt Vite/React frontend, amely a lokĂˇlis AI2AI backendhez tud kapcsolĂłdni. A cĂ©lja a modellek kĂ¶zĂ¶tti debate / council folyamat vizuĂˇlis megjelenĂ­tĂ©se.
 
-### Technológia
+### TechnolĂłgia
 
 - React
 - Vite
 - JavaScript / JSX
-- Base44 SDK opcionálisan
+- Base44 SDK opcionĂˇlisan
 - Tailwind / shadcn/Radix UI
 - Framer Motion
 - React Markdown
 - jspdf / html2canvas dependency is jelen van
 - API client: `src/api/ai2aiClient.js`
 
-### Már meglévő képességek
+### MĂˇr meglĂ©vĹ‘ kĂ©pessĂ©gek
 
-- Launch képernyő backend vagy demo móddal.
-- AI2AI API integráció.
-- Verdict oldal, amely session metadata, validation status, artifact path és synthesis output megjelenítésére alkalmas.
-- Vizuális council/debate komponensek:
+- Launch kĂ©pernyĹ‘ backend vagy demo mĂłddal.
+- AI2AI API integrĂˇciĂł.
+- Verdict oldal, amely session metadata, validation status, artifact path Ă©s synthesis output megjelenĂ­tĂ©sĂ©re alkalmas.
+- VizuĂˇlis council/debate komponensek:
   - CouncilChatFeed,
   - CouncilCompletionCard,
   - CouncilRightRail,
@@ -193,36 +199,36 @@ Ez egy Base44-exportált Vite/React frontend, amely a lokális AI2AI backendhez 
   - LiveModelCard,
   - LiveTranscript.
 
-### Erősségek
+### ErĹ‘ssĂ©gek
 
-- Látványos UI alap a Review Council funkcióhoz.
-- Már kapcsolódik az AI2AI backendhez.
-- Jó demoérték: megmutatja, hogy több szerep értékeli a projektet.
-- A VerdictMesh név használható belső motornévként.
+- LĂˇtvĂˇnyos UI alap a Review Council funkciĂłhoz.
+- MĂˇr kapcsolĂłdik az AI2AI backendhez.
+- JĂł demoĂ©rtĂ©k: megmutatja, hogy tĂ¶bb szerep Ă©rtĂ©keli a projektet.
+- A VerdictMesh nĂ©v hasznĂˇlhatĂł belsĹ‘ motornĂ©vkĂ©nt.
 
-### Hiányosságok
+### HiĂˇnyossĂˇgok
 
-- Base44-exportált, tisztításra szorulhat.
-- JavaScript, miközben ShipSeal TypeScript; egységesítés kell.
-- Külön frontendként nem célszerű továbbvinni.
-- Auth/demo flow és Base44 maradványok termékbe emelés előtt rendezendők.
-- Nincs közös design system a ShipSeal frontenddel.
+- Base44-exportĂˇlt, tisztĂ­tĂˇsra szorulhat.
+- JavaScript, mikĂ¶zben ShipSeal TypeScript; egysĂ©gesĂ­tĂ©s kell.
+- KĂĽlĂ¶n frontendkĂ©nt nem cĂ©lszerĹ± tovĂˇbbvinni.
+- Auth/demo flow Ă©s Base44 maradvĂˇnyok termĂ©kbe emelĂ©s elĹ‘tt rendezendĹ‘k.
+- Nincs kĂ¶zĂ¶s design system a ShipSeal frontenddel.
 
-### Mit használjunk fel belőle?
+### Mit hasznĂˇljunk fel belĹ‘le?
 
-Nem önálló termékként. Használjuk:
+Nem Ă¶nĂˇllĂł termĂ©kkĂ©nt. HasznĂˇljuk:
 
-- Review Council vizualizációs komponensek inspirációjaként,
-- Verdict oldal alapgondolatként,
-- AI2AI API client mintaként,
-- élő debate / council demo UI részleteként.
+- Review Council vizualizĂˇciĂłs komponensek inspirĂˇciĂłjakĂ©nt,
+- Verdict oldal alapgondolatkĂ©nt,
+- AI2AI API client mintakĂ©nt,
+- Ă©lĹ‘ debate / council demo UI rĂ©szletekĂ©nt.
 
-## Összesített komponens-térkép
+## Ă–sszesĂ­tett komponens-tĂ©rkĂ©p
 
-| Végső ShipSeal modul | Felhasználható forrás |
+| VĂ©gsĹ‘ ShipSeal modul | FelhasznĂˇlhatĂł forrĂˇs |
 |---|---|
 | Repo scanner | agentready-hub |
-| Agent Pack generátor | agentready-hub |
+| Agent Pack generĂˇtor | agentready-hub |
 | MCP Governance Pack | agentready-hub |
 | Repo Context Pack | agentready-hub |
 | Review Council / multi-agent review | ai2ai-main |
@@ -230,21 +236,21 @@ Nem önálló termékként. Használjuk:
 | Final Judge / synthesis | ai2ai-main |
 | Debate / council visual UI | verdictmesh-main |
 | Backend API minta | ai2ai-main + verdictmesh-main |
-| Product landing és upload UI | agentready-hub |
+| Product landing Ă©s upload UI | agentready-hub |
 
-## Javasolt új repo-struktúra
+## Javasolt Ăşj repo-struktĂşra
 
 ```text
 shipseal/
   apps/
     web/                    # ShipSeal frontend, TypeScript, Vite/React
-    api/                    # FastAPI vagy Node backend később
+    api/                    # FastAPI vagy Node backend kĂ©sĹ‘bb
   packages/
-    scanner/                # repo scanner és scoring
+    scanner/                # repo scanner Ă©s scoring
     pack-generator/         # AGENTS, CLAUDE, skills, MCP, reports
-    review-council/         # AI2AI/VerdictMesh logika szűkítve
+    review-council/         # AI2AI/VerdictMesh logika szĹ±kĂ­tve
     ai-act-readiness/       # checklist, questions, transparency drafts
-    report-renderer/        # Markdown/PDF/DOCX export később
+    report-renderer/        # Markdown/PDF/DOCX export kĂ©sĹ‘bb
   docs/
     product/
     architecture/
@@ -255,15 +261,15 @@ shipseal/
     sample-reports/
 ```
 
-## Első migrációs döntés
+## ElsĹ‘ migrĂˇciĂłs dĂ¶ntĂ©s
 
-A leggyorsabb út: ne monorepo-migrációval kezdjünk. Először az `agentready-hub` repót vigyük tovább új branchben, és importáljunk be belőle funkciókat:
+A leggyorsabb Ăşt: ne monorepo-migrĂˇciĂłval kezdjĂĽnk. ElĹ‘szĂ¶r az `agentready-hub` repĂłt vigyĂĽk tovĂˇbb Ăşj branchben, Ă©s importĂˇljunk be belĹ‘le funkciĂłkat:
 
-1. Az agentready-hub frontend marad az alap, ShipSealre átnevezve.
-2. AI2AI-t külön backend service-ként kapcsoljuk.
-3. VerdictMesh komponenseket csak később emeljük át.
-4. A report output-spec legyen előbb kész, mint a nagy architektúra.
+1. Az agentready-hub frontend marad az alap, ShipSealre Ăˇtnevezve.
+2. AI2AI-t kĂĽlĂ¶n backend service-kĂ©nt kapcsoljuk.
+3. VerdictMesh komponenseket csak kĂ©sĹ‘bb emeljĂĽk Ăˇt.
+4. A report output-spec legyen elĹ‘bb kĂ©sz, mint a nagy architektĂşra.
 
-## Statikus vizsgálat korlátja
+## Statikus vizsgĂˇlat korlĂˇtja
 
-A ZIP-eket forrás- és dokumentációszinten néztük át. Buildet, tesztet, dependency auditot és runtime futtatást ebben a dokumentumkészítési lépésben nem végeztünk. A következő fejlesztési lépésben külön technikai smoke test szükséges.
+A ZIP-eket forrĂˇs- Ă©s dokumentĂˇciĂłszinten nĂ©ztĂĽk Ăˇt. Buildet, tesztet, dependency auditot Ă©s runtime futtatĂˇst ebben a dokumentumkĂ©szĂ­tĂ©si lĂ©pĂ©sben nem vĂ©geztĂĽnk. A kĂ¶vetkezĹ‘ fejlesztĂ©si lĂ©pĂ©sben kĂĽlĂ¶n technikai smoke test szĂĽksĂ©ges.

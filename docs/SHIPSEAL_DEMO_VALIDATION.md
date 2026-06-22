@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # ShipSeal MVP Demo Validation
 
 This document describes the manual demo validation flow for the local-first ShipSeal MVP. Use it before a client-facing demo or before accepting a sprint that changes scan, intake, preview, or Delivery Pack output.
@@ -157,3 +163,4 @@ The demo validation passes when:
 - AI Act readiness output is a pre-screening aid only, not legal advice.
 - Security output is not a production security audit.
 - Public GitHub import can fail because of browser/network/CORS constraints; ZIP upload is the reliable fallback.
+

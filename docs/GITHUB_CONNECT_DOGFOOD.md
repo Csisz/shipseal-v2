@@ -1,3 +1,9 @@
+﻿# DEPRECATED
+
+Superseded by:
+
+docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+
 # GitHub Connect Dogfood Check
 
 Use this checklist on the deployed Vercel app after setting the GitHub App environment variables.
@@ -41,3 +47,4 @@ GitHub App settings checklist:
 - The OAuth client ID in `GITHUB_APP_CLIENT_ID` must be the GitHub App OAuth client ID, not the numeric GitHub App ID.
 
 Do not paste private key, OAuth secret, or installation tokens into client-side logs or screenshots.
+
