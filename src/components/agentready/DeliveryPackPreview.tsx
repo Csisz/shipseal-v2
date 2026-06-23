@@ -6,6 +6,7 @@ import type { PartialProjectIntake } from '@/lib/intake';
 import { normalizeProjectIntake } from '@/lib/intake';
 import { buildRepoContextPackJson, buildScoreJson, downloadAgentPackZip } from '@/lib/exports';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { downloadClientReportPdf, generateClientReportHtml } from '@/lib/report';
 import { toast } from '@/hooks/use-toast';
 import { DEFAULT_AGENT_OPERATING_MODE, buildAgentOperatingModeSummary, resolveAgentOperatingMode } from '@/lib/agentOperatingMode';
@@ -23,9 +24,11 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
   const normalizedIntake = normalizeProjectIntake(intake, report.repoName);
   const resolvedAgentMode = resolveAgentOperatingMode(agentOperatingMode || report.recommendedAgentOperatingMode || DEFAULT_AGENT_OPERATING_MODE);
   const agentModeSummary = buildAgentOperatingModeSummary(resolvedAgentMode);
-  const focus = resolveDeliveryPackFocus(selectedPackages);
+  const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
+  const focus = resolveDeliveryPackFocus(selectedPackages, { folderAgentPaths });
   const generatedPaths = focus.generatedPaths;
   const hasContextCompressionPack = generatedPaths.includes('07-context/ARCHITECTURE.md');
+  const hasFolderAgentSuggestions = generatedPaths.some(path => path.startsWith('07-context/folder-agents/'));
   const scoreJson = buildScoreJson(report, { selectedPackages, agentOperatingMode: resolvedAgentMode });
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const risks = previewRisks(report, normalizedIntake);
@@ -121,6 +124,11 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
         {hasContextCompressionPack && (
           <p className="mt-2 text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">Context Compression Pack generated.</span> ShipSeal generated compact project memory files to help AI coding agents avoid unnecessary full-repo scans.
+          </p>
+        )}
+        {hasFolderAgentSuggestions && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Folder-level AGENTS suggestions generated.</span> These local instructions help AI coding agents use the right context for each part of the project.
           </p>
         )}
       </div>

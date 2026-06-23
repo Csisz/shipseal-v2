@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CreateReadinessPrDialog } from '@/components/agentready/CreateReadinessPrDialog';
 import { SuggestedReadinessFixPack } from '@/components/agentready/SuggestedReadinessFixPack';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { createConnectedGitHubConnection } from '@/lib/githubConnection/types';
 import { buildSampleReport } from '@/lib/readiness';
 import { buildSuggestedReadinessFixPack } from '@/lib/readinessFixPack';
@@ -303,7 +304,8 @@ describe('SuggestedReadinessFixPack', () => {
 
   it('distinguishes Agent development Delivery Pack outputs from the PR safe subset', async () => {
     const report = buildSampleReport();
-    const agentPackOutputCount = resolveDeliveryPackFocus(['agent-readiness']).generatedPaths.length;
+    const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
+    const agentPackOutputCount = resolveDeliveryPackFocus(['agent-readiness'], { folderAgentPaths }).generatedPaths.length;
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,

@@ -23,6 +23,7 @@ import type { ReadinessReport } from '@/lib/types';
 import type { ReadinessFixPackFile } from '@/lib/readinessFixPack';
 import { buildReadinessPrPlan } from '@/lib/readinessPr';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import {
   CreateReadinessPrClientError,
   ACTIVE_CI_WORKFLOW_PATH,
@@ -45,7 +46,8 @@ interface Props {
 export function CreateReadinessPrDialog({ report, files, githubAppConfig, githubConnection, selectedPackages = [] }: Props) {
   const [open, setOpen] = useState(false);
   const plan = useMemo(() => buildReadinessPrPlan(selectedPackages), [selectedPackages]);
-  const focus = useMemo(() => resolveDeliveryPackFocus(selectedPackages), [selectedPackages]);
+  const folderAgentPaths = useMemo(() => getFolderAgentSuggestionPaths(report.repoContextPack), [report.repoContextPack]);
+  const focus = useMemo(() => resolveDeliveryPackFocus(selectedPackages, { folderAgentPaths }), [selectedPackages, folderAgentPaths]);
   const inferred = useMemo(() => inferGitHubRepo(report), [report]);
   const appConfig = useMemo(() => githubAppConfig || getGitHubAppClientConfig(), [githubAppConfig]);
   const connection = useMemo(() => githubConnection || buildGitHubConnectionFromReport(report), [githubConnection, report]);

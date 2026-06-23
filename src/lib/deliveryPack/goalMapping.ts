@@ -181,13 +181,22 @@ export interface DeliveryPackFocus {
   packageSummary: string;
 }
 
-export function resolveDeliveryPackFocus(selectedPackages: string[] = []): DeliveryPackFocus {
+interface DeliveryPackFocusOptions {
+  folderAgentPaths?: string[];
+}
+
+export function resolveDeliveryPackFocus(selectedPackages: string[] = [], options: DeliveryPackFocusOptions = {}): DeliveryPackFocus {
   const selectedGoals = resolveSelectedPackages(selectedPackages);
   const allPaths = getDeliveryPackRequiredPaths();
   const fullPackage = selectedGoals.includes(FULL_PACKAGE_ID);
-  const generatedPaths = fullPackage
+  const folderAgentPaths = uniquePaths(options.folderAgentPaths || []);
+  const staticPaths = fullPackage
     ? allPaths
     : uniquePaths(selectedGoals.flatMap(goal => GOAL_OUTPUT_PATHS[goal])).filter(path => allPaths.includes(path));
+  const generatedPaths = uniquePaths([
+    ...staticPaths,
+    ...(fullPackage || selectedGoals.includes('agent-readiness') ? folderAgentPaths : []),
+  ]);
   const allReadinessPrPaths = uniquePaths(Object.entries(GOAL_READINESS_PR_PATHS)
     .filter(([id]) => id !== FULL_PACKAGE_ID)
     .flatMap(([, paths]) => paths));

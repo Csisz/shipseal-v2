@@ -19,6 +19,7 @@ import type { ProjectIntake } from '@/lib/intake';
 import { createDefaultProjectIntake, normalizeProjectIntake } from '@/lib/intake';
 import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages } from '@/lib/packages';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import type { GitHubConnectionState } from '@/lib/githubConnection/types';
 import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentOperatingMode, resolveAgentOperatingMode, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
 
@@ -38,7 +39,8 @@ interface Props {
 export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false, selectedPackages, agentOperatingMode, githubConnection }: Props) {
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
   const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
-  const deliveryFocus = resolveDeliveryPackFocus(resolvedPackages);
+  const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
+  const deliveryFocus = resolveDeliveryPackFocus(resolvedPackages, { folderAgentPaths });
   const resolvedAgentMode = resolveAgentOperatingMode(agentOperatingMode || report.recommendedAgentOperatingMode || DEFAULT_AGENT_OPERATING_MODE);
   const agentMode = getAgentOperatingMode(resolvedAgentMode);
   const modeAgentPack = applyAgentOperatingModeToFiles(report, resolvedAgentMode);
@@ -119,6 +121,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               outputCount={deliveryFocus.generatedPaths.length}
               packageSummary={deliveryFocus.packageSummary}
               hasContextCompressionPack={deliveryFocus.generatedPaths.includes('07-context/ARCHITECTURE.md')}
+              hasFolderAgentSuggestions={deliveryFocus.generatedPaths.some(path => path.startsWith('07-context/folder-agents/'))}
             />
             {selectionUsesAgentDevelopment(resolvedPackages) && (
               <AgentOperatingModeSummary
@@ -490,11 +493,13 @@ function ProjectPackageSummary({
   outputCount,
   packageSummary,
   hasContextCompressionPack,
+  hasFolderAgentSuggestions,
 }: {
   packageLabel: string;
   outputCount: number;
   packageSummary: string;
   hasContextCompressionPack: boolean;
+  hasFolderAgentSuggestions: boolean;
 }) {
   return (
     <div className="mt-3 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-4 shadow-sm shadow-primary/5">
@@ -515,6 +520,11 @@ function ProjectPackageSummary({
       {hasContextCompressionPack && (
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
           <span className="font-semibold text-foreground">Context Compression Pack generated.</span> ShipSeal generated compact project memory files to help AI coding agents avoid unnecessary full-repo scans.
+        </p>
+      )}
+      {hasFolderAgentSuggestions && (
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+          <span className="font-semibold text-foreground">Folder-level AGENTS suggestions generated.</span> These local instructions help AI coding agents use the right context for each part of the project.
         </p>
       )}
     </div>

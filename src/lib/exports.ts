@@ -1,6 +1,7 @@
 import type { AgentPackFile, MCPPolicyFile, ReadinessReport, ScoreJsonExport } from './types';
 import { buildDeliveryPackFiles } from './deliveryPack';
 import { resolveDeliveryPackFocus } from './deliveryPack/goalMapping';
+import { getFolderAgentSuggestionPaths } from './deliveryPack/folderAgents';
 import { normalizeProjectIntake } from './intake';
 import type { PartialProjectIntake } from './intake';
 import { DEFAULT_AGENT_OPERATING_MODE, buildAgentOperatingModeSummary, resolveAgentOperatingMode } from './agentOperatingMode';
@@ -57,7 +58,8 @@ export function buildAgentPackZipFilename(repositoryName: string): string {
 }
 
 export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonOptions = {}): ScoreJsonExport {
-  const deliveryPackFocus = resolveDeliveryPackFocus(options.selectedPackages);
+  const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
+  const deliveryPackFocus = resolveDeliveryPackFocus(options.selectedPackages, { folderAgentPaths });
   const agentOperatingMode = resolveAgentOperatingMode(options.agentOperatingMode || report.recommendedAgentOperatingMode || DEFAULT_AGENT_OPERATING_MODE);
 
   return {

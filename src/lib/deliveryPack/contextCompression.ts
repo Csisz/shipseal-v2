@@ -126,6 +126,7 @@ function criticalFiles(source: ContextSource) {
   const exportReport = matchingPaths(source, [/report/i, /export/i, /deliveryPack/i, /delivery-pack/i]);
   const github = matchingPaths(source, [/github/i, /^api\/github/i, /\/api\/github/i, /\.github\//i]);
   const tests = matchingPaths(source, [/(\.|-)(test|spec)\.[cm]?[jt]sx?$/i, /(^|\/)(tests?|__tests__)\//i]);
+  const folderAgents = folderAgentLocations(source);
 
   return [
     '# CRITICAL_FILES.md',
@@ -138,6 +139,7 @@ function criticalFiles(source: ContextSource) {
     sectionList('Likely useful for export/report work', exportReport),
     sectionList('Likely useful for GitHub integration', github),
     sectionList('Likely useful for tests', tests),
+    sectionList('Suggested local agent instruction locations', folderAgents),
     sectionList('Existing agent instruction files', source.instructionFiles),
     '',
   ].filter(Boolean).join('\n');
@@ -210,11 +212,16 @@ function taskRouter(source: ContextSource) {
   const github = matchingPaths(source, [/github/i, /^api\/github/i, /\/api\/github/i, /\.github\//i]);
   const tests = matchingPaths(source, [/(\.|-)(test|spec)\.[cm]?[jt]sx?$/i, /(^|\/)(tests?|__tests__)\//i]);
   const security = matchingPaths(source, [/security/i, /\.env/i, /privacy/i, /auth/i]);
+  const folderAgents = folderAgentLocations(source);
 
   return [
     '# TASK_ROUTER.md',
     '',
     'Use this to open fewer files before making changes.',
+    '',
+    '## Folder-level AGENTS suggestions',
+    'Suggested folder-level AGENTS.md files are generated in `07-context/folder-agents/` when scan signals support them. Review before copying them into the repository.',
+    mdList(folderAgents, 'No folder-level AGENTS suggestions detected.'),
     '',
     routeBlock('UI changes', ui, focusedTestCommand(source)),
     routeBlock('Export/report changes', exportReport, focusedTestCommand(source)),
@@ -251,6 +258,13 @@ function orderedKnownPaths(source: ContextSource, patterns: RegExp[]) {
     if (match) paths.push(match);
   }
   return unique(paths);
+}
+
+function folderAgentLocations(source: ContextSource) {
+  const candidates = ['root', 'src', 'src/components', 'src/lib', 'api', 'src/test', 'tests', 'docs'];
+  return candidates
+    .filter(folder => folder === 'root' || source.keyFolders.includes(folder) || source.sampleFiles.some(path => path === folder || path.startsWith(`${folder}/`)))
+    .map(folder => `07-context/folder-agents/${folder}/AGENTS.md`);
 }
 
 function projectType(source: ContextSource) {

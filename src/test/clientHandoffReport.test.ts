@@ -8,7 +8,6 @@ import {
   buildRepoContextPackJson,
   buildScoreJson,
 } from '@/lib/exports';
-import { getDeliveryPackRequiredPaths } from '@/lib/deliveryPack/manifest';
 
 const HANDOFF_PATHS = [
   '06-client-handoff/CLIENT_HANDOFF_REPORT.md',
@@ -49,8 +48,9 @@ describe('ShipSeal client handoff report generator', () => {
   });
 
   it('uses intake values and manifest output count in client-facing reports', () => {
-    const files = generateClientHandoffFiles(intake(), buildScoreJson(buildSampleReport()));
-    const expectedCount = getDeliveryPackRequiredPaths().length;
+    const scoreJson = buildScoreJson(buildSampleReport());
+    const files = generateClientHandoffFiles(intake(), scoreJson);
+    const expectedCount = scoreJson.outputCount;
 
     expect(files.clientHandoffReport).toContain('Client: ClientCo');
     expect(files.clientHandoffReport).toContain('Agency: AgencyCo');

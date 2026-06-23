@@ -88,6 +88,24 @@ describe('ShipSeal sample Delivery Pack', () => {
     expect(taskRouter).toContain('Use this to open fewer files before making changes.');
   });
 
+  it('generates suggested folder-level AGENTS files for detected folders only', () => {
+    const rootAgents = textAt('07-context/folder-agents/root/AGENTS.md');
+    const srcAgents = textAt('07-context/folder-agents/src/AGENTS.md');
+    const componentsAgents = textAt('07-context/folder-agents/src/components/AGENTS.md');
+    const docsAgents = textAt('07-context/folder-agents/docs/AGENTS.md');
+    const pack = buildSampleDeliveryPack();
+    const paths = pack.files.map(file => file.path);
+
+    expect(rootAgents).toContain('Suggested folder-level AGENTS.md files. Review before copying into your repository.');
+    expect(rootAgents).toContain('Do not start by reading the whole repository.');
+    expect(rootAgents).toContain('07-context/ARCHITECTURE.md');
+    expect(rootAgents).toContain('07-context/TASK_ROUTER.md');
+    expect(srcAgents).toContain('Use for application source files');
+    expect(componentsAgents).toContain('Use for UI components');
+    expect(docsAgents).toContain('current ShipSeal 2.0 product direction');
+    expect(paths).not.toContain('07-context/folder-agents/api/AGENTS.md');
+  });
+
   it('does not generate duplicated fallback phrases in markdown outputs', () => {
     const pack = buildSampleDeliveryPack();
     const markdown = pack.files

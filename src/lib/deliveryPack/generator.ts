@@ -6,6 +6,7 @@ import { generateTestingPackFiles } from './testingPack';
 import { generateSkillsPackFiles } from './skillsPack';
 import { generateClientHandoffFiles } from './clientHandoff';
 import { generateContextCompressionFiles } from './contextCompression';
+import { generateFolderAgentSuggestionFiles } from './folderAgents';
 import { generateClientReportHtml } from '../report';
 import {
   SHIPSEAL_DELIVERY_PACK_MANIFEST,
@@ -31,14 +32,22 @@ export function buildDeliveryPackFiles(input: BuildDeliveryPackFilesInput): Deli
   const intake = normalizeProjectIntake(input.intake, projectName);
   const agentFileByName = new Map(input.agentFiles.map(file => [file.name, file]));
   const mcpFileByName = new Map((input.mcpFiles || []).map(file => [file.filename, file]));
-  const focus = resolveDeliveryPackFocus(resolveSelectedPackagesForExport(input.selectedPackages, input.scoreJson));
+  const folderAgentFiles = generateFolderAgentSuggestionFiles({
+    projectName,
+    contextJson: input.contextFiles?.json,
+    scoreJson: input.scoreJson,
+  });
+  const focus = resolveDeliveryPackFocus(resolveSelectedPackagesForExport(input.selectedPackages, input.scoreJson), {
+    folderAgentPaths: Object.keys(folderAgentFiles),
+  });
   const generatedPathSet = new Set(focus.generatedPaths);
 
-  return getDeliveryPackFileContracts(manifest).filter(fileContract => generatedPathSet.has(fileContract.path)).map(fileContract => {
+  const staticFiles = getDeliveryPackFileContracts(manifest).filter(fileContract => generatedPathSet.has(fileContract.path)).map(fileContract => {
     const sourceContent = resolveSourceContent(fileContract.path, fileContract.filename, {
       agentFileByName,
       mcpFileByName,
       contextFiles: input.contextFiles,
+      folderAgentFiles,
       intake,
       scoreJson: input.scoreJson,
     });
@@ -49,6 +58,17 @@ export function buildDeliveryPackFiles(input: BuildDeliveryPackFilesInput): Deli
       content: withGeneratedContent(sourceContent, projectName, fileContract.path, fileContract.kind),
     };
   });
+
+  const staticPathSet = new Set(staticFiles.map(file => file.path));
+  const dynamicFolderAgentFiles = focus.generatedPaths
+    .filter(path => path.startsWith('07-context/folder-agents/') && !staticPathSet.has(path))
+    .map(path => ({
+      path,
+      kind: 'markdown' as const,
+      content: withGeneratedContent(folderAgentFiles[path] || fallbackText(path, projectName), projectName, path, 'markdown'),
+    }));
+
+  return [...staticFiles, ...dynamicFolderAgentFiles];
 }
 
 function resolveProjectName(input: BuildDeliveryPackFilesInput): string {
@@ -94,6 +114,7 @@ function resolveSourceContent(
     agentFileByName: Map<string, AgentPackFile>;
     mcpFileByName: Map<string, MCPPolicyFile>;
     contextFiles?: { markdown: string; json: unknown };
+    folderAgentFiles?: Record<string, string>;
     intake: ProjectIntake;
     scoreJson?: unknown;
   }
@@ -168,6 +189,11 @@ function resolveSourceContent(
   }
 
   if (path.startsWith('07-context/')) {
+    if (path.startsWith('07-context/folder-agents/')) {
+      return input.folderAgentFiles?.[path] || markdownPlaceholder(filename, projectName, [
+        'Suggested folder-level AGENTS.md files. Review before copying into your repository.',
+      ]);
+    }
     return contextCompressionFiles[path] || markdownPlaceholder(filename, projectName, [
       'No compressed context signal was available for this output.',
       'Re-run the scan with a repository ZIP or GitHub repository to populate compact agent memory files.',

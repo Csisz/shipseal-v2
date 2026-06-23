@@ -3,6 +3,7 @@ import { buildSuggestedReadinessFixPack } from '@/lib/readinessFixPack';
 import type { ReadinessFixPackFile } from '@/lib/readinessFixPack';
 import { buildReadinessPrPlan } from '@/lib/readinessPr';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack/goalMapping';
+import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import type { CreateGitHubAppReadinessPrPayload, CreateReadinessPrFilePayload, CreateReadinessPrPayload } from './types';
 
@@ -104,7 +105,7 @@ export function readinessPrPreviewFiles(
 }
 
 export function buildReadinessPrBody(report: ReadinessReport, files: CreateReadinessPrFilePayload[], selectedPackages: string[] = []) {
-  const focus = resolveDeliveryPackFocus(selectedPackages);
+  const focus = resolveDeliveryPackFocus(selectedPackages, { folderAgentPaths: getFolderAgentSuggestionPaths(report.repoContextPack) });
   const plan = buildReadinessPrPlan(selectedPackages);
   const fileList = files.map(file => `- \`${file.path}\``).join('\n');
   const includesActiveWorkflow = files.some(file => file.path === ACTIVE_CI_WORKFLOW_PATH);

@@ -304,9 +304,10 @@ describe('Sprint 2 exports', () => {
       categories: report.categories,
       detectedStack: report.stack,
       scanSummary: report.scanSummary,
-      generatedFiles: getDeliveryPackRequiredPaths(),
+      generatedFiles: expect.arrayContaining(getDeliveryPackRequiredPaths()),
     });
-    expect(scoreJson.generatedFiles).toEqual(getDeliveryPackRequiredPaths());
+    expect(scoreJson.generatedFiles).toEqual(expect.arrayContaining(getDeliveryPackRequiredPaths()));
+    expect(scoreJson.generatedFiles).toContain('07-context/folder-agents/root/AGENTS.md');
     expect(scoreJson.mcpReadiness).toMatchObject({
       score: report.mcpReadiness.score,
       status: report.mcpReadiness.status,
@@ -455,7 +456,7 @@ describe('scan engine boundary', () => {
     expect((result as ScanJobResult).status).toBe('completed');
     expect((result as ScanJobResult).report.repoName).toBe('adapter-repo');
     expect((result as ScanJobResult).scoreJson.mcpReadiness).toBeDefined();
-    expect((result as ScanJobResult).generatedFiles.deliveryPack).toEqual(getDeliveryPackRequiredPaths());
+    expect((result as ScanJobResult).generatedFiles.deliveryPack).toEqual((result as ScanJobResult).scoreJson.generatedFiles);
     clearLocalScanJobs();
   });
 });

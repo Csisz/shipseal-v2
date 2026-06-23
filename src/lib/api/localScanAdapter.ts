@@ -1,5 +1,5 @@
 import { buildScoreJson } from '../exports';
-import { getDeliveryPackRequiredPaths } from '../deliveryPack/manifest';
+import { getFolderAgentSuggestionPaths } from '../deliveryPack/folderAgents';
 import { localScanEngine, ScanCancelledError } from '../scanEngine';
 import type { ReadinessReport } from '../types';
 import type { CreateScanResponse, ScanErrorResponse, ScanJobProgress, ScanJobResult, ScanJobStatus } from './contracts';
@@ -84,13 +84,15 @@ export function getLocalScanJobResult(id: string): ScanJobResult | ScanErrorResp
   if (!job.report || job.status !== 'completed') {
     return { scanId: id, status: 'failed', code: 'SCAN_FAILED', message: 'Scan job has not completed yet.' };
   }
+  const scoreJson = buildScoreJson(job.report);
+  const folderAgentFiles = getFolderAgentSuggestionPaths(job.report.repoContextPack).map(path => path.replace(/^07-context\//, ''));
   return {
     scanId: id,
     status: 'completed',
     report: job.report,
-    scoreJson: buildScoreJson(job.report),
+    scoreJson,
     generatedFiles: {
-      deliveryPack: getDeliveryPackRequiredPaths(),
+      deliveryPack: scoreJson.generatedFiles,
       coreAgentPack: job.report.agentPack.map(file => file.name),
       mcpGovernancePack: job.report.mcpReadiness.generatedFiles.map(file => file.filename),
       repoContextPack: [
@@ -101,6 +103,7 @@ export function getLocalScanJobResult(id: string): ScanJobResult | ScanErrorResp
         'COMMAND_MAP.md',
         'KNOWN_RISKS.md',
         'TASK_ROUTER.md',
+        ...folderAgentFiles,
       ],
     },
   };

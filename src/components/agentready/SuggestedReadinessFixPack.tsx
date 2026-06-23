@@ -11,6 +11,7 @@ import {
 import { buildReadinessPrPlan } from '@/lib/readinessPr';
 import type { GitHubConnectionState } from '@/lib/githubConnection/types';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { readinessPrPreviewFiles } from '@/lib/github/write';
 import { CreateReadinessPrDialog } from './CreateReadinessPrDialog';
 
@@ -26,7 +27,8 @@ export function SuggestedReadinessFixPack({ report, githubConnection, selectedPa
   const selected = files.find(file => file.path === selectedPath) || files[0];
   const prPlan = useMemo(() => buildReadinessPrPlan(selectedPackages), [selectedPackages]);
   const prPreviewFiles = useMemo(() => readinessPrPreviewFiles(files, { selectedPackages }), [files, selectedPackages]);
-  const focus = useMemo(() => resolveDeliveryPackFocus(selectedPackages), [selectedPackages]);
+  const folderAgentPaths = useMemo(() => getFolderAgentSuggestionPaths(report.repoContextPack), [report.repoContextPack]);
+  const focus = useMemo(() => resolveDeliveryPackFocus(selectedPackages, { folderAgentPaths }), [selectedPackages, folderAgentPaths]);
   const [copied, setCopied] = useState(false);
   const [copiedManualSteps, setCopiedManualSteps] = useState(false);
 

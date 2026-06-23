@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildSampleReport } from '@/lib/readiness';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 
 vi.mock('@/components/agentready/ScoreGauge', () => ({
   ScoreGauge: ({ score }: { score: number }) => <div>Score gauge {score}</div>,
@@ -42,9 +43,11 @@ import { ResultDashboard } from '@/components/agentready/ResultDashboard';
 
 describe('ResultDashboard summary copy', () => {
   it('uses compact Delivery Pack summary text that does not truncate the old wording', () => {
+    const report = buildSampleReport();
+    const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
     render(
       <ResultDashboard
-        report={buildSampleReport()}
+        report={report}
         history={[]}
         onReset={vi.fn()}
         onClearHistory={vi.fn()}
@@ -52,7 +55,7 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
-    expect(screen.getByText(`${resolveDeliveryPackFocus(['full-package']).generatedPaths.length} outputs`)).toBeInTheDocument();
+    expect(screen.getByText(`${resolveDeliveryPackFocus(['full-package'], { folderAgentPaths }).generatedPaths.length} outputs`)).toBeInTheDocument();
     expect(screen.queryByText('Full Delivery Pack: 36 required outputs')).not.toBeInTheDocument();
     expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
     expect(screen.getByText(/Advanced details — full scan results and generated files/i)).toBeInTheDocument();
@@ -60,9 +63,11 @@ describe('ResultDashboard summary copy', () => {
   });
 
   it('shows the selected goal package instead of always showing full pack', () => {
+    const report = buildSampleReport();
+    const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
     render(
       <ResultDashboard
-        report={buildSampleReport()}
+        report={report}
         history={[]}
         onReset={vi.fn()}
         onClearHistory={vi.fn()}
@@ -71,8 +76,9 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getByText('Agent development pack')).toBeInTheDocument();
-    expect(screen.getByText(`${resolveDeliveryPackFocus(['agent-readiness']).generatedPaths.length} outputs`)).toBeInTheDocument();
+    expect(screen.getByText(`${resolveDeliveryPackFocus(['agent-readiness'], { folderAgentPaths }).generatedPaths.length} outputs`)).toBeInTheDocument();
     expect(screen.getByText(/Context Compression Pack generated/i)).toBeInTheDocument();
+    expect(screen.getByText(/Folder-level AGENTS suggestions generated/i)).toBeInTheDocument();
     expect(screen.getByText('Recommended operating mode')).toBeInTheDocument();
     expect(screen.getByText('Balanced Productivity')).toBeInTheDocument();
     expect(screen.getAllByText('Balanced token usage').length).toBeGreaterThan(0);
