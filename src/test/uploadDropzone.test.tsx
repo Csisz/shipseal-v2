@@ -50,6 +50,10 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(screen.getByText('Upload ZIP')).toBeInTheDocument();
     expect(screen.getByText('Best for local/private review without GitHub access.')).toBeInTheDocument();
     expect(screen.getByLabelText('Select repository')).toHaveAttribute('placeholder', 'Connect GitHub to list repositories');
+    expect(screen.getByText('Code is never executed.')).toBeInTheDocument();
+    expect(screen.getByText('Static analysis only.')).toBeInTheDocument();
+    expect(screen.getByText('Repository structure and metadata are analyzed.')).toBeInTheDocument();
+    expect(screen.getByText('Existing documentation and project signals are used.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Connect GitHub$/i })).toBeEnabled();
     expect(screen.queryByRole('button', { name: /Install or configure ShipSeal GitHub App/i })).not.toBeInTheDocument();
   });

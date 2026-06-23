@@ -138,6 +138,32 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(exportedScoreJson.content.deliveryPackFocus.manifestOutputCount).toBe(scoreJson.generatedFiles.length);
   });
 
+  it('keeps the delivery manifest aligned with score.json metadata and generated files', async () => {
+    const report = buildSampleReport();
+    const selectedPackages = ['client-handoff'];
+    const scoreJson = buildScoreJson(report, { selectedPackages });
+    const blob = await buildAgentPackZipBlob(
+      report.agentPack,
+      report.mcpReadiness.generatedFiles,
+      { markdown: report.contextPack, json: buildRepoContextPackJson(report) },
+      { repositoryName: report.repoName, scoreJson, selectedPackages }
+    );
+    const zip = await JSZip.loadAsync(blob);
+    const manifest = await zipText(zip, '06-client-handoff/DELIVERY_MANIFEST.md');
+
+    expect(manifest).toContain(`Repository: ${scoreJson.repositoryName}`);
+    expect(manifest).toContain('Branch / ref:');
+    expect(manifest).toContain(`Selected package: ${scoreJson.deliveryPackFocus?.packageLabel}`);
+    expect(manifest).toContain(`Output count: ${scoreJson.outputCount}`);
+    expect(manifest).toContain(`Readiness score: ${scoreJson.score}/100`);
+    expect(manifest).toContain(`Readiness decision: ${scoreJson.status}`);
+    expect(manifest).toContain('## Scan Evidence');
+    expect(manifest).toContain('Code execution: ShipSeal did not execute repository code.');
+    for (const path of scoreJson.generatedFiles) {
+      expect(manifest).toContain(`- ${path}`);
+    }
+  });
+
   it('exports a focused ZIP whose file list matches score.json generatedFiles', async () => {
     const report = buildSampleReport();
     const selectedPackages = ['testing-red-team'];
@@ -155,6 +181,25 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(paths).toContain('04-testing/RED_TEAM_PROMPTS.md');
     expect(paths).toContain('score.json');
     expect(paths).not.toContain('03-mcp-governance/MCP_READINESS.md');
+    expect(paths).not.toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
+  });
+
+  it('keeps focused ZIP exports aligned with score.json when selected packages are omitted by the caller', async () => {
+    const report = buildSampleReport();
+    const scoreJson = buildScoreJson(report, { selectedPackages: ['safety-risk'] });
+    const blob = await buildAgentPackZipBlob(
+      report.agentPack,
+      report.mcpReadiness.generatedFiles,
+      { markdown: report.contextPack, json: buildRepoContextPackJson(report) },
+      { repositoryName: report.repoName, scoreJson, selectedPackages: [] }
+    );
+    const zip = await JSZip.loadAsync(blob);
+    const paths = Object.values(zip.files).filter(file => !file.dir).map(file => file.name).sort();
+
+    expect(paths).toEqual([...scoreJson.generatedFiles].sort());
+    expect(paths).toContain('08-security-data/DATA_PRIVACY_CHECKLIST.md');
+    expect(paths).toContain('score.json');
+    expect(paths).not.toContain('01-agent-instructions/AGENTS.md');
     expect(paths).not.toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
   });
 

@@ -176,7 +176,7 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
                 <Info label="PR safe subset" value={`${prFiles.length} files`} />
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                The downloadable Delivery Pack contains the full selected package: {focus.packageSummary} This PR adds only a safe reviewed subset of repository-ready files.
+                The downloadable Delivery Pack contains the full selected package: {focus.packageSummary} The PR adds only a safe reviewed subset of repository-ready files.
               </p>
               <div className="mt-4 grid sm:grid-cols-2 gap-2">
                 {prFiles.map(file => (

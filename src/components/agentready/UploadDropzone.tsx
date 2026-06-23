@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { GitBranch, Github, Search, Upload, FileArchive, X, Plug } from 'lucide-react';
+import { GitBranch, Github, Search, Upload, FileArchive, X, Plug, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -144,6 +144,8 @@ export function UploadDropzone({
           onClick={() => { setMode('zip'); setError(null); }}
         />
       </div>
+
+      <TrustHintStrip />
 
       {mode === 'github-app' ? (
         <div className={cn('glass rounded-2xl p-6', disabled && 'opacity-60 pointer-events-none')}>
@@ -403,6 +405,26 @@ export function UploadDropzone({
           </Button>
         </div>
       )}
+    </div>
+  );
+}
+
+function TrustHintStrip() {
+  const hints = [
+    'Code is never executed.',
+    'Static analysis only.',
+    'Repository structure and metadata are analyzed.',
+    'Existing documentation and project signals are used.',
+  ];
+
+  return (
+    <div className="mb-4 grid gap-2 rounded-xl border border-border/60 bg-secondary/20 p-3 text-xs text-muted-foreground sm:grid-cols-2">
+      {hints.map(hint => (
+        <div key={hint} className="flex items-center gap-2">
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-accent" />
+          <span>{hint}</span>
+        </div>
+      ))}
     </div>
   );
 }

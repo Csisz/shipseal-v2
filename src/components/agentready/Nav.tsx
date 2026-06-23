@@ -9,6 +9,7 @@ const links = [
   { label: 'How it works', href: '#how' },
   { label: 'What you get', href: '#preview' },
   { label: 'Pricing', href: '#pricing' },
+  { label: 'Contact', href: '#contact' },
 ];
 
 interface Props {
