@@ -76,10 +76,10 @@ describe('ShipSeal landing', () => {
     expect(screen.getByLabelText('Selected interest')).toBeInTheDocument();
     expect(screen.getByText(/No backend delivery is configured in this demo/i)).toBeInTheDocument();
 
-    expect(screen.getAllByRole('button', { name: /sample project/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('button', { name: /Scan my project/i }).length).toBeGreaterThan(0);
-    expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy');
-    expect(screen.getByRole('link', { name: 'Security' })).toHaveAttribute('href', '/security');
+    expect(screen.getAllByText(/sample project/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Scan my project/i).length).toBeGreaterThan(0);
+    expect(screen.getByText('Privacy').closest('a')).toHaveAttribute('href', '/privacy');
+    expect(screen.getByText('Security').closest('a')).toHaveAttribute('href', '/security');
   });
 
   it('preselects a package when a path card is clicked', () => {

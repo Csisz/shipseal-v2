@@ -51,7 +51,7 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
-    expect(screen.getByText('36 outputs')).toBeInTheDocument();
+    expect(screen.getByText('37 outputs')).toBeInTheDocument();
     expect(screen.queryByText('Full Delivery Pack: 36 required outputs')).not.toBeInTheDocument();
     expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
     expect(screen.getByText(/Advanced details — full scan results and generated files/i)).toBeInTheDocument();
@@ -70,9 +70,31 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getByText('Agent development pack')).toBeInTheDocument();
-    expect(screen.getByText('11 outputs')).toBeInTheDocument();
+    expect(screen.getByText('12 outputs')).toBeInTheDocument();
+    expect(screen.getByText('Recommended operating mode')).toBeInTheDocument();
+    expect(screen.getByText('Balanced Productivity')).toBeInTheDocument();
+    expect(screen.getAllByText('Balanced token usage').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Recommended default').length).toBeGreaterThan(0);
     expect(screen.queryByText('Full ShipSeal package')).not.toBeInTheDocument();
     expect(screen.getByText(/AGENTS.md, CLAUDE.md, Codex guidance, repo context, and agent safety notes/i)).toBeInTheDocument();
+  });
+
+  it('shows a selected agent operating mode for AI agent development outputs', () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        selectedPackages={['agent-readiness']}
+        agentOperatingMode="token-saver"
+      />
+    );
+
+    expect(screen.getByText('Recommended operating mode')).toBeInTheDocument();
+    expect(screen.getByText('Token Saver')).toBeInTheDocument();
+    expect(screen.getAllByText('Lowest token cost').length).toBeGreaterThan(0);
+    expect(screen.getByText(/vibe coding, UI tweaks, Plus\/Pro limits, and short iterations/i)).toBeInTheDocument();
   });
 
   it('shows long selected package labels without combining them into the compact metric value', () => {

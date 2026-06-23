@@ -1,26 +1,31 @@
 import { Download, FileArchive, FileText, ShieldCheck, TestTube2, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { ReadinessReport } from '@/lib/types';
+import type { AgentOperatingModeId, AgentPackFile, ReadinessReport } from '@/lib/types';
 import type { PartialProjectIntake } from '@/lib/intake';
 import { normalizeProjectIntake } from '@/lib/intake';
 import { buildRepoContextPackJson, buildScoreJson, downloadAgentPackZip } from '@/lib/exports';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { downloadClientReportPdf, generateClientReportHtml } from '@/lib/report';
 import { toast } from '@/hooks/use-toast';
+import { DEFAULT_AGENT_OPERATING_MODE, buildAgentOperatingModeSummary, resolveAgentOperatingMode } from '@/lib/agentOperatingMode';
 
 interface Props {
   report: ReadinessReport;
+  agentFiles?: AgentPackFile[];
   intake?: PartialProjectIntake;
   intakeSkipped?: boolean;
   selectedPackages?: string[];
+  agentOperatingMode?: AgentOperatingModeId;
 }
 
-export function DeliveryPackPreview({ report, intake, intakeSkipped = false, selectedPackages = [] }: Props) {
+export function DeliveryPackPreview({ report, agentFiles = report.agentPack, intake, intakeSkipped = false, selectedPackages = [], agentOperatingMode }: Props) {
   const normalizedIntake = normalizeProjectIntake(intake, report.repoName);
+  const resolvedAgentMode = resolveAgentOperatingMode(agentOperatingMode || report.recommendedAgentOperatingMode || DEFAULT_AGENT_OPERATING_MODE);
+  const agentModeSummary = buildAgentOperatingModeSummary(resolvedAgentMode);
   const focus = resolveDeliveryPackFocus(selectedPackages);
   const generatedPaths = focus.generatedPaths;
-  const scoreJson = buildScoreJson(report, { selectedPackages });
+  const scoreJson = buildScoreJson(report, { selectedPackages, agentOperatingMode: resolvedAgentMode });
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const risks = previewRisks(report, normalizedIntake);
   const goNoGo = goNoGoCategory(report, normalizedIntake);
@@ -60,7 +65,7 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false, sel
           <Button
             onClick={() => downloadAgentPackZip(
               report.repoName,
-              report.agentPack,
+              agentFiles,
               report.mcpReadiness.generatedFiles,
               { markdown: report.contextPack, json: buildRepoContextPackJson(report) },
               scoreJson,
@@ -81,6 +86,22 @@ export function DeliveryPackPreview({ report, intake, intakeSkipped = false, sel
         <PreviewMetric label="Repository / ref" value={`${report.repoName} @ ${branchOrRef(report)}`} />
         <PreviewMetric label="Output files" value={`${generatedPaths.length} generated`} />
       </div>
+
+      {focus.generatedPaths.some(path => path.startsWith('01-agent-instructions/')) && (
+        <div className="mb-5 rounded-lg border border-accent/30 bg-accent/10 px-4 py-3">
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Recommended operating mode</div>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold text-foreground">{agentModeSummary.label}</div>
+            <Badge variant="outline" className="border-accent/45 bg-background/25 text-[10px] text-accent">
+              {agentModeSummary.expectedTokenUsage}
+            </Badge>
+            <Badge variant="outline" className="border-border/70 bg-background/25 text-[10px]">
+              {agentModeSummary.confidence}
+            </Badge>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{agentModeSummary.summary}</p>
+        </div>
+      )}
 
       <div className="mb-5 rounded-lg border border-primary/30 bg-primary/10 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2">

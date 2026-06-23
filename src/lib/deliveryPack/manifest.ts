@@ -36,6 +36,7 @@ export const SHIPSEAL_DELIVERY_PACK_MANIFEST: DeliveryPackManifest = {
     section('agent-instructions', '01-agent-instructions', 'Agent instructions', [
       'AGENTS.md',
       'CLAUDE.md',
+      'AGENT_COST_OPTIMIZATION.md',
       'CODEX_PROMPTS.md',
       'CURSOR_RULES.md',
       'REVIEWER_PROMPT.md',

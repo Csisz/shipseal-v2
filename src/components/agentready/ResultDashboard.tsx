@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type React from 'react';
 import { AlertOctagon, Check, CheckCircle2, Copy, Download, FileArchive, Layers, Lightbulb, RefreshCw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
-import type { AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
+import type { AgentOperatingModeId, AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { evaluateReadiness } from '@/lib/scoring';
 import { ScoreGauge } from './ScoreGauge';
 import { ReadinessBadge } from './ReadinessBadge';
@@ -20,6 +20,7 @@ import { createDefaultProjectIntake, normalizeProjectIntake } from '@/lib/intake
 import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages } from '@/lib/packages';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import type { GitHubConnectionState } from '@/lib/githubConnection/types';
+import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentOperatingMode, resolveAgentOperatingMode, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
 
 interface Props {
   report: ReadinessReport;
@@ -30,13 +31,17 @@ interface Props {
   intakeSkipped?: boolean;
   /** Package options the user picked before the scan; defaults to the full package. */
   selectedPackages?: string[];
+  agentOperatingMode?: AgentOperatingModeId;
   githubConnection?: GitHubConnectionState;
 }
 
-export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false, selectedPackages, githubConnection }: Props) {
+export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false, selectedPackages, agentOperatingMode, githubConnection }: Props) {
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
   const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
   const deliveryFocus = resolveDeliveryPackFocus(resolvedPackages);
+  const resolvedAgentMode = resolveAgentOperatingMode(agentOperatingMode || report.recommendedAgentOperatingMode || DEFAULT_AGENT_OPERATING_MODE);
+  const agentMode = getAgentOperatingMode(resolvedAgentMode);
+  const modeAgentPack = applyAgentOperatingModeToFiles(report, resolvedAgentMode);
   const [contextCopied, setContextCopied] = useState(false);
   const [appliedIntake, setAppliedIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [draftIntake, setDraftIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
@@ -48,7 +53,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
   const limitedScanReason = report.scanEvidence.limitationReason || report.scanSummary.warnings.find(warning => /limited scan|fallback|file limit|archive|GitHub access|ZIP/i.test(warning));
   const readinessReport = report.agentPack.find(file => file.name === 'AGENT_READINESS_REPORT.md');
   const repoContextJson = buildRepoContextPackJson(report);
-  const scoreJson = buildScoreJson(report, { selectedPackages: resolvedPackages });
+  const scoreJson = buildScoreJson(report, { selectedPackages: resolvedPackages, agentOperatingMode: resolvedAgentMode });
   const mcpPackFiles: AgentPackFile[] = report.mcpReadiness.generatedFiles.map(file => ({
     name: file.filename,
     language: 'markdown',
@@ -114,6 +119,14 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               outputCount={deliveryFocus.generatedPaths.length}
               packageSummary={deliveryFocus.packageSummary}
             />
+            {selectionUsesAgentDevelopment(resolvedPackages) && (
+              <AgentOperatingModeSummary
+                modeLabel={agentMode.label}
+                expectedTokenUsage={agentMode.expectedTokenUsage}
+                confidence={agentMode.confidence}
+                summary={agentMode.summary}
+              />
+            )}
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
               <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Selected packages</span>
@@ -173,7 +186,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => downloadJsonFile('score.json', buildScoreJson(report, { selectedPackages: resolvedPackages }))}
+                onClick={() => downloadJsonFile('score.json', buildScoreJson(report, { selectedPackages: resolvedPackages, agentOperatingMode: resolvedAgentMode }))}
                 className="border-border/60"
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export score.json
@@ -194,7 +207,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         <DecisionSummary report={report} ready={ready} nextActions={report.aiNarrative.nextBestActions.slice(0, 3)} />
       </div>
 
-      <DeliveryPackPreview report={report} intake={appliedIntake} intakeSkipped={wasIntakeSkipped} selectedPackages={resolvedPackages} />
+      <DeliveryPackPreview report={report} agentFiles={modeAgentPack} intake={appliedIntake} intakeSkipped={wasIntakeSkipped} selectedPackages={resolvedPackages} agentOperatingMode={resolvedAgentMode} />
 
       <Disclosure title="Project context used for this report" defaultOpen={wasIntakeSkipped || intakeDirty}>
         <ProjectContextPanel
@@ -436,7 +449,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         <div className="lg:col-span-2">
           <h3 className="font-display text-xl font-semibold mb-3">Delivery Pack file preview</h3>
           <AgentPackTabs
-            files={report.agentPack}
+            files={modeAgentPack}
             repositoryName={report.repoName}
             mcpFiles={report.mcpReadiness.generatedFiles}
             contextFiles={{ markdown: report.contextPack, json: repoContextJson }}
@@ -496,6 +509,34 @@ function ProjectPackageSummary({
           {packageSummary}
         </p>
       )}
+    </div>
+  );
+}
+
+function AgentOperatingModeSummary({
+  modeLabel,
+  expectedTokenUsage,
+  confidence,
+  summary,
+}: {
+  modeLabel: string;
+  expectedTokenUsage: string;
+  confidence: string;
+  summary: string;
+}) {
+  return (
+    <div className="mt-3 rounded-2xl border border-accent/25 bg-accent/10 px-4 py-4">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Recommended operating mode</div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="text-base font-semibold text-foreground">{modeLabel}</div>
+        <Badge variant="outline" className="border-accent/45 bg-background/25 text-[10px] text-accent">
+          {expectedTokenUsage}
+        </Badge>
+        <Badge variant="outline" className="border-border/70 bg-background/25 text-[10px]">
+          {confidence}
+        </Badge>
+      </div>
+      <p className="mt-1 text-xs leading-relaxed text-muted-foreground sm:text-sm">{summary}</p>
     </div>
   );
 }

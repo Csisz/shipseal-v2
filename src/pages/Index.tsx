@@ -6,7 +6,7 @@ import { ScanProgress } from '@/components/agentready/ScanProgress';
 import { ProjectIntakeForm } from '@/components/agentready/ProjectIntakeForm';
 import { buildSampleReport } from '@/lib/readiness';
 import { clearScanHistory, getScanHistory, saveScanHistory } from '@/lib/scanHistory';
-import type { ReadinessReport, ScanHistoryItem } from '@/lib/types';
+import type { AgentOperatingModeId, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
 import { useRepoScan } from '@/hooks/useRepoScan';
 import type { ProjectIntake } from '@/lib/intake';
@@ -15,6 +15,7 @@ import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import { Button } from '@/components/ui/button';
 import { PackageCards } from '@/components/agentready/PackageCards';
 import { FULL_PACKAGE_ID, type ShipSealPackageId } from '@/lib/packages';
+import { AGENT_OPERATING_MODES, DEFAULT_AGENT_OPERATING_MODE, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
 import { getGitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
@@ -95,6 +96,7 @@ const Index = () => {
   const [pendingSource, setPendingSource] = useState<PendingSource | null>(null);
   const [pendingIntake, setPendingIntake] = useState<ProjectIntake>(() => createDefaultProjectIntake());
   const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
+  const [agentOperatingMode, setAgentOperatingMode] = useState<AgentOperatingModeId>(DEFAULT_AGENT_OPERATING_MODE);
   const [submittedIntake, setSubmittedIntake] = useState<ProjectIntake | undefined>();
   const [submittedIntakeSkipped, setSubmittedIntakeSkipped] = useState(false);
   const [githubInstallationId, setGithubInstallationId] = useState('');
@@ -229,6 +231,7 @@ const Index = () => {
     setSampleReport(null);
     setPendingSource(null);
     setSelectedPackages([]);
+    setAgentOperatingMode(DEFAULT_AGENT_OPERATING_MODE);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
     savedReportKey.current = null;
@@ -246,6 +249,7 @@ const Index = () => {
     setSampleReport(null);
     setPendingSource(null);
     setSelectedPackages([]);
+    setAgentOperatingMode(DEFAULT_AGENT_OPERATING_MODE);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
     savedReportKey.current = null;
@@ -357,6 +361,7 @@ const Index = () => {
     scan.resetScan();
     setPendingSource(null);
     setSelectedPackages([]);
+    setAgentOperatingMode(DEFAULT_AGENT_OPERATING_MODE);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
     const report = buildSampleReport();
@@ -369,6 +374,7 @@ const Index = () => {
     scan.resetScan();
     setSampleReport(null);
     setPendingSource(null);
+    setAgentOperatingMode(DEFAULT_AGENT_OPERATING_MODE);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
     savedReportKey.current = null;
@@ -396,6 +402,7 @@ const Index = () => {
               initialIntake={submittedIntake}
               intakeSkipped={submittedIntakeSkipped}
               selectedPackages={selectedPackages}
+              agentOperatingMode={agentOperatingMode}
               githubConnection={activeGithubConnection}
             />
           </Suspense>
@@ -431,6 +438,8 @@ const Index = () => {
                     intake={pendingIntake}
                     onChange={setPendingIntake}
                     selectedPackages={selectedPackages}
+                    agentOperatingMode={agentOperatingMode}
+                    onAgentOperatingModeChange={setAgentOperatingMode}
                     onTogglePackage={togglePackage}
                     onBack={() => setPendingSource(null)}
                     onContinue={startPendingScan}
@@ -487,6 +496,8 @@ function ProjectContextStep({
   intake,
   onChange,
   selectedPackages,
+  agentOperatingMode,
+  onAgentOperatingModeChange,
   onTogglePackage,
   onBack,
   onContinue,
@@ -496,6 +507,8 @@ function ProjectContextStep({
   intake: ProjectIntake;
   onChange: (value: ProjectIntake) => void;
   selectedPackages: string[];
+  agentOperatingMode: AgentOperatingModeId;
+  onAgentOperatingModeChange: (mode: AgentOperatingModeId) => void;
   onTogglePackage: (id: string) => void;
   onBack: () => void;
   onContinue: () => void;
@@ -533,6 +546,9 @@ function ProjectContextStep({
 
       {hasGoalSelection && (
         <>
+          {selectionUsesAgentDevelopment(selectedPackages) && (
+            <AgentOperatingModeSelector value={agentOperatingMode} onChange={onAgentOperatingModeChange} />
+          )}
           <ProjectIntakeForm value={intake} onChange={onChange} />
           <OutputPreview selectedPackages={selectedPackages} />
           <div className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-muted-foreground">
@@ -547,6 +563,71 @@ function ProjectContextStep({
           Scan project
         </Button>
       </div>
+    </div>
+  );
+}
+
+function AgentOperatingModeSelector({
+  value,
+  onChange,
+}: {
+  value: AgentOperatingModeId;
+  onChange: (mode: AgentOperatingModeId) => void;
+}) {
+  return (
+    <div className="glass rounded-2xl p-6">
+      <div className="max-w-3xl">
+        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-primary-glow">Agent Cost Optimizer</div>
+        <h3 className="mt-2 font-display text-xl font-semibold">Choose how AI agents should spend attention</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          ShipSeal uses this to tune AGENTS.md, CLAUDE.md, and AGENT_COST_OPTIMIZATION.md for safer or leaner agent work.
+        </p>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        {AGENT_OPERATING_MODES.map(mode => (
+          <button
+            key={mode.id}
+            type="button"
+            aria-pressed={value === mode.id}
+            title={`${mode.label}: ${mode.expectedTokenUsage}. ${mode.confidence}.`}
+            onClick={() => onChange(mode.id)}
+            className={`rounded-xl border p-4 text-left transition-all ${
+              value === mode.id
+                ? 'border-primary/60 bg-primary/10 shadow-glow'
+                : 'border-border/60 bg-secondary/25 hover:border-primary/35 hover:bg-secondary/45'
+            }`}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold">{mode.label}</span>
+              {mode.id === DEFAULT_AGENT_OPERATING_MODE && (
+                <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] text-success">
+                  Default
+                </span>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] text-accent">
+                {mode.expectedTokenUsage}
+              </span>
+              <span className="rounded-full border border-border/70 bg-background/25 px-2 py-0.5 text-[10px] text-muted-foreground">
+                {mode.confidence}
+              </span>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{mode.summary}</p>
+            <div className="mt-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Best for</div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {mode.bestFor.slice(0, 3).map(item => (
+                <span key={item} className="rounded border border-border/60 bg-background/25 px-1.5 py-0.5 text-[10px] text-foreground/80">
+                  {item}
+                </span>
+              ))}
+            </div>
+          </button>
+        ))}
+      </div>
+      <p className="mt-4 text-xs text-muted-foreground">
+        ShipSeal helps AI coding agents avoid unnecessary context usage and excessive verification cycles. No fixed savings are promised.
+      </p>
     </div>
   );
 }

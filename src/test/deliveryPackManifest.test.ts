@@ -8,6 +8,7 @@ import {
 const REQUIRED_PATHS = [
   '01-agent-instructions/AGENTS.md',
   '01-agent-instructions/CLAUDE.md',
+  '01-agent-instructions/AGENT_COST_OPTIMIZATION.md',
   '01-agent-instructions/CODEX_PROMPTS.md',
   '01-agent-instructions/CURSOR_RULES.md',
   '01-agent-instructions/REVIEWER_PROMPT.md',

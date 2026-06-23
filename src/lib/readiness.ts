@@ -8,6 +8,7 @@ import { createEmptyScanSummary, isBinaryLikePath, isGeneratedOrVendorPath } fro
 import { localAIProvider } from './ai';
 import { buildRepoContextPack, renderRepoContextPackMarkdown } from './repoContextPack';
 import type { MCPPolicyFile } from './types';
+import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles } from './agentOperatingMode';
 
 function addMcpNarrativeToPolicyFiles(files: MCPPolicyFile[], narrative: NonNullable<ReturnType<typeof localAIProvider.generateMcpGovernanceNarrativeSync>>): MCPPolicyFile[] {
   return files.map(file => {
@@ -119,7 +120,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     mcpNarrative,
     repoContextPack,
   });
-  const agentPack = buildAgentPack(input, stack, {
+  const baseAgentPack = buildAgentPack(input, stack, {
     ...scoring,
     isReady: readiness.isReady,
     scannedAt,
@@ -128,7 +129,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     mcpNarrative,
   });
 
-  return {
+  const report: ReadinessReport = {
     repoName: input.repoName,
     fileCount,
     totalSizeBytes,
@@ -144,13 +145,19 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     improvements: scoring.improvements,
     contextPack,
     repoContextPack,
-    agentPack,
+    agentPack: baseAgentPack,
     aiNarrative,
     aiAgentInstructions,
     mcpReadiness,
     scanSummary,
     scanEvidence,
     sampleFiles: input.files.filter(f => !f.isDir && !f.ignored && !isGeneratedOrVendorPath(f.path) && !isBinaryLikePath(f.path)).slice(0, 30),
+    recommendedAgentOperatingMode: DEFAULT_AGENT_OPERATING_MODE,
+  };
+
+  return {
+    ...report,
+    agentPack: applyAgentOperatingModeToFiles(report, DEFAULT_AGENT_OPERATING_MODE),
   };
 }
 

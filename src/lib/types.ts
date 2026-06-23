@@ -254,6 +254,11 @@ export type ReadinessLevel =
   | 'AI Coding Ready'
   | 'AgentReady Certified';
 
+export type AgentOperatingModeId =
+  | 'maximum-reliability'
+  | 'balanced-productivity'
+  | 'token-saver';
+
 export interface ReadinessReport {
   repoName: string;
   fileCount: number;
@@ -277,6 +282,7 @@ export interface ReadinessReport {
   scanSummary: ScanSummary;
   scanEvidence: ScanEvidence;
   sampleFiles: RepoFileSummary[];
+  recommendedAgentOperatingMode?: AgentOperatingModeId;
 }
 
 export interface RepoScanInput {
@@ -318,6 +324,13 @@ export interface ScoreJsonExport {
   };
   generatedFiles: string[];
   outputCount: number;
+  agentOperatingMode?: {
+    id: AgentOperatingModeId;
+    label: string;
+    summary: string;
+    expectedTokenUsage: string;
+    confidence: string;
+  };
   deliveryPackFocus?: {
     selectedGoals: Array<{ id: string; title: string }>;
     emphasizedFiles: string[];

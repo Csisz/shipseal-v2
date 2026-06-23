@@ -134,6 +134,7 @@ describe('ShipSeal pre-scan intake flow', () => {
     expect(screen.getByText(/Optional, but recommended for client-ready reports/i)).toBeInTheDocument();
     expect(screen.getByText('Advanced details')).toBeInTheDocument();
     expect(screen.getByText('What ShipSeal will prepare')).toBeInTheDocument();
+    expect(screen.queryByText('Agent Cost Optimizer')).not.toBeInTheDocument();
     expect(screen.getByText('Client handoff')).toBeInTheDocument();
     expect(screen.getByText('AI agent development pack')).toBeInTheDocument();
     expect(screen.getByText(/View generated file list/)).toBeInTheDocument();
@@ -146,6 +147,28 @@ describe('ShipSeal pre-scan intake flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Scan project$/i }));
 
     expect(screen.getByText(/Scanning repository/i)).toBeInTheDocument();
+  });
+
+  it('shows and updates Agent Operating Mode for AI Agent Development package', async () => {
+    render(
+      <MemoryRouter>
+        <Index />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /analyze repository/i }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Make it easier to build with AI agents/i }));
+
+    expect(screen.getByText('Agent Cost Optimizer')).toBeInTheDocument();
+    expect(screen.getByText('Choose how AI agents should spend attention')).toBeInTheDocument();
+    expect(screen.getByText('Balanced token usage')).toBeInTheDocument();
+    expect(screen.getByText('Recommended default')).toBeInTheDocument();
+    expect(screen.getByText('Lowest token cost')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Balanced Productivity/i })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /Token Saver/i }));
+
+    expect(screen.getByRole('button', { name: /Token Saver/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Balanced Productivity/i })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('recognizes GitHub App callback query params and exposes repository listing state', async () => {

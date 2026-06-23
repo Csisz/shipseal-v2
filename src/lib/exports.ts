@@ -3,12 +3,15 @@ import { buildDeliveryPackFiles } from './deliveryPack';
 import { resolveDeliveryPackFocus } from './deliveryPack/goalMapping';
 import { normalizeProjectIntake } from './intake';
 import type { PartialProjectIntake } from './intake';
+import { DEFAULT_AGENT_OPERATING_MODE, buildAgentOperatingModeSummary, resolveAgentOperatingMode } from './agentOperatingMode';
+import type { AgentOperatingModeId } from './types';
 
 type ZipModule = typeof import('jszip');
 
 export const REQUIRED_AGENT_PACK_FILES = [
   'AGENTS.md',
   'CLAUDE.md',
+  'AGENT_COST_OPTIMIZATION.md',
   'CODEX_PROMPTS.md',
   'REVIEWER_PROMPT.md',
   'SECURITY_REVIEW.md',
@@ -34,6 +37,7 @@ export interface BuildAgentPackZipOptions {
 
 export interface BuildScoreJsonOptions {
   selectedPackages?: string[];
+  agentOperatingMode?: AgentOperatingModeId;
 }
 
 export function sanitizeRepositoryName(name: string): string {
@@ -54,6 +58,7 @@ export function buildAgentPackZipFilename(repositoryName: string): string {
 
 export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonOptions = {}): ScoreJsonExport {
   const deliveryPackFocus = resolveDeliveryPackFocus(options.selectedPackages);
+  const agentOperatingMode = resolveAgentOperatingMode(options.agentOperatingMode || report.recommendedAgentOperatingMode || DEFAULT_AGENT_OPERATING_MODE);
 
   return {
     product: 'ShipSeal',
@@ -86,6 +91,7 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
     },
     generatedFiles: deliveryPackFocus.generatedPaths,
     outputCount: deliveryPackFocus.generatedPaths.length,
+    agentOperatingMode: buildAgentOperatingModeSummary(agentOperatingMode),
     deliveryPackFocus: {
       selectedGoals: deliveryPackFocus.selectedGoals,
       emphasizedFiles: deliveryPackFocus.emphasizedPaths,

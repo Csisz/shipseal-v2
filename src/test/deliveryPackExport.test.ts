@@ -8,6 +8,7 @@ import {
   buildScoreJson,
 } from '@/lib/exports';
 import { getDeliveryPackRequiredPaths, resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import { applyAgentOperatingModeToFiles } from '@/lib/agentOperatingMode';
 
 async function zipText(zip: JSZip, path: string): Promise<string> {
   const file = zip.file(path);
@@ -77,7 +78,7 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
   it('returns expected output paths for each major package', () => {
     const expected: Array<[string, string[]]> = [
       ['client-handoff', ['06-client-handoff/CLIENT_HANDOFF_REPORT.md', '06-client-handoff/DELIVERY_MANIFEST.md']],
-      ['agent-readiness', ['01-agent-instructions/AGENTS.md', '01-agent-instructions/CURSOR_RULES.md', '07-context/REPO_CONTEXT_PACK.md']],
+      ['agent-readiness', ['01-agent-instructions/AGENTS.md', '01-agent-instructions/AGENT_COST_OPTIMIZATION.md', '01-agent-instructions/CURSOR_RULES.md', '07-context/REPO_CONTEXT_PACK.md']],
       ['testing-red-team', ['04-testing/EVAL_TEST_CASES.md', '04-testing/CI_QUALITY_GATE.yml']],
       ['safety-risk', ['08-security-data/ENV_SECRETS_FINDINGS.md', '08-security-data/DATA_PRIVACY_CHECKLIST.md']],
       ['mcp-readiness', ['03-mcp-governance/MCP_READINESS.md', '03-mcp-governance/MCP_TOOL_ALLOWLIST.md']],
@@ -112,6 +113,58 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(scoreJson.deliveryPackFocus?.readinessPrOutputCount).toBe(focus.readinessPrPaths.length);
     expect(scoreJson.deliveryPackFocus?.emphasizedFiles).toContain('03-mcp-governance/MCP_READINESS.md');
     expect(scoreJson.deliveryPackFocus?.emphasizedFiles).not.toContain('04-testing/EVAL_TEST_CASES.md');
+  });
+
+  it('defaults score.json to Balanced Productivity operating mode', () => {
+    const report = buildSampleReport();
+    const scoreJson = buildScoreJson(report, { selectedPackages: ['agent-readiness'] });
+
+    expect(scoreJson.agentOperatingMode).toMatchObject({
+      id: 'balanced-productivity',
+      label: 'Balanced Productivity',
+      expectedTokenUsage: 'Balanced token usage',
+      confidence: 'Recommended default',
+    });
+  });
+
+  it('exports mode-specific AI agent development outputs', async () => {
+    const report = buildSampleReport();
+    const selectedPackages = ['agent-readiness'];
+    const tokenSaverFiles = applyAgentOperatingModeToFiles(report, 'token-saver');
+    const reliabilityFiles = applyAgentOperatingModeToFiles(report, 'maximum-reliability');
+    const tokenSaverAgents = tokenSaverFiles.find(file => file.name === 'AGENTS.md')?.content || '';
+    const reliabilityAgents = reliabilityFiles.find(file => file.name === 'AGENTS.md')?.content || '';
+    const tokenSaverClaude = tokenSaverFiles.find(file => file.name === 'CLAUDE.md')?.content || '';
+    const reliabilityClaude = reliabilityFiles.find(file => file.name === 'CLAUDE.md')?.content || '';
+    const scoreJson = buildScoreJson(report, { selectedPackages, agentOperatingMode: 'token-saver' });
+    const blob = await buildAgentPackZipBlob(
+      tokenSaverFiles,
+      report.mcpReadiness.generatedFiles,
+      { markdown: report.contextPack, json: buildRepoContextPackJson(report) },
+      { repositoryName: report.repoName, scoreJson, selectedPackages }
+    );
+    const zip = await JSZip.loadAsync(blob);
+    const costOptimization = await zipText(zip, '01-agent-instructions/AGENT_COST_OPTIMIZATION.md');
+
+    expect(tokenSaverAgents).toContain('Recommended operating mode: Token Saver');
+    expect(tokenSaverAgents).not.toContain('Recommended operating mode: Balanced Productivity');
+    expect(tokenSaverAgents).toContain('Expected token usage: Lowest token cost');
+    expect(tokenSaverAgents).toContain('Reason: Use this for short, low-risk iterations');
+    expect(tokenSaverAgents).toContain('ShipSeal helps AI coding agents avoid unnecessary context usage and excessive verification cycles');
+    expect(reliabilityAgents).toContain('Recommended operating mode: Maximum Reliability');
+    expect(reliabilityAgents).toContain('Expected token usage: Higher token cost');
+    expect(reliabilityAgents).toContain('Run full test/build commands when the change touches shared logic');
+    expect(tokenSaverAgents).not.toBe(reliabilityAgents);
+    expect(tokenSaverClaude).toContain('Recommended operating mode: Token Saver');
+    expect(reliabilityClaude).toContain('Recommended operating mode: Maximum Reliability');
+    expect(tokenSaverClaude).not.toBe(reliabilityClaude);
+    expect(scoreJson.generatedFiles).toContain('01-agent-instructions/AGENT_COST_OPTIMIZATION.md');
+    expect(scoreJson.agentOperatingMode?.label).toBe('Token Saver');
+    expect(scoreJson.agentOperatingMode?.expectedTokenUsage).toBe('Lowest token cost');
+    expect(costOptimization).toContain('Recommended operating mode: Token Saver');
+    expect(costOptimization).toContain('Expected token usage: Lowest token cost');
+    expect(costOptimization).toContain('## Expected tradeoffs');
+    expect(costOptimization).toContain('Avoid full build/test unless explicitly requested');
   });
 
   it('keeps score.json metadata and focused ZIP file list consistent', async () => {

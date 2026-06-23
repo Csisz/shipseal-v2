@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CreateReadinessPrDialog } from '@/components/agentready/CreateReadinessPrDialog';
 import { SuggestedReadinessFixPack } from '@/components/agentready/SuggestedReadinessFixPack';
+import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { createConnectedGitHubConnection } from '@/lib/githubConnection/types';
 import { buildSampleReport } from '@/lib/readiness';
 import { buildSuggestedReadinessFixPack } from '@/lib/readinessFixPack';
@@ -302,6 +303,7 @@ describe('SuggestedReadinessFixPack', () => {
 
   it('distinguishes Agent development Delivery Pack outputs from the PR safe subset', async () => {
     const report = buildSampleReport();
+    const agentPackOutputCount = resolveDeliveryPackFocus(['agent-readiness']).generatedPaths.length;
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -334,7 +336,7 @@ describe('SuggestedReadinessFixPack', () => {
 
     expect(within(dialog).getByText('Agent development pack')).toBeInTheDocument();
     expect(within(dialog).getByText('Delivery Pack outputs')).toBeInTheDocument();
-    expect(within(dialog).getByText('11 files')).toBeInTheDocument();
+    expect(within(dialog).getByText(`${agentPackOutputCount} files`)).toBeInTheDocument();
     expect(within(dialog).getByText('PR safe subset')).toBeInTheDocument();
     expect(within(dialog).getByText('3 files')).toBeInTheDocument();
     expect(within(dialog).getByText(/safe reviewed subset of repository-ready files/i)).toBeInTheDocument();
@@ -352,7 +354,7 @@ describe('SuggestedReadinessFixPack', () => {
     expect(paths).toEqual(['AGENTS.md', 'CLAUDE.md', 'docs/CRITICAL_FILES_POLICY.md']);
     expect(paths).not.toContain('.github/workflows/ci.yml');
     expect(payload.prBody).toContain('Selected package: Agent development pack');
-    expect(payload.prBody).toContain('Delivery Pack outputs: 11');
+    expect(payload.prBody).toContain(`Delivery Pack outputs: ${agentPackOutputCount}`);
     expect(payload.prBody).toContain('PR safe subset: 3');
     expect(payload.prBody).toContain('This PR adds a safe reviewed subset of the selected ShipSeal package');
     expect(payload.prBody).toContain('The downloadable Delivery Pack contains the full package outputs');
