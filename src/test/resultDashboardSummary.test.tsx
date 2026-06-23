@@ -93,6 +93,38 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(/Env\/secrets signals, data\/privacy checklist, red-team prompts, and risk summary/i)).toBeInTheDocument();
   });
 
+  it('uses package-specific almost-ready copy and separates readiness status from limited scan', () => {
+    render(
+      <ResultDashboard
+        report={{ ...buildSampleReport(), score: 52, blockers: [] }}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        selectedPackages={['safety-risk']}
+      />
+    );
+
+    expect(screen.getAllByText('Partially Ready').length).toBeGreaterThan(0);
+    expect(screen.getByText(/not a limited scan/i)).toBeInTheDocument();
+    expect(screen.getByText(/strengthen security and data readiness/i)).toBeInTheDocument();
+    expect(screen.queryByText('Almost there - improve a few areas to reach AI Coding Ready.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Limited scan$/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps AI agent development using AI coding readiness copy', () => {
+    render(
+      <ResultDashboard
+        report={{ ...buildSampleReport(), score: 70, blockers: [] }}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        selectedPackages={['agent-readiness']}
+      />
+    );
+
+    expect(screen.getByText('Almost there - improve a few areas to reach AI Coding Ready.')).toBeInTheDocument();
+  });
+
   it('shows skipped intake warning and regenerate action after intake edits', () => {
     render(
       <ResultDashboard

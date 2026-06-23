@@ -24,7 +24,7 @@ describe('ShipSeal landing', () => {
     expect(screen.getByText('Prepare for launch or production')).toBeInTheDocument();
     expect(screen.getByText('Make it safer')).toBeInTheDocument();
     expect(screen.getByText('MCP readiness and tool integration')).toBeInTheDocument();
-    expect(screen.getByText('Full ShipSeal package')).toBeInTheDocument();
+    expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
 
     // Guided trust-aware process.
     expect(screen.getByText('How ShipSeal works.')).toBeInTheDocument();
@@ -38,7 +38,7 @@ describe('ShipSeal landing', () => {
 
     // Demo-first sample paths.
     expect(screen.getByText(/Try ShipSeal without connecting GitHub/i)).toBeInTheDocument();
-    expect(screen.getByText('See a sample ShipSeal report')).toBeInTheDocument();
+    expect(screen.queryByText('See a sample ShipSeal report')).not.toBeInTheDocument();
     expect(screen.getByText('View before/after readiness example')).toBeInTheDocument();
     expect(screen.getByText(/Scan evidence, readiness score, and next actions/i)).toBeInTheDocument();
 
@@ -58,13 +58,17 @@ describe('ShipSeal landing', () => {
     expect(screen.getByText('Free Demo')).toBeInTheDocument();
     expect(screen.getByText('Builder')).toBeInTheDocument();
     expect(screen.getByText('Pro / Agency')).toBeInTheDocument();
-    expect(screen.getByText('Expert Review Add-On')).toBeInTheDocument();
-    expect(screen.getByText('Coming soon')).toBeInTheDocument();
+    expect(screen.getByText('Agent Efficiency Pro')).toBeInTheDocument();
+    expect(screen.getByText('Context Packs')).toBeInTheDocument();
+    expect(screen.getByText('Folder-level AGENTS')).toBeInTheDocument();
+    expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Request access').length).toBeGreaterThan(0);
     expect(screen.queryByText(/founder/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Human review option/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Expert Review Add-On/i)).not.toBeInTheDocument();
 
     // Non-persistent contact fallback.
-    expect(screen.getByText('Request a ShipSeal audit.')).toBeInTheDocument();
+    expect(screen.getByText('Contact ShipSeal.')).toBeInTheDocument();
     expect(screen.getByLabelText('Contact name')).toBeInTheDocument();
     expect(screen.getByLabelText('Contact email')).toBeInTheDocument();
     expect(screen.getByLabelText('Company or agency')).toBeInTheDocument();
@@ -98,13 +102,13 @@ describe('ShipSeal landing', () => {
     fireEvent.change(screen.getByLabelText('Contact email'), { target: { value: 'ada@example.com' } });
     fireEvent.change(screen.getByLabelText('Company or agency'), { target: { value: 'Ada Studio' } });
     fireEvent.change(screen.getByLabelText('Project type'), { target: { value: 'AI support app' } });
-    fireEvent.change(screen.getByLabelText('Selected interest'), { target: { value: 'security/data pre-screen' } });
+    fireEvent.change(screen.getByLabelText('Selected interest'), { target: { value: 'Security/data pre-screen' } });
     fireEvent.change(screen.getByLabelText('Contact message'), { target: { value: 'Please review our handoff readiness.' } });
     fireEvent.click(screen.getByRole('button', { name: /Prepare email draft/i }));
 
     expect(screen.getByText(/No message was sent to a server/i)).toBeInTheDocument();
     const link = screen.getByRole('link', { name: /Open email draft/i });
     expect(link.getAttribute('href')).toContain('mailto:hello@shipseal.dev');
-    expect(link.getAttribute('href')).toContain('security%2Fdata%20pre-screen');
+    expect(link.getAttribute('href')).toContain('Security%2Fdata%20pre-screen');
   });
 });

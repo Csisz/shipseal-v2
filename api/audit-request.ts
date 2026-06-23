@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const MAX_BODY_BYTES = 16 * 1024;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const AUDIT_REQUEST_SOURCE = 'shipseal-founder-reviewed-audit';
+const CONTACT_REQUEST_SOURCE = 'shipseal-contact-request';
 
 type QueryBody = Record<string, unknown>;
 type VercelLikeRequest = IncomingMessage & {
@@ -17,7 +17,7 @@ export interface AuditRequestPayload {
   projectUrl: string;
   message: string;
   consent: true;
-  source: 'shipseal-founder-reviewed-audit';
+  source: 'shipseal-contact-request';
 }
 
 export interface AuditRequestValidationError {
@@ -27,7 +27,7 @@ export interface AuditRequestValidationError {
 
 export function validateAuditRequestPayload(input: unknown): AuditRequestPayload | AuditRequestValidationError {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    return { status: 400, error: 'Invalid audit request payload.' };
+    return { status: 400, error: 'Invalid contact request payload.' };
   }
 
   const body = input as QueryBody;
@@ -37,12 +37,12 @@ export function validateAuditRequestPayload(input: unknown): AuditRequestPayload
   const phoneOrOtherContact = clean(body.phoneOrOtherContact);
   const projectUrl = clean(body.projectUrl);
   const message = clean(body.message);
-  const source = clean(body.source) || AUDIT_REQUEST_SOURCE;
+  const source = clean(body.source) || CONTACT_REQUEST_SOURCE;
   const consent = body.consent === true;
   const website = clean(body.website);
 
   if (website) {
-    return { status: 400, error: 'Invalid audit request payload.' };
+    return { status: 400, error: 'Invalid contact request payload.' };
   }
   if (!email && !phoneOrOtherContact) {
     return { status: 400, error: 'Email or phone/other contact is required.' };
@@ -65,7 +65,7 @@ export function validateAuditRequestPayload(input: unknown): AuditRequestPayload
     projectUrl,
     message,
     consent: true,
-    source: source === AUDIT_REQUEST_SOURCE ? AUDIT_REQUEST_SOURCE : AUDIT_REQUEST_SOURCE,
+    source: source === CONTACT_REQUEST_SOURCE ? CONTACT_REQUEST_SOURCE : CONTACT_REQUEST_SOURCE,
   };
 }
 
@@ -132,7 +132,7 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   } catch (error) {
     sendJson(res, error instanceof Error && error.message === 'payload-too-large' ? 413 : 400, {
       error: error instanceof Error && error.message === 'payload-too-large'
-        ? 'Audit request payload is too large.'
+        ? 'Contact request payload is too large.'
         : 'Invalid JSON payload.',
     });
     return;
@@ -146,18 +146,18 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
 
   const webhookUrl = process.env.CONTACT_WEBHOOK_URL;
   if (!webhookUrl) {
-    sendJson(res, 503, { error: 'Audit request form is not configured yet.' });
+    sendJson(res, 503, { error: 'Contact form is not configured yet.' });
     return;
   }
 
   try {
     const forwarded = await forwardAuditRequestToWebhook(validated, webhookUrl);
     if (!forwarded) {
-      sendJson(res, 502, { error: 'Audit request webhook did not accept the request.' });
+      sendJson(res, 502, { error: 'Contact request webhook did not accept the request.' });
       return;
     }
   } catch {
-    sendJson(res, 502, { error: 'Audit request webhook could not be reached.' });
+    sendJson(res, 502, { error: 'Contact request webhook could not be reached.' });
     return;
   }
 

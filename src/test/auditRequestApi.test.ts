@@ -12,7 +12,7 @@ const VALID_PAYLOAD = {
   projectUrl: 'https://github.com/acme/support-rag',
   message: 'Please review this AI handoff.',
   consent: true,
-  source: 'shipseal-founder-reviewed-audit',
+  source: 'shipseal-contact-request',
 };
 
 function createResponse() {
@@ -63,7 +63,7 @@ describe('audit request API', () => {
     await handler(req as never, res as never);
 
     expect(res.statusCode).toBe(503);
-    expect(res.json()).toEqual({ error: 'Audit request form is not configured yet.' });
+    expect(res.json()).toEqual({ error: 'Contact form is not configured yet.' });
   });
 
   it('forwards valid payloads to CONTACT_WEBHOOK_URL when configured', async () => {

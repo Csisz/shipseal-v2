@@ -71,24 +71,24 @@ export function FounderAuditRequestDialog({ open, onOpenChange }: FounderAuditRe
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
-          source: 'shipseal-founder-reviewed-audit',
+          source: 'shipseal-contact-request',
         }),
       });
       const payload = await readJson(response);
 
       if (response.status === 503) {
-        setErrors({ submit: 'Audit request sending is not configured in this demo environment.' });
+        setErrors({ submit: 'Contact form sending is not configured in this demo environment.' });
         return;
       }
       if (!response.ok) {
-        setErrors({ submit: payload?.error || 'Audit request could not be sent. Please check the form and try again.' });
+        setErrors({ submit: payload?.error || 'Contact request could not be sent. Please check the form and try again.' });
         return;
       }
 
-      setStatusMessage('Audit request sent. We will review whether ShipSeal is a good fit for your AI project handoff.');
+      setStatusMessage('Contact request sent. We will review whether ShipSeal is a good fit for your AI project workflow.');
       setForm(INITIAL_FORM);
     } catch {
-      setErrors({ submit: 'Audit request sending is not configured in this demo environment.' });
+      setErrors({ submit: 'Contact form sending is not configured in this demo environment.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -98,9 +98,9 @@ export function FounderAuditRequestDialog({ open, onOpenChange }: FounderAuditRe
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl">Request founder-reviewed audit</DialogTitle>
+          <DialogTitle className="font-display text-2xl">Contact ShipSeal</DialogTitle>
           <DialogDescription>
-            Send your contact details and a short project note. We will review whether ShipSeal is a good fit for your AI project handoff.
+            Send your contact details and a short project note. We will review whether ShipSeal is a good fit for your AI project workflow.
           </DialogDescription>
         </DialogHeader>
 
@@ -126,7 +126,7 @@ export function FounderAuditRequestDialog({ open, onOpenChange }: FounderAuditRe
                 aria-label="Message"
                 value={form.message}
                 onChange={event => update('message', event.target.value)}
-                placeholder="Tell us what the AI project does and what kind of client handoff or review you need."
+                placeholder="Tell us what the AI project does and what ShipSeal package or workflow you are interested in."
                 rows={5}
               />
             </Field>
@@ -142,13 +142,13 @@ export function FounderAuditRequestDialog({ open, onOpenChange }: FounderAuditRe
               <Checkbox
                 checked={form.consent}
                 onCheckedChange={checked => update('consent', checked === true)}
-                aria-label="I agree to be contacted about my ShipSeal audit request."
+                aria-label="I agree to be contacted about my ShipSeal request."
               />
-              <span>I agree to be contacted about my ShipSeal audit request.</span>
+              <span>I agree to be contacted about my ShipSeal request.</span>
             </label>
             {errors.consent && <div className="mt-2 text-xs text-destructive">{errors.consent}</div>}
             <p className="mt-3 text-xs text-muted-foreground">
-              ShipSeal will use your contact details only to respond to this audit request.
+              ShipSeal will use your contact details only to respond to this request.
             </p>
           </div>
 
@@ -170,7 +170,7 @@ export function FounderAuditRequestDialog({ open, onOpenChange }: FounderAuditRe
             </div>
             <Button type="submit" disabled={isSubmitting} className="bg-gradient-primary border-0 shadow-glow hover:opacity-90">
               <Send className="h-4 w-4 mr-1.5" />
-              {isSubmitting ? 'Sending...' : 'Send audit request'}
+              {isSubmitting ? 'Sending...' : 'Send message'}
             </Button>
           </div>
         </form>

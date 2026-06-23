@@ -67,13 +67,7 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
         <Reveal>
           <SectionHeader title="Try ShipSeal without connecting GitHub." lead="Use the bundled sample project to see score, scan evidence, package focus, reports, and generated outputs." />
         </Reveal>
-        <div className="mt-10 grid md:grid-cols-3 gap-4 max-w-5xl mx-auto">
-          <DemoAction
-            title="See a sample ShipSeal report"
-            desc="Open a realistic demo dashboard with readiness score, evidence, risks, next actions, and export preview."
-            cta="Open sample report"
-            onClick={onSampleReport}
-          />
+        <div className="mt-10 grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
           <DemoAction
             title="Try sample project"
             desc="Skip setup and preview what ShipSeal produces before uploading a ZIP or connecting GitHub."
@@ -293,7 +287,7 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
       {/* ========================== CONTACT ============================= */}
       <section id="contact" className="container py-24 md:py-32 scroll-mt-20">
         <Reveal>
-          <SectionHeader title="Request a ShipSeal audit." lead="Tell us what you are trying to hand off. This demo form stores nothing unless you open and send the email draft." />
+          <SectionHeader title="Contact ShipSeal." lead="Tell us about your project. This demo form stores nothing unless you open and send the email draft." />
         </Reveal>
         <Reveal className="mt-10 max-w-3xl mx-auto" delay={100}>
           <ContactLeadForm />
@@ -445,7 +439,7 @@ function ContactLeadForm() {
             value={form.message}
             onChange={event => update('message', event.target.value)}
             rows={5}
-            placeholder="Tell us what you want ShipSeal to review or package."
+            placeholder="Tell us what you want ShipSeal to package or make easier for AI agents."
           />
         </LeadField>
       </div>
@@ -531,11 +525,11 @@ const PRICING_TIERS = [
     features: ['Full ShipSeal package', 'GitHub App readiness PR', 'White-label-ready handoff flow'],
   },
   {
-    name: 'Expert Review Add-On',
-    price: 'Request quote',
+    name: 'Agent Efficiency Pro',
+    price: 'Coming soon',
     featured: false,
     cta: 'Contact us',
-    features: ['Human review option', 'Client handoff review', 'Security/data pre-screen support'],
+    features: ['Agent Cost Optimizer', 'Context Packs', 'Folder-level AGENTS', 'Skill & MCP recommendations', 'White-label-ready reports'],
   },
 ];
 
@@ -544,13 +538,14 @@ const DISCLAIMERS = [
   'AI usage and transparency notes are drafts and questions for legal review — not legal advice or compliance certification.',
   'The risk check highlights obvious issues. It is not a full production security audit.',
   'ShipSeal reads your project structure and selected text — it never runs your code.',
-  'Everything ShipSeal generates supports expert review. It does not replace it.',
+  'Everything ShipSeal generates supports review and decision-making. It does not replace it.',
 ];
 
 const INTEREST_OPTIONS = [
-  'client handoff report',
+  'Client handoff package',
   'AI agent development pack',
-  'token/cost optimization',
-  'security/data pre-screen',
-  'white-label agency report',
+  'Token/cost optimization',
+  'Security/data pre-screen',
+  'White-label reports',
+  'General feedback',
 ];

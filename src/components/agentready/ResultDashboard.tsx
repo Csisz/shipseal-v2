@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { buildRepoContextPackJson, buildScoreJson, downloadJsonFile, downloadTextFile } from '@/lib/exports';
 import { formatFileSize } from '@/lib/uploadValidation';
-import { criticalBlockersEmptyStateText, displayReadinessLevel } from '@/lib/uiCopy';
+import { criticalBlockersEmptyStateText, displayReadinessLevel, readinessStatusMessageForPackage } from '@/lib/uiCopy';
 import type { ProjectIntake } from '@/lib/intake';
 import { createDefaultProjectIntake, normalizeProjectIntake } from '@/lib/intake';
 import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages } from '@/lib/packages';
@@ -44,6 +44,8 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
   const readiness = evaluateReadiness(report.score, report.blockers);
   const ready = readiness.isReady;
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
+  const statusMessage = readinessStatusMessageForPackage(readiness.statusMessage, resolvedPackages);
+  const limitedScanReason = report.scanEvidence.limitationReason || report.scanSummary.warnings.find(warning => /limited scan|fallback|file limit|archive|GitHub access|ZIP/i.test(warning));
   const readinessReport = report.agentPack.find(file => file.name === 'AGENT_READINESS_REPORT.md');
   const repoContextJson = buildRepoContextPackJson(report);
   const scoreJson = buildScoreJson(report, { selectedPackages: resolvedPackages });
@@ -102,6 +104,11 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <SummaryTile label="Status" value={displayReadinessLevel(readiness.level)} />
               <SummaryTile label="Blockers" value={String(report.blockers.length)} />
             </div>
+            {readiness.level === 'Partially Ready' && !limitedScan && (
+              <div className="mt-3 rounded-xl border border-border/60 bg-secondary/20 px-4 py-3 text-xs text-muted-foreground">
+                Status: Partially Ready. This is a readiness status based on the score, not a limited scan.
+              </div>
+            )}
             <ProjectPackageSummary
               packageLabel={deliveryFocus.packageLabel}
               outputCount={deliveryFocus.generatedPaths.length}
@@ -134,7 +141,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <div className="flex items-start gap-3">
                 {ready ? <Sparkles className="h-5 w-5 text-success mt-0.5" /> : <AlertOctagon className="h-5 w-5 text-destructive mt-0.5" />}
                 <div>
-                  <div className="font-display font-semibold text-lg">{readiness.statusMessage}</div>
+                  <div className="font-display font-semibold text-lg">{statusMessage}</div>
                   <div className="text-sm text-muted-foreground mt-1">
                     {ready
                       ? 'This project is ready for a controlled AI handoff. Download the ShipSeal Delivery Pack and review it with the client before production use.'
@@ -147,7 +154,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <div className="mt-4 rounded-2xl border border-warning/40 bg-warning/10 p-4 text-sm text-warning">
                 <div className="font-semibold">Limited scan</div>
                 <div className="mt-1 text-warning/90">
-                  ShipSeal could not fully parse this repository ZIP, so the report is based on deterministic fallback data. Do not treat it as a complete client handoff audit.
+                  {limitedScanReason || 'ShipSeal could not fully analyze this repository, so the report is based on limited scan data.'}
                 </div>
               </div>
             )}
