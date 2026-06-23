@@ -97,6 +97,7 @@ export interface RepoContextPackSummary {
   scripts: Record<string, string>;
   runCommands: { label: string; cmd: string }[];
   keyFolders: string[];
+  sampleFiles: string[];
   existingInstructionFiles: string[];
   scanSummary: {
     totalFilesFound: number;

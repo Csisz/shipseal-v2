@@ -77,6 +77,11 @@ export const SHIPSEAL_DELIVERY_PACK_MANIFEST: DeliveryPackManifest = {
     section('context', '07-context', 'Context', [
       'REPO_CONTEXT_PACK.md',
       ['repo-context-pack.json', 'json'],
+      'ARCHITECTURE.md',
+      'CRITICAL_FILES.md',
+      'COMMAND_MAP.md',
+      'KNOWN_RISKS.md',
+      'TASK_ROUTER.md',
     ]),
     section('security-data', '08-security-data', 'Security and data pre-screen', [
       'SECURITY_NOTES.md',

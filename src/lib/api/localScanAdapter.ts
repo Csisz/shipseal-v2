@@ -93,7 +93,15 @@ export function getLocalScanJobResult(id: string): ScanJobResult | ScanErrorResp
       deliveryPack: getDeliveryPackRequiredPaths(),
       coreAgentPack: job.report.agentPack.map(file => file.name),
       mcpGovernancePack: job.report.mcpReadiness.generatedFiles.map(file => file.filename),
-      repoContextPack: ['REPO_CONTEXT_PACK.md', 'repo-context-pack.json'],
+      repoContextPack: [
+        'REPO_CONTEXT_PACK.md',
+        'repo-context-pack.json',
+        'ARCHITECTURE.md',
+        'CRITICAL_FILES.md',
+        'COMMAND_MAP.md',
+        'KNOWN_RISKS.md',
+        'TASK_ROUTER.md',
+      ],
     },
   };
 }

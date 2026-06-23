@@ -36,6 +36,10 @@ export function buildRepoContextPack(input: RepoScanInput, stack: DetectedStack,
     scripts: { ...stack.scripts },
     runCommands: [...stack.runCommands],
     keyFolders: [...meta.summary.keyFolders],
+    sampleFiles: input.files
+      .filter(file => !file.isDir && !file.ignored)
+      .slice(0, 40)
+      .map(file => file.path),
     existingInstructionFiles: [...meta.summary.instructionFiles],
     scanSummary: {
       totalFilesFound: meta.scanSummary.totalFilesFound,
@@ -100,6 +104,9 @@ ${pack.runCommands.length ? pack.runCommands.map(command => `- **${command.label
 
 ## Key folders
 ${mdList(pack.keyFolders.map(folder => `${folder}/`), 'No standard key folders detected.')}
+
+## Sampled files
+${mdList(pack.sampleFiles, 'No sampled files available.')}
 
 ## Existing instruction files
 ${mdList(pack.existingInstructionFiles, 'No existing instruction files detected.')}

@@ -78,7 +78,17 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
   it('returns expected output paths for each major package', () => {
     const expected: Array<[string, string[]]> = [
       ['client-handoff', ['06-client-handoff/CLIENT_HANDOFF_REPORT.md', '06-client-handoff/DELIVERY_MANIFEST.md']],
-      ['agent-readiness', ['01-agent-instructions/AGENTS.md', '01-agent-instructions/AGENT_COST_OPTIMIZATION.md', '01-agent-instructions/CURSOR_RULES.md', '07-context/REPO_CONTEXT_PACK.md']],
+      ['agent-readiness', [
+        '01-agent-instructions/AGENTS.md',
+        '01-agent-instructions/AGENT_COST_OPTIMIZATION.md',
+        '01-agent-instructions/CURSOR_RULES.md',
+        '07-context/REPO_CONTEXT_PACK.md',
+        '07-context/ARCHITECTURE.md',
+        '07-context/CRITICAL_FILES.md',
+        '07-context/COMMAND_MAP.md',
+        '07-context/KNOWN_RISKS.md',
+        '07-context/TASK_ROUTER.md',
+      ]],
       ['testing-red-team', ['04-testing/EVAL_TEST_CASES.md', '04-testing/CI_QUALITY_GATE.yml']],
       ['safety-risk', ['08-security-data/ENV_SECRETS_FINDINGS.md', '08-security-data/DATA_PRIVACY_CHECKLIST.md']],
       ['mcp-readiness', ['03-mcp-governance/MCP_READINESS.md', '03-mcp-governance/MCP_TOOL_ALLOWLIST.md']],
@@ -89,6 +99,24 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
       const focus = resolveDeliveryPackFocus([packageId]);
       for (const path of paths) expect(focus.generatedPaths).toContain(path);
       expect(focus.generatedPaths).toContain('score.json');
+    }
+  });
+
+  it('includes Context Compression outputs only for AI Agent Development or Full ShipSeal', () => {
+    const contextCompressionPaths = [
+      '07-context/ARCHITECTURE.md',
+      '07-context/CRITICAL_FILES.md',
+      '07-context/COMMAND_MAP.md',
+      '07-context/KNOWN_RISKS.md',
+      '07-context/TASK_ROUTER.md',
+    ];
+
+    for (const path of contextCompressionPaths) {
+      expect(resolveDeliveryPackFocus(['agent-readiness']).generatedPaths).toContain(path);
+      expect(resolveDeliveryPackFocus(['full-package']).generatedPaths).toContain(path);
+      expect(resolveDeliveryPackFocus(['client-handoff']).generatedPaths).not.toContain(path);
+      expect(resolveDeliveryPackFocus(['testing-red-team']).generatedPaths).not.toContain(path);
+      expect(resolveDeliveryPackFocus(['safety-risk']).generatedPaths).not.toContain(path);
     }
   });
 
@@ -145,6 +173,11 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     );
     const zip = await JSZip.loadAsync(blob);
     const costOptimization = await zipText(zip, '01-agent-instructions/AGENT_COST_OPTIMIZATION.md');
+    const architecture = await zipText(zip, '07-context/ARCHITECTURE.md');
+    const criticalFiles = await zipText(zip, '07-context/CRITICAL_FILES.md');
+    const commandMap = await zipText(zip, '07-context/COMMAND_MAP.md');
+    const knownRisks = await zipText(zip, '07-context/KNOWN_RISKS.md');
+    const taskRouter = await zipText(zip, '07-context/TASK_ROUTER.md');
 
     expect(tokenSaverAgents).toContain('Recommended operating mode: Token Saver');
     expect(tokenSaverAgents).not.toContain('Recommended operating mode: Balanced Productivity');
@@ -165,6 +198,14 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(costOptimization).toContain('Expected token usage: Lowest token cost');
     expect(costOptimization).toContain('## Expected tradeoffs');
     expect(costOptimization).toContain('Avoid full build/test unless explicitly requested');
+    expect(architecture).toContain('sample-nextjs-app');
+    expect(architecture).toContain('Detected Stack');
+    expect(criticalFiles).toContain('Do not start by reading the whole repository.');
+    expect(criticalFiles).toContain('package.json');
+    expect(commandMap).toContain('test');
+    expect(commandMap).toContain('build');
+    expect(knownRisks).toContain('Risks below are based only on existing ShipSeal scan and readiness signals.');
+    expect(taskRouter).toContain('Use this to open fewer files before making changes.');
   });
 
   it('keeps score.json metadata and focused ZIP file list consistent', async () => {

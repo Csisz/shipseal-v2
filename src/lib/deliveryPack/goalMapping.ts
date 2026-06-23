@@ -45,6 +45,11 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '02-skills/test-generation/SKILL.md',
     '07-context/REPO_CONTEXT_PACK.md',
     '07-context/repo-context-pack.json',
+    '07-context/ARCHITECTURE.md',
+    '07-context/CRITICAL_FILES.md',
+    '07-context/COMMAND_MAP.md',
+    '07-context/KNOWN_RISKS.md',
+    '07-context/TASK_ROUTER.md',
     ROOT_SCORE,
   ],
   'testing-red-team': [

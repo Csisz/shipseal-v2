@@ -675,6 +675,7 @@ function packageFocus(score: Record<string, unknown>, intake: ClientReportHtmlIn
       title: 'AI agent development focus',
       items: [
         'Review AGENTS.md, CLAUDE.md, Codex/Cursor guidance, repo context, and agent safety notes together.',
+        'Context Compression Pack generated: ShipSeal generated compact project memory files to help AI coding agents avoid unnecessary full-repo scans.',
         'Confirm safe edit boundaries and human-review rules before assigning agent work.',
         `Delivery manifest: ${outputCount(score)} generated outputs for the selected agent-development package.`,
       ],
@@ -718,6 +719,7 @@ function packageFocus(score: Record<string, unknown>, intake: ClientReportHtmlIn
     title: 'Full ShipSeal overview',
     items: [
       'Broad review across client handoff, AI-agent readiness, testing, safety, MCP, and AI Act/transparency readiness.',
+      'Context Compression Pack generated: ShipSeal generated compact project memory files to help AI coding agents avoid unnecessary full-repo scans.',
       `Delivery manifest: ${outputCount(score)} generated outputs for the selected package.`,
       'Use strengths, risks, next actions, scan evidence, and generated files together before sharing externally.',
     ],

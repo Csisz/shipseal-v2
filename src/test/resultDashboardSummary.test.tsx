@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildSampleReport } from '@/lib/readiness';
+import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 
 vi.mock('@/components/agentready/ScoreGauge', () => ({
   ScoreGauge: ({ score }: { score: number }) => <div>Score gauge {score}</div>,
@@ -51,7 +52,7 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
-    expect(screen.getByText('37 outputs')).toBeInTheDocument();
+    expect(screen.getByText(`${resolveDeliveryPackFocus(['full-package']).generatedPaths.length} outputs`)).toBeInTheDocument();
     expect(screen.queryByText('Full Delivery Pack: 36 required outputs')).not.toBeInTheDocument();
     expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
     expect(screen.getByText(/Advanced details — full scan results and generated files/i)).toBeInTheDocument();
@@ -70,7 +71,8 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getByText('Agent development pack')).toBeInTheDocument();
-    expect(screen.getByText('12 outputs')).toBeInTheDocument();
+    expect(screen.getByText(`${resolveDeliveryPackFocus(['agent-readiness']).generatedPaths.length} outputs`)).toBeInTheDocument();
+    expect(screen.getByText(/Context Compression Pack generated/i)).toBeInTheDocument();
     expect(screen.getByText('Recommended operating mode')).toBeInTheDocument();
     expect(screen.getByText('Balanced Productivity')).toBeInTheDocument();
     expect(screen.getAllByText('Balanced token usage').length).toBeGreaterThan(0);

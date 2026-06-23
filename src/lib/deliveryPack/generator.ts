@@ -5,6 +5,7 @@ import { generateAiActReadinessFiles } from './aiActReadiness';
 import { generateTestingPackFiles } from './testingPack';
 import { generateSkillsPackFiles } from './skillsPack';
 import { generateClientHandoffFiles } from './clientHandoff';
+import { generateContextCompressionFiles } from './contextCompression';
 import { generateClientReportHtml } from '../report';
 import {
   SHIPSEAL_DELIVERY_PACK_MANIFEST,
@@ -102,6 +103,11 @@ function resolveSourceContent(
   const testingPackFiles = generateTestingPackFiles(input.intake, input.agentFileByName.get('TESTING_STRATEGY.md')?.content);
   const skillsPackFiles = generateSkillsPackFiles(input.intake);
   const clientHandoffFiles = generateClientHandoffFiles(input.intake, input.scoreJson);
+  const contextCompressionFiles = generateContextCompressionFiles({
+    projectName,
+    contextJson: input.contextFiles?.json,
+    scoreJson: input.scoreJson,
+  });
 
   if (path.startsWith('01-agent-instructions/')) {
     if (path === '01-agent-instructions/CURSOR_RULES.md') return cursorRules(projectName);
@@ -159,6 +165,13 @@ function resolveSourceContent(
 
   if (path === '07-context/repo-context-pack.json') {
     return input.contextFiles?.json || { repositoryName: projectName, contextAvailable: false };
+  }
+
+  if (path.startsWith('07-context/')) {
+    return contextCompressionFiles[path] || markdownPlaceholder(filename, projectName, [
+      'No compressed context signal was available for this output.',
+      'Re-run the scan with a repository ZIP or GitHub repository to populate compact agent memory files.',
+    ]);
   }
 
   if (path === 'score.json') {

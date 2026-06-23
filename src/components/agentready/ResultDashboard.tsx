@@ -118,6 +118,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               packageLabel={deliveryFocus.packageLabel}
               outputCount={deliveryFocus.generatedPaths.length}
               packageSummary={deliveryFocus.packageSummary}
+              hasContextCompressionPack={deliveryFocus.generatedPaths.includes('07-context/ARCHITECTURE.md')}
             />
             {selectionUsesAgentDevelopment(resolvedPackages) && (
               <AgentOperatingModeSummary
@@ -488,10 +489,12 @@ function ProjectPackageSummary({
   packageLabel,
   outputCount,
   packageSummary,
+  hasContextCompressionPack,
 }: {
   packageLabel: string;
   outputCount: number;
   packageSummary: string;
+  hasContextCompressionPack: boolean;
 }) {
   return (
     <div className="mt-3 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-4 shadow-sm shadow-primary/5">
@@ -507,6 +510,11 @@ function ProjectPackageSummary({
       {packageSummary && (
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
           {packageSummary}
+        </p>
+      )}
+      {hasContextCompressionPack && (
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+          <span className="font-semibold text-foreground">Context Compression Pack generated.</span> ShipSeal generated compact project memory files to help AI coding agents avoid unnecessary full-repo scans.
         </p>
       )}
     </div>

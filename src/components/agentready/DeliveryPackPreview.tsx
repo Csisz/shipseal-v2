@@ -25,6 +25,7 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
   const agentModeSummary = buildAgentOperatingModeSummary(resolvedAgentMode);
   const focus = resolveDeliveryPackFocus(selectedPackages);
   const generatedPaths = focus.generatedPaths;
+  const hasContextCompressionPack = generatedPaths.includes('07-context/ARCHITECTURE.md');
   const scoreJson = buildScoreJson(report, { selectedPackages, agentOperatingMode: resolvedAgentMode });
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const risks = previewRisks(report, normalizedIntake);
@@ -117,6 +118,11 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
             ? 'Full ShipSeal includes every manifest output.'
             : `${generatedPaths.length} focused outputs will be generated for this goal. The score.json export and Delivery Pack ZIP use the same generated file list.`}
         </p>
+        {hasContextCompressionPack && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Context Compression Pack generated.</span> ShipSeal generated compact project memory files to help AI coding agents avoid unnecessary full-repo scans.
+          </p>
+        )}
       </div>
 
       <div className="mb-5 rounded-lg border border-border/60 bg-secondary/25 px-4 py-3">

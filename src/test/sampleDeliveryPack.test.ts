@@ -71,6 +71,23 @@ describe('ShipSeal sample Delivery Pack', () => {
     expect(mcpReadiness).toContain(SAMPLE_PROJECT_INTAKE.aiProvider);
   });
 
+  it('generates Context Compression files from scan signals', () => {
+    const architecture = textAt('07-context/ARCHITECTURE.md');
+    const criticalFiles = textAt('07-context/CRITICAL_FILES.md');
+    const commandMap = textAt('07-context/COMMAND_MAP.md');
+    const knownRisks = textAt('07-context/KNOWN_RISKS.md');
+    const taskRouter = textAt('07-context/TASK_ROUTER.md');
+
+    expect(architecture).toContain('Detected Stack');
+    expect(architecture).toContain(SAMPLE_PROJECT_INTAKE.projectName);
+    expect(criticalFiles).toContain('Do not start by reading the whole repository.');
+    expect(criticalFiles).toContain('package.json');
+    expect(commandMap).toContain('npm run test');
+    expect(commandMap).toContain('npm run build');
+    expect(knownRisks).toContain('Risks below are based only on existing ShipSeal scan and readiness signals.');
+    expect(taskRouter).toContain('Use this to open fewer files before making changes.');
+  });
+
   it('does not generate duplicated fallback phrases in markdown outputs', () => {
     const pack = buildSampleDeliveryPack();
     const markdown = pack.files
