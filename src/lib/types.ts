@@ -357,6 +357,11 @@ export interface ScoreJsonExport {
       signals: string[];
     }>;
   };
+  specializedContextPacks?: {
+    generated: boolean;
+    files: string[];
+    outputCount: number;
+  };
   deliveryPackFocus?: {
     selectedGoals: Array<{ id: string; title: string }>;
     emphasizedFiles: string[];

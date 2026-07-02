@@ -137,6 +137,13 @@ ${mdList(pack.securityFindings, 'No secret-path findings in metadata.')}
 - Recommended categories: ${pack.mcpSummary.recommendedServerCategories.join(', ') || 'none'}
 - Summary: ${pack.mcpSummary.summary}
 
+## Specialized context files
+- General coding work: 07-context/GLOBAL_CONTEXT.md
+- QA/test-generation work: 07-context/QA_CONTEXT.md
+- Security/data review: 07-context/SECURITY_CONTEXT.md
+- Documentation/handoff work: 07-context/DOCS_CONTEXT.md
+- MCP/tooling work: 07-context/MCP_CONTEXT.md
+
 ## Content policy
 - Raw full file contents included: ${pack.contentPolicy.rawFileContentsIncluded ? 'yes' : 'no'}
 - Secrets included: ${pack.contentPolicy.secretsIncluded ? 'yes' : 'no'}

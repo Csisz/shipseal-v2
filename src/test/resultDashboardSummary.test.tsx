@@ -79,12 +79,13 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(`${resolveDeliveryPackFocus(['agent-readiness'], { folderAgentPaths }).generatedPaths.length} outputs`)).toBeInTheDocument();
     expect(screen.getByText(/Context Compression Pack generated/i)).toBeInTheDocument();
     expect(screen.getByText(/Folder-level AGENTS suggestions generated/i)).toBeInTheDocument();
+    expect(screen.getByText(/Specialized context packs generated/i)).toBeInTheDocument();
     expect(screen.getByText('Recommended operating mode')).toBeInTheDocument();
     expect(screen.getByText('Balanced Productivity')).toBeInTheDocument();
     expect(screen.getAllByText('Balanced token usage').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Recommended default').length).toBeGreaterThan(0);
     expect(screen.queryByText('Full ShipSeal package')).not.toBeInTheDocument();
-    expect(screen.getByText(/AGENTS.md, CLAUDE.md, Codex guidance, repo context, agent safety notes, and tooling recommendations/i)).toBeInTheDocument();
+    expect(screen.getByText(/AGENTS.md, CLAUDE.md, Codex guidance, repo context, role-specific context packs, agent safety notes, and tooling recommendations/i)).toBeInTheDocument();
   });
 
   it('shows a selected agent operating mode for AI agent development outputs', () => {

@@ -124,6 +124,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               packageSummary={deliveryFocus.packageSummary}
               hasContextCompressionPack={deliveryFocus.generatedPaths.includes('07-context/ARCHITECTURE.md')}
               hasFolderAgentSuggestions={deliveryFocus.generatedPaths.some(path => path.startsWith('07-context/folder-agents/'))}
+              hasSpecializedContextPacks={deliveryFocus.generatedPaths.includes('07-context/GLOBAL_CONTEXT.md')}
               hasToolingRecommendations={deliveryFocus.generatedPaths.includes('07-context/SKILL_RECOMMENDATIONS.md') || deliveryFocus.generatedPaths.includes('07-context/MCP_RECOMMENDATIONS.md')}
               skillRecommendationCount={toolingRecommendationCounts.skills}
               mcpRecommendationCount={toolingRecommendationCounts.mcpTools}
@@ -499,6 +500,7 @@ function ProjectPackageSummary({
   packageSummary,
   hasContextCompressionPack,
   hasFolderAgentSuggestions,
+  hasSpecializedContextPacks,
   hasToolingRecommendations,
   skillRecommendationCount,
   mcpRecommendationCount,
@@ -508,6 +510,7 @@ function ProjectPackageSummary({
   packageSummary: string;
   hasContextCompressionPack: boolean;
   hasFolderAgentSuggestions: boolean;
+  hasSpecializedContextPacks: boolean;
   hasToolingRecommendations: boolean;
   skillRecommendationCount: number;
   mcpRecommendationCount: number;
@@ -536,6 +539,11 @@ function ProjectPackageSummary({
       {hasFolderAgentSuggestions && (
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
           <span className="font-semibold text-foreground">Folder-level AGENTS suggestions generated.</span> These local instructions help AI coding agents use the right context for each part of the project.
+        </p>
+      )}
+      {hasSpecializedContextPacks && (
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+          <span className="font-semibold text-foreground">Specialized context packs generated.</span> ShipSeal generated role-specific context files for QA, security, docs, and MCP/tooling agents.
         </p>
       )}
       {hasToolingRecommendations && (

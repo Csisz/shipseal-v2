@@ -91,6 +91,11 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
         '07-context/COMMAND_MAP.md',
         '07-context/KNOWN_RISKS.md',
         '07-context/TASK_ROUTER.md',
+        '07-context/GLOBAL_CONTEXT.md',
+        '07-context/QA_CONTEXT.md',
+        '07-context/SECURITY_CONTEXT.md',
+        '07-context/DOCS_CONTEXT.md',
+        '07-context/MCP_CONTEXT.md',
         '07-context/SKILL_RECOMMENDATIONS.md',
         '07-context/MCP_RECOMMENDATIONS.md',
       ]],
@@ -114,6 +119,11 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
       '07-context/COMMAND_MAP.md',
       '07-context/KNOWN_RISKS.md',
       '07-context/TASK_ROUTER.md',
+      '07-context/GLOBAL_CONTEXT.md',
+      '07-context/QA_CONTEXT.md',
+      '07-context/SECURITY_CONTEXT.md',
+      '07-context/DOCS_CONTEXT.md',
+      '07-context/MCP_CONTEXT.md',
       '07-context/SKILL_RECOMMENDATIONS.md',
       '07-context/MCP_RECOMMENDATIONS.md',
     ];
@@ -186,6 +196,11 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     const commandMap = await zipText(zip, '07-context/COMMAND_MAP.md');
     const knownRisks = await zipText(zip, '07-context/KNOWN_RISKS.md');
     const taskRouter = await zipText(zip, '07-context/TASK_ROUTER.md');
+    const globalContext = await zipText(zip, '07-context/GLOBAL_CONTEXT.md');
+    const qaContext = await zipText(zip, '07-context/QA_CONTEXT.md');
+    const securityContext = await zipText(zip, '07-context/SECURITY_CONTEXT.md');
+    const docsContext = await zipText(zip, '07-context/DOCS_CONTEXT.md');
+    const mcpContext = await zipText(zip, '07-context/MCP_CONTEXT.md');
     const rootAgents = await zipText(zip, '07-context/folder-agents/root/AGENTS.md');
     const docsAgents = await zipText(zip, '07-context/folder-agents/docs/AGENTS.md');
 
@@ -217,6 +232,17 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(knownRisks).toContain('Risks below are based only on existing ShipSeal scan and readiness signals.');
     expect(taskRouter).toContain('Use this to open fewer files before making changes.');
     expect(taskRouter).toContain('Suggested folder-level AGENTS.md files are generated');
+    expect(taskRouter).toContain('07-context/SECURITY_CONTEXT.md');
+    expect(globalContext).toContain('sample-nextjs-app');
+    expect(globalContext).toContain('Recommended operating mode');
+    expect(globalContext).toContain('07-context/TASK_ROUTER.md');
+    expect(qaContext).toContain('Playwright');
+    expect(qaContext).toContain('Test command');
+    expect(securityContext).toContain('.env.example');
+    expect(securityContext).toContain('not legal advice');
+    expect(docsContext).toContain('docs/architecture.md');
+    expect(mcpContext).toContain('Recommended MCP tools');
+    expect(mcpContext).toContain('read-only MCP access');
     expect(rootAgents).toContain('Suggested folder-level AGENTS.md files. Review before copying into your repository.');
     expect(rootAgents).toContain('Do not start by reading the whole repository.');
     expect(rootAgents).toContain('07-context/ARCHITECTURE.md');
@@ -243,6 +269,18 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(clientScoreJson.generatedFiles).not.toContain('07-context/folder-agents/root/AGENTS.md');
     expect(agentScoreJson.outputCount).toBe(agentScoreJson.generatedFiles.length);
     expect(agentScoreJson.deliveryPackFocus?.manifestOutputCount).toBe(agentScoreJson.generatedFiles.length);
+    expect(agentScoreJson.specializedContextPacks).toEqual({
+      generated: true,
+      files: [
+        '07-context/GLOBAL_CONTEXT.md',
+        '07-context/QA_CONTEXT.md',
+        '07-context/SECURITY_CONTEXT.md',
+        '07-context/DOCS_CONTEXT.md',
+        '07-context/MCP_CONTEXT.md',
+      ],
+      outputCount: 5,
+    });
+    expect(clientScoreJson.specializedContextPacks?.generated).toBe(false);
 
     const blob = await buildAgentPackZipBlob(
       report.agentPack,

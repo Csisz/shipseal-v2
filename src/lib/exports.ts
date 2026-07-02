@@ -42,6 +42,14 @@ export interface BuildScoreJsonOptions {
   agentOperatingMode?: AgentOperatingModeId;
 }
 
+const SPECIALIZED_CONTEXT_PACK_PATHS = [
+  '07-context/GLOBAL_CONTEXT.md',
+  '07-context/QA_CONTEXT.md',
+  '07-context/SECURITY_CONTEXT.md',
+  '07-context/DOCS_CONTEXT.md',
+  '07-context/MCP_CONTEXT.md',
+];
+
 export function sanitizeRepositoryName(name: string): string {
   const cleaned = name
     .trim()
@@ -63,6 +71,7 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
   const deliveryPackFocus = resolveDeliveryPackFocus(options.selectedPackages, { folderAgentPaths });
   const agentOperatingMode = resolveAgentOperatingMode(options.agentOperatingMode || report.recommendedAgentOperatingMode || DEFAULT_AGENT_OPERATING_MODE);
   const toolingRecommendations = buildToolingRecommendationBundle(report);
+  const specializedContextPacks = SPECIALIZED_CONTEXT_PACK_PATHS.filter(path => deliveryPackFocus.generatedPaths.includes(path));
 
   return {
     product: 'ShipSeal',
@@ -97,6 +106,11 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
     outputCount: deliveryPackFocus.generatedPaths.length,
     agentOperatingMode: buildAgentOperatingModeSummary(agentOperatingMode),
     toolingRecommendations,
+    specializedContextPacks: {
+      generated: specializedContextPacks.length > 0,
+      files: specializedContextPacks,
+      outputCount: specializedContextPacks.length,
+    },
     deliveryPackFocus: {
       selectedGoals: deliveryPackFocus.selectedGoals,
       emphasizedFiles: deliveryPackFocus.emphasizedPaths,

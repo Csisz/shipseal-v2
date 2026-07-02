@@ -1,3 +1,5 @@
+import { buildToolingRecommendationBundleFromExports, type McpToolRecommendation } from '../toolingRecommendations';
+
 interface ContextCompressionInput {
   projectName: string;
   contextJson?: unknown;
@@ -9,6 +11,7 @@ interface ContextSource {
   stack: string;
   languages: string[];
   frameworks: string[];
+  testFrameworks: string[];
   packageManager: string;
   scripts: Record<string, string>;
   runCommands: Array<{ label: string; cmd: string }>;
@@ -21,6 +24,20 @@ interface ContextSource {
   warnings: string[];
   limitedScan: boolean;
   keyFilesFound: Record<string, boolean>;
+  sourceType: string;
+  repositoryFullName: string;
+  branchOrRef: string;
+  packageLabel: string;
+  packageSummary: string;
+  agentOperatingMode: {
+    label: string;
+    summary: string;
+    expectedTokenUsage: string;
+  };
+  generatedFiles: string[];
+  mcpRecommendations: McpToolRecommendation[];
+  mcpRiskFindings: Array<{ title: string; severity: string; description: string; recommendation: string }>;
+  mcpGeneratedFiles: string[];
 }
 
 export function generateContextCompressionFiles(input: ContextCompressionInput): Record<string, string> {
@@ -32,6 +49,11 @@ export function generateContextCompressionFiles(input: ContextCompressionInput):
     '07-context/COMMAND_MAP.md': commandMap(source),
     '07-context/KNOWN_RISKS.md': knownRisks(source),
     '07-context/TASK_ROUTER.md': taskRouter(source),
+    '07-context/GLOBAL_CONTEXT.md': globalContext(source),
+    '07-context/QA_CONTEXT.md': qaContext(source),
+    '07-context/SECURITY_CONTEXT.md': securityContext(source),
+    '07-context/DOCS_CONTEXT.md': docsContext(source),
+    '07-context/MCP_CONTEXT.md': mcpContext(source),
   };
 }
 
@@ -40,12 +62,18 @@ function buildContextSource(input: ContextCompressionInput): ContextSource {
   const score = asRecord(input.scoreJson);
   const scanSummary = asRecord(score.scanSummary);
   const scanEvidence = asRecord(score.scanEvidence);
+  const source = asRecord(score.source);
+  const focus = asRecord(score.deliveryPackFocus);
+  const agentOperatingMode = asRecord(score.agentOperatingMode);
+  const mcpReadiness = asRecord(score.mcpReadiness);
+  const toolingRecommendations = buildToolingRecommendationBundleFromExports(input.scoreJson, input.contextJson);
 
   return {
     projectName: stringValue(context.repositoryName) || stringValue(score.repositoryName) || input.projectName,
     stack: stringValue(context.detectedStack) || stringValue(asRecord(score.detectedStack).primary) || 'not detected',
     languages: stringArray(context.languages).length ? stringArray(context.languages) : stringArray(scanEvidence.topLanguages),
     frameworks: stringArray(context.frameworks).length ? stringArray(context.frameworks) : stringArray(scanEvidence.topFrameworks),
+    testFrameworks: stringArray(asRecord(score.detectedStack).testFrameworks),
     packageManager: stringValue(context.packageManager) || 'not detected',
     scripts: stringRecord(context.scripts),
     runCommands: commandArray(context.runCommands),
@@ -68,6 +96,25 @@ function buildContextSource(input: ContextCompressionInput): ContextSource {
       : stringArray(scanSummary.warnings),
     limitedScan: asRecord(context.scanSummary).limited === true || scanEvidence.limitedScan === true || scanSummary.limited === true,
     keyFilesFound: booleanRecord(scanEvidence.keyFilesFound),
+    sourceType: stringValue(scanEvidence.sourceType) || stringValue(source.sourceType) || 'not detected',
+    repositoryFullName: stringValue(scanEvidence.repositoryFullName) || stringValue(score.repositoryName) || input.projectName,
+    branchOrRef: stringValue(scanEvidence.branchOrRef) || stringValue(source.githubBranch) || stringValue(source.githubDefaultBranch) || 'default ref',
+    packageLabel: stringValue(focus.packageLabel) || 'Full ShipSeal package',
+    packageSummary: stringValue(focus.packageSummary) || 'No package summary detected.',
+    agentOperatingMode: {
+      label: stringValue(agentOperatingMode.label) || 'Not detected',
+      summary: stringValue(agentOperatingMode.summary) || 'No operating mode summary detected.',
+      expectedTokenUsage: stringValue(agentOperatingMode.expectedTokenUsage) || 'Not detected',
+    },
+    generatedFiles: stringArray(focus.generatedFiles).length ? stringArray(focus.generatedFiles) : stringArray(score.generatedFiles),
+    mcpRecommendations: toolingRecommendations.mcpTools,
+    mcpRiskFindings: arrayValue(mcpReadiness.riskFindings).map(asRecord).map(finding => ({
+      title: stringValue(finding.title) || 'MCP risk finding',
+      severity: stringValue(finding.severity) || 'Not detected',
+      description: stringValue(finding.description) || 'No description provided by scan.',
+      recommendation: stringValue(finding.recommendation) || 'Review before enabling MCP/tool access.',
+    })),
+    mcpGeneratedFiles: stringArray(mcpReadiness.generatedFiles),
   };
 }
 
@@ -141,6 +188,12 @@ function criticalFiles(source: ContextSource) {
     sectionList('Likely useful for tests', tests),
     sectionList('Suggested local agent instruction locations', folderAgents),
     sectionList('Existing agent instruction files', source.instructionFiles),
+    '## Specialized context packs',
+    '- General agent memory: `07-context/GLOBAL_CONTEXT.md`',
+    '- Testing work: `07-context/QA_CONTEXT.md`',
+    '- Security/data review: `07-context/SECURITY_CONTEXT.md`',
+    '- Documentation/handoff work: `07-context/DOCS_CONTEXT.md`',
+    '- MCP/tooling work: `07-context/MCP_CONTEXT.md`',
     '',
   ].filter(Boolean).join('\n');
 }
@@ -223,11 +276,204 @@ function taskRouter(source: ContextSource) {
     'Suggested folder-level AGENTS.md files are generated in `07-context/folder-agents/` when scan signals support them. Review before copying them into the repository.',
     mdList(folderAgents, 'No folder-level AGENTS suggestions detected.'),
     '',
+    '## Specialized context starting points',
+    '- General coding work: start with `07-context/GLOBAL_CONTEXT.md`.',
+    '- Testing work: start with `07-context/QA_CONTEXT.md`.',
+    '- Security/data review: start with `07-context/SECURITY_CONTEXT.md`.',
+    '- Documentation or handoff work: start with `07-context/DOCS_CONTEXT.md`.',
+    '- MCP/tooling work: start with `07-context/MCP_CONTEXT.md`.',
+    '',
     routeBlock('UI changes', ui, focusedTestCommand(source)),
     routeBlock('Export/report changes', exportReport, focusedTestCommand(source)),
     routeBlock('GitHub integration', github, focusedTestCommand(source)),
     routeBlock('Testing changes', tests, testCommand(source)),
     routeBlock('Security/data review', security, 'List manual verification steps and require human review for secrets, auth, privacy, and deployment changes.'),
+    '',
+  ].join('\n');
+}
+
+function globalContext(source: ContextSource) {
+  return [
+    '# GLOBAL_CONTEXT.md',
+    '',
+    'General compact project memory for AI coding agents. Use this before opening broader repository context.',
+    '',
+    '## Project',
+    `- Project name: ${source.projectName}`,
+    `- Detected stack: ${source.stack}`,
+    `- Languages: ${inlineList(source.languages)}`,
+    `- Frameworks: ${inlineList(source.frameworks)}`,
+    `- Source type: ${source.sourceType}`,
+    `- Repository / branch: ${source.repositoryFullName} @ ${source.branchOrRef}`,
+    `- Package / goal: ${source.packageLabel}`,
+    `- Package summary: ${source.packageSummary}`,
+    '',
+    '## Recommended operating mode',
+    `- Mode: ${source.agentOperatingMode.label}`,
+    `- Expected token usage: ${source.agentOperatingMode.expectedTokenUsage}`,
+    `- Summary: ${source.agentOperatingMode.summary}`,
+    '',
+    '## Key folders',
+    mdList(source.keyFolders.map(folder => `${folder}/`), 'No key folders detected by scan.'),
+    '',
+    '## Key files',
+    mdList(orderedKnownPaths(source, [/^readme\.md$/i, /^package\.json$/i, /^agents\.md$/i, /^claude\.md$/i, /^tsconfig\.json$/i, /^vite\.config\./i, /^next\.config\./i]), 'No key files detected from sampled paths.'),
+    '',
+    '## Verification commands',
+    mdList(source.runCommands.map(command => `${command.label}: \`${command.cmd}\``), 'No verification commands detected.'),
+    '',
+    '## Related context',
+    '- Task routing: `07-context/TASK_ROUTER.md`',
+    '- Critical file map: `07-context/CRITICAL_FILES.md`',
+    '- Known risks: `07-context/KNOWN_RISKS.md`',
+    '',
+  ].join('\n');
+}
+
+function qaContext(source: ContextSource) {
+  const testFiles = matchingPaths(source, [/(\.|-)(test|spec)\.[cm]?[jt]sx?$/i, /(^|\/)(tests?|__tests__|e2e)\//i, /playwright\.config\./i, /cypress\//i]);
+  const testingFiles = matchingPaths(source, [/testing/i, /quality/i, /ci/i, /\.github\/workflows\//i]);
+  const missingRisks = [
+    source.keyFilesFound.tests === false ? 'Missing tests signal in scan evidence.' : '',
+    source.keyFilesFound.ciConfig === false ? 'Missing CI workflow signal in scan evidence.' : '',
+    !source.scripts.test ? 'No test script detected.' : '',
+  ].filter(Boolean);
+  const suggestedAreas = unique([
+    ...matchingPaths(source, [/^(src\/)?(app|pages|components)\//i]).map(path => `UI flow around ${path}`),
+    ...matchingPaths(source, [/api\//i, /server\//i, /routes?\//i]).map(path => `API behavior around ${path}`),
+    ...matchingPaths(source, [/report/i, /export/i, /manifest/i]).map(path => `Export/report behavior around ${path}`),
+  ]).slice(0, 8);
+
+  return [
+    '# QA_CONTEXT.md',
+    '',
+    'Context for QA and test-generation agents. Do not invent tests; use only scan-supported files, commands, and risks.',
+    '',
+    '## Detected test files and folders',
+    mdList(testFiles, 'No test files or folders detected from sampled paths.'),
+    '',
+    '## Detected test frameworks',
+    mdList(source.testFrameworks, 'No test framework detected.'),
+    '',
+    '## Test command',
+    source.scripts.test ? `- \`${source.scripts.test}\`` : '- No test command detected.',
+    '',
+    '## Missing test risks',
+    mdList(missingRisks, 'No missing test risk detected from scan evidence.'),
+    '',
+    '## Suggested focused test areas',
+    mdList(suggestedAreas, 'No focused test areas detected from sampled paths.'),
+    '',
+    '## Quality gates and testing-related files',
+    mdList(testingFiles, 'No testing or quality-gate files detected from sampled paths.'),
+    '',
+  ].join('\n');
+}
+
+function securityContext(source: ContextSource) {
+  const envFiles = matchingPaths(source, [/\.env/i]);
+  const securityDocs = matchingPaths(source, [/^security\.md$/i, /security/i, /privacy/i, /auth/i, /codeowners/i]);
+  const githubApiAreas = matchingPaths(source, [/github/i, /^api\//i, /\/api\//i, /server/i, /routes?\//i]);
+  const securityRisks = unique([
+    ...source.blockers.filter(blocker => /secret|security|env|auth|privacy|data|limited/i.test(`${blocker.id} ${blocker.title} ${blocker.detail}`)).map(blocker => `${blocker.title}: ${blocker.detail}`),
+    ...source.improvements.filter(improvement => /security|secret|env|privacy|gitignore|auth|data/i.test(`${improvement.id} ${improvement.title} ${improvement.category}`)).map(improvement => `Improvement signal: ${improvement.title}${improvement.category ? ` (${improvement.category})` : ''}.`),
+  ]);
+  const mcpRisks = source.mcpRiskFindings.map(finding => `${finding.severity}: ${finding.title} - ${finding.recommendation}`);
+
+  return [
+    '# SECURITY_CONTEXT.md',
+    '',
+    'Context for security and data review agents. This is not legal advice, a compliance certification, or a production security audit.',
+    '',
+    '## Env and example files',
+    mdList(envFiles, 'No env/example file detected from sampled paths.'),
+    '',
+    '## Secrets and data-handling signals',
+    mdList(securityRisks, 'No security/data readiness risks detected from available scan signals.'),
+    '',
+    '## Security docs detected',
+    mdList(securityDocs, 'No security/privacy/auth documentation detected from sampled paths.'),
+    '',
+    '## GitHub, App, and API areas',
+    mdList(githubApiAreas, 'No GitHub/App/API areas detected from sampled paths.'),
+    '',
+    '## MCP/tool risk notes',
+    mdList(mcpRisks, 'No MCP/tool-specific risk notes detected.'),
+    '',
+  ].join('\n');
+}
+
+function docsContext(source: ContextSource) {
+  const docs = matchingPaths(source, [/^readme\.md$/i, /^docs\//i, /^contributing\.md$/i, /^security\.md$/i, /^agents\.md$/i, /^claude\.md$/i]);
+  const generatedReports = source.generatedFiles.filter(path => /client-handoff|report|executive|roadmap|manifest|transparency|disclosure|context/i.test(path));
+  const docRisks = unique(source.improvements
+    .filter(improvement => /readme|docs|architecture|contributing|handoff|documentation|instructions/i.test(`${improvement.id} ${improvement.title} ${improvement.category}`))
+    .map(improvement => `Improvement signal: ${improvement.title}${improvement.category ? ` (${improvement.category})` : ''}.`));
+  const deprecatedWarnings = source.sampleFiles.some(path => /founder|audit/i.test(path))
+    ? ['Founder/audit-related path signal detected. Confirm positioning remains current and not deprecated.']
+    : [];
+
+  return [
+    '# DOCS_CONTEXT.md',
+    '',
+    'Context for documentation and handoff agents. Use this to improve docs without scanning everything first.',
+    '',
+    '## README and docs detected',
+    mdList(docs, 'No README/docs files detected from sampled paths.'),
+    '',
+    '## Missing docs risks',
+    mdList(docRisks, 'No documentation improvement risk detected from scan signals.'),
+    '',
+    '## Client handoff and generated report files',
+    mdList(generatedReports, 'No generated handoff/report files detected in the selected package.'),
+    '',
+    '## Documentation improvement suggestions',
+    mdList([
+      source.keyFilesFound.readme === false ? 'Add or improve README before handoff.' : '',
+      source.keyFilesFound.agentInstructions === false ? 'Add or review AGENTS.md guidance for AI-agent work.' : '',
+      source.keyFilesFound.claudeInstructions === false ? 'Add or review CLAUDE.md/Cursor guidance if those agents are used.' : '',
+      ...docRisks,
+    ].filter(Boolean), 'No documentation suggestions detected from scan signals.'),
+    '',
+    '## Deprecated positioning warnings',
+    mdList(deprecatedWarnings, 'No deprecated positioning warning detected from available scan signals.'),
+    '',
+  ].join('\n');
+}
+
+function mcpContext(source: ContextSource) {
+  const existingMcpFiles = matchingPaths(source, [/\bmcp\b/i, /\.mcp\./i, /mcp[_-]/i]);
+  const toolSignals = unique([
+    ...source.mcpRecommendations.flatMap(rec => rec.signals),
+    ...matchingPaths(source, [/github/i, /playwright/i, /cypress/i, /prisma/i, /database/i, /schema/i, /vercel/i, /deploy/i]),
+  ]);
+  const recommendedTools = source.mcpRecommendations.map(rec => `${rec.toolName} (${rec.confidence}): ${rec.whyRecommended}`);
+  const riskNotes = source.mcpRiskFindings.map(finding => `${finding.severity}: ${finding.title} - ${finding.recommendation}`);
+
+  return [
+    '# MCP_CONTEXT.md',
+    '',
+    'Context for MCP and tooling recommendations. ShipSeal does not install MCP servers or write MCP configuration automatically.',
+    '',
+    '## Existing MCP files detected',
+    mdList(existingMcpFiles, 'No existing MCP files detected from sampled paths.'),
+    '',
+    '## Tool and data source signals',
+    mdList(toolSignals, 'No tool/data source signal detected beyond the base repository scan.'),
+    '',
+    '## Recommended MCP tools',
+    mdList(recommendedTools, 'No MCP tool recommendations generated from scan signals.'),
+    '',
+    '## Allowlist and security notes',
+    mdList([
+      ...source.mcpGeneratedFiles.map(file => `Review generated MCP governance file: ${file}`),
+      ...riskNotes,
+    ], 'No MCP allowlist/security notes detected.'),
+    '',
+    '## Read-only vs write-capable caution',
+    '- Prefer read-only MCP access by default.',
+    '- Require human approval for write-capable tools, deploys, workflow reruns, database writes, migrations, production data reads, and browser flows involving credentials or payments.',
+    '- Do not claim compatibility or enable tools unless the repository owner confirms the environment and permissions.',
     '',
   ].join('\n');
 }

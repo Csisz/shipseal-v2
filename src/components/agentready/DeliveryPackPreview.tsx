@@ -30,6 +30,7 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
   const generatedPaths = focus.generatedPaths;
   const hasContextCompressionPack = generatedPaths.includes('07-context/ARCHITECTURE.md');
   const hasFolderAgentSuggestions = generatedPaths.some(path => path.startsWith('07-context/folder-agents/'));
+  const hasSpecializedContextPacks = generatedPaths.includes('07-context/GLOBAL_CONTEXT.md');
   const hasToolingRecommendations = generatedPaths.includes('07-context/SKILL_RECOMMENDATIONS.md') || generatedPaths.includes('07-context/MCP_RECOMMENDATIONS.md');
   const toolingRecommendationCounts = recommendationCounts(buildToolingRecommendationBundle(report));
   const scoreJson = buildScoreJson(report, { selectedPackages, agentOperatingMode: resolvedAgentMode });
@@ -132,6 +133,11 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
         {hasFolderAgentSuggestions && (
           <p className="mt-2 text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">Folder-level AGENTS suggestions generated.</span> These local instructions help AI coding agents use the right context for each part of the project.
+          </p>
+        )}
+        {hasSpecializedContextPacks && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Specialized context packs generated.</span> ShipSeal generated role-specific context files for QA, security, docs, and MCP/tooling agents.
           </p>
         )}
         {hasToolingRecommendations && (
