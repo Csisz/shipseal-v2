@@ -84,7 +84,7 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getAllByText('Balanced token usage').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Recommended default').length).toBeGreaterThan(0);
     expect(screen.queryByText('Full ShipSeal package')).not.toBeInTheDocument();
-    expect(screen.getByText(/AGENTS.md, CLAUDE.md, Codex guidance, repo context, and agent safety notes/i)).toBeInTheDocument();
+    expect(screen.getByText(/AGENTS.md, CLAUDE.md, Codex guidance, repo context, agent safety notes, and tooling recommendations/i)).toBeInTheDocument();
   });
 
   it('shows a selected agent operating mode for AI agent development outputs', () => {

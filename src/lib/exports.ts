@@ -6,6 +6,7 @@ import { normalizeProjectIntake } from './intake';
 import type { PartialProjectIntake } from './intake';
 import { DEFAULT_AGENT_OPERATING_MODE, buildAgentOperatingModeSummary, resolveAgentOperatingMode } from './agentOperatingMode';
 import type { AgentOperatingModeId } from './types';
+import { buildToolingRecommendationBundle } from './toolingRecommendations';
 
 type ZipModule = typeof import('jszip');
 
@@ -61,6 +62,7 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
   const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
   const deliveryPackFocus = resolveDeliveryPackFocus(options.selectedPackages, { folderAgentPaths });
   const agentOperatingMode = resolveAgentOperatingMode(options.agentOperatingMode || report.recommendedAgentOperatingMode || DEFAULT_AGENT_OPERATING_MODE);
+  const toolingRecommendations = buildToolingRecommendationBundle(report);
 
   return {
     product: 'ShipSeal',
@@ -94,6 +96,7 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
     generatedFiles: deliveryPackFocus.generatedPaths,
     outputCount: deliveryPackFocus.generatedPaths.length,
     agentOperatingMode: buildAgentOperatingModeSummary(agentOperatingMode),
+    toolingRecommendations,
     deliveryPackFocus: {
       selectedGoals: deliveryPackFocus.selectedGoals,
       emphasizedFiles: deliveryPackFocus.emphasizedPaths,

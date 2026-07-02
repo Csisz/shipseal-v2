@@ -671,12 +671,14 @@ function packageFocus(score: Record<string, unknown>, intake: ClientReportHtmlIn
   }
 
   if (goalId === 'agent-readiness') {
+    const recommendations = recommendationSummary(score);
     return {
       title: 'AI agent development focus',
       items: [
         'Review AGENTS.md, CLAUDE.md, Codex/Cursor guidance, repo context, and agent safety notes together.',
         'Context Compression Pack generated: ShipSeal generated compact project memory files to help AI coding agents avoid unnecessary full-repo scans.',
         'Folder-level AGENTS suggestions generated: local instructions help AI coding agents use the right context for each part of the project.',
+        recommendations,
         'Confirm safe edit boundaries and human-review rules before assigning agent work.',
         `Delivery manifest: ${outputCount(score)} generated outputs for the selected agent-development package.`,
       ],
@@ -722,6 +724,7 @@ function packageFocus(score: Record<string, unknown>, intake: ClientReportHtmlIn
       'Broad review across client handoff, AI-agent readiness, testing, safety, MCP, and AI Act/transparency readiness.',
       'Context Compression Pack generated: ShipSeal generated compact project memory files to help AI coding agents avoid unnecessary full-repo scans.',
       'Folder-level AGENTS suggestions generated: local instructions help AI coding agents use the right context for each part of the project.',
+      recommendationSummary(score),
       `Delivery manifest: ${outputCount(score)} generated outputs for the selected package.`,
       'Use strengths, risks, next actions, scan evidence, and generated files together before sharing externally.',
     ],
@@ -806,6 +809,13 @@ function packageChecklist(score: Record<string, unknown>, intake: ClientReportHt
       'Re-run ShipSeal after material remediation or scope changes.',
     ],
   };
+}
+
+function recommendationSummary(score: Record<string, unknown>) {
+  const recommendations = asRecord(score.toolingRecommendations);
+  const skills = arrayValue(recommendations.skills).length;
+  const mcpTools = arrayValue(recommendations.mcpTools).length;
+  return `Recommended skills generated: ${skills}. Recommended MCP tools generated: ${mcpTools}.`;
 }
 
 function goNoGoText(score: Record<string, unknown>, intake: ClientReportHtmlInput['intake']) {

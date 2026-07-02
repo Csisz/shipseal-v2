@@ -9,6 +9,11 @@ import { generateContextCompressionFiles } from './contextCompression';
 import { generateFolderAgentSuggestionFiles } from './folderAgents';
 import { generateClientReportHtml } from '../report';
 import {
+  buildToolingRecommendationBundleFromExports,
+  renderMcpRecommendationsMarkdown,
+  renderSkillRecommendationsMarkdown,
+} from '../toolingRecommendations';
+import {
   SHIPSEAL_DELIVERY_PACK_MANIFEST,
   getDeliveryPackFileContracts,
 } from './manifest';
@@ -129,6 +134,7 @@ function resolveSourceContent(
     contextJson: input.contextFiles?.json,
     scoreJson: input.scoreJson,
   });
+  const toolingRecommendations = buildToolingRecommendationBundleFromExports(input.scoreJson, input.contextFiles?.json);
 
   if (path.startsWith('01-agent-instructions/')) {
     if (path === '01-agent-instructions/CURSOR_RULES.md') return cursorRules(projectName);
@@ -186,6 +192,14 @@ function resolveSourceContent(
 
   if (path === '07-context/repo-context-pack.json') {
     return input.contextFiles?.json || { repositoryName: projectName, contextAvailable: false };
+  }
+
+  if (path === '07-context/SKILL_RECOMMENDATIONS.md') {
+    return renderSkillRecommendationsMarkdown(projectName, toolingRecommendations);
+  }
+
+  if (path === '07-context/MCP_RECOMMENDATIONS.md') {
+    return renderMcpRecommendationsMarkdown(projectName, toolingRecommendations);
   }
 
   if (path.startsWith('07-context/')) {

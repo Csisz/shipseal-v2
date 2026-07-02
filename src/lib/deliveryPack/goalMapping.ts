@@ -50,6 +50,8 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '07-context/COMMAND_MAP.md',
     '07-context/KNOWN_RISKS.md',
     '07-context/TASK_ROUTER.md',
+    '07-context/SKILL_RECOMMENDATIONS.md',
+    '07-context/MCP_RECOMMENDATIONS.md',
     ROOT_SCORE,
   ],
   'testing-red-team': [
@@ -111,7 +113,7 @@ const GOAL_SUMMARIES: Record<ShipSealPackageId, string> = {
   'client-handoff': 'Client report, executive summary, readiness decision, roadmap, and delivery manifest.',
   'launch-readiness': 'Go/no-go readiness, quality gates, AI Act pre-screen, and client next steps.',
   'safety-risk': 'Env/secrets signals, data/privacy checklist, red-team prompts, and risk summary.',
-  'agent-readiness': 'AGENTS.md, CLAUDE.md, Codex guidance, repo context, and agent safety notes.',
+  'agent-readiness': 'AGENTS.md, CLAUDE.md, Codex guidance, repo context, agent safety notes, and tooling recommendations.',
   'testing-red-team': 'Testing plan, eval cases, red-team prompts, quality gates, and CI/test recommendations.',
   'rescue-refactor': 'Prioritized fix roadmap, review guidance, and repository context for cleanup.',
   'sales-present': 'Client-facing report, executive summary, transparency draft, and presentation context.',

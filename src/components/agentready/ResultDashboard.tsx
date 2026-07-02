@@ -22,6 +22,7 @@ import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import type { GitHubConnectionState } from '@/lib/githubConnection/types';
 import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentOperatingMode, resolveAgentOperatingMode, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
+import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
 
 interface Props {
   report: ReadinessReport;
@@ -56,6 +57,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
   const readinessReport = report.agentPack.find(file => file.name === 'AGENT_READINESS_REPORT.md');
   const repoContextJson = buildRepoContextPackJson(report);
   const scoreJson = buildScoreJson(report, { selectedPackages: resolvedPackages, agentOperatingMode: resolvedAgentMode });
+  const toolingRecommendationCounts = recommendationCounts(buildToolingRecommendationBundle(report));
   const mcpPackFiles: AgentPackFile[] = report.mcpReadiness.generatedFiles.map(file => ({
     name: file.filename,
     language: 'markdown',
@@ -122,6 +124,9 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               packageSummary={deliveryFocus.packageSummary}
               hasContextCompressionPack={deliveryFocus.generatedPaths.includes('07-context/ARCHITECTURE.md')}
               hasFolderAgentSuggestions={deliveryFocus.generatedPaths.some(path => path.startsWith('07-context/folder-agents/'))}
+              hasToolingRecommendations={deliveryFocus.generatedPaths.includes('07-context/SKILL_RECOMMENDATIONS.md') || deliveryFocus.generatedPaths.includes('07-context/MCP_RECOMMENDATIONS.md')}
+              skillRecommendationCount={toolingRecommendationCounts.skills}
+              mcpRecommendationCount={toolingRecommendationCounts.mcpTools}
             />
             {selectionUsesAgentDevelopment(resolvedPackages) && (
               <AgentOperatingModeSummary
@@ -494,12 +499,18 @@ function ProjectPackageSummary({
   packageSummary,
   hasContextCompressionPack,
   hasFolderAgentSuggestions,
+  hasToolingRecommendations,
+  skillRecommendationCount,
+  mcpRecommendationCount,
 }: {
   packageLabel: string;
   outputCount: number;
   packageSummary: string;
   hasContextCompressionPack: boolean;
   hasFolderAgentSuggestions: boolean;
+  hasToolingRecommendations: boolean;
+  skillRecommendationCount: number;
+  mcpRecommendationCount: number;
 }) {
   return (
     <div className="mt-3 rounded-2xl border border-primary/25 bg-primary/10 px-4 py-4 shadow-sm shadow-primary/5">
@@ -525,6 +536,11 @@ function ProjectPackageSummary({
       {hasFolderAgentSuggestions && (
         <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
           <span className="font-semibold text-foreground">Folder-level AGENTS suggestions generated.</span> These local instructions help AI coding agents use the right context for each part of the project.
+        </p>
+      )}
+      {hasToolingRecommendations && (
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+          <span className="font-semibold text-foreground">Tooling recommendations generated.</span> Recommended skills: {skillRecommendationCount}. Recommended MCP tools: {mcpRecommendationCount}.
         </p>
       )}
     </div>

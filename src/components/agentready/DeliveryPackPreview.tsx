@@ -10,6 +10,7 @@ import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { downloadClientReportPdf, generateClientReportHtml } from '@/lib/report';
 import { toast } from '@/hooks/use-toast';
 import { DEFAULT_AGENT_OPERATING_MODE, buildAgentOperatingModeSummary, resolveAgentOperatingMode } from '@/lib/agentOperatingMode';
+import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
 
 interface Props {
   report: ReadinessReport;
@@ -29,6 +30,8 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
   const generatedPaths = focus.generatedPaths;
   const hasContextCompressionPack = generatedPaths.includes('07-context/ARCHITECTURE.md');
   const hasFolderAgentSuggestions = generatedPaths.some(path => path.startsWith('07-context/folder-agents/'));
+  const hasToolingRecommendations = generatedPaths.includes('07-context/SKILL_RECOMMENDATIONS.md') || generatedPaths.includes('07-context/MCP_RECOMMENDATIONS.md');
+  const toolingRecommendationCounts = recommendationCounts(buildToolingRecommendationBundle(report));
   const scoreJson = buildScoreJson(report, { selectedPackages, agentOperatingMode: resolvedAgentMode });
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const risks = previewRisks(report, normalizedIntake);
@@ -129,6 +132,11 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
         {hasFolderAgentSuggestions && (
           <p className="mt-2 text-xs text-muted-foreground">
             <span className="font-semibold text-foreground">Folder-level AGENTS suggestions generated.</span> These local instructions help AI coding agents use the right context for each part of the project.
+          </p>
+        )}
+        {hasToolingRecommendations && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">Tooling recommendations generated.</span> Recommended skills: {toolingRecommendationCounts.skills}. Recommended MCP tools: {toolingRecommendationCounts.mcpTools}.
           </p>
         )}
       </div>

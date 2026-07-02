@@ -42,6 +42,8 @@ const REQUIRED_PATHS = [
   '07-context/COMMAND_MAP.md',
   '07-context/KNOWN_RISKS.md',
   '07-context/TASK_ROUTER.md',
+  '07-context/SKILL_RECOMMENDATIONS.md',
+  '07-context/MCP_RECOMMENDATIONS.md',
   '08-security-data/SECURITY_NOTES.md',
   '08-security-data/ENV_SECRETS_FINDINGS.md',
   '08-security-data/DATA_PRIVACY_CHECKLIST.md',

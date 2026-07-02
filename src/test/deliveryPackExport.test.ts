@@ -91,6 +91,8 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
         '07-context/COMMAND_MAP.md',
         '07-context/KNOWN_RISKS.md',
         '07-context/TASK_ROUTER.md',
+        '07-context/SKILL_RECOMMENDATIONS.md',
+        '07-context/MCP_RECOMMENDATIONS.md',
       ]],
       ['testing-red-team', ['04-testing/EVAL_TEST_CASES.md', '04-testing/CI_QUALITY_GATE.yml']],
       ['safety-risk', ['08-security-data/ENV_SECRETS_FINDINGS.md', '08-security-data/DATA_PRIVACY_CHECKLIST.md']],
@@ -112,6 +114,8 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
       '07-context/COMMAND_MAP.md',
       '07-context/KNOWN_RISKS.md',
       '07-context/TASK_ROUTER.md',
+      '07-context/SKILL_RECOMMENDATIONS.md',
+      '07-context/MCP_RECOMMENDATIONS.md',
     ];
 
     for (const path of contextCompressionPaths) {

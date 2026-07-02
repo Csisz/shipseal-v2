@@ -332,6 +332,31 @@ export interface ScoreJsonExport {
     expectedTokenUsage: string;
     confidence: string;
   };
+  toolingRecommendations?: {
+    version: 1;
+    source: 'shipseal-static-scan';
+    generatedFrom: 'existing-scan-signals';
+    futureCatalogReady: {
+      skillMarketplace: false;
+      communitySkills: false;
+      customSkills: false;
+      mcpCatalogs: false;
+    };
+    skills: Array<{
+      name: string;
+      whyRecommended: string;
+      expectedBenefit: string;
+      confidence: 'High' | 'Medium' | 'Low';
+      signals: string[];
+    }>;
+    mcpTools: Array<{
+      toolName: string;
+      whyRecommended: string;
+      expectedBenefit: string;
+      confidence: 'High' | 'Medium' | 'Low';
+      signals: string[];
+    }>;
+  };
   deliveryPackFocus?: {
     selectedGoals: Array<{ id: string; title: string }>;
     emphasizedFiles: string[];

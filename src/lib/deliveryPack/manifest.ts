@@ -82,6 +82,8 @@ export const SHIPSEAL_DELIVERY_PACK_MANIFEST: DeliveryPackManifest = {
       'COMMAND_MAP.md',
       'KNOWN_RISKS.md',
       'TASK_ROUTER.md',
+      'SKILL_RECOMMENDATIONS.md',
+      'MCP_RECOMMENDATIONS.md',
     ]),
     section('security-data', '08-security-data', 'Security and data pre-screen', [
       'SECURITY_NOTES.md',
