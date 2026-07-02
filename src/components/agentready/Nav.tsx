@@ -55,7 +55,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
         </nav>
         <div className="hidden md:flex items-center gap-2">
           <Button asChild variant="default" className="bg-gradient-primary hover:opacity-90 border-0 shadow-glow">
-            <a href="#scan" onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my project</a>
+            <a href="#scan" onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a>
           </Button>
         </div>
         <button onClick={() => setOpen(!open)} className="md:hidden p-2">
@@ -70,7 +70,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
                 {l.label}
               </a>
             ))}
-            <Button asChild className="bg-gradient-primary border-0 mt-2"><a href="#scan" onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my project</a></Button>
+            <Button asChild className="bg-gradient-primary border-0 mt-2"><a href="#scan" onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a></Button>
           </div>
         </div>
       )}

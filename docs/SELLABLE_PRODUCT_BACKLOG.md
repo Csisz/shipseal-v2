@@ -477,7 +477,7 @@ Required functionality:
   - AI Act/transparency readiness.
 - Explain No-Go / Caution / Ready decisions.
 - Show why score changed after fixes.
-- Avoid overconfident “Ready” language when client/human review is still needed.
+- Avoid overconfident "Ready" language when client/human review is still needed.
 
 Acceptance criteria:
 
@@ -525,8 +525,8 @@ Required functionality:
 - Public demo walkthrough.
 - Before/after explanation.
 - Pricing page cleanup.
-- Contact/request-audit form.
-- Clear privacy and “code is not executed” explanation.
+- Contact/request-access form.
+- Clear privacy and "code is not executed" explanation.
 
 Recommended demo assets:
 
@@ -550,7 +550,7 @@ Required functionality:
 - Explain GitHub App permissions.
 - Add privacy/security notice.
 - Add client report disclaimer.
-- Add “not legal advice” note for AI Act readiness.
+- Add "not legal advice" note for AI Act readiness.
 
 Acceptance criteria:
 
@@ -627,19 +627,22 @@ Possible tiers:
 - focused packages,
 - PDF/HTML report.
 
-### Pro / Agency
+### AI Workspace Pro
 
-- Readiness PR creation,
-- white-label report,
-- multiple projects,
 - Agent Cost Optimizer modes,
+- Context Compression Pack,
+- folder-level AGENTS,
+- Specialized Context Packs,
+- Skill and MCP recommendations,
+- Delivery Pack export.
+
+### Agency / White-label
+
+- multi-project workspace flow,
+- white-label report,
+- client handoff exports,
+- reviewed Readiness PR workflow,
 - richer export history.
-
-### Expert Review Add-On
-
-- optional human/founder review,
-- not required for core MVP,
-- should remain separate from automated ShipSeal output.
 
 ## Suggested Implementation Order
 
@@ -677,5 +680,5 @@ Before calling a build sellable, test these flows:
 - Should Agent Cost Optimizer be part of AI Agent Development only, or a standalone paid feature?
 - Should ShipSeal store scan history server-side or remain mostly browser/session based for MVP?
 - Should PDF reports support white-label branding in the first paid version?
-- Should “Founder reviewed audit” remain out of scope or return as a paid add-on later?
+- Should human services stay completely separate from the automated ShipSeal product?
 - Should AI Act readiness be framed as legal-adjacent documentation support rather than compliance advice?

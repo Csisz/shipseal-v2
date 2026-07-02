@@ -31,7 +31,7 @@ npm run dev
 
 3. Open the Vite URL shown in the terminal. The default is usually `http://localhost:8080`.
 
-4. On the landing page, confirm the product is presented as `ShipSeal - AI Project Delivery Pack Generator`.
+4. On the landing page, confirm the product is presented as an AI repository optimization platform for agent-ready workspaces.
 
 5. Choose a small repository ZIP for the demo. Prefer a real but non-sensitive sample project.
 

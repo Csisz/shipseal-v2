@@ -37,7 +37,7 @@ No environment variables are required for the core local-first scan/export demo.
 
 Optional:
 
-- `CONTACT_WEBHOOK_URL`: used by `POST /api/audit-request` to forward founder-reviewed audit requests to a configured webhook.
+- `CONTACT_WEBHOOK_URL`: used by the legacy `POST /api/audit-request` endpoint to forward contact/request-access messages to a configured webhook.
 - `VITE_GITHUB_APP_SLUG`: enables the source-level Connect GitHub install URL.
 - `VITE_GITHUB_APP_INSTALL_URL`: optional explicit GitHub App install URL.
 - `VITE_GITHUB_APP_NAME`: optional display name for the GitHub App.
@@ -46,7 +46,7 @@ Optional:
 - `GITHUB_API_BASE_URL`: optional GitHub API base URL, defaults to `https://api.github.com`.
 - `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_WEBHOOK_SECRET`: reserved for later callback/session/webhook hardening.
 
-If `CONTACT_WEBHOOK_URL` is configured, the in-app audit request form validates the payload and forwards it server-side. If it is not configured, the form still validates input but the endpoint returns `503` with `Audit request form is not configured yet.`
+If `CONTACT_WEBHOOK_URL` is configured, the in-app contact form validates the payload and forwards it server-side. If it is not configured, the form still validates input but the endpoint returns `503` with `Audit request form is not configured yet.`
 
 Set variables in Vercel Dashboard -> Project Settings -> Environment Variables. Redeploy Production after changing them.
 
@@ -74,7 +74,7 @@ If server credentials are missing, the repository selector shows that listing is
    - Build command: `npm run build`
    - Output directory: `dist`
 3. Keep `vercel.json`; it sets the Vite framework preset, `devCommand`, API route handling, and SPA fallback.
-4. Leave environment variables empty for scan/export-only demos, or set `CONTACT_WEBHOOK_URL` if the audit request form should forward requests.
+4. Leave environment variables empty for scan/export-only demos, or set `CONTACT_WEBHOOK_URL` if the contact form should forward requests.
 5. Deploy. Vercel should also expose the serverless endpoint at `/api/github-archive`.
 6. After deployment, run the manual demo checks below and [Hosted Smoke Test](HOSTED_SMOKE_TEST.md).
 
@@ -96,7 +96,7 @@ If server credentials are missing, the repository selector shows that listing is
 - Public GitHub URL import through the Vercel same-origin archive proxy in hosted demos.
 - Direct public GitHub URL import when browser/network rules allow fetching the public ZIP.
 - Project Intake form.
-- Founder-reviewed audit request form validation. Sending requires optional `CONTACT_WEBHOOK_URL`.
+- Contact/request-access form validation. Sending requires optional `CONTACT_WEBHOOK_URL`.
 - ShipSeal score and preview UI.
 - Delivery Pack ZIP export.
 - Print-ready HTML client report.

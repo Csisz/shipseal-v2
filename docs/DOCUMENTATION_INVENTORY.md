@@ -1,0 +1,71 @@
+# ShipSeal Documentation Inventory
+
+Last updated: 2026-07-02
+
+## Current Source-of-truth Documents
+
+- `README.md` - local setup, demo flow, GitHub import, exports, and current positioning overview.
+- `docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md` - long-term product roadmap and phase sequencing.
+- `docs/SHIPSEAL_VISION.md` - current vision for AI repository optimization and agent efficiency.
+- `docs/POSITIONING.md` - approved product category, positioning, package language, and anti-positioning.
+- `docs/MESSAGING.md` - landing-page messaging, approved phrases, and phrases to avoid.
+- `docs/SELLABLE_PRODUCT_BACKLOG.md` - sellable MVP backlog and prioritized product work.
+- `docs/ARCHITECTURE.md` - technical architecture and scan/export boundaries.
+- `docs/CRITICAL_FILES_POLICY.md` - files that require careful review before AI-assisted changes.
+- `docs/RELEASE_CHECKLIST.md` - release readiness checks.
+- `docs/READINESS_FIX_PACK.md` - generated repository improvement pack workflow.
+- `docs/SUGGESTED_READINESS_FIX_PACK.md` - current suggested fix pack explanation.
+- `docs/CREATE_READINESS_PR_PLAN.md` - Create Readiness PR behavior and guardrails.
+- `docs/GITHUB_APP_CONNECT_PLAN.md` - GitHub App connection plan and permissions.
+- `docs/GITHUB_IMPORT_PROXY_PLAN.md` - public GitHub archive import proxy plan.
+- `docs/HOSTED_DEMO_READINESS.md` - hosted demo setup and validation.
+- `docs/HOSTED_SMOKE_TEST.md` - hosted smoke test checklist.
+- `docs/PUBLIC_GITHUB_IMPORT_VALIDATION.md` - public GitHub import validation.
+- `docs/SHIPSEAL_DEMO_VALIDATION.md` - manual demo validation checklist.
+- `docs/SAMPLE_DELIVERY_PACK_REVIEW.md` - sample output review checklist.
+- `docs/SAMPLE_REPOS.md` - sample repository notes.
+- `docs/DEMO_SCRIPT.md` - demo walkthrough.
+- `docs/DEPLOYMENT.md` - deployment notes.
+- `docs/PRODUCTION_ROADMAP.md` - production hardening roadmap.
+- `docs/OWNERSHIP.md` - ownership notes.
+
+## Outdated Documents
+
+- `docs/legacy/shipseal_project_documents/` - old Hungarian project-start documents. These are useful for historical context only and should not drive current positioning.
+- `docs/legacy/shipseal_project_documents.zip` - archived copy of the same deprecated material.
+
+## Deprecated Documents
+
+- `docs/legacy/shipseal_project_documents/00_SHIPSEAL_PROJECT_CONTEXT_PROMPT.md`
+- `docs/legacy/shipseal_project_documents/01_CEG_ES_TERMEKLEIRAS_SHIPSEAL.md`
+- `docs/legacy/shipseal_project_documents/02_UZLETI_ES_MEGVALOSITASI_TERV.md`
+- `docs/legacy/shipseal_project_documents/03_FORRASLELTAR_ZIP_ELEMZES.md`
+- `docs/legacy/shipseal_project_documents/04_FEJLESZTESI_IGENYEK_ES_ROADMAP.md`
+- `docs/legacy/shipseal_project_documents/05_EU_AI_ACT_JOGI_WORKSTREAM.md`
+- `docs/legacy/shipseal_project_documents/06_SHIPSEAL_MVP_OUTPUT_SPEC.md`
+- `docs/legacy/shipseal_project_documents/07_FEJLESZTESI_KEZDOPONT_ES_ELSO_SPRINTEK.md`
+- `docs/legacy/shipseal_project_documents/README_SHIPSEAL_DOCS.md`
+- `docs/legacy/shipseal_project_documents/SHIPSEAL_2026_PRODUCT_ROADMAP.md`
+- `docs/legacy/shipseal_project_documents/ShipSeal_Projektindito_Dokumentacio.docx`
+- `docs/legacy/shipseal_project_documents/ShipSeal_Projektindito_Dokumentacio_OSSZES.md`
+
+## Files With Broken Encoding Or Mojibake
+
+Quarantined instead of manually repaired:
+
+- `docs/legacy/shipseal_project_documents/*.md`
+- `docs/legacy/shipseal_project_documents/*.docx`
+- `docs/legacy/shipseal_project_documents.zip`
+
+Active Markdown files were scanned for obvious mojibake markers during Sprint 0.1 cleanup.
+
+## Files To Remove Later
+
+- `docs/legacy/shipseal_project_documents/` after human review confirms no unique current source-of-truth content remains.
+- `docs/legacy/shipseal_project_documents.zip` after human review confirms the archive is no longer needed.
+
+## Cleanup Notes
+
+- `AGENTS copy.md` was removed as a duplicate/noisy file.
+- `AGENTS.md` remains the active repository instruction file.
+- The current active docs should use ShipSeal's AI repository optimization positioning, with Delivery Pack export as an output rather than the primary identity.

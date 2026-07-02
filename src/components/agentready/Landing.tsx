@@ -35,12 +35,21 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
         <div className="container relative max-w-3xl mx-auto text-center">
           <div className="animate-fade-in-up">
             <h1 className="font-display text-4xl md:text-6xl font-bold leading-[1.05] tracking-tight text-gradient">
-              Seal your AI project before you ship it.
+              Stop wasting AI context.
             </h1>
             <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              Upload your project, choose the outcome you need, and ShipSeal prepares a cleaner, safer,
-              easier-to-handoff delivery pack.
+              ShipSeal scans your repository and generates agent memory, context compression, folder-level
+              instructions, operating modes, skills, MCP recommendations, and delivery packs so AI coding tools
+              waste less context and work more consistently.
             </p>
+            <div className="mt-7 flex flex-wrap justify-center gap-3">
+              <Button size="lg" onClick={onScrollScan} className="bg-gradient-primary border-0 shadow-glow hover:opacity-90">
+                Scan my repository <ArrowRight className="ml-1.5 h-4 w-4" />
+              </Button>
+              <Button size="lg" variant="outline" onClick={onSampleReport}>
+                Try sample project
+              </Button>
+            </div>
           </div>
 
           {/* The scan input lives directly in the hero. */}
@@ -51,10 +60,11 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
           <div className="mt-8 flex flex-wrap justify-center items-center gap-x-6 gap-y-2 font-mono text-[11px] text-muted-foreground animate-fade-in" style={{ animationDelay: '0.25s', animationFillMode: 'backwards' } as CSSProperties}>
             <span className="inline-flex items-center gap-1.5"><Lock className="h-3 w-3 text-accent" /> Your code is never executed</span>
             <span className="inline-flex items-center gap-1.5"><ScanLine className="h-3 w-3 text-accent" /> Static scan only</span>
+            <span>Optimizes the repository, not the AI model</span>
             <span>Generated/vendor folders are ignored where possible</span>
             <span>GitHub App permissions are used for repository access</span>
             <button type="button" onClick={onSampleReport} className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline transition-colors">
-              Or try a sample project
+              Or try sample project
             </button>
           </div>
         </div>
@@ -77,7 +87,7 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
           <div className="glass rounded-3xl p-6 h-full">
             <div className="font-display text-lg font-semibold">View before/after readiness example</div>
             <p className="mt-2 text-sm text-muted-foreground">
-              See how ShipSeal turns scattered context into scan evidence, a Delivery Pack, report, and clearer next steps.
+              See how ShipSeal turns scattered context into compact project memory, agent guidance, a Delivery Pack, and clearer next steps.
             </p>
             <Button asChild variant="outline" className="mt-5 border-border/70">
               <a href="#before-after">View before/after</a>
@@ -121,7 +131,7 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
         <Reveal>
           <SectionHeader
             title="Clear scan boundaries."
-            lead="ShipSeal reads project signals for readiness. It does not run imported code."
+            lead="ShipSeal reads project signals to optimize the repository for AI agents. It does not run imported code."
           />
         </Reveal>
         <div className="mt-10 grid gap-4 md:grid-cols-3 max-w-6xl mx-auto">
@@ -145,7 +155,7 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
       {/* ======================== OUTPUT PREVIEW ======================== */}
       <section id="preview" className="container py-24 md:py-32 scroll-mt-20">
         <Reveal>
-          <SectionHeader title="One package. Everything in its place." lead="ShipSeal quietly prepares a lot behind the scenes." />
+          <SectionHeader title="Agent-ready context. Delivery-ready output." lead="ShipSeal prepares compact workspace memory first, then packages the outputs you need." />
         </Reveal>
         <Reveal className="mt-14 max-w-5xl mx-auto" delay={100}>
           <SealChamberHero />
@@ -164,13 +174,13 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
         <Reveal className="mt-8 max-w-5xl mx-auto" delay={150}>
           <details className="group rounded-2xl border border-border/60 bg-secondary/15">
             <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-6 py-4 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors [&::-webkit-details-marker]:hidden">
-              <span>Advanced details — explore the generated files</span>
+              <span>Advanced details - explore the generated files</span>
               <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
             </summary>
             <div className="px-3 pb-3 md:px-5 md:pb-5">
               <DeliveryPackExplorer />
               <p className="mt-4 px-2 text-xs text-muted-foreground">
-                You also get a client-ready report (PDF / HTML) and a fix pack you can add back to your project —
+                You also get a client-ready report (PDF / HTML) and a fix pack you can add back to your project -
                 manually or through a reviewed GitHub pull request. ShipSeal never pushes to your main branch.
               </p>
             </div>
@@ -201,8 +211,8 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
                   <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-success/90 mb-3">After ShipSeal</div>
                   <ul className="space-y-2 text-sm text-foreground/90">
                     <li>Scan evidence, readiness score, and next actions.</li>
-                    <li>Delivery Pack, client report, and generated file list.</li>
-                    <li>Agent-ready guidance and safer review boundaries.</li>
+                    <li>Compact project memory, context compression, and folder guidance.</li>
+                    <li>Delivery Pack, client report, and safer review boundaries.</li>
                   </ul>
                 </div>
               </div>
@@ -215,7 +225,7 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
                 <span className="ss-scanline w-16" />
               </div>
               <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-success/90 mb-2">After</div>
-              <p className="font-display text-xl md:text-2xl text-foreground">Clear package, AI-ready context, safer handoff.</p>
+              <p className="font-display text-xl md:text-2xl text-foreground">Compact memory, AI-ready context, cleaner handoff.</p>
               </div>
             </div>
           </Reveal>
@@ -303,13 +313,13 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
               <div className="flex justify-center mb-6">
                 <SealMark size={110} />
               </div>
-              <h2 className="font-display text-3xl md:text-5xl font-bold tracking-tight">Ready when your project is.</h2>
+              <h2 className="font-display text-3xl md:text-5xl font-bold tracking-tight">Turn your repository into an AI-optimized workspace.</h2>
               <div className="mt-8 flex flex-wrap justify-center gap-3">
                 <Button size="lg" onClick={onScrollScan} className="bg-gradient-primary border-0 shadow-glow hover:opacity-90">
-                  Scan my project <ArrowRight className="ml-1.5 h-4 w-4" />
+                  Scan my repository <ArrowRight className="ml-1.5 h-4 w-4" />
                 </Button>
                 <Button size="lg" variant="outline" onClick={onSampleReport}>
-                  Try a sample project
+                  Try sample project
                 </Button>
               </div>
             </div>
@@ -321,7 +331,7 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
         <div className="container flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-2">
             <div className="h-5 w-5 rounded bg-gradient-primary flex items-center justify-center"><Stamp className="h-3 w-3 text-primary-foreground" /></div>
-            <span>ShipSeal — turn AI-built projects into project-ready packages.</span>
+            <span>ShipSeal - turn repositories into AI-optimized workspaces.</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4">
             <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
@@ -384,7 +394,7 @@ function ContactLeadForm() {
   const [submitted, setSubmitted] = useState(false);
 
   const mailtoHref = useMemo(() => {
-    const subject = encodeURIComponent(`ShipSeal audit request - ${form.interest}`);
+    const subject = encodeURIComponent(`ShipSeal workspace request - ${form.interest}`);
     const body = encodeURIComponent([
       `Name: ${form.name}`,
       `Email: ${form.email}`,
@@ -476,9 +486,9 @@ function LeadField({ label, children, className = '' }: { label: string; childre
 
 const STEPS = [
   { title: 'Connect GitHub or upload ZIP', desc: 'Choose the source that fits your project.' },
-  { title: 'ShipSeal performs static analysis', desc: 'Project structure, metadata, docs, config, and test signals are reviewed.' },
-  { title: 'Generate reports and delivery packs', desc: 'Download client-ready reports, manifests, score data, and selected outputs.' },
-  { title: 'Optionally create a Readiness PR', desc: 'Use the connected GitHub App to open a reviewed ShipSeal PR.' },
+  { title: 'ShipSeal performs static analysis', desc: 'Project structure, metadata, docs, config, and test signals are reviewed without executing code.' },
+  { title: 'Generate agent-ready context', desc: 'Create compact memory, context compression, folder guidance, and specialized context packs.' },
+  { title: 'Export reports or a Readiness PR', desc: 'Download Delivery Pack outputs or open a reviewed ShipSeal PR through the GitHub App.' },
 ];
 
 const SCAN_READS = ['README', 'package.json', 'tests', 'docs', 'CI files', 'AGENTS.md', 'env examples'];
@@ -486,11 +496,11 @@ const SCAN_READS = ['README', 'package.json', 'tests', 'docs', 'CI files', 'AGEN
 const SCAN_IGNORES = ['node_modules', 'dist', 'build', 'coverage', 'large generated folders', 'binaries where possible'];
 
 const PACKAGE_GROUPS = [
-  { icon: PackageCheck, title: 'Handoff', desc: 'Reports and summaries' },
-  { icon: Bot, title: 'AI guidance', desc: 'Files AI tools understand' },
-  { icon: FlaskConical, title: 'Tests', desc: 'Failure checks and QA' },
-  { icon: ShieldAlert, title: 'Risk notes', desc: 'What to fix before shipping' },
-  { icon: Megaphone, title: 'Product notes', desc: 'Explain and present it' },
+  { icon: Bot, title: 'Memory', desc: 'Compact project context' },
+  { icon: PackageCheck, title: 'Compression', desc: 'Less context waste' },
+  { icon: FlaskConical, title: 'Packs', desc: 'Task-focused context' },
+  { icon: ShieldAlert, title: 'Guidance', desc: 'Agent boundaries' },
+  { icon: Megaphone, title: 'Delivery', desc: 'Reports and exports' },
 ];
 
 const AUDIENCES = [
@@ -514,30 +524,30 @@ const PRICING_TIERS = [
     name: 'Builder',
     price: 'Request access',
     featured: false,
-    cta: 'Choose a pack',
-    features: ['One selected package', 'PDF / HTML report', 'Delivery Pack ZIP'],
+    cta: 'Scan my repository',
+    features: ['Repository scan', 'Context preview', 'Delivery Pack export'],
   },
   {
-    name: 'Pro / Agency',
+    name: 'AI Workspace Pro',
     price: 'Coming soon',
     featured: true,
-    cta: 'Request access',
-    features: ['Full ShipSeal package', 'GitHub App readiness PR', 'White-label-ready handoff flow'],
+    cta: 'Scan my repository',
+    features: ['Agent Cost Optimizer', 'Context Compression Pack', 'Folder-level AGENTS', 'Specialized Context Packs', 'Skill & MCP recommendations', 'Delivery Pack export'],
   },
   {
-    name: 'Agent Efficiency Pro',
+    name: 'Agency / White-label',
     price: 'Coming soon',
     featured: false,
     cta: 'Contact us',
-    features: ['Agent Cost Optimizer', 'Context Packs', 'Folder-level AGENTS', 'Skill & MCP recommendations', 'White-label-ready reports'],
+    features: ['Multi-project workspace flow', 'White-label-ready reports', 'Client handoff exports', 'Reviewed Readiness PR workflow'],
   },
 ];
 
 const DISCLAIMERS = [
   'ShipSeal provides technical readiness guidance and documentation support. It does not provide legal advice or compliance certification.',
-  'AI usage and transparency notes are drafts and questions for legal review — not legal advice or compliance certification.',
+  'AI usage and transparency notes are drafts and questions for legal review - not legal advice or compliance certification.',
   'The risk check highlights obvious issues. It is not a full production security audit.',
-  'ShipSeal reads your project structure and selected text — it never runs your code.',
+  'ShipSeal reads your project structure and selected text - it never runs your code.',
   'Everything ShipSeal generates supports review and decision-making. It does not replace it.',
 ];
 
@@ -545,6 +555,7 @@ const INTEREST_OPTIONS = [
   'Client handoff package',
   'AI agent development pack',
   'Token/cost optimization',
+  'AI workspace optimization',
   'Security/data pre-screen',
   'White-label reports',
   'General feedback',

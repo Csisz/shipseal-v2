@@ -1,10 +1,10 @@
 # ShipSeal
 
-ShipSeal is an AI Project Delivery Pack Generator.
+ShipSeal is an AI repository optimization platform that turns a codebase into an agent-ready workspace for Claude Code, Codex, Cursor, Windsurf and other AI coding agents.
 
-The current demo-ready MVP helps AI freelancers and agencies answer one practical question: is this project ready for a clear client handoff?
+ShipSeal prepares repositories for AI-native development. It helps teams stop wasting AI context, prepare the repository once, and give every coding agent compact project memory, scoped instructions, and safer operating boundaries.
 
-ShipSeal scans a repository ZIP or public GitHub repository, calculates a deterministic ShipSeal score, explains the go/no-go signal, identifies delivery risks, and generates a client-ready Delivery Pack with agent instructions, skills, MCP governance, eval and red-team tests, AI Act readiness notes, client handoff reports, repo context, and `score.json`.
+The current demo-ready MVP scans a repository ZIP or GitHub repository, calculates a deterministic ShipSeal score, explains the readiness signal, and generates AI workspace outputs such as Agent Cost Optimizer guidance, Context Compression, folder-level `AGENTS.md` recommendations, Specialized Context Packs, Skill and MCP recommendations, and a Delivery Pack export with reports, manifests, tests, AI Act readiness notes, repo context, and `score.json`.
 
 ShipSeal analyzes repository structure and metadata. It does not execute uploaded or imported code.
 
@@ -16,6 +16,10 @@ ShipSeal analyzes repository structure and metadata. It does not execute uploade
 - Sample report for `sample-nextjs-app`.
 - Deterministic readiness rule: score >= 85 and zero critical blockers.
 - AI Readiness Narrative generated locally from scan metadata.
+- Agent Cost Optimizer and context compression outputs in the AI agent development package.
+- Folder-level `AGENTS.md` recommendations.
+- Specialized Context Packs for agent development, handoff, security/data review, testing, MCP readiness, and refactor work.
+- Skill and MCP recommendations.
 - ShipSeal Delivery Pack export.
 - MCP governance outputs.
 - Sanitized repo context preview/export.
@@ -31,7 +35,7 @@ npm run dev
 
 Vite defaults to port `8080`. If that port is busy, Vite may choose another port.
 
-Use `npm run dev` for frontend-only local development. Use `vercel dev` when you also need the Vercel API routes such as `/api/github-archive`, `/api/create-readiness-pr`, `/api/github-app/repositories`, `/api/github-app/archive`, `/api/github-app/create-readiness-pr`, and `/api/audit-request`.
+Use `npm run dev` for frontend-only local development. Use `vercel dev` when you also need the Vercel API routes such as `/api/github-archive`, `/api/create-readiness-pr`, `/api/github-app/repositories`, `/api/github-app/archive`, `/api/github-app/create-readiness-pr`, and the legacy `/api/audit-request` contact endpoint.
 
 If `vercel dev` shows a white page with console errors such as `GET /src/main.tsx 404`, `GET /@vite/client 404`, or `GET /@react-refresh 404`, the Vercel/Vite dev configuration is broken. `vercel.json` must use the Vite framework preset and `devCommand: "vite --host 0.0.0.0 --port $PORT"` so Vercel dev can pass its proxy port to the Vite dev server instead of serving the root `index.html` as a static file.
 
@@ -77,7 +81,7 @@ npm run build
 npm run dev
 ```
 
-For Vercel, use `npm run build` and publish the `dist` directory; the minimal serverless endpoints under `api/` are included for public GitHub archive imports, temporary-token Create Readiness PR, GitHub App repository listing/archive/PR MVP endpoints, and optional audit requests in hosted demos. No environment variables are required for the core scan/export demo.
+For Vercel, use `npm run build` and publish the `dist` directory; the minimal serverless endpoints under `api/` are included for public GitHub archive imports, temporary-token Create Readiness PR, GitHub App repository listing/archive/PR MVP endpoints, and optional contact requests in hosted demos. No environment variables are required for the core scan/export demo.
 
 For Netlify/static-only hosting, the app still works with ZIP upload and sample project flow, but the Vercel API endpoint is not available unless an equivalent same-origin function is implemented. See [Hosted Demo Readiness](docs/HOSTED_DEMO_READINESS.md) for the full deployment and validation checklist.
 
@@ -103,11 +107,11 @@ If `vercel dev` loads a blank page and the browser console shows missing Vite fi
 
 Private GitHub repositories require a configured GitHub App installation and server env. ZIP upload remains the stable fallback for demos and client validation. After deployment, run the [Hosted Smoke Test](docs/HOSTED_SMOKE_TEST.md).
 
-### Founder-Reviewed Audit Form
+### Contact / Request Access Form
 
-The `Request founder-reviewed audit` CTA opens an in-app form and posts to `POST /api/audit-request`. The form validates contact details, message, and consent before submitting.
+The contact CTA opens an in-app form for product feedback, workspace optimization interest, or request-access conversations. The hosted endpoint is still `POST /api/audit-request` for compatibility, but the product offer is not a paid founder review or human audit service.
 
-Set `CONTACT_WEBHOOK_URL` only if the hosted demo should forward audit requests to a webhook. Configure it in Vercel Dashboard -> Project Settings -> Environment Variables, then redeploy Production. If `CONTACT_WEBHOOK_URL` is not configured, the demo validates the form but returns: `Audit request form is not configured yet.`
+Set `CONTACT_WEBHOOK_URL` only if the hosted demo should forward contact requests to a webhook. Configure it in Vercel Dashboard -> Project Settings -> Environment Variables, then redeploy Production. If `CONTACT_WEBHOOK_URL` is not configured, the demo validates the form but returns: `Audit request form is not configured yet.`
 
 There is no mailto fallback, database, CRM integration, or fake success state in the MVP.
 
@@ -223,11 +227,11 @@ Install the app only on selected repositories. For a Vercel demo, configure `GIT
 
 ## MVP Validation Offer
 
-The first offer to validate is simple: ShipSeal turns an AI prototype or client automation repository into a client-ready Delivery Pack before handoff.
+The first offer to validate is simple: ShipSeal turns an AI prototype or client automation repository into an AI-optimized workspace before the next coding agent session.
 
-Target users are AI freelancers, small AI agencies, no-code/low-code AI builders, indie SaaS teams, and consultants delivering AI automations to clients. The pilot packages being tested are Free Preview, Starter Report at 49 EUR, Pro Agency Report at 149 EUR, and Founder-reviewed Audit at 499 EUR+.
+Target users are AI freelancers, small AI agencies, no-code/low-code AI builders, indie SaaS teams, and consultants delivering AI automations to clients. The pilot packages being tested are Free Demo, Builder, AI Workspace Pro, and Agency / White-label.
 
-To demo the offer, open the sample project, load the demo intake, download the Delivery Pack, and walk through the client handoff report, AI Act readiness files, eval/red-team tests, skills pack, MCP governance, and `score.json`.
+To demo the offer, open the sample project, load the demo intake, review the context compression and agent guidance outputs, download the Delivery Pack, and walk through the client handoff report, AI Act readiness files, eval/red-team tests, skills pack, MCP governance, and `score.json`.
 
 ## Validate Locally
 
@@ -296,6 +300,10 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 
 ## Docs
 
+- [Product Vision](docs/SHIPSEAL_VISION.md)
+- [Positioning](docs/POSITIONING.md)
+- [Messaging](docs/MESSAGING.md)
+- [Documentation Inventory](docs/DOCUMENTATION_INVENTORY.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Production Roadmap](docs/PRODUCTION_ROADMAP.md)
 - [Deployment](docs/DEPLOYMENT.md)

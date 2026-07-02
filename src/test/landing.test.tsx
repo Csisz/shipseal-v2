@@ -13,8 +13,8 @@ describe('ShipSeal landing', () => {
       />
     );
 
-    expect(screen.getByText(/Seal your AI project before you ship it/i)).toBeInTheDocument();
-    expect(screen.getByText(/easier-to-handoff delivery pack/i)).toBeInTheDocument();
+    expect(screen.getByText(/Stop wasting AI context/i)).toBeInTheDocument();
+    expect(screen.getByText(/generates agent memory, context compression/i)).toBeInTheDocument();
     // Upload / GitHub input is embedded directly in the hero.
     expect(screen.getByTestId('scan-slot')).toBeInTheDocument();
 
@@ -30,20 +30,21 @@ describe('ShipSeal landing', () => {
     expect(screen.getByText('How ShipSeal works.')).toBeInTheDocument();
     expect(screen.getByText('Connect GitHub or upload ZIP')).toBeInTheDocument();
     expect(screen.getByText('ShipSeal performs static analysis')).toBeInTheDocument();
-    expect(screen.getByText('Generate reports and delivery packs')).toBeInTheDocument();
-    expect(screen.getByText('Optionally create a Readiness PR')).toBeInTheDocument();
+    expect(screen.getByText('Generate agent-ready context')).toBeInTheDocument();
+    expect(screen.getByText('Export reports or a Readiness PR')).toBeInTheDocument();
 
     // File names stay behind the advanced-details disclosure, not in main cards.
-    expect(screen.getByText(/Advanced details — explore the generated files/i)).toBeInTheDocument();
+    expect(screen.getByText(/Advanced details - explore the generated files/i)).toBeInTheDocument();
 
     // Demo-first sample paths.
     expect(screen.getByText(/Try ShipSeal without connecting GitHub/i)).toBeInTheDocument();
     expect(screen.queryByText('See a sample ShipSeal report')).not.toBeInTheDocument();
     expect(screen.getByText('View before/after readiness example')).toBeInTheDocument();
-    expect(screen.getByText(/Scan evidence, readiness score, and next actions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Compact project memory, context compression, and folder guidance/i)).toBeInTheDocument();
 
     // Trust hints near the scan action.
     expect(screen.getByText(/Static scan only/i)).toBeInTheDocument();
+    expect(screen.getByText(/Optimizes the repository, not the AI model/i)).toBeInTheDocument();
     expect(screen.getByText(/Generated\/vendor folders are ignored where possible/i)).toBeInTheDocument();
     expect(screen.getByText(/GitHub App permissions are used for repository access/i)).toBeInTheDocument();
     expect(screen.getByText('Clear scan boundaries.')).toBeInTheDocument();
@@ -57,9 +58,10 @@ describe('ShipSeal landing', () => {
     // Simple pricing without payment integration.
     expect(screen.getByText('Free Demo')).toBeInTheDocument();
     expect(screen.getByText('Builder')).toBeInTheDocument();
-    expect(screen.getByText('Pro / Agency')).toBeInTheDocument();
-    expect(screen.getByText('Agent Efficiency Pro')).toBeInTheDocument();
-    expect(screen.getByText('Context Packs')).toBeInTheDocument();
+    expect(screen.getByText('AI Workspace Pro')).toBeInTheDocument();
+    expect(screen.getByText('Agency / White-label')).toBeInTheDocument();
+    expect(screen.getByText('Context Compression Pack')).toBeInTheDocument();
+    expect(screen.getByText('Specialized Context Packs')).toBeInTheDocument();
     expect(screen.getByText('Folder-level AGENTS')).toBeInTheDocument();
     expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Request access').length).toBeGreaterThan(0);
@@ -77,7 +79,7 @@ describe('ShipSeal landing', () => {
     expect(screen.getByText(/No backend delivery is configured in this demo/i)).toBeInTheDocument();
 
     expect(screen.getAllByText(/sample project/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Scan my project/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Scan my repository/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Privacy').closest('a')).toHaveAttribute('href', '/privacy');
     expect(screen.getByText('Security').closest('a')).toHaveAttribute('href', '/security');
   });

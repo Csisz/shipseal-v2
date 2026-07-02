@@ -14,9 +14,9 @@ Primary positioning:
 
 AI Agent Efficiency Platform
 
-Secondary positioning:
+Secondary value:
 
-AI Project Delivery Pack Generator
+Delivery Pack and client handoff reports
 
 ShipSeal should help users answer:
 

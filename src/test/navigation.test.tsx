@@ -16,7 +16,7 @@ describe('ShipSeal navigation', () => {
     expect(screen.getByRole('link', { name: /What you get/i })).toHaveAttribute('href', '#preview');
     expect(screen.getByRole('link', { name: /Pricing/i })).toHaveAttribute('href', '#pricing');
     expect(screen.getByRole('link', { name: /Contact/i })).toHaveAttribute('href', '#contact');
-    expect(screen.getByRole('link', { name: /Scan my project/i })).toHaveAttribute('href', '#scan');
+    expect(screen.getByRole('link', { name: /Scan my repository/i })).toHaveAttribute('href', '#scan');
     expect(screen.getByRole('link', { name: /ShipSeal home/i })).toHaveAttribute('href', '/');
   });
 
