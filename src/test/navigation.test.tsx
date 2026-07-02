@@ -11,9 +11,9 @@ describe('ShipSeal navigation', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('link', { name: /Packages/i })).toHaveAttribute('href', '#packages');
+    expect(screen.getByRole('link', { name: /Why ShipSeal/i })).toHaveAttribute('href', '#why');
+    expect(screen.getByRole('link', { name: /Intelligence/i })).toHaveAttribute('href', '#intelligence');
     expect(screen.getByRole('link', { name: /How it works/i })).toHaveAttribute('href', '#how');
-    expect(screen.getByRole('link', { name: /What you get/i })).toHaveAttribute('href', '#preview');
     expect(screen.getByRole('link', { name: /Pricing/i })).toHaveAttribute('href', '#pricing');
     expect(screen.getByRole('link', { name: /Contact/i })).toHaveAttribute('href', '#contact');
     expect(screen.getByRole('link', { name: /Scan my repository/i })).toHaveAttribute('href', '#scan');

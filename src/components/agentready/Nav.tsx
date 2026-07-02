@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 const links = [
-  { label: 'Packages', href: '#packages' },
+  { label: 'Why ShipSeal', href: '#why' },
+  { label: 'Intelligence', href: '#intelligence' },
   { label: 'How it works', href: '#how' },
-  { label: 'What you get', href: '#preview' },
   { label: 'Pricing', href: '#pricing' },
   { label: 'Contact', href: '#contact' },
 ];

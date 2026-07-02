@@ -37,7 +37,11 @@ interface Props {
   githubConnection?: GitHubConnectionState;
 }
 
+type RepositoryHealth = ReadinessReport['repositoryHealth'];
+type RepositoryHealthSignal = RepositoryHealth['dimensions']['repositoryIntelligence']['signals'][number];
+
 export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false, selectedPackages, agentOperatingMode, githubConnection }: Props) {
+  const repositoryHealth = report.repositoryHealth;
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
   const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
   const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
@@ -91,6 +95,27 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
       <div className="dashboard-print-warning">
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
+
+      <RepositoryHealthHero
+        report={report}
+        limitationReason={limitedScanReason}
+        onExportReport={() => readinessReport && downloadTextFile('AGENT_READINESS_REPORT.md', readinessReport.content)}
+        onExportScoreJson={() => downloadJsonFile('score.json', buildScoreJson(report, { selectedPackages: resolvedPackages, agentOperatingMode: resolvedAgentMode }))}
+        onReset={onReset}
+      />
+
+      {repositoryHealth.overall.score !== null && (
+        <>
+          <RepositoryHealthActions repositoryHealth={repositoryHealth} />
+          <RepositoryHealthDimensions repositoryHealth={repositoryHealth} />
+        </>
+      )}
+
+      <div className="grid gap-6 mb-8 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+        <ScanEvidencePanel report={report} />
+        <MeasurementBoundary repositoryHealth={repositoryHealth} />
+      </div>
+
       <div className="glass rounded-3xl p-6 md:p-10 mb-8 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-glow opacity-30 pointer-events-none" />
         <div className="relative flex flex-col lg:flex-row lg:items-center gap-8">
@@ -108,10 +133,10 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               <span>scanned {new Date(report.scannedAt).toLocaleTimeString()}</span>
             </div>
 
-            <div className="mt-6 grid grid-cols-3 gap-3">
-              <SummaryTile label="Score" value={`${report.score}/100`} />
-              <SummaryTile label="Status" value={displayReadinessLevel(readiness.level)} />
-              <SummaryTile label="Blockers" value={String(report.blockers.length)} />
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <SummaryTile label="Legacy readiness" value={`${report.score}/100`} />
+              <SummaryTile label="Readiness status" value={displayReadinessLevel(readiness.level)} />
+              <SummaryTile label="Critical blockers" value={String(report.blockers.length)} />
             </div>
             {readiness.level === 'Partially Ready' && !limitedScan && (
               <div className="mt-3 rounded-xl border border-border/60 bg-secondary/20 px-4 py-3 text-xs text-muted-foreground">
@@ -182,8 +207,10 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
               </div>
             )}
           </div>
-          <div className="flex flex-col items-center gap-3">
-            <ScoreGauge score={report.score} size={220} />
+          <div className="flex flex-col items-stretch gap-3 lg:w-64">
+            <div className="rounded-2xl border border-border/60 bg-secondary/25 p-4 text-sm leading-relaxed text-muted-foreground">
+              Repository Health reflects the scanned repository before ShipSeal-generated improvements are applied.
+            </div>
             <div className="flex flex-col sm:flex-row lg:flex-col gap-2 w-full">
               <Button
                 variant="outline"
@@ -209,9 +236,20 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         </div>
       </div>
 
-      <div className="mb-8">
-        <ScanEvidencePanel report={report} />
-      </div>
+      <Disclosure title="Technical readiness details">
+        <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
+          <div className="glass rounded-2xl p-6 flex flex-col items-center justify-center">
+            <ScoreGauge score={report.score} size={200} label="legacy / 100" />
+            <div className="mt-3 text-center text-sm text-muted-foreground">
+              Existing ShipSeal readiness score. Repository Health is the primary dashboard summary above.
+            </div>
+          </div>
+          <div>
+            <h2 className="font-display text-2xl font-semibold mb-4">Legacy readiness categories</h2>
+            <CategoryBreakdown categories={report.categories} />
+          </div>
+        </div>
+      </Disclosure>
 
       <div className="mb-8">
         <DecisionSummary report={report} ready={ready} nextActions={report.aiNarrative.nextBestActions.slice(0, 3)} />
@@ -231,7 +269,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         />
       </Disclosure>
 
-      <Disclosure title="Improve your score — optional fixes you can add back">
+      <Disclosure title="Available ShipSeal improvements — optional fixes you can add back">
         <SuggestedReadinessFixPack report={report} githubConnection={githubConnection} selectedPackages={resolvedPackages} />
       </Disclosure>
 
@@ -361,8 +399,9 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         </div>
       </div>
 
-      <h2 className="font-display text-2xl font-semibold mb-4">Score breakdown</h2>
-      <CategoryBreakdown categories={report.categories} />
+      <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4 text-sm text-muted-foreground">
+        Legacy readiness categories are available in Technical readiness details above. This advanced section keeps scanner, MCP and generated-file details available without changing the Repository Health score.
+      </div>
 
       <div className="mt-8 glass rounded-2xl p-6">
         <div className="flex flex-wrap items-center gap-3 mb-3">
@@ -476,6 +515,394 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
       </Disclosure>
     </section>
   );
+}
+
+function RepositoryHealthHero({
+  report,
+  limitationReason,
+  onExportReport,
+  onExportScoreJson,
+  onReset,
+}: {
+  report: ReadinessReport;
+  limitationReason?: string;
+  onExportReport: () => void;
+  onExportScoreJson: () => void;
+  onReset: () => void;
+}) {
+  const health = report.repositoryHealth;
+  const contextWaste = health.dimensions.contextWaste;
+  const topAction = health.topActions[0];
+  const unavailable = health.overall.score === null;
+
+  return (
+    <section className="glass rounded-3xl p-6 md:p-10 mb-8 relative overflow-hidden" aria-labelledby="repository-health-heading">
+      <div className="absolute inset-0 bg-gradient-glow opacity-25 pointer-events-none" />
+      <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Health</span>
+            <Badge variant="outline" className={unavailable ? 'border-warning/60 text-warning' : 'border-primary/45 text-primary-glow'}>
+              {health.measurementMethod}
+            </Badge>
+          </div>
+          <h1 id="repository-health-heading" className="font-display text-3xl md:text-5xl font-bold leading-tight">
+            {unavailable ? 'Repository Health unavailable' : `${health.overall.score} / 100`}
+          </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className={repositoryHealthStatusClass(health.overall.status)}>
+              {health.overall.status}
+            </Badge>
+            <Badge variant="outline" className="border-border/70 bg-background/25">
+              {health.overall.confidence} confidence
+            </Badge>
+          </div>
+
+          {unavailable ? (
+            <div className="mt-5 rounded-2xl border border-warning/35 bg-warning/10 p-4 text-sm leading-relaxed text-warning">
+              <p className="font-medium">ShipSeal does not have enough repository evidence to calculate a trustworthy health score.</p>
+              <p className="mt-2 text-warning/90">{limitationReason || health.blockers[0]?.detail || 'The scan was limited or synthetic fallback data was used.'}</p>
+              <p className="mt-2 text-warning/90">Next action: reconnect GitHub, upload the complete ZIP, or retry the full scan.</p>
+            </div>
+          ) : (
+            <>
+              <p className="mt-5 max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">
+                {repositoryHealthSummarySentence(health.overall.status)} Repository Health reflects the scanned repository before ShipSeal-generated improvements are applied.
+              </p>
+              <div className="mt-5 rounded-2xl border border-border/60 bg-secondary/20 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-semibold text-foreground">Context Waste Risk</span>
+                  <Badge variant="outline" className={contextWasteRiskClass(contextWaste.riskScore)}>
+                    {contextWaste.riskScore} / 100 - {contextWasteRiskLabel(contextWaste.riskScore)}
+                  </Badge>
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                  Higher Context Waste means higher risk. This static estimate is based on generated noise, oversized files, documentation duplication, context anchors and routing clarity.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+
+        <aside className="rounded-2xl border border-border/60 bg-secondary/20 p-5">
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">How prepared is this repository for efficient and reliable AI-agent work?</div>
+          {topAction && !unavailable ? (
+            <div className="mt-4">
+              <div className="text-sm font-semibold text-foreground">Top improvement</div>
+              <div className="mt-1 text-base font-medium leading-snug text-foreground">{topAction.title}</div>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{topAction.action}</p>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+              Complete repository evidence is required before ShipSeal can rank improvement actions.
+            </p>
+          )}
+          <div className="mt-5 grid gap-2">
+            <Button variant="outline" size="sm" onClick={onExportReport} className="justify-start border-border/60">
+              <Download className="h-3.5 w-3.5 mr-1.5" /> Export report
+            </Button>
+            <Button variant="outline" size="sm" onClick={onExportScoreJson} className="justify-start border-border/60">
+              <Download className="h-3.5 w-3.5 mr-1.5" /> Export score.json
+            </Button>
+            <Button variant="outline" size="sm" onClick={onReset} className="justify-start border-border/60">
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
+            </Button>
+          </div>
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function RepositoryHealthActions({ repositoryHealth }: { repositoryHealth: RepositoryHealth }) {
+  const actions = repositoryHealth.topActions.slice(0, 5);
+
+  return (
+    <section className="mb-8" aria-labelledby="repository-health-actions-heading">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <Lightbulb className="h-5 w-5 text-accent" />
+        <h2 id="repository-health-actions-heading" className="font-display text-2xl font-semibold">Top repository improvements</h2>
+      </div>
+      {actions.length === 0 ? (
+        <div className="glass rounded-2xl p-5 text-sm text-muted-foreground">No high-priority Repository Health actions were generated from the current scan.</div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {actions.map(action => (
+            <article key={action.id} className="glass rounded-2xl p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className={action.priority === 'High' ? 'border-warning/70 text-warning' : 'border-border/70 text-muted-foreground'}>
+                  {action.priority} priority
+                </Badge>
+                {action.suggestedTargetPath && (
+                  <code className="rounded bg-secondary/70 px-2 py-1 text-[11px] text-foreground/90 break-all">{action.suggestedTargetPath}</code>
+                )}
+              </div>
+              <h3 className="mt-3 font-display text-lg font-semibold leading-snug">{action.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{action.whyItMatters}</p>
+              <p className="mt-2 text-sm leading-relaxed text-foreground/90">{action.action}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {action.dimensions.map(dimension => (
+                  <Badge key={dimension} variant="outline" className="border-primary/35 text-primary-glow">
+                    {dimensionLabel(dimension)}
+                  </Badge>
+                ))}
+              </div>
+              {action.potentialDimensionGain > 0 && (
+                <div className="mt-3 text-xs text-muted-foreground">
+                  Potential {dimensionLabel(action.dimensions[0])} improvement: up to {action.potentialDimensionGain} dimension points.
+                </div>
+              )}
+              <EvidenceList evidence={action.evidence.slice(0, 3)} className="mt-3" />
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RepositoryHealthDimensions({ repositoryHealth }: { repositoryHealth: RepositoryHealth }) {
+  const dimensions = [
+    {
+      id: 'repositoryIntelligence' as const,
+      name: 'Repository Intelligence',
+      description: 'How much reusable project knowledge is available to an AI agent before work begins.',
+      score: repositoryHealth.dimensions.repositoryIntelligence.score,
+      confidence: repositoryHealth.dimensions.repositoryIntelligence.confidence,
+      signals: repositoryHealth.dimensions.repositoryIntelligence.signals,
+    },
+    {
+      id: 'contextWaste' as const,
+      name: 'Context Waste Risk',
+      description: 'How likely an agent is to process unnecessary, duplicated or poorly routed repository context.',
+      score: repositoryHealth.dimensions.contextWaste.riskScore,
+      confidence: repositoryHealth.dimensions.contextWaste.confidence,
+      signals: repositoryHealth.dimensions.contextWaste.signals,
+      risk: true,
+    },
+    {
+      id: 'aiDevelopmentReadiness' as const,
+      name: 'AI Development Readiness',
+      description: "How clearly an agent can build, test and verify changes using the repository's declared workflow.",
+      score: repositoryHealth.dimensions.aiDevelopmentReadiness.score,
+      confidence: repositoryHealth.dimensions.aiDevelopmentReadiness.confidence,
+      signals: repositoryHealth.dimensions.aiDevelopmentReadiness.signals,
+    },
+    {
+      id: 'agentRouting' as const,
+      name: 'Agent Routing',
+      description: 'How clearly tasks map to folders, critical files and focused verification steps.',
+      score: repositoryHealth.dimensions.agentRouting.score,
+      confidence: repositoryHealth.dimensions.agentRouting.confidence,
+      signals: repositoryHealth.dimensions.agentRouting.signals,
+    },
+    {
+      id: 'deliveryConfidence' as const,
+      name: 'Delivery Confidence',
+      description: 'How clearly the project can be understood, operated and handed over.',
+      score: repositoryHealth.dimensions.deliveryConfidence.score,
+      confidence: repositoryHealth.dimensions.deliveryConfidence.confidence,
+      signals: repositoryHealth.dimensions.deliveryConfidence.signals,
+    },
+  ];
+
+  return (
+    <section className="mb-8" aria-labelledby="repository-health-dimensions-heading">
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        <Layers className="h-5 w-5 text-primary-glow" />
+        <h2 id="repository-health-dimensions-heading" className="font-display text-2xl font-semibold">Repository Health dimensions</h2>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+        {dimensions.map(dimension => (
+          <DimensionCard key={dimension.id} {...dimension} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function DimensionCard({
+  name,
+  description,
+  score,
+  confidence,
+  signals,
+  risk = false,
+}: {
+  name: string;
+  description: string;
+  score: number | null;
+  confidence: string;
+  signals: RepositoryHealthSignal[];
+  risk?: boolean;
+}) {
+  const positive = signals.filter(signal => signal.status === 'pass').slice(0, 2);
+  const gaps = signals.filter(signal => signal.status === 'fail' || signal.status === 'partial').slice(0, 2);
+  const displayScore = score === null ? 'Unavailable' : risk ? `${score} / 100 risk` : `${score} / 100`;
+  const label = score === null ? 'Insufficient evidence' : risk ? contextWasteRiskLabel(score) : dimensionQualityLabel(score);
+
+  return (
+    <article className="glass rounded-2xl p-5 min-w-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-display text-lg font-semibold">{name}</h3>
+          <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+        </div>
+        <Badge variant="outline" className={risk ? contextWasteRiskClass(score) : dimensionQualityClass(score)}>
+          {label}
+        </Badge>
+      </div>
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="font-semibold text-foreground">{displayScore}</span>
+          <span className="text-muted-foreground">{confidence} confidence</span>
+        </div>
+        {score !== null && (
+          <div
+            className="mt-2 h-2 overflow-hidden rounded-full bg-secondary"
+            role="img"
+            aria-label={`${name} ${displayScore}${risk ? ', higher means higher risk' : ''}`}
+          >
+            <div
+              className={risk ? 'h-full rounded-full bg-gradient-to-r from-warning to-destructive' : 'h-full rounded-full bg-gradient-to-r from-primary to-accent'}
+              style={{ width: `${Math.max(0, Math.min(100, score))}%` }}
+            />
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <SignalSummary title="Evidence" signals={positive} emptyText="No strong positive signal surfaced." />
+        <SignalSummary title="Main gaps" signals={gaps} emptyText="No main gap surfaced." />
+      </div>
+
+      <details className="mt-4 rounded-lg border border-border/60 bg-secondary/20 p-3">
+        <summary className="cursor-pointer select-none text-sm font-medium">Why this score?</summary>
+        <ul className="mt-3 space-y-3">
+          {signals.slice(0, 6).map(signal => (
+            <li key={signal.id} className="text-xs leading-relaxed">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline" className="border-border/70 text-[10px]">{signal.status}</Badge>
+                <span className="font-medium text-foreground/90">{signal.label}</span>
+              </div>
+              <EvidenceList evidence={signal.evidence.slice(0, 2)} className="mt-2" />
+            </li>
+          ))}
+        </ul>
+      </details>
+    </article>
+  );
+}
+
+function MeasurementBoundary({ repositoryHealth }: { repositoryHealth: RepositoryHealth }) {
+  return (
+    <details className="glass rounded-2xl p-6">
+      <summary className="cursor-pointer select-none font-display font-semibold text-foreground">
+        How this score is measured
+      </summary>
+      <div className="mt-4 space-y-3 text-sm leading-relaxed text-muted-foreground">
+        <p>Repository Health is the current repository state from this scan, before generated ShipSeal improvements are applied.</p>
+        <ul className="space-y-2">
+          {repositoryHealth.measurementBoundary.map(boundary => (
+            <li key={boundary} className="flex gap-2">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-primary-glow" />
+              <span>{boundary}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
+  );
+}
+
+function SignalSummary({ title, signals, emptyText }: { title: string; signals: RepositoryHealthSignal[]; emptyText: string }) {
+  return (
+    <div>
+      <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground mb-2">{title}</div>
+      {signals.length === 0 ? (
+        <div className="text-xs text-muted-foreground">{emptyText}</div>
+      ) : (
+        <ul className="space-y-2">
+          {signals.map(signal => (
+            <li key={signal.id} className="text-xs leading-relaxed text-foreground/90">
+              {signal.evidence[0] || signal.label}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function EvidenceList({ evidence, className = '' }: { evidence: string[]; className?: string }) {
+  if (evidence.length === 0) return null;
+  return (
+    <ul className={`space-y-1 text-xs leading-relaxed text-muted-foreground ${className}`}>
+      {evidence.map(item => (
+        <li key={item} className="break-words">
+          <span className="sr-only">Evidence: </span>{item}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function repositoryHealthSummarySentence(status: RepositoryHealth['overall']['status']) {
+  if (status === 'AI-ready workspace') return 'The repository has strong project knowledge, routing and verification signals for AI-agent work.';
+  if (status === 'Workable with optimization') return 'The repository has usable project knowledge and verification signals, but agents may still need broad context discovery.';
+  if (status === 'Fragmented workspace') return 'The repository has useful signals, but project knowledge and routing are fragmented.';
+  if (status === 'High agent friction') return 'The repository is likely to require substantial context discovery before agent work is reliable.';
+  if (status === 'Blocked') return 'A critical repository issue blocks trustworthy AI-agent handoff until it is resolved.';
+  return 'ShipSeal does not have enough repository evidence to calculate Repository Health.';
+}
+
+function contextWasteRiskLabel(score: number | null) {
+  if (score === null) return 'Unavailable';
+  if (score >= 75) return 'Very high';
+  if (score >= 50) return 'High';
+  if (score >= 25) return 'Moderate';
+  return 'Low';
+}
+
+function contextWasteRiskClass(score: number | null) {
+  if (score === null) return 'border-warning/60 text-warning';
+  if (score >= 75) return 'border-destructive/70 text-destructive';
+  if (score >= 50) return 'border-warning/80 text-warning';
+  if (score >= 25) return 'border-accent/70 text-accent';
+  return 'border-success/50 text-success';
+}
+
+function dimensionQualityLabel(score: number | null) {
+  if (score === null) return 'Unavailable';
+  if (score >= 85) return 'Strong';
+  if (score >= 70) return 'Workable';
+  if (score >= 50) return 'Needs focus';
+  return 'Weak';
+}
+
+function dimensionQualityClass(score: number | null) {
+  if (score === null) return 'border-warning/60 text-warning';
+  if (score >= 85) return 'border-success/50 text-success';
+  if (score >= 70) return 'border-primary/45 text-primary-glow';
+  if (score >= 50) return 'border-warning/70 text-warning';
+  return 'border-destructive/60 text-destructive';
+}
+
+function repositoryHealthStatusClass(status: RepositoryHealth['overall']['status']) {
+  if (status === 'AI-ready workspace') return 'border-success/50 text-success';
+  if (status === 'Workable with optimization') return 'border-primary/45 text-primary-glow';
+  if (status === 'Fragmented workspace') return 'border-warning/70 text-warning';
+  if (status === 'High agent friction' || status === 'Blocked') return 'border-destructive/70 text-destructive';
+  return 'border-warning/60 text-warning';
+}
+
+function dimensionLabel(dimension: string) {
+  if (dimension === 'repositoryIntelligence') return 'Repository Intelligence';
+  if (dimension === 'contextWaste') return 'Context Waste Risk';
+  if (dimension === 'aiDevelopmentReadiness') return 'AI Development Readiness';
+  if (dimension === 'agentRouting') return 'Agent Routing';
+  if (dimension === 'deliveryConfidence') return 'Delivery Confidence';
+  return dimension;
 }
 
 function severityClass(severity: MCPRiskSeverity) {

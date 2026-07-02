@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { buildSampleReport } from '@/lib/readiness';
+import { buildReport, buildSampleReport } from '@/lib/readiness';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
+import { createEmptyScanSummary } from '@/lib/scannerLimits';
 
 vi.mock('@/components/agentready/ScoreGauge', () => ({
   ScoreGauge: ({ score }: { score: number }) => <div>Score gauge {score}</div>,
@@ -58,8 +59,172 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(`${resolveDeliveryPackFocus(['full-package'], { folderAgentPaths }).generatedPaths.length} outputs`)).toBeInTheDocument();
     expect(screen.queryByText('Full Delivery Pack: 36 required outputs')).not.toBeInTheDocument();
     expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
-    expect(screen.getByText(/Advanced details — full scan results and generated files/i)).toBeInTheDocument();
-    expect(screen.getByText(/Improve your score — optional fixes you can add back/i)).toBeInTheDocument();
+    expect(screen.getByText(/Advanced details/i)).toBeInTheDocument();
+    expect(screen.getByText(/Available ShipSeal improvements/i)).toBeInTheDocument();
+  });
+
+  it('makes Repository Health the primary dashboard summary', () => {
+    const report = buildSampleReport();
+    const topAction = report.repositoryHealth.topActions[0];
+
+    render(
+      <ResultDashboard
+        report={report}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: /repository health/i })).toBeInTheDocument();
+    expect(screen.getByText(`${report.repositoryHealth.overall.score} / 100`)).toBeInTheDocument();
+    expect(screen.getByText(report.repositoryHealth.overall.status)).toBeInTheDocument();
+    expect(screen.getAllByText(`${report.repositoryHealth.overall.confidence} confidence`).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Context Waste Risk').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Higher Context Waste means higher risk/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Repository Intelligence').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('AI Development Readiness').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Agent Routing').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Delivery Confidence').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(topAction.title).length).toBeGreaterThan(0);
+  });
+
+  it('shows insufficient evidence without synthetic dimension values', () => {
+    const summary = {
+      ...createEmptyScanSummary(),
+      scanMode: 'limited-fallback' as const,
+      limited: true,
+      limitationReason: 'ZIP parsing failed before repository contents could be fully analyzed.',
+      warnings: ['fallback scan'],
+    };
+    const report = buildReport({
+      repoName: 'limited-repo',
+      files: [
+        { path: 'README.md', size: 100 },
+        { path: 'AGENTS.md', size: 100 },
+        { path: 'package.json', size: 100 },
+      ],
+      textContents: {
+        'README.md': '# Synthetic fallback\n',
+        'AGENTS.md': '# Synthetic instructions\n',
+        'package.json': JSON.stringify({ scripts: { test: 'vitest' } }),
+      },
+      scanSummary: summary,
+    });
+
+    render(
+      <ResultDashboard
+        report={report}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Repository Health unavailable')).toBeInTheDocument();
+    expect(screen.getAllByText('Insufficient evidence').length).toBeGreaterThan(0);
+    expect(screen.getByText('Low confidence')).toBeInTheDocument();
+    expect(screen.getByText(/upload the complete ZIP/i)).toBeInTheDocument();
+    expect(screen.queryByText('0 / 100')).not.toBeInTheDocument();
+    expect(screen.queryByText('Repository Intelligence')).not.toBeInTheDocument();
+  });
+
+  it('labels high Context Waste as risk and does not imply it is positive', () => {
+    const report = buildSampleReport();
+    const highRiskReport = {
+      ...report,
+      repositoryHealth: {
+        ...report.repositoryHealth,
+        dimensions: {
+          ...report.repositoryHealth.dimensions,
+          contextWaste: {
+            ...report.repositoryHealth.dimensions.contextWaste,
+            riskScore: 82,
+            contextEfficiencyScore: 18,
+          },
+        },
+      },
+    };
+
+    render(
+      <ResultDashboard
+        report={highRiskReport}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getAllByText(/82 \/ 100/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Very high/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Higher Context Waste means higher risk/i)).toBeInTheDocument();
+    expect(screen.queryByText(/high context waste is good/i)).not.toBeInTheDocument();
+  });
+
+  it('shows safe evidence and recommendations without raw readable content or unsupported claims', () => {
+    const report = buildSampleReport();
+    const evidence = report.repositoryHealth.topActions[0]?.evidence[0];
+
+    render(
+      <ResultDashboard
+        report={report}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    if (evidence) expect(screen.getAllByText(evidence).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Potential .* improvement: up to/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/deterministic static repository estimate/i)).toBeInTheDocument();
+    expect(screen.queryByText(/PRIVATE_README_BODY_SHOULD_NOT_EXPORT/i)).not.toBeInTheDocument();
+    expect(document.body.textContent?.toLowerCase()).not.toMatch(/token-saving|financial savings|guaranteed speed/);
+  });
+
+  it('keeps legacy readiness details, package controls, and export buttons available', () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Technical readiness details')).toBeInTheDocument();
+    expect(screen.getByText('Legacy readiness categories')).toBeInTheDocument();
+    expect(screen.getByText('Category breakdown mock')).toBeInTheDocument();
+    expect(screen.getByText('Delivery Pack preview mock')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /export score\.json/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /scan another project/i }).length).toBeGreaterThan(0);
+  });
+
+  it('renders the supplied Repository Health model without recalculating it in the UI', () => {
+    const report = buildSampleReport();
+    const suppliedReport = {
+      ...report,
+      repositoryHealth: {
+        ...report.repositoryHealth,
+        overall: {
+          score: 41,
+          status: 'High agent friction' as const,
+          confidence: 'Low' as const,
+        },
+      },
+    };
+
+    render(
+      <ResultDashboard
+        report={suppliedReport}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('41 / 100')).toBeInTheDocument();
+    expect(screen.getByText('High agent friction')).toBeInTheDocument();
+    expect(screen.getByText('Low confidence')).toBeInTheDocument();
   });
 
   it('shows the selected goal package instead of always showing full pack', () => {

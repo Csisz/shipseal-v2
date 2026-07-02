@@ -9,6 +9,7 @@ import { localAIProvider } from './ai';
 import { buildRepoContextPack, renderRepoContextPackMarkdown } from './repoContextPack';
 import type { MCPPolicyFile } from './types';
 import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles } from './agentOperatingMode';
+import { scoreRepositoryHealth } from './repositoryHealth';
 
 function addMcpNarrativeToPolicyFiles(files: MCPPolicyFile[], narrative: NonNullable<ReturnType<typeof localAIProvider.generateMcpGovernanceNarrativeSync>>): MCPPolicyFile[] {
   return files.map(file => {
@@ -58,6 +59,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     readableTextBytesAnalyzed: Object.values(input.textContents).reduce((total, text) => total + text.length, 0),
   };
   const scanEvidence = buildScanEvidence(input, stack, scanSummary);
+  const repositoryHealth = scoreRepositoryHealth({ ...input, scanSummary });
   const baseMcpReadiness = buildMCPReadinessReport(input, {
     stack,
     summary,
@@ -149,6 +151,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     aiNarrative,
     aiAgentInstructions,
     mcpReadiness,
+    repositoryHealth,
     scanSummary,
     scanEvidence,
     sampleFiles: input.files.filter(f => !f.isDir && !f.ignored && !isGeneratedOrVendorPath(f.path) && !isBinaryLikePath(f.path)).slice(0, 30),

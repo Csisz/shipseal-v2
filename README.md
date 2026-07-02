@@ -1,10 +1,10 @@
 # ShipSeal
 
-ShipSeal is an AI repository optimization platform that turns a codebase into an agent-ready workspace for Claude Code, Codex, Cursor, Windsurf and other AI coding agents.
+ShipSeal is an AI Repository Optimization Platform: the missing layer between a Git repository and AI coding agents.
 
-ShipSeal prepares repositories for AI-native development. It helps teams stop wasting AI context, prepare the repository once, and give every coding agent compact project memory, scoped instructions, and safer operating boundaries.
+ShipSeal prepares repositories for Claude Code, Codex, Cursor, Windsurf and similar tools before the next AI coding session begins. Instead of rereading the whole codebase every time, agents receive Repository Intelligence: structured project memory, context compression, routing guidance and delivery-ready documentation.
 
-The current demo-ready MVP scans a repository ZIP or GitHub repository, calculates a deterministic ShipSeal score, explains the readiness signal, and generates AI workspace outputs such as Agent Cost Optimizer guidance, Context Compression, folder-level `AGENTS.md` recommendations, Specialized Context Packs, Skill and MCP recommendations, and a Delivery Pack export with reports, manifests, tests, AI Act readiness notes, repo context, and `score.json`.
+The current demo-ready MVP scans a repository ZIP or GitHub repository, calculates a deterministic ShipSeal score, explains the readiness signal, and generates Repository Intelligence outputs such as Agent Cost Optimizer guidance, Context Compression, folder-level `AGENTS.md` recommendations, Specialized Context Packs, Skill and MCP recommendations, and a Delivery Pack export with reports, manifests, tests, AI Act readiness notes, repo context, and `score.json`.
 
 ShipSeal analyzes repository structure and metadata. It does not execute uploaded or imported code.
 

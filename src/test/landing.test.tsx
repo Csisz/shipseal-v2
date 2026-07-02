@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Landing } from '@/components/agentready/Landing';
 
 describe('ShipSeal landing', () => {
-  it('renders the calm hero, outcome goals plus full package, steps, pricing, and no founder audit offer', () => {
+  it('renders the repository intelligence narrative, workflow, pricing, and no founder audit offer', () => {
     render(
       <Landing
         onSampleReport={vi.fn()}
@@ -14,33 +14,44 @@ describe('ShipSeal landing', () => {
     );
 
     expect(screen.getByText(/Stop wasting AI context/i)).toBeInTheDocument();
-    expect(screen.getByText(/generates agent memory, context compression/i)).toBeInTheDocument();
+    expect(screen.getByText(/prepares it for Claude Code, Codex, Cursor, Windsurf/i)).toBeInTheDocument();
+    expect(screen.getByText(/Instead of rereading your entire codebase every session/i)).toBeInTheDocument();
     // Upload / GitHub input is embedded directly in the hero.
     expect(screen.getByTestId('scan-slot')).toBeInTheDocument();
 
-    // Outcome goals plus the distinct full package.
-    expect(screen.getByText(/What do you want ShipSeal to help with\?/i)).toBeInTheDocument();
+    // Problem-first narrative before packages.
+    expect(screen.getByText(/AI coding gets expensive when the repository has no memory/i)).toBeInTheDocument();
+    expect(screen.getByText('Context waste')).toBeInTheDocument();
+    expect(screen.getAllByText('Repository Intelligence').length).toBeGreaterThan(0);
+    expect(screen.getByText('AI rereads the whole repository every session.')).toBeInTheDocument();
+    expect(screen.getAllByText('Context Compression').length).toBeGreaterThan(0);
+    expect(screen.getByText('AI edits the wrong files.')).toBeInTheDocument();
+    expect(screen.getAllByText('Folder-level AGENTS').length).toBeGreaterThan(0);
+    expect(screen.getByText(/missing layer between a Git repository and AI coding agents/i)).toBeInTheDocument();
+
+    // Outcome goals plus the distinct full package remain available after the explanation.
+    expect(screen.getByText(/Choose what to optimize first/i)).toBeInTheDocument();
     expect(screen.getByText('Prepare for client handoff')).toBeInTheDocument();
     expect(screen.getByText('Prepare for launch or production')).toBeInTheDocument();
     expect(screen.getByText('Make it safer')).toBeInTheDocument();
     expect(screen.getByText('MCP readiness and tool integration')).toBeInTheDocument();
     expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
 
-    // Guided trust-aware process.
-    expect(screen.getByText('How ShipSeal works.')).toBeInTheDocument();
-    expect(screen.getByText('Connect GitHub or upload ZIP')).toBeInTheDocument();
-    expect(screen.getByText('ShipSeal performs static analysis')).toBeInTheDocument();
-    expect(screen.getByText('Generate agent-ready context')).toBeInTheDocument();
-    expect(screen.getByText('Export reports or a Readiness PR')).toBeInTheDocument();
+    // Minimal workflow.
+    expect(screen.getByText('How it works.')).toBeInTheDocument();
+    expect(screen.getByText('Scan repository')).toBeInTheDocument();
+    expect(screen.getByText('Generate Repository Intelligence')).toBeInTheDocument();
+    expect(screen.getByText('Optimize AI coding workflow')).toBeInTheDocument();
+    expect(screen.getByText('Export delivery-ready documentation')).toBeInTheDocument();
 
-    // File names stay behind the advanced-details disclosure, not in main cards.
-    expect(screen.getByText(/Advanced details - explore the generated files/i)).toBeInTheDocument();
+    // Detailed outputs stay behind the advanced-details disclosure, not in main cards.
+    expect(screen.getByText(/Advanced details - what Repository Intelligence can include/i)).toBeInTheDocument();
 
     // Demo-first sample paths.
-    expect(screen.getByText(/Try ShipSeal without connecting GitHub/i)).toBeInTheDocument();
+    expect(screen.getByText(/See it on a sample repository/i)).toBeInTheDocument();
     expect(screen.queryByText('See a sample ShipSeal report')).not.toBeInTheDocument();
-    expect(screen.getByText('View before/after readiness example')).toBeInTheDocument();
-    expect(screen.getByText(/Compact project memory, context compression, and folder guidance/i)).toBeInTheDocument();
+    expect(screen.getByText('View before/after context')).toBeInTheDocument();
+    expect(screen.getByText(/Repository Intelligence, cleaner AI sessions, delivery-ready output/i)).toBeInTheDocument();
 
     // Trust hints near the scan action.
     expect(screen.getByText(/Static scan only/i)).toBeInTheDocument();
@@ -60,9 +71,9 @@ describe('ShipSeal landing', () => {
     expect(screen.getByText('Builder')).toBeInTheDocument();
     expect(screen.getByText('AI Workspace Pro')).toBeInTheDocument();
     expect(screen.getByText('Agency / White-label')).toBeInTheDocument();
-    expect(screen.getByText('Context Compression Pack')).toBeInTheDocument();
-    expect(screen.getByText('Specialized Context Packs')).toBeInTheDocument();
-    expect(screen.getByText('Folder-level AGENTS')).toBeInTheDocument();
+    expect(screen.getByText('Optimize one repository.')).toBeInTheDocument();
+    expect(screen.getByText('Optimize your AI development workflow.')).toBeInTheDocument();
+    expect(screen.getByText('Optimize AI development across multiple repositories.')).toBeInTheDocument();
     expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Request access').length).toBeGreaterThan(0);
     expect(screen.queryByText(/founder/i)).not.toBeInTheDocument();
@@ -70,7 +81,7 @@ describe('ShipSeal landing', () => {
     expect(screen.queryByText(/Expert Review Add-On/i)).not.toBeInTheDocument();
 
     // Non-persistent contact fallback.
-    expect(screen.getByText('Contact ShipSeal.')).toBeInTheDocument();
+    expect(screen.getByText('Bring ShipSeal into your workflow.')).toBeInTheDocument();
     expect(screen.getByLabelText('Contact name')).toBeInTheDocument();
     expect(screen.getByLabelText('Contact email')).toBeInTheDocument();
     expect(screen.getByLabelText('Company or agency')).toBeInTheDocument();

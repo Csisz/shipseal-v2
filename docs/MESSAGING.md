@@ -15,7 +15,7 @@ Supporting headline options:
 
 Subheadline:
 
-ShipSeal scans your repository and generates agent memory, context compression, folder-level instructions, operating modes, skills, MCP recommendations, and delivery packs so AI coding tools waste less context and work more consistently.
+ShipSeal scans your repository and prepares it for Claude Code, Codex, Cursor, Windsurf and other AI coding agents. Instead of rereading your entire codebase every session, agents receive structured project memory, context compression, routing guidance and repository intelligence.
 
 Primary CTA:
 
@@ -26,6 +26,10 @@ Secondary CTA:
 Try sample project
 
 ## Message Pillars
+
+### Repository Intelligence
+
+Repository Intelligence is the missing layer between a Git repository and AI coding agents. It combines Context Compression, Folder-level AGENTS, Specialized Context Packs, Agent Cost Optimizer, Skill Recommendations, MCP Recommendations and Agent Memory into one system.
 
 ### AI Repository Optimization
 
@@ -50,6 +54,8 @@ Delivery Packs remain available, but they should be presented as one output of a
 ## Approved Phrases
 
 - AI repository optimization platform
+- Repository Intelligence Platform
+- missing layer between a Git repository and AI coding agents
 - AI-native development workspace
 - Agent-ready repository
 - Stop wasting AI context
@@ -75,11 +81,11 @@ Delivery Packs remain available, but they should be presented as one output of a
 
 ### 25 Words
 
-ShipSeal turns repositories into AI-optimized workspaces with compact memory, context compression, folder instructions, agent tooling recommendations, and Delivery Pack export.
+ShipSeal adds Repository Intelligence between Git repositories and AI coding agents so Claude Code, Codex, Cursor and Windsurf waste less context.
 
 ### 50 Words
 
-ShipSeal scans your repository and prepares it for AI-native development. It generates compact project memory, context compression, folder-level instructions, operating modes, skills, MCP recommendations, and Delivery Packs so Claude Code, Codex, Cursor, Windsurf, and other AI coding agents waste less context and work more consistently.
+ShipSeal scans your repository and prepares it for AI-native development. Instead of repeatedly rereading the codebase, Claude Code, Codex, Cursor, Windsurf and other agents receive Repository Intelligence: project memory, context compression, routing guidance, operating modes, skills, MCP recommendations and delivery-ready documentation.
 
 ### Product Footer
 
