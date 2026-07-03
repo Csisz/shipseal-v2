@@ -143,8 +143,9 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('Scan evidence:');
     expect(html).toContain(report.repoName);
     expect(html).toContain('Client and agency fields can be completed before final delivery.');
-    expect(html).toContain('Generated outputs: 7');
+    expect(html).toContain('Generated outputs: 8');
     expect(html).toContain('03-mcp-governance/MCP_READINESS.md');
+    expect(html).toContain('07-context/REPOSITORY_HEALTH.md');
     expect(html).toContain('score.json');
   });
 
@@ -175,8 +176,9 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('Client handoff priorities');
     expect(html).toContain('Delivery manifest review');
     expect(html).toContain('executive summary, readiness decision, roadmap, and delivery manifest');
-    expect(html).toContain('Generated outputs: 6');
+    expect(html).toContain('Generated outputs: 7');
     expect(html).toContain('06-client-handoff/NEXT_STEPS_ROADMAP.md');
+    expect(html).toContain('07-context/REPOSITORY_HEALTH.md');
   });
 
   it('prioritizes security and data pre-screen sections for safety-risk package', () => {
@@ -207,8 +209,9 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('Selected package: AI Act and transparency pack');
     expect(html).toContain('AI Act / transparency focus');
     expect(html).toContain('Transparency review');
-    expect(html).toContain('Generated outputs: 5');
+    expect(html).toContain('Generated outputs: 6');
     expect(html).toContain('05-ai-act-readiness/USER_FACING_DISCLOSURE_NOTES.md');
+    expect(html).toContain('07-context/REPOSITORY_HEALTH.md');
   });
 
   it('exports CLIENT_HANDOFF_REPORT.html into the Delivery Pack ZIP', async () => {

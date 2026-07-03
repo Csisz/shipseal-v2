@@ -2,6 +2,7 @@ import type { AgentPackFile, MCPPolicyFile, ReadinessReport, ScoreJsonExport } f
 import { buildDeliveryPackFiles } from './deliveryPack';
 import { resolveDeliveryPackFocus } from './deliveryPack/goalMapping';
 import { getFolderAgentSuggestionPaths } from './deliveryPack/folderAgents';
+import { SHIPSEAL_DELIVERY_PACK_MANIFEST } from './deliveryPack/manifest';
 import { normalizeProjectIntake } from './intake';
 import type { PartialProjectIntake } from './intake';
 import { DEFAULT_AGENT_OPERATING_MODE, buildAgentOperatingModeSummary, resolveAgentOperatingMode } from './agentOperatingMode';
@@ -33,6 +34,7 @@ export const REPO_CONTEXT_FOLDER = '07-context';
 export interface BuildAgentPackZipOptions {
   repositoryName?: string;
   scoreJson?: unknown;
+  repositoryHealth?: ReadinessReport['repositoryHealth'];
   intake?: PartialProjectIntake;
   selectedPackages?: string[];
 }
@@ -108,6 +110,10 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
       ignoredFolders: report.repoContextPack.ignoredFolders,
       securityFindingCount: report.repoContextPack.securityFindings.length,
       mcpStatus: report.repoContextPack.mcpSummary.status,
+      repositoryHealthScore: report.repositoryHealth.overall.score,
+      repositoryHealthStatus: report.repositoryHealth.overall.status,
+      repositoryHealthConfidence: report.repositoryHealth.overall.confidence,
+      contextWasteRiskScore: report.repositoryHealth.dimensions.contextWaste.riskScore,
       rawFileContentsIncluded: false,
     },
     generatedFiles: deliveryPackFocus.generatedPaths,
@@ -131,6 +137,14 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
       fullPackage: deliveryPackFocus.fullPackage,
       packageLabel: deliveryPackFocus.packageLabel,
       packageSummary: deliveryPackFocus.packageSummary,
+    },
+    deliveryPackManifest: {
+      schemaVersion: SHIPSEAL_DELIVERY_PACK_MANIFEST.version,
+      repositoryHealthFile: '07-context/REPOSITORY_HEALTH.md',
+      repositoryHealthModelVersion: report.repositoryHealth.modelVersion,
+      repositoryHealthScore: report.repositoryHealth.overall.score,
+      repositoryHealthStatus: report.repositoryHealth.overall.status,
+      repositoryHealthConfidence: report.repositoryHealth.overall.confidence,
     },
     mcpReadiness: {
       score: report.mcpReadiness.score,
@@ -192,6 +206,7 @@ export async function buildAgentPackZipBlob(
     contextFiles,
     repositoryName: options.repositoryName,
     scoreJson: options.scoreJson,
+    repositoryHealth: options.repositoryHealth,
     intake: options.intake,
     selectedPackages: options.selectedPackages,
   });
@@ -210,10 +225,11 @@ export async function downloadAgentPackZip(
   contextFiles?: { markdown: string; json: unknown },
   scoreJson?: unknown,
   intake?: PartialProjectIntake,
-  selectedPackages?: string[]
+  selectedPackages?: string[],
+  repositoryHealth?: ReadinessReport['repositoryHealth']
 ) {
   const normalizedIntake = normalizeProjectIntake(intake, repositoryName);
-  const blob = await buildAgentPackZipBlob(files, mcpFiles, contextFiles, { repositoryName, scoreJson, intake: normalizedIntake, selectedPackages });
+  const blob = await buildAgentPackZipBlob(files, mcpFiles, contextFiles, { repositoryName, scoreJson, repositoryHealth, intake: normalizedIntake, selectedPackages });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

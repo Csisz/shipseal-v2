@@ -33,7 +33,7 @@ export interface DeliveryPackSectionContract {
 export interface DeliveryPackManifest {
   product: 'ShipSeal';
   packNameTemplate: 'shipseal-delivery-pack-[project]';
-  version: 1;
+  version: 2;
   sections: DeliveryPackSectionContract[];
   rootFiles: DeliveryPackFileContract[];
 }

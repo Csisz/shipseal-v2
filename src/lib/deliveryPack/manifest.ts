@@ -31,7 +31,7 @@ function section(id: DeliveryPackSectionId, folder: string, label: string, filen
 export const SHIPSEAL_DELIVERY_PACK_MANIFEST: DeliveryPackManifest = {
   product: 'ShipSeal',
   packNameTemplate: 'shipseal-delivery-pack-[project]',
-  version: 1,
+  version: 2,
   sections: [
     section('agent-instructions', '01-agent-instructions', 'Agent instructions', [
       'AGENTS.md',
@@ -75,6 +75,7 @@ export const SHIPSEAL_DELIVERY_PACK_MANIFEST: DeliveryPackManifest = {
       'DELIVERY_MANIFEST.md',
     ]),
     section('context', '07-context', 'Context', [
+      'REPOSITORY_HEALTH.md',
       'REPO_CONTEXT_PACK.md',
       ['repo-context-pack.json', 'json'],
       'ARCHITECTURE.md',

@@ -818,8 +818,18 @@ describe('Sprint 6 AI provider and Repo Context Pack', () => {
     const json = buildRepoContextPackJson(report);
 
     expect(report.contextPack).toContain('# REPO_CONTEXT_PACK.md');
+    expect(report.contextPack).toContain('## Repository Health summary');
+    expect(report.contextPack).toContain(`Repository Health status: ${report.repositoryHealth.overall.status}`);
+    expect(report.contextPack).toContain('## Repository Health top actions');
     expect(report.contextPack).toContain('Raw full file contents included: no');
     expect(json.repositoryName).toBe(report.repoName);
+    expect(json.repositoryHealth).toMatchObject({
+      score: report.repositoryHealth.overall.score,
+      status: report.repositoryHealth.overall.status,
+      confidence: report.repositoryHealth.overall.confidence,
+      contextWasteRiskScore: report.repositoryHealth.dimensions.contextWaste.riskScore,
+    });
+    expect(json.repositoryHealth.topActions).toEqual(report.repositoryHealth.topActions.slice(0, 5).map(action => action.title));
     expect(json.contentPolicy.secretsIncluded).toBe(false);
   });
 

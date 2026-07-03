@@ -61,6 +61,51 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(scoreJson.content.generatedFiles).toContain('07-context/folder-agents/root/AGENTS.md');
   });
 
+  it('exports Repository Health as a dedicated manifest v2 Delivery Pack artifact', async () => {
+    const report = buildSampleReport();
+    const expectedScoreJson = buildScoreJson(report);
+    const blob = await buildAgentPackZipBlob(
+      report.agentPack,
+      report.mcpReadiness.generatedFiles,
+      { markdown: report.contextPack, json: buildRepoContextPackJson(report) },
+      {
+        repositoryName: report.repoName,
+        scoreJson: {
+          ...expectedScoreJson,
+          repositoryHealth: {
+            ...expectedScoreJson.repositoryHealth,
+            overall: {
+              score: 1,
+              status: 'Blocked',
+              confidence: 'Low',
+            },
+          },
+        },
+        repositoryHealth: report.repositoryHealth,
+      }
+    );
+    const zip = await JSZip.loadAsync(blob);
+    const repositoryHealth = await zipText(zip, '07-context/REPOSITORY_HEALTH.md');
+    const manifest = await zipText(zip, '06-client-handoff/DELIVERY_MANIFEST.md');
+
+    expect(expectedScoreJson.generatedFiles).toContain('07-context/REPOSITORY_HEALTH.md');
+    expect(expectedScoreJson.deliveryPackManifest).toMatchObject({
+      schemaVersion: 2,
+      repositoryHealthFile: '07-context/REPOSITORY_HEALTH.md',
+      repositoryHealthScore: report.repositoryHealth.overall.score,
+      repositoryHealthStatus: report.repositoryHealth.overall.status,
+      repositoryHealthConfidence: report.repositoryHealth.overall.confidence,
+    });
+    expect(repositoryHealth).toContain('# Repository Health - sample-nextjs-app');
+    expect(repositoryHealth).toContain(`- Score: ${report.repositoryHealth.overall.score}/100`);
+    expect(repositoryHealth).toContain(`- Status: ${report.repositoryHealth.overall.status}`);
+    expect(repositoryHealth).toContain('## Top Repository Improvements');
+    expect(repositoryHealth).not.toContain('- Score: 1/100');
+    expect(manifest).toContain('Manifest schema version: 2');
+    expect(manifest).toContain('Repository Health file: 07-context/REPOSITORY_HEALTH.md');
+    expect(manifest).toContain(`Repository Health score: ${report.repositoryHealth.overall.score}/100`);
+  });
+
   it('maps selected goals to focused Delivery Pack outputs', () => {
     const clientHandoff = resolveDeliveryPackFocus(['client-handoff']);
     const testing = resolveDeliveryPackFocus(['testing-red-team']);
@@ -340,6 +385,9 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(manifest).toContain(`Output count: ${scoreJson.outputCount}`);
     expect(manifest).toContain(`Readiness score: ${scoreJson.score}/100`);
     expect(manifest).toContain(`Readiness decision: ${scoreJson.status}`);
+    expect(manifest).toContain(`Repository Health score: ${scoreJson.repositoryHealth.overall.score}/100`);
+    expect(manifest).toContain(`Repository Health status: ${scoreJson.repositoryHealth.overall.status}`);
+    expect(manifest).toContain('07-context/REPOSITORY_HEALTH.md');
     expect(manifest).toContain('## Scan Evidence');
     expect(manifest).toContain('Code execution: ShipSeal did not execute repository code.');
     for (const path of scoreJson.generatedFiles) {

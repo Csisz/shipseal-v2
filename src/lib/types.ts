@@ -1,4 +1,4 @@
-import type { RepositoryHealthModel } from './repositoryHealth';
+import type { HealthConfidence, RepositoryHealthModel, RepositoryHealthStatus } from './repositoryHealth';
 
 // Core types for AgentReady
 
@@ -118,6 +118,18 @@ export interface RepoContextPackSummary {
     summary: string;
     riskFindingCount: number;
     recommendedServerCategories: string[];
+  };
+  repositoryHealth: {
+    modelVersion: RepositoryHealthModel['modelVersion'];
+    measurementMethod: RepositoryHealthModel['measurementMethod'];
+    score: number | null;
+    status: RepositoryHealthStatus;
+    confidence: HealthConfidence;
+    contextWasteRiskScore: number | null;
+    contextEfficiencyScore: number | null;
+    blockerCount: number;
+    topActions: string[];
+    measurementBoundary: string[];
   };
   contentPolicy: {
     rawFileContentsIncluded: false;
@@ -333,6 +345,10 @@ export interface ScoreJsonExport {
     ignoredFolders: string[];
     securityFindingCount: number;
     mcpStatus: MCPReadinessStatus;
+    repositoryHealthScore: number | null;
+    repositoryHealthStatus: RepositoryHealthStatus;
+    repositoryHealthConfidence: HealthConfidence;
+    contextWasteRiskScore: number | null;
     rawFileContentsIncluded: false;
   };
   generatedFiles: string[];
@@ -386,6 +402,14 @@ export interface ScoreJsonExport {
     fullPackage: boolean;
     packageLabel: string;
     packageSummary: string;
+  };
+  deliveryPackManifest?: {
+    schemaVersion: 2;
+    repositoryHealthFile: string;
+    repositoryHealthModelVersion: RepositoryHealthModel['modelVersion'];
+    repositoryHealthScore: number | null;
+    repositoryHealthStatus: RepositoryHealthStatus;
+    repositoryHealthConfidence: HealthConfidence;
   };
   mcpReadiness: {
     score: number;

@@ -105,6 +105,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     blockers: scoring.blockers,
     improvements: scoring.improvements,
     mcpReadiness,
+    repositoryHealth,
   });
   const contextPack = renderRepoContextPackMarkdown(repoContextPack);
   const aiAgentInstructions = localAIProvider.generateAgentInstructionsSync({

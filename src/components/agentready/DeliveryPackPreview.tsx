@@ -78,7 +78,8 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
               { markdown: report.contextPack, json: buildRepoContextPackJson(report) },
               scoreJson,
               normalizedIntake,
-              selectedPackages
+              selectedPackages,
+              report.repositoryHealth
             )}
             className="bg-gradient-primary border-0 shadow-glow hover:opacity-90"
           >

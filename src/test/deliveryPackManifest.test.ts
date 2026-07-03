@@ -35,6 +35,7 @@ const REQUIRED_PATHS = [
   '06-client-handoff/EXECUTIVE_SUMMARY.md',
   '06-client-handoff/NEXT_STEPS_ROADMAP.md',
   '06-client-handoff/DELIVERY_MANIFEST.md',
+  '07-context/REPOSITORY_HEALTH.md',
   '07-context/REPO_CONTEXT_PACK.md',
   '07-context/repo-context-pack.json',
   '07-context/ARCHITECTURE.md',
@@ -63,6 +64,7 @@ describe('ShipSeal Delivery Pack manifest', () => {
 
     expect(SHIPSEAL_DELIVERY_PACK_MANIFEST.product).toBe('ShipSeal');
     expect(SHIPSEAL_DELIVERY_PACK_MANIFEST.packNameTemplate).toBe('shipseal-delivery-pack-[project]');
+    expect(SHIPSEAL_DELIVERY_PACK_MANIFEST.version).toBe(2);
     expect(paths).toEqual(REQUIRED_PATHS);
   });
 
@@ -74,6 +76,7 @@ describe('ShipSeal Delivery Pack manifest', () => {
     expect(paths).toContain('04-testing/RED_TEAM_PROMPTS.md');
     expect(paths).toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.md');
     expect(paths).toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.html');
+    expect(paths).toContain('07-context/REPOSITORY_HEALTH.md');
   });
 
   it('contains at least five SKILL.md files', () => {

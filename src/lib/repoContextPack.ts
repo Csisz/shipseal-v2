@@ -5,6 +5,7 @@ import type {
   MCPReadinessReport,
   RepoContextPackSummary,
   RepoScanInput,
+  ReadinessReport,
   RepositorySummary,
   ScanSummary,
 } from './types';
@@ -16,6 +17,7 @@ interface RepoContextPackMeta {
   blockers: CriticalBlocker[];
   improvements: Improvement[];
   mcpReadiness: MCPReadinessReport;
+  repositoryHealth: ReadinessReport['repositoryHealth'];
 }
 
 export function buildRepoContextPack(input: RepoScanInput, stack: DetectedStack, meta: RepoContextPackMeta): RepoContextPackSummary {
@@ -66,6 +68,18 @@ export function buildRepoContextPack(input: RepoScanInput, stack: DetectedStack,
       summary: meta.mcpReadiness.summary,
       riskFindingCount: meta.mcpReadiness.riskFindings.length,
       recommendedServerCategories: meta.mcpReadiness.recommendedServerCategories.map(rec => rec.category),
+    },
+    repositoryHealth: {
+      modelVersion: meta.repositoryHealth.modelVersion,
+      measurementMethod: meta.repositoryHealth.measurementMethod,
+      score: meta.repositoryHealth.overall.score,
+      status: meta.repositoryHealth.overall.status,
+      confidence: meta.repositoryHealth.overall.confidence,
+      contextWasteRiskScore: meta.repositoryHealth.dimensions.contextWaste.riskScore,
+      contextEfficiencyScore: meta.repositoryHealth.dimensions.contextWaste.contextEfficiencyScore,
+      blockerCount: meta.repositoryHealth.blockers.length,
+      topActions: meta.repositoryHealth.topActions.slice(0, 5).map(action => action.title),
+      measurementBoundary: [...meta.repositoryHealth.measurementBoundary],
     },
     contentPolicy: {
       rawFileContentsIncluded: false,
@@ -136,6 +150,21 @@ ${mdList(pack.securityFindings, 'No secret-path findings in metadata.')}
 - MCP risk findings: ${pack.mcpSummary.riskFindingCount}
 - Recommended categories: ${pack.mcpSummary.recommendedServerCategories.join(', ') || 'none'}
 - Summary: ${pack.mcpSummary.summary}
+
+## Repository Health summary
+- Repository Health score: ${pack.repositoryHealth.score === null ? 'Not available' : `${pack.repositoryHealth.score}/100`}
+- Repository Health status: ${pack.repositoryHealth.status}
+- Confidence: ${pack.repositoryHealth.confidence}
+- Context Waste Risk: ${pack.repositoryHealth.contextWasteRiskScore === null ? 'Not available' : `${pack.repositoryHealth.contextWasteRiskScore}/100`}
+- Context efficiency score: ${pack.repositoryHealth.contextEfficiencyScore === null ? 'Not available' : `${pack.repositoryHealth.contextEfficiencyScore}/100`}
+- Health blockers: ${pack.repositoryHealth.blockerCount}
+- Model: ${pack.repositoryHealth.modelVersion} (${pack.repositoryHealth.measurementMethod})
+
+## Repository Health top actions
+${mdList(pack.repositoryHealth.topActions, 'No Repository Health actions available.')}
+
+## Repository Health measurement boundary
+${mdList(pack.repositoryHealth.measurementBoundary, 'No Repository Health boundary notes available.')}
 
 ## Specialized context files
 - General coding work: 07-context/GLOBAL_CONTEXT.md

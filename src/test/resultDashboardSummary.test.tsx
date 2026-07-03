@@ -176,7 +176,7 @@ describe('ResultDashboard summary copy', () => {
 
     if (evidence) expect(screen.getAllByText(evidence).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Potential .* improvement: up to/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/deterministic static repository estimate/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/deterministic static repository estimate/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/PRIVATE_README_BODY_SHOULD_NOT_EXPORT/i)).not.toBeInTheDocument();
     expect(document.body.textContent?.toLowerCase()).not.toMatch(/token-saving|financial savings|guaranteed speed/);
   });
@@ -284,8 +284,8 @@ describe('ResultDashboard summary copy', () => {
 
     expect(screen.getByText('Project package')).toBeInTheDocument();
     expect(screen.getByText('Security and data pre-screen')).toBeInTheDocument();
-    expect(screen.getByText('7 outputs')).toBeInTheDocument();
-    expect(screen.queryByText(/Security and data pre-screen - 6 outputs/i)).not.toBeInTheDocument();
+    expect(screen.getByText(`${resolveDeliveryPackFocus(['safety-risk']).generatedPaths.length} outputs`)).toBeInTheDocument();
+    expect(screen.queryByText(/Security and data pre-screen - 8 outputs/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Env\/secrets signals, data\/privacy checklist, red-team prompts, and risk summary/i)).toBeInTheDocument();
   });
 

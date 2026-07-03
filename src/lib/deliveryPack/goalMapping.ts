@@ -2,6 +2,7 @@ import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages, type Ship
 import { getDeliveryPackRequiredPaths } from './manifest';
 
 const ROOT_SCORE = 'score.json';
+const REPOSITORY_HEALTH = '07-context/REPOSITORY_HEALTH.md';
 
 const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
   'client-handoff': [
@@ -10,6 +11,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '06-client-handoff/EXECUTIVE_SUMMARY.md',
     '06-client-handoff/NEXT_STEPS_ROADMAP.md',
     '06-client-handoff/DELIVERY_MANIFEST.md',
+    REPOSITORY_HEALTH,
     ROOT_SCORE,
   ],
   'launch-readiness': [
@@ -22,6 +24,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '06-client-handoff/CLIENT_HANDOFF_REPORT.md',
     '06-client-handoff/EXECUTIVE_SUMMARY.md',
     '06-client-handoff/NEXT_STEPS_ROADMAP.md',
+    REPOSITORY_HEALTH,
     ROOT_SCORE,
   ],
   'safety-risk': [
@@ -31,6 +34,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '08-security-data/RISK_SUMMARY.md',
     '08-security-data/HUMAN_APPROVAL_REVIEWERS.md',
     '04-testing/RED_TEAM_PROMPTS.md',
+    REPOSITORY_HEALTH,
     ROOT_SCORE,
   ],
   'agent-readiness': [
@@ -43,6 +47,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '01-agent-instructions/AGENT_SAFETY_NOTES.md',
     '02-skills/code-review/SKILL.md',
     '02-skills/test-generation/SKILL.md',
+    REPOSITORY_HEALTH,
     '07-context/REPO_CONTEXT_PACK.md',
     '07-context/repo-context-pack.json',
     '07-context/ARCHITECTURE.md',
@@ -64,11 +69,13 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '04-testing/RED_TEAM_PROMPTS.md',
     '04-testing/TESTING_STRATEGY.md',
     '04-testing/CI_QUALITY_GATE.yml',
+    REPOSITORY_HEALTH,
     ROOT_SCORE,
   ],
   'rescue-refactor': [
     '01-agent-instructions/REVIEWER_PROMPT.md',
     '06-client-handoff/NEXT_STEPS_ROADMAP.md',
+    REPOSITORY_HEALTH,
     '07-context/REPO_CONTEXT_PACK.md',
     '07-context/repo-context-pack.json',
     ROOT_SCORE,
@@ -79,6 +86,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '06-client-handoff/CLIENT_HANDOFF_REPORT.md',
     '06-client-handoff/CLIENT_HANDOFF_REPORT.html',
     '06-client-handoff/EXECUTIVE_SUMMARY.md',
+    REPOSITORY_HEALTH,
     '07-context/REPO_CONTEXT_PACK.md',
     ROOT_SCORE,
   ],
@@ -87,6 +95,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '05-ai-act-readiness/AI_ACT_READINESS_CHECKLIST.md',
     '05-ai-act-readiness/USER_FACING_DISCLOSURE_NOTES.md',
     '05-ai-act-readiness/LEGAL_REVIEW_QUESTIONS.md',
+    REPOSITORY_HEALTH,
     ROOT_SCORE,
   ],
   'mcp-readiness': [
@@ -94,6 +103,7 @@ const GOAL_OUTPUT_PATHS: Record<ShipSealPackageId, string[]> = {
     '03-mcp-governance/MCP_SECURITY_POLICY.md',
     '03-mcp-governance/MCP_SERVER_RECOMMENDATIONS.md',
     '03-mcp-governance/MCP_TOOL_ALLOWLIST.md',
+    REPOSITORY_HEALTH,
     '07-context/REPO_CONTEXT_PACK.md',
     '07-context/repo-context-pack.json',
     ROOT_SCORE,

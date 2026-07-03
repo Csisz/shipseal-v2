@@ -143,7 +143,22 @@ describe('Repository Health report and score.json integration', () => {
       categories: scoreJson.categories,
     });
     expect(scoreJson.repositoryHealth).toEqual(report.repositoryHealth);
+    expect(scoreJson.repoContextPack).toMatchObject({
+      repositoryHealthScore: report.repositoryHealth.overall.score,
+      repositoryHealthStatus: report.repositoryHealth.overall.status,
+      repositoryHealthConfidence: report.repositoryHealth.overall.confidence,
+      contextWasteRiskScore: report.repositoryHealth.dimensions.contextWaste.riskScore,
+    });
+    expect(scoreJson.deliveryPackManifest).toEqual({
+      schemaVersion: 2,
+      repositoryHealthFile: '07-context/REPOSITORY_HEALTH.md',
+      repositoryHealthModelVersion: report.repositoryHealth.modelVersion,
+      repositoryHealthScore: report.repositoryHealth.overall.score,
+      repositoryHealthStatus: report.repositoryHealth.overall.status,
+      repositoryHealthConfidence: report.repositoryHealth.overall.confidence,
+    });
     expect(scoreJson.generatedFiles).toContain('score.json');
+    expect(scoreJson.generatedFiles).toContain('07-context/REPOSITORY_HEALTH.md');
   });
 
   it('places schema v2, legacy readiness, and Repository Health inside nested Delivery Pack score.json content', async () => {

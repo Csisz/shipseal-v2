@@ -1,4 +1,5 @@
 import type { AgentPackFile, MCPPolicyFile } from '../types';
+import type { RepositoryHealthModel } from '../repositoryHealth';
 import { normalizeProjectIntake } from '../intake';
 import type { PartialProjectIntake, ProjectIntake } from '../intake';
 import { generateAiActReadinessFiles } from './aiActReadiness';
@@ -26,6 +27,7 @@ export interface BuildDeliveryPackFilesInput {
   contextFiles?: { markdown: string; json: unknown };
   repositoryName?: string;
   scoreJson?: unknown;
+  repositoryHealth?: RepositoryHealthModel;
   intake?: PartialProjectIntake;
   manifest?: DeliveryPackManifest;
   selectedPackages?: string[];
@@ -55,6 +57,7 @@ export function buildDeliveryPackFiles(input: BuildDeliveryPackFilesInput): Deli
       folderAgentFiles,
       intake,
       scoreJson: input.scoreJson,
+      repositoryHealth: input.repositoryHealth,
     });
 
     return {
@@ -122,6 +125,7 @@ function resolveSourceContent(
     folderAgentFiles?: Record<string, string>;
     intake: ProjectIntake;
     scoreJson?: unknown;
+    repositoryHealth?: RepositoryHealthModel;
   }
 ): string | unknown {
   const projectName = input.intake.projectName;
@@ -181,7 +185,11 @@ function resolveSourceContent(
   if (path === '06-client-handoff/CLIENT_HANDOFF_REPORT.html') return generateClientReportHtml({ intake: input.intake, scoreJson: input.scoreJson });
   if (path === '06-client-handoff/EXECUTIVE_SUMMARY.md') return clientHandoffFiles.executiveSummary;
   if (path === '06-client-handoff/NEXT_STEPS_ROADMAP.md') return clientHandoffFiles.nextStepsRoadmap;
-  if (path === '06-client-handoff/DELIVERY_MANIFEST.md') return deliveryManifest(projectName, input.scoreJson);
+  if (path === '06-client-handoff/DELIVERY_MANIFEST.md') return deliveryManifest(projectName, input.scoreJson, input.repositoryHealth);
+
+  if (path === '07-context/REPOSITORY_HEALTH.md') {
+    return repositoryHealthMarkdown(projectName, resolveRepositoryHealth(input.repositoryHealth, input.scoreJson));
+  }
 
   if (path === '07-context/REPO_CONTEXT_PACK.md') {
     return input.contextFiles?.markdown || markdownPlaceholder('REPO_CONTEXT_PACK.md', projectName, [
@@ -364,7 +372,7 @@ function disclosureNotes(projectName: string, intake: ProjectIntake) {
   ].join('\n');
 }
 
-function deliveryManifest(projectName: string, scoreJson: unknown) {
+function deliveryManifest(projectName: string, scoreJson: unknown, repositoryHealthInput?: RepositoryHealthModel) {
   const score = scoreJson && typeof scoreJson === 'object' ? scoreJson as Record<string, unknown> : {};
   const focus = score.deliveryPackFocus && typeof score.deliveryPackFocus === 'object'
     ? score.deliveryPackFocus as Record<string, unknown>
@@ -381,6 +389,7 @@ function deliveryManifest(projectName: string, scoreJson: unknown) {
   const analyzedFiles = numberOrUnknown(evidence.analyzedFileCount);
   const discoveredFiles = numberOrUnknown(evidence.discoveredFileCount);
   const warningCount = numberOrUnknown(evidence.warningCount);
+  const repositoryHealth = resolveRepositoryHealth(repositoryHealthInput, scoreJson);
 
   return [
     `# Delivery Manifest - ${projectName}`,
@@ -394,6 +403,12 @@ function deliveryManifest(projectName: string, scoreJson: unknown) {
     `Output count: ${typeof score.outputCount === 'number' ? score.outputCount : files.length}`,
     `Readiness score: ${readinessScore}`,
     `Readiness decision: ${readinessDecision}`,
+    `Manifest schema version: 2`,
+    `Repository Health file: 07-context/REPOSITORY_HEALTH.md`,
+    `Repository Health score: ${healthScore(repositoryHealth)}`,
+    `Repository Health status: ${healthStatus(repositoryHealth)}`,
+    `Repository Health confidence: ${healthConfidence(repositoryHealth)}`,
+    `Repository Health model: ${healthModelVersion(repositoryHealth)}`,
     '',
     '## Scan Evidence',
     `- Source: ${sourceType}`,
@@ -406,6 +421,120 @@ function deliveryManifest(projectName: string, scoreJson: unknown) {
     ...(files.length ? files.map(file => `- ${file}`) : ['- score.json']),
     '',
   ].join('\n');
+}
+
+function repositoryHealthMarkdown(projectName: string, health: Record<string, unknown>) {
+  const dimensions = asRecord(health.dimensions);
+  const contextWaste = asRecord(dimensions.contextWaste);
+  const blockers = arrayValue(health.blockers)
+    .map(blocker => asRecord(blocker))
+    .map(blocker => {
+      const title = stringField(blocker, 'title') || 'Repository Health blocker';
+      const detail = stringField(blocker, 'detail');
+      const evidence = arrayValue(blocker.evidence).map(value => String(value)).slice(0, 3);
+      return [
+        `- **${title}:** ${detail || 'Review blocker evidence.'}`,
+        ...evidence.map(item => `  - Evidence: ${item}`),
+      ].join('\n');
+    });
+  const topActions = arrayValue(health.topActions)
+    .map(action => asRecord(action))
+    .slice(0, 8)
+    .map(action => {
+      const title = stringField(action, 'title') || 'Repository Health improvement';
+      const why = stringField(action, 'whyItMatters');
+      const next = stringField(action, 'action');
+      const priority = stringField(action, 'priority') || 'Medium';
+      const evidence = arrayValue(action.evidence).map(value => String(value)).slice(0, 3);
+      return [
+        `- **${title}** (${priority} priority)`,
+        why ? `  - Why it matters: ${why}` : '',
+        next ? `  - Action: ${next}` : '',
+        ...evidence.map(item => `  - Evidence: ${item}`),
+      ].filter(Boolean).join('\n');
+    });
+  const measurementBoundary = arrayValue(health.measurementBoundary).map(value => String(value));
+
+  return [
+    `# Repository Health - ${projectName}`,
+    '',
+    'Generated by ShipSeal.',
+    '',
+    'Repository Health is ShipSeal\'s primary AI Repository Intelligence summary. It is based on deterministic static scan signals and does not execute repository code.',
+    '',
+    '## Overall',
+    `- Score: ${healthScore(health)}`,
+    `- Status: ${healthStatus(health)}`,
+    `- Confidence: ${healthConfidence(health)}`,
+    `- Model: ${healthModelVersion(health)} (${stringField(health, 'measurementMethod') || 'deterministic-static-scan'})`,
+    `- Context Waste Risk: ${scoreValue(contextWaste.riskScore)}`,
+    `- Context efficiency score: ${scoreValue(contextWaste.contextEfficiencyScore)}`,
+    '',
+    '## Dimensions',
+    ...healthDimensionLines(health),
+    '',
+    '## Blockers',
+    ...(blockers.length ? blockers : ['- None detected from Repository Health signals.']),
+    '',
+    '## Top Repository Improvements',
+    ...(topActions.length ? topActions : ['- No Repository Health improvements available.']),
+    '',
+    '## Measurement Boundary',
+    ...(measurementBoundary.length ? measurementBoundary.map(item => `- ${item}`) : ['- No measurement boundary notes available.']),
+    '',
+    '## Supporting Delivery Signals',
+    '- Legacy readiness, AI Act readiness, testing, MCP, and client handoff outputs remain available elsewhere in this Delivery Pack.',
+    '- Treat this assessment as static repository intelligence, not legal advice.',
+    '',
+  ].join('\n');
+}
+
+function resolveRepositoryHealth(repositoryHealth: RepositoryHealthModel | undefined, scoreJson: unknown): Record<string, unknown> {
+  if (repositoryHealth) return repositoryHealth as unknown as Record<string, unknown>;
+  const score = scoreJson && typeof scoreJson === 'object' ? scoreJson as Record<string, unknown> : {};
+  return asRecord(score.repositoryHealth);
+}
+
+function healthDimensionLines(health: Record<string, unknown>) {
+  const dimensions = asRecord(health.dimensions);
+  return [
+    ['Repository intelligence', asRecord(dimensions.repositoryIntelligence), 'score'],
+    ['Context waste', asRecord(dimensions.contextWaste), 'riskScore'],
+    ['AI development readiness', asRecord(dimensions.aiDevelopmentReadiness), 'score'],
+    ['Agent routing', asRecord(dimensions.agentRouting), 'score'],
+    ['Delivery confidence', asRecord(dimensions.deliveryConfidence), 'score'],
+  ].map(([label, dimension, scoreKey]) => {
+    const record = dimension as Record<string, unknown>;
+    return `- ${label}: ${scoreValue(record[scoreKey as string])}; confidence ${stringField(record, 'confidence') || 'unknown'}`;
+  });
+}
+
+function healthScore(health: Record<string, unknown>) {
+  return scoreValue(asRecord(health.overall).score);
+}
+
+function healthStatus(health: Record<string, unknown>) {
+  return stringField(asRecord(health.overall), 'status') || 'Not available';
+}
+
+function healthConfidence(health: Record<string, unknown>) {
+  return stringField(asRecord(health.overall), 'confidence') || 'Not available';
+}
+
+function healthModelVersion(health: Record<string, unknown>) {
+  return stringField(health, 'modelVersion') || 'Not available';
+}
+
+function scoreValue(value: unknown) {
+  return typeof value === 'number' ? `${value}/100` : 'Not available';
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function arrayValue(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
 function stringField(record: Record<string, unknown>, key: string) {
