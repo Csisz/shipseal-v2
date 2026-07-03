@@ -7,6 +7,7 @@ import type {
   ScoreCategory,
   ScoreItem,
 } from './types';
+import { detectEntryPointCandidates, detectSourceFolders } from './sourceDetection';
 
 const STACK_CONFIG_FILES = [
   'package.json', 'tsconfig.json', 'pyproject.toml', 'requirements.txt',
@@ -109,7 +110,8 @@ export function scoreRepo(input: RepoScanInput, stack: DetectedStack): ScoringRe
   const pkg = (() => { try { return JSON.parse(input.textContents['package.json'] || 'null'); } catch { return null; } })();
   const scripts = pkg?.scripts || {};
   const hasStackConfig = STACK_CONFIG_FILES.some(p => has(p));
-  const hasSourceDir = SOURCE_DIRS.some(hasDir);
+  const sourceFolders = detectSourceFolders(input);
+  const hasSourceDir = SOURCE_DIRS.some(hasDir) || sourceFolders.length > 0;
   const hasCi = anyMatch(/\.github\/workflows\/.+\.ya?ml$/);
   const hasTests = anyMatch(/(\.test\.|\.spec\.|__tests__\/|tests?\/)/i) || !!scripts.test;
   const hasLint = !!scripts.lint || has('.eslintrc') || has('.eslintrc.json') || has('eslint.config.js') || has('eslint.config.ts');
@@ -195,7 +197,7 @@ export function scoreRepo(input: RepoScanInput, stack: DetectedStack): ScoringRe
 
   // ---------- Category 5: Token efficiency & context engineering (15) ----------
   const ignorable = !generatedFiles.length || gitignore.includes('node_modules');
-  const entryPoints = anyMatch(/(src\/(index|main)\.[tj]sx?|app\/page\.[tj]sx?|main\.py|cmd\/.+\/main\.go)$/);
+  const entryPoints = detectEntryPointCandidates(input).length > 0;
   const c5 = category('tokens', 'Token efficiency & context engineering',
     'Keep agent context tight: small surface area, clear entry points.',
     [

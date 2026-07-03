@@ -223,7 +223,8 @@ describe('public GitHub import helpers', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/github-app/archive?installationId=12345&owner=Csisz&repo=shipseal&ref=main', { method: 'GET', redirect: 'follow' });
     expect(imported.file.name).toBe('Csisz-shipseal-main.zip');
     expect(imported.source).toMatchObject({
-      sourceType: 'github-url',
+      sourceType: 'github-app',
+      originalSourceType: 'github-url',
       githubOwner: 'Csisz',
       githubRepo: 'shipseal',
       githubBranch: 'main',

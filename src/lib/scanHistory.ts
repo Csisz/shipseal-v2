@@ -21,7 +21,7 @@ function safeParse(value: string | null): ScanHistoryItem[] {
       .map(item => ({
         repositoryName: item.repositoryName,
         timestamp: item.timestamp,
-        sourceType: item.sourceType === 'github-url' ? 'github-url' : item.sourceType === 'github-public' ? 'github-public' : item.sourceType === 'zip-upload' ? 'zip-upload' : undefined,
+        sourceType: item.sourceType === 'github-app' ? 'github-app' : item.sourceType === 'github-url' ? 'github-url' : item.sourceType === 'github-public' ? 'github-public' : item.sourceType === 'zip-upload' ? 'zip-upload' : undefined,
         githubOwner: typeof item.githubOwner === 'string' ? item.githubOwner : undefined,
         githubRepo: typeof item.githubRepo === 'string' ? item.githubRepo : undefined,
         githubBranch: typeof item.githubBranch === 'string' ? item.githubBranch : undefined,

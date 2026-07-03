@@ -22,12 +22,19 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('<!doctype html>');
     expect(html).toContain('ShipSeal');
     expect(html).toContain(SAMPLE_PROJECT_INTAKE.projectName);
-    expect(html).toContain('Readiness score');
+    expect(html).toContain('Repository Health');
+    expect(html).toContain('Repository Health summary');
+    expect(html).toContain('Repository Health dimensions');
+    expect(html).toContain('Repository evidence');
+    expect(html).toContain('Top repository improvements');
+    expect(html).toContain('Measurement boundary');
+    expect(html).toContain('Legacy readiness score');
     expect(html).toContain('class="score-number"');
     expect(html).toContain('class="score-denominator"');
-    expect(html).toContain('Readiness decision');
+    expect(html).toContain('Legacy readiness decision');
+    expect(html).toContain('Delivery and verification signals');
     expect(html).toContain('AI Act readiness pre-screen');
-    expect(html).toContain('Testing and eval summary');
+    expect(html).toContain('Delivery and verification signals');
     expect(html).toContain('Generated file list');
     expect(html).toContain('Full ShipSeal overview');
     expect(html).toContain('06-client-handoff/CLIENT_HANDOFF_REPORT.html');
@@ -39,6 +46,64 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).not.toContain('Human approval was not indicated');
     expect(html).not.toContain('Enterprise MCP Ready');
     expect(html).toContain('@page');
+  });
+
+  it('uses ReadinessReport.repositoryHealth as the primary source when supplied', () => {
+    const report = buildSampleProjectReadinessReport();
+    const scoreJson = buildScoreJson(report);
+    const html = generateClientReportHtml({
+      intake: SAMPLE_PROJECT_INTAKE,
+      report: {
+        ...report,
+        repositoryHealth: {
+          ...report.repositoryHealth,
+          overall: {
+            score: 41,
+            status: 'High agent friction',
+            confidence: 'Low',
+          },
+        },
+      },
+      scoreJson: {
+        ...scoreJson,
+        repositoryHealth: {
+          ...scoreJson.repositoryHealth,
+          overall: {
+            score: 99,
+            status: 'AI-ready workspace',
+            confidence: 'High',
+          },
+        },
+      },
+    });
+
+    expect(html).toContain('41');
+    expect(html).toContain('High agent friction');
+    expect(html).toContain('Low confidence');
+    expect(html).not.toContain('AI-ready workspace');
+  });
+
+  it('falls back to score.json Repository Health for generated Delivery Pack HTML', () => {
+    const report = buildSampleProjectReadinessReport();
+    const scoreJson = {
+      ...buildScoreJson(report),
+      repositoryHealth: {
+        ...report.repositoryHealth,
+        overall: {
+          score: 58,
+          status: 'Fragmented workspace',
+          confidence: 'Medium',
+        },
+      },
+    };
+    const html = generateClientReportHtml({
+      intake: SAMPLE_PROJECT_INTAKE,
+      scoreJson,
+    });
+
+    expect(html).toContain('58');
+    expect(html).toContain('Fragmented workspace');
+    expect(html).toContain('Medium confidence');
   });
 
   it('uses cautious wording when human approval is unknown or not provided', () => {
@@ -166,7 +231,7 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('ShipSeal');
     expect(html).toContain(SAMPLE_PROJECT_INTAKE.projectName);
     expect(html).toContain('AI Act readiness pre-screen');
-    expect(html).toContain('Testing and eval summary');
+    expect(html).toContain('Delivery and verification signals');
     expect(html).toContain('ShipSeal does not provide legal advice');
     expect(html).toContain('MCP readiness is a separate governance dimension');
   });

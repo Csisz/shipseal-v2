@@ -33,6 +33,8 @@ function healthyRepo(extraPaths: string[] = [], extraText: Record<string, string
     'README.md',
     'AGENTS.md',
     'src/AGENTS.md',
+    'docs/AGENTS.md',
+    'tests/AGENTS.md',
     'src/main.tsx',
     'src/App.test.tsx',
     'package.json',
@@ -53,6 +55,8 @@ function healthyRepo(extraPaths: string[] = [], extraText: Record<string, string
     'README.md': '# Fixture\n\nOverview and setup.\n',
     'AGENTS.md': '# Agent instructions\n\nRun tests and review critical files.\n',
     'src/AGENTS.md': '# Source instructions\n',
+    'docs/AGENTS.md': '# Docs instructions\n',
+    'tests/AGENTS.md': '# Test instructions\n',
     'package.json': packageJson,
     '.gitignore': 'node_modules\ndist\nbuild\ncoverage\n.env\n',
     '.env.example': 'VITE_API_URL=\n',
@@ -146,6 +150,76 @@ describe('Repository Health pure core', () => {
     expect(result.dimensions.agentRouting.signals.find(signal => signal.id === 'route.task-router')?.status).toBe('pass');
   });
 
+  it('recognizes a top-level Python package as a source folder and importable package', () => {
+    const extracted = extractRepositoryHealthSignals(repo([
+      'README.md',
+      'pyproject.toml',
+      'contentflow_ai/__init__.py',
+      'contentflow_ai/routes.py',
+      'contentflow_ai/services.py',
+      'tests/test_routes.py',
+    ], {
+      'README.md': '# ContentFlow\n',
+      'pyproject.toml': '[project]\ndependencies = ["flask"]\n',
+    }));
+
+    expect(extracted.sourceFolders).toContain('contentflow_ai');
+    expect(extracted.files.find(file => file.path === 'tests/test_routes.py')?.kind).toBe('test');
+    expect(extracted.signals.find(signal => signal.id === 'repo.source-map')?.evidence.join('\n')).toContain('contentflow_ai');
+  });
+
+  it('recognizes a src/package Python layout as a source folder', () => {
+    const extracted = extractRepositoryHealthSignals(repo([
+      'README.md',
+      'pyproject.toml',
+      'src/contentflow_ai/__init__.py',
+      'src/contentflow_ai/app.py',
+      'tests/test_app.py',
+    ], {
+      'README.md': '# ContentFlow\n',
+      'pyproject.toml': '[project]\ndependencies = ["flask"]\n',
+      'src/contentflow_ai/app.py': 'from flask import Flask\napp = Flask(__name__)\n',
+    }));
+
+    expect(extracted.sourceFolders).toContain('src/contentflow_ai');
+    expect(extracted.entryPointCandidates).toContain('src/contentflow_ai/app.py');
+  });
+
+  it('detects deterministic Python entry-point candidates without claiming execution validity', () => {
+    const extracted = extractRepositoryHealthSignals(repo([
+      'pyproject.toml',
+      'contentflow_ai/__init__.py',
+      'contentflow_ai/app_factory.py',
+      'contentflow_ai/cli.py',
+    ], {
+      'pyproject.toml': '[project.scripts]\ncontentflow = "contentflow_ai.cli:main"\n',
+      'contentflow_ai/app_factory.py': 'from flask import Flask\n\ndef create_app():\n    return Flask(__name__)\n',
+    }));
+
+    expect(extracted.entryPointCandidates).toEqual(expect.arrayContaining([
+      'contentflow_ai/app_factory.py',
+      'contentflow_ai/cli.py',
+      'pyproject.toml: contentflow -> contentflow_ai.cli:main',
+    ]));
+  });
+
+  it('distinguishes an importable Python package from a missing executable entry point', () => {
+    const result = scoreRepositoryHealth(repo([
+      'README.md',
+      'pyproject.toml',
+      'contentflow_ai/__init__.py',
+      'contentflow_ai/domain.py',
+    ], {
+      'README.md': '# ContentFlow\n',
+      'pyproject.toml': '[project]\ndependencies = ["flask"]\n',
+    }));
+    const signal = result.dimensions.agentRouting.signals.find(item => item.id === 'route.entry-point-clarity');
+
+    expect(signal?.status).toBe('fail');
+    expect(signal?.evidence.join('\n')).toContain('Importable source package or source folder detected: contentflow_ai');
+    expect(signal?.evidence.join('\n')).toContain('Executable entry point not detected');
+  });
+
   it('flags entry-point ambiguity when too many entry candidates exist', () => {
     const ambiguous = healthyRepo([
       'src/index.ts',
@@ -205,6 +279,82 @@ describe('Repository Health pure core', () => {
     ];
 
     expect(allSignals.filter(signal => signal.status === 'fail').every(hasRecommendationForFailedSignal)).toBe(true);
+  });
+
+  it('does not recommend package.json for a Python-only project without package.json', () => {
+    const result = scoreRepositoryHealth(repo([
+      'README.md',
+      'pyproject.toml',
+      'requirements.txt',
+      'contentflow_ai/__init__.py',
+      'contentflow_ai/app.py',
+      'tests/test_app.py',
+    ], {
+      'README.md': '# ContentFlow\n',
+      'pyproject.toml': '[project]\ndependencies = ["flask"]\n',
+      'requirements.txt': 'flask\n',
+    }));
+    const serializedActions = JSON.stringify(result.topActions);
+
+    expect(serializedActions).not.toContain('package.json');
+    expect(result.topActions.some(action => ['pyproject.toml', 'requirements.txt', 'README.md'].includes(action.suggestedTargetPath || ''))).toBe(true);
+  });
+
+  it('keeps package.json guidance for JavaScript projects when appropriate', () => {
+    const result = scoreRepositoryHealth(repo(['README.md', 'package.json', 'src/main.ts'], {
+      'README.md': '# App\n',
+      'package.json': JSON.stringify({ scripts: { build: 'vite build' }, dependencies: { vite: '^5.4.0' } }),
+    }));
+
+    expect(result.topActions.map(action => action.suggestedTargetPath)).toContain('package.json');
+  });
+
+  it('merges duplicate root AGENTS.md recommendations into one top action', () => {
+    const result = scoreRepositoryHealth(repo(['README.md', 'package.json', 'src/main.ts'], {
+      'README.md': '# App\n',
+      'package.json': JSON.stringify({ scripts: { test: 'vitest' } }),
+    }));
+    const agentsActions = result.topActions.filter(action => action.suggestedTargetPath === 'AGENTS.md');
+
+    expect(agentsActions).toHaveLength(1);
+    expect(agentsActions[0].id).toBe('root-agent-instructions');
+    expect(agentsActions[0].dimensions).toEqual(expect.arrayContaining(['repositoryIntelligence', 'agentRouting']));
+  });
+
+  it('scores folder-instruction coverage as pass, fail, partial, and not-applicable', () => {
+    const pass = scoreRepositoryHealth(repo([
+      'README.md', 'AGENTS.md', 'src/AGENTS.md', 'docs/AGENTS.md', 'src/main.ts', 'docs/README.md',
+    ], { 'README.md': '# App\n', 'AGENTS.md': '# Root\n', 'src/AGENTS.md': '# Src\n', 'docs/AGENTS.md': '# Docs\n', 'docs/README.md': '# Docs\n' }));
+    const fail = scoreRepositoryHealth(repo([
+      'README.md', 'AGENTS.md', 'src/main.ts', 'docs/README.md', 'tests/app.test.ts',
+    ], { 'README.md': '# App\n', 'AGENTS.md': '# Root\n', 'docs/README.md': '# Docs\n' }));
+    const partial = scoreRepositoryHealth(repo([
+      'README.md', 'AGENTS.md', 'src/AGENTS.md', 'src/main.ts', 'docs/README.md', 'tests/app.test.ts',
+    ], { 'README.md': '# App\n', 'AGENTS.md': '# Root\n', 'src/AGENTS.md': '# Src\n', 'docs/README.md': '# Docs\n' }));
+    const notApplicable = scoreRepositoryHealth(repo([
+      'README.md', 'AGENTS.md', 'src/main.ts',
+    ], { 'README.md': '# Small\n', 'AGENTS.md': '# Root\n' }));
+
+    expect(pass.dimensions.agentRouting.signals.find(signal => signal.id === 'route.folder-instructions')?.status).toBe('pass');
+    expect(fail.dimensions.agentRouting.signals.find(signal => signal.id === 'route.folder-instructions')?.status).toBe('fail');
+    expect(partial.dimensions.agentRouting.signals.find(signal => signal.id === 'route.folder-instructions')?.status).toBe('partial');
+    expect(notApplicable.dimensions.agentRouting.signals.find(signal => signal.id === 'route.folder-instructions')?.status).toBe('not-applicable');
+  });
+
+  it('scores compact context anchors from actual detected anchors', () => {
+    const oneAnchor = scoreRepositoryHealth(repo(['README.md', 'src/main.ts'], { 'README.md': '# App\n' }));
+    const twoAnchors = scoreRepositoryHealth(repo(['README.md', 'AGENTS.md', 'src/main.ts'], {
+      'README.md': '# App\n',
+      'AGENTS.md': '# Root agent guidance\n',
+    }));
+    const oneAnchorSignal = oneAnchor.dimensions.contextWaste.signals.find(signal => signal.id === 'waste.compact-anchor-missing');
+    const twoAnchorSignal = twoAnchors.dimensions.contextWaste.signals.find(signal => signal.id === 'waste.compact-anchor-missing');
+
+    expect(oneAnchorSignal?.status).toBe('partial');
+    expect(oneAnchorSignal?.evidence.join('\n')).toContain('README/project overview');
+    expect(oneAnchorSignal?.evidence.join('\n')).not.toContain('task router');
+    expect(twoAnchorSignal?.status).toBe('pass');
+    expect(twoAnchorSignal?.evidence.join('\n')).toContain('root agent instructions');
   });
 
   it('orders top actions by priority, potential gain, and stable id', () => {

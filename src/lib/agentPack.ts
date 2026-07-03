@@ -13,15 +13,49 @@ import type {
 import { buildRepositorySummary } from './repositorySummary';
 import { isGeneratedOrVendorPath } from './scannerLimits';
 import { displayReadinessLevel } from './uiCopy';
+import { detectEntryPointCandidates } from './sourceDetection';
 
 function pickPm(stack: DetectedStack): string {
-  return stack.packageManagers[0] || 'npm';
+  return stack.packageManagers[0] || 'not detected';
 }
 
 function runCmd(stack: DetectedStack, script: string): string {
   const pm = pickPm(stack);
+  if (pm === 'not detected') return '';
   if (pm === 'npm') return `npm run ${script}`;
   return `${pm} ${script}`;
+}
+
+function detectedCommand(stack: DetectedStack, label: string): string | undefined {
+  return stack.runCommands.find(command => command.label.toLowerCase() === label.toLowerCase())?.cmd;
+}
+
+function verificationCommandList(stack: DetectedStack): string {
+  return stack.runCommands.length
+    ? stack.runCommands.map(c => `- **${c.label}:** \`${c.cmd}\``).join('\n')
+    : '- No verified test, build, lint, or typecheck command was detected from repository files.';
+}
+
+function verificationChecklist(stack: DetectedStack): string {
+  const labels = ['Lint', 'Typecheck', 'Test', 'Build'];
+  return labels.map(label => {
+    const command = detectedCommand(stack, label);
+    return command
+      ? `- [ ] \`${command}\` passes`
+      : `- [ ] Manually verify the ${label.toLowerCase()} command; none was detected by ShipSeal.`;
+  }).join('\n');
+}
+
+function commandReference(stack: DetectedStack, label: string): string {
+  const command = detectedCommand(stack, label);
+  return command ? `\`${command}\`` : 'the verified repository command after it is documented';
+}
+
+function commandDocumentationTargets(stack: DetectedStack): string {
+  const pythonOnly = stack.languages.includes('Python') && !stack.languages.some(language => ['JavaScript', 'TypeScript'].includes(language));
+  return pythonOnly
+    ? 'pyproject.toml, Makefile, CI, or development docs'
+    : 'package.json, pyproject.toml, Makefile, CI, or development docs';
 }
 
 export function buildContextPack(input: RepoScanInput, stack: DetectedStack): string {
@@ -33,10 +67,7 @@ export function buildContextPack(input: RepoScanInput, stack: DetectedStack): st
     if (top && !top.startsWith('.')) topDirs.add(top);
   }
 
-  const entryPoints = input.files
-    .filter(f => !f.ignored && !isGeneratedOrVendorPath(f.path) && /(src\/(index|main)\.[tj]sx?|app\/page\.[tj]sx?|main\.py|cmd\/.+\/main\.go)$/.test(f.path))
-    .slice(0, 5)
-    .map(f => f.path);
+  const entryPoints = detectEntryPointCandidates(input).slice(0, 5);
 
   return [
     `# Repo Context Pack - ${input.repoName}`,
@@ -60,9 +91,7 @@ export function buildContextPack(input: RepoScanInput, stack: DetectedStack): st
     entryPoints.length ? entryPoints.map(e => `- ${e}`).join('\n') : '- (none auto-detected)',
     '',
     '## Suggested run commands',
-    stack.runCommands.length
-      ? stack.runCommands.map(c => `- **${c.label}:** \`${c.cmd}\``).join('\n')
-      : '- (none auto-detected)',
+    verificationCommandList(stack),
   ].join('\n');
 }
 
@@ -88,12 +117,15 @@ export function buildAgentPack(
   const scriptsList = Object.entries(stack.scripts)
     .map(([name, command]) => `- \`${name}\`: \`${command}\``)
     .join('\n') || '- No package scripts detected.';
+  const commandsList = verificationCommandList(stack);
   const foldersList = summary.keyFolders.map(folder => `- \`${folder}/\``).join('\n') || '- No standard key folders detected.';
   const blockersList = meta.blockers.map(blocker => `- **${blocker.title}:** ${blocker.detail}`).join('\n') || '- None.';
   const improvementsList = meta.improvements.slice(0, 10).map(improvement => `- **${improvement.title}:** ${improvement.detail}`).join('\n') || '- None.';
   const readinessLine = meta.isReady
     ? 'Your repository is AI Coding Ready.'
-    : 'This repository needs blocker remediation before it is AI Coding Ready.';
+    : meta.blockers.length
+      ? 'This repository needs blocker remediation before it is AI Coding Ready.'
+      : 'No critical blocker was detected, but the repository has not reached the AI Coding Ready score threshold.';
   const readinessLevel = displayReadinessLevel(meta.level);
   const source = input.source || { sourceType: 'zip-upload' as const };
   const sourceLines = [
@@ -128,7 +160,10 @@ ${foldersList}
 ${scriptsList}
 
 ## 5. Allowed commands
-${stack.runCommands.map(c => `- **${c.label}:** \`${c.cmd}\``).join('\n') || `- Install: \`${pm} install\``}
+${commandsList}
+
+### Manual verification placeholders
+${stack.runCommands.length ? '- Use the detected commands above; add missing commands to repository docs before relying on them.' : `- No verified test, build, lint, or typecheck command was detected. Add the repository-specific command to ${commandDocumentationTargets(stack)} before asking agents to rely on it.`}
 
 ## 6. Current readiness status
 ${readinessLine}
@@ -155,10 +190,7 @@ ${improvementsList}
 - Lock files unless explicitly asked to update dependencies.
 
 ## 9. Testing checklist
-- [ ] ${runCmd(stack, 'lint')} passes
-- [ ] ${runCmd(stack, 'typecheck')} passes (if applicable)
-- [ ] ${runCmd(stack, 'test')} passes
-- [ ] ${runCmd(stack, 'build')} succeeds
+${verificationChecklist(stack)}
 
 ## 10. PR / self-review checklist
 - [ ] Change is scoped and reversible
@@ -194,7 +226,7 @@ A task is done only when: tests pass, lint/typecheck pass, build succeeds, and t
 ## Hard rules
 - Never read or modify secrets (\`.env\`, key files).
 - Never run destructive shell commands (\`rm -rf\`, force pushes, db drops).
-- After every code change, run: \`${runCmd(stack, 'test')}\` and \`${runCmd(stack, 'build')}\`.
+- After every code change, run detected verification commands when available: ${stack.runCommands.map(command => `\`${command.cmd}\``).join(', ') || 'none detected; document the repository-specific checks first'}.
 
 ## Tone
 Be concise. Show diffs, not full files. Ask before large refactors.
@@ -205,13 +237,13 @@ ${claudeEnhancement}
   const codexMd = `# CODEX_PROMPTS.md - Reusable prompts
 
 ## Implement a feature
-> You are working in ${repoName} (${stack.primary}, ${summary.packageManager}). Read AGENTS.md first. Implement <FEATURE> with the smallest viable change. Start in these folders when relevant: ${summary.keyFolders.join(', ') || 'repository root'}. After editing, run \`${runCmd(stack, 'test')}\` and \`${runCmd(stack, 'build')}\` and report results.
+> You are working in ${repoName} (${stack.primary}, ${summary.packageManager}). Read AGENTS.md first. Implement <FEATURE> with the smallest viable change. Start in these folders when relevant: ${summary.keyFolders.join(', ') || 'repository root'}. After editing, run ${commandReference(stack, 'Test')} and ${commandReference(stack, 'Build')} when those commands exist, then report results.
 
 ## Debug an issue
-> Reproduce the bug described in <ISSUE>. Identify the root cause by reading the relevant files in \`src/\`. Propose a fix, apply it, and verify with \`${runCmd(stack, 'test')}\`.
+> Reproduce the bug described in <ISSUE>. Identify the root cause by reading the relevant source files. Propose a fix, apply it, and verify with ${commandReference(stack, 'Test')}.
 
 ## Refactor
-> Refactor <MODULE> without changing behavior. Keep public APIs identical. Confirm with \`${runCmd(stack, 'test')}\` and \`${runCmd(stack, 'typecheck')}\`.
+> Refactor <MODULE> without changing behavior. Keep public APIs identical. Confirm with ${commandReference(stack, 'Test')} and ${commandReference(stack, 'Typecheck')}.
 
 ## Write tests
 > Add unit tests for <MODULE> using ${stack.testFrameworks[0] || 'the existing test framework'}. Cover happy path, edge cases, and one failure mode.
@@ -259,7 +291,7 @@ Stack: ${stack.primary}
 
 ## Dependencies
 - Pin versions in lockfiles.
-- Run \`${pm} audit\` (or equivalent) regularly.
+- Run the dependency audit command used by this repository when one is documented.
 
 ## Current ShipSeal security findings
 ${meta.blockers.filter(blocker => blocker.id === 'secrets').map(blocker => `- ${blocker.detail}`).join('\n') || '- No suspicious secret filenames were found in this scan.'}
@@ -281,16 +313,16 @@ Project: ${repoName}
 Stack: ${stack.primary}
 
 ## Unit
-Test pure functions and small modules. Framework: ${stack.testFrameworks[0] || 'pick one (Vitest / Jest / Pytest)'}.
+Test pure functions and small modules. Framework: ${stack.testFrameworks[0] || 'not detected from repository metadata'}.
 
-Detected scripts:
-${scriptsList}
+Detected commands:
+${commandsList}
 
 ## Integration
 Test feature flows that span multiple modules. Mock external services at the edge.
 
 ## End-to-end
-Use ${stack.testFrameworks.includes('Playwright') ? 'Playwright' : 'Playwright or Cypress'} for the critical happy paths only.
+Use the repository's documented end-to-end framework for the critical happy paths only.
 
 ## Smoke
 After every deploy, hit the health endpoint and the top 3 user actions.
@@ -330,7 +362,7 @@ ${stack.languages.includes('JavaScript') || stack.languages.includes('TypeScript
 
 **Score:** ${meta.score}/100
 **Status:** ${readinessLevel}
-${meta.isReady ? '\n> Your repository is **AI Coding Ready**.\n' : '\n> Critical blockers must be resolved before this repo can be AI Coding Ready.\n'}
+${meta.isReady ? '\n> Your repository is **AI Coding Ready**.\n' : meta.blockers.length ? '\n> Critical blockers must be resolved before this repo can be AI Coding Ready.\n' : '\n> No critical blocker was detected, but the repository has not reached the readiness threshold.\n'}
 
 ## Source metadata
 ${sourceLines}
@@ -372,13 +404,15 @@ ${meta.improvements.slice(0, 10).map(i => `- ${i.title} _(${i.category})_`).join
 - Key folders: ${summary.keyFolders.join(', ') || 'n/a'}
 - Existing instruction files: ${summary.instructionFiles.join(', ') || 'none'}
 
-## Detected scripts
-${scriptsList}
+## Detected commands
+${commandsList}
 
 ## Recommended next actions
 ${meta.isReady
   ? '1. Commit the generated Agent Pack to your repo.\n2. Point your agents at AGENTS.md.\n3. Treat optional improvements as nice-to-haves - they do not undermine ready status.'
-  : '1. Resolve every critical blocker listed above.\n2. Re-run ShipSeal to confirm.\n3. Then commit the Agent Pack.'}
+  : meta.blockers.length
+    ? '1. Resolve every critical blocker listed above.\n2. Re-run ShipSeal to confirm.\n3. Then commit the Agent Pack.'
+    : '1. Improve the lowest readiness categories until the score reaches 85.\n2. Document verified commands and agent instructions.\n3. Re-run ShipSeal to confirm the readiness threshold.'}
 
 ## MCP governance notes
 ${mcpNarrative ? `### MCP summary

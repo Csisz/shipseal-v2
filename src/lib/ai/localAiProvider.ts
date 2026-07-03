@@ -94,11 +94,19 @@ export class LocalAIProvider implements AIProvider {
 
     const blockerText = topBlockers.length ? topBlockers.join('; ') : 'score below the AI Coding Ready threshold';
     const minimumActions = input.blockers.length
-      ? input.blockers.slice(0, 3).map(blocker => `Resolve ${blocker.title.toLowerCase()}.`)
-      : ['Raise the deterministic score to at least 85 by improving documentation, verification commands, and agent instructions.'];
+      ? [
+          ...input.blockers.slice(0, 3).map(blocker => `Resolve ${blocker.title.toLowerCase()}.`),
+          'Re-run ShipSeal after remediation and confirm the blockers list is empty.',
+        ]
+      : [
+          'Raise the deterministic score to at least 85 by improving documentation, verification commands, and agent instructions.',
+          'Re-run ShipSeal after score-focused improvements and confirm the readiness threshold.',
+        ];
 
     return {
-      executiveSummary: `${input.repositoryName} is not AI Coding Ready yet (${input.score}/100, ${displayReadinessLevel(input.level)}). The local scan found ${stack} signals, but readiness is blocked by ${blockerText}.`,
+      executiveSummary: input.blockers.length
+        ? `${input.repositoryName} is not AI Coding Ready yet (${input.score}/100, ${displayReadinessLevel(input.level)}). The local scan found ${stack} signals, but readiness is blocked by ${blockerText}.`
+        : `${input.repositoryName} is not AI Coding Ready yet (${input.score}/100, ${displayReadinessLevel(input.level)}). No critical blocker was detected, but the repository has not reached the readiness threshold.`,
       readinessExplanation: `ShipSeal will only mark the repository ready when the deterministic score is at least 85 and criticalBlockers.length is 0. Detected context: ${languages}; frameworks: ${frameworks}; commands: ${commands}. Concrete scan signals: ${concreteSignals}. Uploaded code was not executed during this scan.`,
       blockerExplanation: input.blockers.length
         ? `Minimum path to readiness: ${input.blockers.map(blocker => `${blocker.title} - ${blocker.detail}`).join(' ')}`
@@ -106,7 +114,6 @@ export class LocalAIProvider implements AIProvider {
       improvementPriorities: improvements.length ? improvements : ['Add a README, stack manifest, and safe verification commands.'],
       nextBestActions: [
         ...minimumActions,
-        'Re-run ShipSeal after remediation and confirm the blockers list is empty.',
         'Review MCP Readiness separately before enabling external capability servers.',
       ],
       confidenceNote: CONFIDENCE_NOTE,
@@ -121,7 +128,9 @@ export class LocalAIProvider implements AIProvider {
       : 'none';
     const readyLine = input.isReady
       ? 'The repo is AI Coding Ready; optional improvements should be handled only when they match the task.'
-      : 'The repo is not AI Coding Ready; agents should focus first on clearing deterministic blockers.';
+      : input.blockers.length
+        ? 'The repo is not AI Coding Ready; agents should focus first on clearing deterministic blockers.'
+        : 'The repo is not AI Coding Ready; no critical blocker was detected, but the score still needs improvement.';
 
     return {
       agentsMdEnhancement: `## Repository-specific AI guidance

@@ -1,4 +1,4 @@
-import type { ReadinessReport, RepoFileSummary, RepoScanInput, ScanEvidence, ScanSummary } from './types';
+import type { ReadinessReport, RepoFileSummary, RepoScanInput, ScanEvidence, ScanSourceMetadata, ScanSummary } from './types';
 import { detectStack } from './stack';
 import { evaluateReadiness, scoreRepo } from './scoring';
 import { buildAgentPack } from './agentPack';
@@ -33,34 +33,36 @@ ${narrative.recommendedGovernanceActions.map(action => `- ${action}`).join('\n')
 
 export function buildReport(input: RepoScanInput): ReadinessReport {
   const scannedAt = new Date().toISOString();
-  const stack = detectStack(input);
-  const scoring = scoreRepo(input, stack);
-  if (input.scanSummary?.limited) {
+  const normalizedInput = { ...input, source: normalizeScanSource(input.source) };
+  const stack = detectStack(normalizedInput);
+  const scoring = scoreRepo(normalizedInput, stack);
+  if (normalizedInput.scanSummary?.limited) {
     scoring.score = Math.min(scoring.score, 20);
     if (!scoring.blockers.some(blocker => blocker.id === 'limited-scan')) {
       scoring.blockers.push({
         id: 'limited-scan',
         title: 'Limited scan',
-        detail: input.scanSummary.limitationReason || 'Repository parsing failed, so ShipSeal used deterministic fallback data instead of a complete repository scan.',
+        detail: normalizedInput.scanSummary.limitationReason || 'Repository parsing failed, so ShipSeal used deterministic fallback data instead of a complete repository scan.',
       });
     }
   }
   const readiness = evaluateReadiness(scoring.score, scoring.blockers);
-  const summary = buildRepositorySummary(input, stack);
-  const fileCount = input.files.filter(f => !f.isDir).length;
-  const totalSizeBytes = input.files.reduce((a, f) => a + (f.size || 0), 0);
-  const scanSummary = input.scanSummary || {
+  const summary = buildRepositorySummary(normalizedInput, stack);
+  const fileCount = normalizedInput.files.filter(f => !f.isDir).length;
+  const totalSizeBytes = normalizedInput.files.reduce((a, f) => a + (f.size || 0), 0);
+  const scanSummary = normalizedInput.scanSummary || {
     ...createEmptyScanSummary(),
     totalFilesFound: fileCount,
-    filesAnalyzed: input.files.filter(f => !f.isDir && !isGeneratedOrVendorPath(f.path) && !isBinaryLikePath(f.path)).length,
-    filesIgnored: input.files.filter(f => !f.isDir && (isGeneratedOrVendorPath(f.path) || isBinaryLikePath(f.path))).length,
-    generatedVendorFilesIgnored: input.files.filter(f => !f.isDir && isGeneratedOrVendorPath(f.path)).length,
-    binaryFilesIgnored: input.files.filter(f => !f.isDir && !isGeneratedOrVendorPath(f.path) && isBinaryLikePath(f.path)).length,
-    readableTextBytesAnalyzed: Object.values(input.textContents).reduce((total, text) => total + text.length, 0),
+    filesAnalyzed: normalizedInput.files.filter(f => !f.isDir && !isGeneratedOrVendorPath(f.path) && !isBinaryLikePath(f.path)).length,
+    filesIgnored: normalizedInput.files.filter(f => !f.isDir && (isGeneratedOrVendorPath(f.path) || isBinaryLikePath(f.path))).length,
+    generatedVendorFilesIgnored: normalizedInput.files.filter(f => !f.isDir && isGeneratedOrVendorPath(f.path)).length,
+    binaryFilesIgnored: normalizedInput.files.filter(f => !f.isDir && !isGeneratedOrVendorPath(f.path) && isBinaryLikePath(f.path)).length,
+    readableTextBytesAnalyzed: Object.values(normalizedInput.textContents).reduce((total, text) => total + text.length, 0),
   };
-  const scanEvidence = buildScanEvidence(input, stack, scanSummary);
-  const repositoryHealth = scoreRepositoryHealth({ ...input, scanSummary });
-  const baseMcpReadiness = buildMCPReadinessReport(input, {
+  normalizedInput.scanSummary = scanSummary;
+  const scanEvidence = buildScanEvidence(normalizedInput, stack, scanSummary);
+  const repositoryHealth = scoreRepositoryHealth(normalizedInput);
+  const baseMcpReadiness = buildMCPReadinessReport(normalizedInput, {
     stack,
     summary,
     agentScore: scoring.score,
@@ -69,7 +71,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     criticalBlockers: scoring.blockers,
   });
   const mcpNarrative = localAIProvider.generateMcpGovernanceNarrativeSync({
-    repositoryName: input.repoName,
+    repositoryName: normalizedInput.repoName,
     stack,
     summary,
     agentScore: scoring.score,
@@ -84,7 +86,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     generatedFiles: addMcpNarrativeToPolicyFiles(baseMcpReadiness.generatedFiles, mcpNarrative),
   };
   const aiNarrative = localAIProvider.generateReadinessNarrativeSync({
-    repositoryName: input.repoName,
+    repositoryName: normalizedInput.repoName,
     score: scoring.score,
     level: readiness.level,
     isReady: readiness.isReady,
@@ -97,7 +99,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     scanEvidence,
     mcpReadiness,
   });
-  const repoContextPack = buildRepoContextPack(input, stack, {
+  const repoContextPack = buildRepoContextPack(normalizedInput, stack, {
     summary,
     scanSummary,
     blockers: scoring.blockers,
@@ -106,7 +108,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
   });
   const contextPack = renderRepoContextPackMarkdown(repoContextPack);
   const aiAgentInstructions = localAIProvider.generateAgentInstructionsSync({
-    repositoryName: input.repoName,
+    repositoryName: normalizedInput.repoName,
     score: scoring.score,
     level: readiness.level,
     isReady: readiness.isReady,
@@ -122,7 +124,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     mcpNarrative,
     repoContextPack,
   });
-  const baseAgentPack = buildAgentPack(input, stack, {
+  const baseAgentPack = buildAgentPack(normalizedInput, stack, {
     ...scoring,
     isReady: readiness.isReady,
     scannedAt,
@@ -132,11 +134,11 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
   });
 
   const report: ReadinessReport = {
-    repoName: input.repoName,
+    repoName: normalizedInput.repoName,
     fileCount,
     totalSizeBytes,
     scannedAt,
-    source: input.source || { sourceType: 'zip-upload' },
+    source: normalizedInput.source || { sourceType: 'zip-upload' },
     stack,
     summary,
     categories: scoring.categories,
@@ -154,7 +156,7 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     repositoryHealth,
     scanSummary,
     scanEvidence,
-    sampleFiles: input.files.filter(f => !f.isDir && !f.ignored && !isGeneratedOrVendorPath(f.path) && !isBinaryLikePath(f.path)).slice(0, 30),
+    sampleFiles: normalizedInput.files.filter(f => !f.isDir && !f.ignored && !isGeneratedOrVendorPath(f.path) && !isBinaryLikePath(f.path)).slice(0, 30),
     recommendedAgentOperatingMode: DEFAULT_AGENT_OPERATING_MODE,
   };
 
@@ -162,6 +164,18 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     ...report,
     agentPack: applyAgentOperatingModeToFiles(report, DEFAULT_AGENT_OPERATING_MODE),
   };
+}
+
+function normalizeScanSource(source?: ScanSourceMetadata): ScanSourceMetadata {
+  if (!source) return { sourceType: 'zip-upload' };
+  if (source.githubInstallationId && source.sourceType !== 'github-app') {
+    return {
+      ...source,
+      originalSourceType: source.sourceType,
+      sourceType: 'github-app',
+    };
+  }
+  return source;
 }
 
 function buildScanEvidence(input: RepoScanInput, stack: ReturnType<typeof detectStack>, scanSummary: ScanSummary): ScanEvidence {

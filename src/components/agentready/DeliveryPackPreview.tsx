@@ -55,13 +55,13 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
         </div>
         <div className="flex flex-col sm:flex-row lg:flex-col gap-2">
           <Button
-            onClick={() => downloadPdfReport(report.repoName, normalizedIntake, scoreJson)}
+            onClick={() => downloadPdfReport(report, normalizedIntake, scoreJson)}
             className="bg-gradient-primary border-0 shadow-glow hover:opacity-90"
           >
             <Download className="h-4 w-4 mr-2" /> Download PDF report
           </Button>
           <Button
-            onClick={() => openPrintReadyReport(report.repoName, normalizedIntake, scoreJson)}
+            onClick={() => openPrintReadyReport(report, normalizedIntake, scoreJson)}
             variant="outline"
             className="border-border/80"
           >
@@ -225,8 +225,8 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
   );
 }
 
-function openPrintReadyReport(repositoryName: string, intake: ReturnType<typeof normalizeProjectIntake>, scoreJson: unknown) {
-  const html = generateClientReportHtml({ intake, scoreJson });
+function openPrintReadyReport(report: ReadinessReport, intake: ReturnType<typeof normalizeProjectIntake>, scoreJson: unknown) {
+  const html = generateClientReportHtml({ intake, report, scoreJson });
   const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const opened = window.open(url, '_blank', 'noopener,noreferrer');
@@ -234,16 +234,16 @@ function openPrintReadyReport(repositoryName: string, intake: ReturnType<typeof 
   if (!opened) {
     const link = document.createElement('a');
     link.href = url;
-    link.download = `shipseal-client-report-${repositoryName}.html`;
+    link.download = `shipseal-client-report-${report.repoName}.html`;
     link.click();
   }
 
   window.setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
-async function downloadPdfReport(repositoryName: string, intake: ReturnType<typeof normalizeProjectIntake>, scoreJson: unknown) {
+async function downloadPdfReport(report: ReadinessReport, intake: ReturnType<typeof normalizeProjectIntake>, scoreJson: unknown) {
   try {
-    await downloadClientReportPdf({ intake, scoreJson }, repositoryName);
+    await downloadClientReportPdf({ intake, report, scoreJson }, report.repoName);
   } catch {
     toast({
       title: 'PDF generation failed',

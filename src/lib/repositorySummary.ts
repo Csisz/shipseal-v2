@@ -1,4 +1,5 @@
 import type { DetectedStack, RepoScanInput, RepositorySummary } from './types';
+import { detectSourceFolders } from './sourceDetection';
 
 const KEY_FOLDERS = ['src', 'app', 'pages', 'components', 'lib', 'api', 'server', 'backend', 'docs', 'tests'];
 const INSTRUCTION_FILES = ['AGENTS.md', 'CLAUDE.md', '.cursorrules', 'README.md', 'CONTRIBUTING.md'];
@@ -21,7 +22,7 @@ export function buildRepositorySummary(input: RepoScanInput, stack: DetectedStac
     detectedStack: stack.primary,
     packageManager: stack.packageManagers[0] || 'not detected',
     scripts: stack.scripts,
-    keyFolders: KEY_FOLDERS.filter(hasFolder),
+    keyFolders: [...new Set([...KEY_FOLDERS.filter(hasFolder), ...detectSourceFolders(input)])].sort(),
     instructionFiles,
   };
 }

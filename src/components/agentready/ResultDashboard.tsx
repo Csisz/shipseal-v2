@@ -1310,5 +1310,5 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 function isGitHubSource(sourceType?: string) {
-  return sourceType === 'github-url' || sourceType === 'github-public';
+  return sourceType === 'github-app' || sourceType === 'github-url' || sourceType === 'github-public';
 }

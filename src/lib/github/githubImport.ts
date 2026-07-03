@@ -260,7 +260,8 @@ export async function importGitHubAppRepoArchive(input: GitHubAppArchiveImportIn
   return {
     file: createArchiveFile(blob, fileName),
     source: {
-      sourceType: 'github-url',
+      sourceType: 'github-app',
+      originalSourceType: 'github-url',
       githubOwner: input.owner,
       githubRepo: input.repo,
       githubBranch: input.ref,

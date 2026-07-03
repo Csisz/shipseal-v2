@@ -1,4 +1,6 @@
 import type { HealthDimensionId, HealthRecommendation, HealthSignal } from './types';
+import { detectStack } from '../stack';
+import type { RepoScanInput } from '../types';
 
 type RecommendationTemplate = Omit<HealthRecommendation, 'evidence'>;
 
@@ -175,7 +177,7 @@ const RECOMMENDATION_TEMPLATES: Record<string, RecommendationTemplate> = {
     id: 'ai.ci-script-cross-reference',
     title: 'Align CI with package scripts',
     whyItMatters: 'CI is more useful when it references the same commands agents should run locally.',
-    action: 'Update the CI workflow to call detected scripts such as npm run build and npm run test.',
+    action: 'Update the CI workflow to call detected repository verification commands.',
     dimensions: ['aiDevelopmentReadiness'],
     suggestedTargetPath: '.github/workflows/ci.yml',
     potentialDimensionGain: 4,
@@ -311,24 +313,31 @@ const RECOMMENDATION_TEMPLATES: Record<string, RecommendationTemplate> = {
   },
 };
 
-export function buildRepositoryHealthRecommendations(signals: HealthSignal[], maxActions = 5): HealthRecommendation[] {
-  return signals
+export function buildRepositoryHealthRecommendations(signals: HealthSignal[], maxActions = 5, input?: RepoScanInput): HealthRecommendation[] {
+  const stack = input ? detectStack(input) : undefined;
+  const paths = new Set(input?.files.map(file => file.path.toLowerCase()) || []);
+  return dedupeRecommendations(signals
     .filter(signal => signal.status === 'fail' || signal.status === 'partial')
-    .map(signal => recommendationForSignal(signal))
+    .map(signal => recommendationForSignal(signal, { stack, paths }))
     .filter((recommendation): recommendation is HealthRecommendation => !!recommendation)
+  )
     .sort(compareRecommendations)
     .slice(0, maxActions);
 }
 
-export function recommendationForSignal(signal: HealthSignal): HealthRecommendation | null {
+export function recommendationForSignal(
+  signal: HealthSignal,
+  context: { stack?: ReturnType<typeof detectStack>; paths?: Set<string> } = {},
+): HealthRecommendation | null {
   if (!signal.recommendationId) return null;
   const template = RECOMMENDATION_TEMPLATES[signal.recommendationId];
   if (!template) return null;
-  return {
+  const recommendation = {
     ...template,
     evidence: signal.evidence,
     dimensions: [...template.dimensions] as HealthDimensionId[],
   };
+  return adaptRecommendationToStack(recommendation, context);
 }
 
 export function hasRecommendationForFailedSignal(signal: HealthSignal): boolean {
@@ -342,6 +351,91 @@ function compareRecommendations(a: HealthRecommendation, b: HealthRecommendation
   const gain = b.potentialDimensionGain - a.potentialDimensionGain;
   if (gain !== 0) return gain;
   return a.id.localeCompare(b.id);
+}
+
+function adaptRecommendationToStack(
+  recommendation: HealthRecommendation,
+  context: { stack?: ReturnType<typeof detectStack>; paths?: Set<string> },
+): HealthRecommendation {
+  const languages = context.stack?.languages || [];
+  const pythonOnly = languages.includes('Python') && !languages.some(language => ['JavaScript', 'TypeScript'].includes(language));
+  if (!pythonOnly) return recommendation;
+
+  if (recommendation.id === 'ai.package-scripts') {
+    return {
+      ...recommendation,
+      title: 'Document build, test, and quality commands',
+      action: 'Document the repository build, test, and quality commands in pyproject.toml, a Makefile, or the development documentation.',
+      suggestedTargetPath: pythonCommandTarget(context.paths),
+    };
+  }
+  if (recommendation.id === 'ai.tests-present') {
+    return {
+      ...recommendation,
+      action: 'Add or document the repository test entry using the framework already present in this Python project.',
+      suggestedTargetPath: pythonCommandTarget(context.paths),
+    };
+  }
+  if (recommendation.id === 'ai.ci-script-cross-reference') {
+    return {
+      ...recommendation,
+      title: 'Align CI with detected repository commands',
+      action: 'Update the CI workflow to call detected Python project commands from pyproject.toml, Makefile, tox.ini, noxfile.py, or development docs.',
+      suggestedTargetPath: '.github/workflows/ci.yml',
+    };
+  }
+  return recommendation;
+}
+
+function pythonCommandTarget(paths?: Set<string>) {
+  if (paths?.has('pyproject.toml')) return 'pyproject.toml';
+  if (paths?.has('makefile')) return 'Makefile';
+  if (paths?.has('tox.ini')) return 'tox.ini';
+  if (paths?.has('noxfile.py')) return 'noxfile.py';
+  if (paths?.has('docs/commands.md')) return 'docs/COMMANDS.md';
+  if (paths?.has('readme.md')) return 'README.md';
+  if (paths?.has('requirements.txt')) return 'requirements.txt';
+  return 'README.md';
+}
+
+function dedupeRecommendations(recommendations: HealthRecommendation[]): HealthRecommendation[] {
+  const byKey = new Map<string, HealthRecommendation>();
+  for (const recommendation of recommendations) {
+    const key = remediationKey(recommendation);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, recommendation);
+      continue;
+    }
+    byKey.set(key, mergeRecommendations(existing, recommendation, key));
+  }
+  return [...byKey.values()];
+}
+
+function remediationKey(recommendation: HealthRecommendation) {
+  const target = recommendation.suggestedTargetPath?.trim().toLowerCase();
+  if (target === 'agents.md') return 'root-agent-instructions';
+  return target || recommendation.id;
+}
+
+function mergeRecommendations(a: HealthRecommendation, b: HealthRecommendation, key: string): HealthRecommendation {
+  const primary = compareRecommendations(a, b) <= 0 ? a : b;
+  return {
+    ...primary,
+    id: key === 'root-agent-instructions' ? 'root-agent-instructions' : [a.id, b.id].sort().join('+'),
+    dimensions: unique([...a.dimensions, ...b.dimensions]),
+    evidence: unique([...a.evidence, ...b.evidence]),
+    potentialDimensionGain: a.potentialDimensionGain + b.potentialDimensionGain,
+    priority: rank(a.priority) >= rank(b.priority) ? a.priority : b.priority,
+  };
+}
+
+function unique<T>(values: T[]): T[] {
+  return [...new Set(values)];
+}
+
+function rank(priority: HealthRecommendation['priority']): number {
+  return priority === 'High' ? 3 : priority === 'Medium' ? 2 : 1;
 }
 
 function priorityRank(priority: HealthRecommendation['priority']): number {

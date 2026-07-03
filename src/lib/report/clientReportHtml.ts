@@ -1,4 +1,5 @@
 ﻿import type { ClientReportHtmlInput, ClientReportSummary } from './types';
+import type { ReadinessReport } from '../types';
 
 const LEGAL_DISCLAIMER = 'ShipSeal does not provide legal advice. This report is a technical, product-side and preliminary readiness assessment. It is not a formal legal opinion, production security audit or compliance certification.';
 const HU_DISCLAIMER = 'A ShipSeal nem nyújt jogi tanácsadást. Ez a riport technikai, termékoldali és előzetes readiness értékelés.';
@@ -23,6 +24,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       --brand-dark: #08245f;
       --brand-mid: #0b3b94;
       --warm: #f8efe1;
+      --teal: #08746f;
       --success: #067647;
       --warning: #b54708;
       --danger: #b42318;
@@ -128,6 +130,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     .score-grid { grid-template-columns: 1.45fr 1fr 1.2fr 0.65fr; margin-top: 10px; }
     .two-grid { grid-template-columns: repeat(2, 1fr); }
     .three-grid { grid-template-columns: repeat(3, 1fr); }
+    .dimension-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 
     .card {
       border: 1px solid var(--line);
@@ -239,6 +242,30 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
 
     .output-card strong {
       font-size: 22px;
+    }
+
+    .health-panel {
+      border: 1px solid #9fd5d0;
+      background: linear-gradient(180deg, #f3fbfa 0%, #ffffff 100%);
+      border-radius: 10px;
+      padding: 14px;
+    }
+
+    .health-score {
+      color: var(--teal);
+      font-size: 30px;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .dimension-card { min-height: 104px; }
+
+    .dimension-score {
+      color: var(--brand-mid);
+      font-weight: 900;
+      font-size: 18px;
+      margin: 4px 0;
     }
 
     ul {
@@ -378,7 +405,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
     @media (max-width: 760px) {
       .page { margin: 0; border-left: 0; border-right: 0; }
       header, main { padding-left: 22px; padding-right: 22px; }
-      .brand, .meta-grid, .score-grid, .two-grid, .three-grid, .roadmap, .manifest-grid { grid-template-columns: 1fr; display: grid; }
+      .brand, .meta-grid, .score-grid, .two-grid, .three-grid, .dimension-grid, .roadmap, .manifest-grid { grid-template-columns: 1fr; display: grid; }
       h1 { font-size: 28px; }
     }
   </style>
@@ -394,7 +421,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
         <div class="small muted">Generated ${escapeHtml(summary.generatedTimestamp)}</div>
       </div>
       <h1>${escapeHtml(summary.projectName)}</h1>
-      <p class="muted">AI Project Delivery Pack readiness report for client handover and further expert review.</p>
+      <p class="muted">AI Repository Intelligence report for client handover and further expert review.</p>
       <div class="meta-grid">
         <div class="card"><div class="label">Client</div>${escapeHtml(summary.clientName)}</div>
         <div class="card"><div class="label">Agency</div>${escapeHtml(summary.agencyName)}</div>
@@ -403,11 +430,28 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       </div>
       <div class="score-grid">
         <div class="card score-card">
-          <div class="label">Readiness score</div>
+          <div class="label">Repository Health</div>
+          ${renderScore(summary.repositoryHealthScore)}
+        </div>
+        <div class="card decision-card">
+          <div class="label">Health status</div>
+          <strong>${escapeHtml(summary.repositoryHealthStatus)}</strong>
+          <div class="small muted">${escapeHtml(summary.repositoryHealthConfidence)} confidence</div>
+        </div>
+        <div class="card package-card">
+          <div class="label">Context Waste Risk</div>
+          <strong>${escapeHtml(summary.contextWasteRisk)}</strong>
+          <div class="small muted">${escapeHtml(summary.contextWasteExplanation)}</div>
+        </div>
+        <div class="card output-card"><div class="label">Outputs</div><strong>${escapeHtml(summary.generatedOutputCount)}</strong></div>
+      </div>
+      <div class="score-grid">
+        <div class="card score-card">
+          <div class="label">Legacy readiness score</div>
           ${renderScore(summary.score)}
         </div>
         <div class="card decision-card">
-          <div class="label">Readiness decision</div>
+          <div class="label">Legacy readiness decision</div>
           <strong>${escapeHtml(summary.status)}</strong>
           <div class="small muted">${escapeHtml(summary.goNoGo)}</div>
         </div>
@@ -415,19 +459,61 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
           <div class="label">Selected package</div>
           <strong>${escapeHtml(summary.selectedGoal)}</strong>
         </div>
-        <div class="card output-card"><div class="label">Outputs</div><strong>${escapeHtml(summary.generatedOutputCount)}</strong></div>
+        <div class="card output-card"><div class="label">Schema</div><strong>v2</strong></div>
       </div>
     </header>
 
     <main>
       <section>
         <h2>Executive summary</h2>
-        <p>${escapeHtml(summary.projectName)} was reviewed with ShipSeal to prepare an AI project delivery package. ${escapeHtml(executiveSummaryLead(summary))}</p>
+        <p>${escapeHtml(summary.projectName)} was reviewed with ShipSeal as an AI Repository Intelligence assessment. ${escapeHtml(summary.repositoryHealthSummary)}</p>
         <p class="muted">Selected package: ${escapeHtml(summary.selectedGoal)}. ${escapeHtml(summary.selectedGoalSummary)} Generated outputs: ${escapeHtml(summary.generatedOutputCount)}.</p>
         <p class="muted">${escapeHtml(summary.scanSummary)}</p>
         <p class="muted">${escapeHtml(summary.scanEvidenceSummary)}</p>
         ${summary.intakeNote ? `<p class="muted">${escapeHtml(summary.intakeNote)}</p>` : ''}
         ${summary.scanLimited ? `<p class="warning">${escapeHtml(summary.scanWarning)}</p>` : ''}
+      </section>
+
+      <section class="avoid-break">
+        <h2>Repository Health summary</h2>
+        <div class="health-panel">
+          <div class="two-grid">
+            <div>
+              <div class="label">Overall Repository Health</div>
+              <div class="health-score">${escapeHtml(summary.repositoryHealthScore)}</div>
+              <p class="compact">${escapeHtml(summary.repositoryHealthStatus)} · ${escapeHtml(summary.repositoryHealthConfidence)} confidence.</p>
+            </div>
+            <div>
+              <div class="label">Context Waste Risk</div>
+              <strong>${escapeHtml(summary.contextWasteRisk)}</strong>
+              <p class="compact">${escapeHtml(summary.contextWasteExplanation)}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="avoid-break">
+        <h2>Repository Health dimensions</h2>
+        <div class="dimension-grid">
+          ${summary.repositoryHealthDimensions.map(dimension => `
+          <div class="card dimension-card">
+            <div class="label">${escapeHtml(dimension.label)}</div>
+            <div class="dimension-score">${escapeHtml(dimension.score)}</div>
+            <div class="small muted">${escapeHtml(dimension.confidence)} confidence</div>
+            <p class="small">${escapeHtml(dimension.signalSummary)}</p>
+          </div>`).join('')}
+        </div>
+      </section>
+
+      <section class="two-grid avoid-break">
+        <div class="card">
+          <h3>Repository evidence</h3>
+          ${renderList(summary.repositoryHealthEvidence)}
+        </div>
+        <div class="card">
+          <h3>Top repository improvements</h3>
+          ${renderList(summary.repositoryHealthTopActions)}
+        </div>
       </section>
 
       <section class="two-grid avoid-break">
@@ -456,17 +542,22 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
 
       <section class="three-grid avoid-break">
         <div class="card">
-          <h3>AI Act readiness pre-screen</h3>
-          <p class="compact">${escapeHtml(summary.aiActSummary)}</p>
+          <h3>Delivery and verification signals</h3>
+          <p class="compact">Legacy readiness: ${escapeHtml(summary.score)} (${escapeHtml(summary.status)}). ${escapeHtml(summary.testingSummary)}</p>
         </div>
         <div class="card">
-          <h3>Testing and eval summary</h3>
-          <p class="compact">${escapeHtml(summary.testingSummary)}</p>
+          <h3>AI Act readiness pre-screen</h3>
+          <p class="compact">${escapeHtml(summary.aiActSummary)}</p>
         </div>
         <div class="card">
           <h3>MCP governance summary</h3>
           <p class="compact">${escapeHtml(summary.mcpSummary)}</p>
         </div>
+      </section>
+
+      <section class="avoid-break">
+        <h2>Measurement boundary</h2>
+        ${renderList(summary.repositoryHealthMeasurementBoundary)}
       </section>
 
       <section>
@@ -524,12 +615,15 @@ export function buildClientReportSummary(input: ClientReportHtmlInput): ClientRe
 
 function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
   const score = scoreSource(input.scoreJson);
+  const repositoryHealth = repositoryHealthSource(input.report, score);
   const intake = input.intake;
-  const generatedAt = input.generatedAt ? new Date(input.generatedAt) : dateFromScore(score.scanTimestamp) || new Date();
-  const blockerCount = arrayValue(score.criticalBlockers).length;
-  const isReady = typeof score.isReady === 'boolean' ? score.isReady : false;
+  const generatedAt = input.generatedAt ? new Date(input.generatedAt) : dateFromScore(input.report?.scannedAt || score.scanTimestamp) || new Date();
+  const blockerCount = input.report ? input.report.blockers.length : arrayValue(score.criticalBlockers).length;
+  const isReady = input.report ? input.report.isReady : typeof score.isReady === 'boolean' ? score.isReady : false;
   const focusContent = packageFocus(score, input.intake);
   const checklistContent = packageChecklist(score, input.intake);
+  const healthDimensions = repositoryHealthDimensions(repositoryHealth);
+  const topActions = repositoryHealthTopActions(repositoryHealth);
   const goNoGo = blockerCount > 0
     ? 'No-Go'
     : isReady && input.intake.hasHumanApproval
@@ -544,11 +638,21 @@ function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
     agencyName: intake.agencyName?.trim() || 'To be completed before final delivery',
     generatedDate: generatedAt.toLocaleDateString('en-GB'),
     generatedTimestamp: formatTimestamp(generatedAt),
-    score: typeof score.score === 'number' ? `${score.score}/100` : 'Not detected',
-    status: stringValue(score.status) || 'Not detected',
+    score: input.report ? `${input.report.score}/100` : typeof score.score === 'number' ? `${score.score}/100` : 'Not detected',
+    status: input.report ? input.report.level : stringValue(score.status) || 'Not detected',
     goNoGo,
-    repositoryName: stringValue(score.repositoryName) || intake.projectName || 'Not detected',
-    branchOrRef: branchOrRef(score),
+    repositoryHealthScore: repositoryHealthScore(repositoryHealth),
+    repositoryHealthStatus: repositoryHealthStatus(repositoryHealth),
+    repositoryHealthConfidence: repositoryHealthConfidence(repositoryHealth),
+    repositoryHealthSummary: repositoryHealthSummary(repositoryHealth),
+    contextWasteRisk: contextWasteRisk(repositoryHealth),
+    contextWasteExplanation: contextWasteExplanation(repositoryHealth),
+    repositoryHealthDimensions: healthDimensions,
+    repositoryHealthEvidence: repositoryHealthEvidence(repositoryHealth),
+    repositoryHealthTopActions: topActions,
+    repositoryHealthMeasurementBoundary: repositoryHealthMeasurementBoundary(repositoryHealth),
+    repositoryName: input.report?.repoName || stringValue(score.repositoryName) || intake.projectName || 'Not detected',
+    branchOrRef: input.report ? branchOrRefFromReport(input.report) : branchOrRef(score),
     selectedGoalId: selectedGoalId(score),
     selectedGoal: selectedGoalLabel(score),
     selectedGoalSummary: selectedGoalSummary(score),
@@ -559,13 +663,13 @@ function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
     packageChecklistTitle: checklistContent.title,
     packageChecklistItems: checklistContent.items,
     intakeNote: intakeCompletenessNote(input.intake),
-    scanSummary: scanSummaryText(score.scanSummary),
-    scanEvidenceSummary: scanEvidenceText(score.scanEvidence),
-    scanLimited: isLimitedScan(score.scanSummary),
-    scanWarning: limitedScanWarning(score.scanSummary),
-    strengths: strengthsFromScore(score),
-    risks: risksFromScore(score, input.intake),
-    nextActions: nextActionsFromScore(score, input.intake),
+    scanSummary: input.report ? scanSummaryText(input.report.scanSummary) : scanSummaryText(score.scanSummary),
+    scanEvidenceSummary: input.report ? scanEvidenceText(input.report.scanEvidence) : scanEvidenceText(score.scanEvidence),
+    scanLimited: input.report ? isLimitedScan(input.report.scanSummary) : isLimitedScan(score.scanSummary),
+    scanWarning: input.report ? limitedScanWarning(input.report.scanSummary) : limitedScanWarning(score.scanSummary),
+    strengths: strengthsFromScore(score, repositoryHealth),
+    risks: risksFromScore(score, input.intake, repositoryHealth),
+    nextActions: nextActionsFromScore(score, input.intake, topActions),
     aiActSummary: aiActSummary(input.intake),
     testingSummary: testingSummary(score),
     mcpSummary: mcpSummary(score),
@@ -576,6 +680,146 @@ function scoreSource(scoreJson: unknown): Record<string, unknown> {
   const source = asRecord(scoreJson);
   const wrapped = asRecord(source.content);
   return Object.keys(wrapped).length ? wrapped : source;
+}
+
+function repositoryHealthSource(report: ReadinessReport | undefined, score: Record<string, unknown>) {
+  return report?.repositoryHealth || asRecord(score.repositoryHealth);
+}
+
+function repositoryHealthScore(health: unknown) {
+  const overall = asRecord(asRecord(health).overall);
+  return typeof overall.score === 'number' ? `${overall.score}/100` : 'Unavailable';
+}
+
+function repositoryHealthStatus(health: unknown) {
+  return stringValue(asRecord(asRecord(health).overall).status) || 'Insufficient evidence';
+}
+
+function repositoryHealthConfidence(health: unknown) {
+  return stringValue(asRecord(asRecord(health).overall).confidence) || 'Low';
+}
+
+function repositoryHealthSummary(health: unknown) {
+  const score = repositoryHealthScore(health);
+  const status = repositoryHealthStatus(health);
+  const confidence = repositoryHealthConfidence(health);
+  if (score === 'Unavailable') {
+    return `Repository Health is unavailable for this scan (${status}, ${confidence} confidence). Review scan evidence and rerun with complete repository contents before relying on repository-intelligence conclusions.`;
+  }
+  return `Repository Health is ${score}: ${status}, with ${confidence} confidence. The assessment summarizes how prepared the repository is for efficient AI-agent work, where context is wasteful, and which concrete improvements matter most.`;
+}
+
+function contextWasteRisk(health: unknown) {
+  const rawRiskScore = asRecord(asRecord(asRecord(health).dimensions).contextWaste).riskScore;
+  if (typeof rawRiskScore !== 'number') return 'Unavailable';
+  const riskScore = rawRiskScore;
+  if (riskScore >= 70) return `Very high (${riskScore}/100)`;
+  if (riskScore >= 45) return `High (${riskScore}/100)`;
+  if (riskScore >= 25) return `Moderate (${riskScore}/100)`;
+  return `Low (${riskScore}/100)`;
+}
+
+function contextWasteExplanation(health: unknown) {
+  const contextWaste = asRecord(asRecord(asRecord(health).dimensions).contextWaste);
+  const riskScore = typeof contextWaste.riskScore === 'number' ? contextWaste.riskScore : null;
+  if (riskScore === null) return 'Higher means more context waste; not enough evidence was available.';
+  return 'Higher means more repository context waste and agent routing friction.';
+}
+
+function repositoryHealthDimensions(health: unknown): ClientReportSummary['repositoryHealthDimensions'] {
+  const dimensions = asRecord(asRecord(health).dimensions);
+  return [
+    dimensionSummary('Repository Intelligence', asRecord(dimensions.repositoryIntelligence)),
+    contextWasteDimensionSummary(asRecord(dimensions.contextWaste)),
+    dimensionSummary('AI Development Readiness', asRecord(dimensions.aiDevelopmentReadiness)),
+    dimensionSummary('Agent Routing', asRecord(dimensions.agentRouting)),
+    dimensionSummary('Delivery Confidence', asRecord(dimensions.deliveryConfidence)),
+  ];
+}
+
+function dimensionSummary(label: string, dimension: Record<string, unknown>) {
+  const score = typeof dimension.score === 'number' ? `${dimension.score}/100` : 'Unavailable';
+  return {
+    label,
+    score,
+    confidence: stringValue(dimension.confidence) || 'Low',
+    signalSummary: signalSummary(arrayValue(dimension.signals).map(asRecord)),
+  };
+}
+
+function contextWasteDimensionSummary(dimension: Record<string, unknown>) {
+  const score = typeof dimension.riskScore === 'number' ? `${dimension.riskScore}/100 risk` : 'Unavailable';
+  return {
+    label: 'Context Waste Risk',
+    score,
+    confidence: stringValue(dimension.confidence) || 'Low',
+    signalSummary: signalSummary(arrayValue(dimension.signals).map(asRecord)),
+  };
+}
+
+function signalSummary(signals: Record<string, unknown>[]) {
+  if (!signals.length) return 'No signals available.';
+  const pass = signals.filter(signal => signal.status === 'pass').length;
+  const partial = signals.filter(signal => signal.status === 'partial').length;
+  const fail = signals.filter(signal => signal.status === 'fail').length;
+  const unknown = signals.filter(signal => signal.status === 'unknown' || signal.status === 'not-applicable').length;
+  return `${pass} pass, ${partial} partial, ${fail} gap, ${unknown} not scored.`;
+}
+
+function repositoryHealthEvidence(health: unknown) {
+  const dimensions = asRecord(asRecord(health).dimensions);
+  const signals = [
+    ...arrayValue(asRecord(dimensions.repositoryIntelligence).signals),
+    ...arrayValue(asRecord(dimensions.contextWaste).signals),
+    ...arrayValue(asRecord(dimensions.aiDevelopmentReadiness).signals),
+    ...arrayValue(asRecord(dimensions.agentRouting).signals),
+    ...arrayValue(asRecord(dimensions.deliveryConfidence).signals),
+  ].map(asRecord);
+  const evidence = signals
+    .filter(signal => signal.status === 'pass')
+    .flatMap(signal => arrayValue(signal.evidence).map(value => String(value)))
+    .filter(Boolean)
+    .slice(0, 6);
+  return evidence.length ? evidence : ['No positive Repository Health evidence was available from this scan.'];
+}
+
+function repositoryHealthGaps(health: unknown) {
+  const dimensions = asRecord(asRecord(health).dimensions);
+  const signals = [
+    ...arrayValue(asRecord(dimensions.repositoryIntelligence).signals),
+    ...arrayValue(asRecord(dimensions.contextWaste).signals),
+    ...arrayValue(asRecord(dimensions.aiDevelopmentReadiness).signals),
+    ...arrayValue(asRecord(dimensions.agentRouting).signals),
+    ...arrayValue(asRecord(dimensions.deliveryConfidence).signals),
+  ].map(asRecord);
+  return signals
+    .filter(signal => signal.status === 'fail' || signal.status === 'partial')
+    .flatMap(signal => arrayValue(signal.evidence).map(value => String(value)))
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
+function repositoryHealthTopActions(health: unknown) {
+  const actions = arrayValue(asRecord(health).topActions).map(asRecord).map(action => {
+    const title = stringValue(action.title) || 'Repository improvement';
+    const target = stringValue(action.suggestedTargetPath);
+    const why = stringValue(action.whyItMatters);
+    return `${title}${target ? ` (${target})` : ''}${why ? `: ${why}` : ''}`;
+  });
+  return actions.length ? actions.slice(0, 5) : ['No high-priority Repository Health action was generated from the current scan.'];
+}
+
+function repositoryHealthMeasurementBoundary(health: unknown) {
+  const boundary = arrayValue(asRecord(health).measurementBoundary).map(value => String(value)).filter(Boolean);
+  return boundary.length ? boundary : [
+    'This model is a deterministic static repository estimate.',
+    'It does not execute repository code.',
+    'Detected commands, tests, and CI files are not proof that they pass.',
+  ];
+}
+
+function branchOrRefFromReport(report: ReadinessReport) {
+  return report.scanEvidence.branchOrRef || report.source.githubBranch || report.source.githubDefaultBranch || 'default ref';
 }
 
 function selectedGoalLabel(score: Record<string, unknown>) {
@@ -835,14 +1079,15 @@ function goNoGoText(score: Record<string, unknown>, intake: ClientReportHtmlInpu
   return 'Remediation';
 }
 
-function strengthsFromScore(score: Record<string, unknown>) {
+function strengthsFromScore(score: Record<string, unknown>, health: unknown) {
   const categories = arrayValue(score.categories).map(asRecord);
   const evidence = asRecord(score.scanEvidence);
   const keyFiles = asRecord(evidence.keyFilesFound);
-  const strengths = categories
+  const strengths = repositoryHealthEvidence(health).slice(0, 3);
+  strengths.push(...categories
     .filter(category => numeric(category.earned) >= numeric(category.max) * 0.7 && numeric(category.max) > 0)
     .slice(0, 4)
-    .map(category => `${stringValue(category.name) || 'Readiness area'} has a strong scan signal (${numeric(category.earned)}/${numeric(category.max)}).`);
+    .map(category => `${stringValue(category.name) || 'Readiness area'} has a supporting legacy readiness signal (${numeric(category.earned)}/${numeric(category.max)}).`));
 
   if (outputCount(score)) {
     strengths.push(`ShipSeal Delivery Pack manifest outputs detected: ${outputCount(score)}.`);
@@ -856,9 +1101,13 @@ function strengthsFromScore(score: Record<string, unknown>) {
   return strengths.length ? strengths : ['No major strengths detected from available data.'];
 }
 
-function risksFromScore(score: Record<string, unknown>, intake: ClientReportHtmlInput['intake']) {
+function risksFromScore(score: Record<string, unknown>, intake: ClientReportHtmlInput['intake'], health: unknown) {
   const blockers = arrayValue(score.criticalBlockers).map(asRecord);
-  const risks = blockers.slice(0, 5).map(blocker => `${stringValue(blocker.title) || 'Critical blocker'}: ${stringValue(blocker.detail) || 'Details not provided'}.`);
+  const healthGaps = repositoryHealthGaps(health);
+  const risks = [
+    ...healthGaps,
+    ...blockers.slice(0, 5).map(blocker => `${stringValue(blocker.title) || 'Critical blocker'}: ${stringValue(blocker.detail) || 'Details not provided'}.`),
+  ].slice(0, 6);
   if (isLimitedScan(score.scanSummary)) {
     risks.push('Limited scan warning: ShipSeal could not fully parse the repository ZIP, so this is not a complete client handoff audit.');
   }
@@ -879,12 +1128,13 @@ function risksFromScore(score: Record<string, unknown>, intake: ClientReportHtml
   return risks.length ? risks : ['No major handoff risks detected from available scan and intake data.'];
 }
 
-function nextActionsFromScore(score: Record<string, unknown>, intake: ClientReportHtmlInput['intake']) {
-  const actions = arrayValue(score.improvements)
+function nextActionsFromScore(score: Record<string, unknown>, intake: ClientReportHtmlInput['intake'], healthActions: string[]) {
+  const actions = healthActions.filter(action => !/^No high-priority Repository Health action/i.test(action));
+  actions.push(...arrayValue(score.improvements)
     .map(asRecord)
     .map(improvement => stringValue(improvement.title) || stringValue(improvement.detail))
     .filter((value): value is string => Boolean(value))
-    .slice(0, 4);
+    .slice(0, 3));
 
   if (isLimitedScan(score.scanSummary)) {
     actions.unshift('Re-run ShipSeal with a valid repository ZIP or GitHub import before final handoff.');

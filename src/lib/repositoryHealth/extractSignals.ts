@@ -1,5 +1,6 @@
 import { detectStack } from '../stack';
 import { scoreRepo } from '../scoring';
+import { detectEntryPointCandidates, detectSourceFolders } from '../sourceDetection';
 import type { RepoScanInput } from '../types';
 import { classifyRepositoryFiles, isInstructionPath } from './classifyFiles';
 import type {
@@ -15,7 +16,6 @@ import type {
 const LARGE_RELEVANT_FILE_BYTES = 128 * 1024;
 const GIANT_RELEVANT_FILE_BYTES = 512 * 1024;
 
-const ENTRY_POINT_RE = /(^|\/)(src\/)?(main|index)\.[cm]?[jt]sx?$|(^|\/)app\/page\.[jt]sx?$|(^|\/)main\.py$|(^|\/)cmd\/[^/]+\/main\.go$/i;
 const CI_WORKFLOW_RE = /(^|\/)\.github\/workflows\/[^/]+\.ya?ml$/i;
 const LOCKFILE_RE = /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|bun\.lock|poetry\.lock|cargo\.lock|go\.sum|gemfile\.lock|composer\.lock)$/i;
 const ROOT_INSTRUCTION_RE = /^(agents\.md|claude\.md|codex\.md|\.cursorrules|\.cursor\/rules(?:\/.*)?)$/i;
@@ -31,6 +31,7 @@ type SignalFacts = {
   duplicateDocumentationGroups: DocumentationDuplicateGroup[];
   documentationFamilies: DocumentationFamilyGroup[];
   entryPointCandidates: string[];
+  sourceFolders: string[];
   blockers: HealthBlocker[];
 };
 
@@ -43,10 +44,8 @@ export function extractRepositoryHealthSignals(input: RepoScanInput): Repository
   }));
   const duplicateDocumentationGroups = findExactDuplicateDocumentation(input, files);
   const documentationFamilies = groupDocumentationFamilies(files);
-  const entryPointCandidates = files
-    .filter(file => !file.isDir && !file.generatedOrVendor && !file.binaryLike && ENTRY_POINT_RE.test(file.path))
-    .map(file => file.path)
-    .sort();
+  const entryPointCandidates = detectEntryPointCandidates(input);
+  const sourceFolders = detectSourceFolders(input);
 
   const facts: SignalFacts = {
     input,
@@ -58,6 +57,7 @@ export function extractRepositoryHealthSignals(input: RepoScanInput): Repository
     duplicateDocumentationGroups,
     documentationFamilies,
     entryPointCandidates,
+    sourceFolders,
     blockers,
   };
 
@@ -73,6 +73,7 @@ export function extractRepositoryHealthSignals(input: RepoScanInput): Repository
     duplicateDocumentationGroups,
     documentationFamilies,
     entryPointCandidates,
+    sourceFolders,
     blockers,
   };
 }
@@ -81,7 +82,7 @@ function repositoryIntelligenceSignals(facts: SignalFacts): HealthSignal[] {
   const readmePaths = findPaths(facts, /(^|\/)readme(\.md)?$/i);
   const docsIndexPaths = findPaths(facts, /(^|\/)(docs\/(index|readme)|documentation_(index|inventory)|docs\/documentation_inventory)\.md$/i);
   const rootInstructions = findPaths(facts, ROOT_INSTRUCTION_RE);
-  const sourceFolders = topFolders(facts.files.filter(file => file.kind === 'source').map(file => file.path));
+  const sourceFolders = facts.sourceFolders;
   const stackConfig = findPaths(facts, /(^|\/)(package\.json|pyproject\.toml|requirements\.txt|go\.mod|cargo\.toml|pom\.xml|build\.gradle|composer\.json|gemfile)$/i);
   const conflicts = facts.documentationFamilies.filter(group => group.activePaths.length > 1);
 
@@ -107,10 +108,15 @@ function contextWasteSignals(facts: SignalFacts): HealthSignal[] {
   const giantRelevant = relevantFiles.filter(file => file.size >= GIANT_RELEVANT_FILE_BYTES);
   const activeDocs = facts.files.filter(file => file.activeDocumentation);
   const conflicts = facts.documentationFamilies.filter(group => group.activePaths.length > 1);
-  const hasCompactAnchor = hasAny(facts, /(^|\/)readme(\.md)?$/i) || hasAny(facts, /(^|\/)(agents\.md|docs\/(index|readme)\.md|docs\/task_router\.md)$/i);
+  const compactAnchors = findCompactContextAnchors(facts);
   const generatedRatio = realFiles.length ? generatedFiles.length / realFiles.length : 0;
   const generatedByteRatio = totalBytes ? generatedBytes / totalBytes : 0;
   const entryPointStatus = facts.entryPointCandidates.length === 0 ? 'fail' : facts.entryPointCandidates.length > 5 ? 'partial' : 'pass';
+  const entryPointEvidence = facts.entryPointCandidates.length
+    ? [`Entry point candidates: ${facts.entryPointCandidates.join(', ')}`]
+    : facts.sourceFolders.length
+      ? [`Importable source package or source folder detected: ${facts.sourceFolders.join(', ')}. Executable entry point not detected.`]
+      : ['No entry point candidate or source package detected.'];
 
   return [
     riskSignal('waste.generated-file-ratio', 'Generated/vendor file ratio is controlled', generatedRatio > 0.5 ? 'fail' : generatedRatio > 0.15 ? 'partial' : 'pass', 20, generatedRatio > 0.5 ? 20 : generatedRatio > 0.15 ? 10 : 0, [`Generated/vendor files: ${generatedFiles.length} of ${realFiles.length}.`], 'waste.generated-file-ratio'),
@@ -119,17 +125,18 @@ function contextWasteSignals(facts: SignalFacts): HealthSignal[] {
     riskSignal('waste.duplicate-docs', 'Readable documentation has no exact duplicates', facts.duplicateDocumentationGroups.length ? 'fail' : 'pass', 15, facts.duplicateDocumentationGroups.length ? 15 : 0, facts.duplicateDocumentationGroups.length ? facts.duplicateDocumentationGroups.map(group => `Duplicate docs: ${group.paths.join(', ')}`) : ['No exact duplicate readable documentation detected.'], 'waste.duplicate-docs'),
     riskSignal('waste.active-doc-sprawl', 'Active documentation set is compact', activeDocs.length > 20 ? 'fail' : activeDocs.length > 10 ? 'partial' : 'pass', 10, activeDocs.length > 20 ? 10 : activeDocs.length > 10 ? 5 : 0, [`Active documentation files: ${activeDocs.length}.`], 'waste.active-doc-sprawl'),
     riskSignal('waste.canonical-conflicts', 'Canonical documentation families do not conflict', conflicts.length ? 'fail' : 'pass', 10, conflicts.length ? 10 : 0, conflicts.length ? conflicts.map(group => `${group.family}: ${group.activePaths.join(', ')}`) : ['No active canonical document conflicts detected.'], 'waste.canonical-conflicts'),
-    riskSignal('waste.compact-anchor-missing', 'Compact context anchors are present', hasCompactAnchor ? 'pass' : 'fail', 10, hasCompactAnchor ? 0 : 10, hasCompactAnchor ? ['README, docs index, task router, or agent instructions found.'] : ['No compact README, docs index, task router, or agent instruction anchor found.'], 'waste.compact-anchor-missing'),
-    riskSignal('waste.entrypoint-ambiguity', 'Entry point routing is not ambiguous', entryPointStatus, 5, entryPointStatus === 'fail' ? 5 : entryPointStatus === 'partial' ? 2.5 : 0, facts.entryPointCandidates.length ? [`Entry point candidates: ${facts.entryPointCandidates.join(', ')}`] : ['No entry point candidate detected.'], 'waste.entrypoint-ambiguity'),
+    riskSignal('waste.compact-anchor-missing', 'Compact context anchors are present', compactAnchors.status, 10, compactAnchors.earned, compactAnchors.evidence, 'waste.compact-anchor-missing'),
+    riskSignal('waste.entrypoint-ambiguity', 'Entry point routing is not ambiguous', entryPointStatus, 5, entryPointStatus === 'fail' ? 5 : entryPointStatus === 'partial' ? 2.5 : 0, entryPointEvidence, 'waste.entrypoint-ambiguity'),
   ];
 }
 
 function aiDevelopmentReadinessSignals(facts: SignalFacts): HealthSignal[] {
   const scripts = facts.stack.scripts || {};
   const scriptNames = Object.keys(scripts);
-  const hasBuild = !!scripts.build;
+  const runCommandLabels = facts.stack.runCommands.map(command => command.label.toLowerCase());
+  const hasBuild = !!scripts.build || runCommandLabels.includes('build');
   const hasTest = !!scripts.test || hasAny(facts, /(^|\/)(tests?|__tests__)\/|(\.|-)(test|spec)\.[cm]?[jt]sx?$/i);
-  const hasLintOrTypecheck = !!scripts.lint || !!scripts.typecheck || hasAny(facts, /(^|\/)(eslint\.config\.[jt]s|tsconfig\.json)$/i);
+  const hasLintOrTypecheck = !!scripts.lint || !!scripts.typecheck || runCommandLabels.includes('lint') || runCommandLabels.includes('typecheck') || hasAny(facts, /(^|\/)(eslint\.config\.[jt]s|tsconfig\.json)$/i);
   const scriptEarned = [hasBuild, hasTest, hasLintOrTypecheck].filter(Boolean).length;
   const ciWorkflows = findPaths(facts, CI_WORKFLOW_RE);
   const ciCrossRef = classifyCiScriptCrossReference(facts, ciWorkflows, scriptNames);
@@ -137,7 +144,7 @@ function aiDevelopmentReadinessSignals(facts: SignalFacts): HealthSignal[] {
 
   return [
     signal('ai.stack-detected', 'aiDevelopmentReadiness', 'Technology stack is detected', facts.stack.primary !== 'Unknown' ? 'pass' : 'fail', 5, facts.stack.primary !== 'Unknown' ? 5 : 0, [`Detected stack: ${facts.stack.primary}.`], 'ai.stack-detected'),
-    signal('ai.package-scripts', 'aiDevelopmentReadiness', 'Build, test, and quality scripts are declared', scriptEarned === 3 ? 'pass' : scriptEarned > 0 ? 'partial' : 'fail', 8, (scriptEarned / 3) * 8, scriptNames.length ? [`Package scripts: ${scriptNames.join(', ')}`] : ['No package scripts detected.'], 'ai.package-scripts'),
+    signal('ai.package-scripts', 'aiDevelopmentReadiness', 'Build, test, and quality commands are declared', scriptEarned === 3 ? 'pass' : scriptEarned > 0 ? 'partial' : 'fail', 8, (scriptEarned / 3) * 8, facts.stack.runCommands.length ? [`Detected verification commands: ${facts.stack.runCommands.map(command => `${command.label}: ${command.cmd}`).join('; ')}`] : scriptNames.length ? [`Package scripts: ${scriptNames.join(', ')}`] : ['No build, test, lint, or typecheck command detected.'], 'ai.package-scripts'),
     signal('ai.tests-present', 'aiDevelopmentReadiness', 'Test signal exists', hasTest ? 'pass' : 'fail', 5, hasTest ? 5 : 0, hasTest ? ['Test script or test files detected.'] : ['No test script or test file pattern detected.'], 'ai.tests-present'),
     signal('ai.ci-workflow', 'aiDevelopmentReadiness', 'CI workflow exists', ciWorkflows.length ? 'pass' : 'fail', 4, ciWorkflows.length ? 4 : 0, evidenceOr(ciWorkflows, 'No .github/workflows YAML file detected.'), 'ai.ci-workflow'),
     signal('ai.ci-script-cross-reference', 'aiDevelopmentReadiness', 'CI references repository scripts', ciCrossRef.status, 4, ciCrossRef.earned, ciCrossRef.evidence, 'ai.ci-script-cross-reference'),
@@ -155,16 +162,110 @@ function agentRoutingSignals(facts: SignalFacts): HealthSignal[] {
   const criticalPolicy = findPaths(facts, /(^|\/)(critical_files_policy|critical-files-policy|codeowners|security)\.md$|(^|\/)codeowners$/i);
   const knownRisks = findPaths(facts, /(^|\/)(risks|risk_register|known_risks|security)\.md$/i);
   const entryStatus = facts.entryPointCandidates.length === 0 ? 'fail' : facts.entryPointCandidates.length > 5 ? 'partial' : 'pass';
+  const folderInstructionCoverage = classifyFolderInstructionCoverage(facts, nestedInstructions);
+  const entryPointEvidence = facts.entryPointCandidates.length
+    ? [`Entry point candidates: ${facts.entryPointCandidates.join(', ')}`]
+    : facts.sourceFolders.length
+      ? [`Importable source package or source folder detected: ${facts.sourceFolders.join(', ')}. Executable entry point not detected.`]
+      : ['No entry point candidate or source package detected.'];
 
   return [
     signal('route.root-instructions', 'agentRouting', 'Root agent instruction file is available', rootInstructions.length ? 'pass' : 'fail', 6, rootInstructions.length ? 6 : 0, evidenceOr(rootInstructions, 'No root agent instruction file detected.'), 'route.root-instructions'),
-    signal('route.folder-instructions', 'agentRouting', 'Folder-level instructions guide focused work', nestedInstructions.length ? 'pass' : 'partial', 4, nestedInstructions.length ? 4 : 2, nestedInstructions.length ? nestedInstructions : ['No nested AGENTS.md, CLAUDE.md, Codex, or Cursor instruction files detected.'], 'route.folder-instructions'),
+    signal('route.folder-instructions', 'agentRouting', 'Folder-level instructions guide focused work', folderInstructionCoverage.status, 4, folderInstructionCoverage.earned, folderInstructionCoverage.evidence, folderInstructionCoverage.status === 'not-applicable' ? undefined : 'route.folder-instructions'),
     signal('route.task-router', 'agentRouting', 'Task router maps work to starting folders', taskRouter.length ? 'pass' : 'fail', 5, taskRouter.length ? 5 : 0, evidenceOr(taskRouter, 'No task router document detected.'), 'route.task-router'),
     signal('route.command-map', 'agentRouting', 'Command map is documented', commandMap.length ? 'pass' : Object.keys(facts.stack.scripts).length ? 'partial' : 'fail', 4, commandMap.length ? 4 : Object.keys(facts.stack.scripts).length ? 2 : 0, commandMap.length ? commandMap : Object.keys(facts.stack.scripts).length ? [`Package scripts can seed a command map: ${Object.keys(facts.stack.scripts).join(', ')}`] : ['No command map or package scripts detected.'], 'route.command-map'),
     signal('route.critical-policy', 'agentRouting', 'Critical file policy is discoverable', criticalPolicy.length ? 'pass' : 'fail', 4, criticalPolicy.length ? 4 : 0, evidenceOr(criticalPolicy, 'No critical files policy, SECURITY.md, or CODEOWNERS signal detected.'), 'route.critical-policy'),
     signal('route.known-risks', 'agentRouting', 'Known risks are documented', knownRisks.length ? 'pass' : 'fail', 3, knownRisks.length ? 3 : 0, evidenceOr(knownRisks, 'No known risks, risk register, or security review document detected.'), 'route.known-risks'),
-    signal('route.entry-point-clarity', 'agentRouting', 'Entry points are clear enough to route tasks', entryStatus, 4, entryStatus === 'pass' ? 4 : entryStatus === 'partial' ? 2 : 0, facts.entryPointCandidates.length ? [`Entry point candidates: ${facts.entryPointCandidates.join(', ')}`] : ['No entry point candidate detected.'], 'route.entry-point-clarity'),
+    signal('route.entry-point-clarity', 'agentRouting', 'Entry points are clear enough to route tasks', entryStatus, 4, entryStatus === 'pass' ? 4 : entryStatus === 'partial' ? 2 : 0, entryPointEvidence, 'route.entry-point-clarity'),
   ];
+}
+
+function findCompactContextAnchors(facts: SignalFacts) {
+  const anchors: string[] = [];
+  if (hasAny(facts, /(^|\/)readme(\.md)?$/i)) anchors.push('README/project overview');
+  if (hasAny(facts, /(^|\/)docs\/(index|readme)\.md$/i)) anchors.push('docs index');
+  if (hasAny(facts, /(^|\/)(architecture|arch|system-design)\.md$/i) || hasAny(facts, /(^|\/)docs\/.*(architecture|arch|system-design).*\.md$/i)) anchors.push('architecture summary');
+  if (hasAny(facts, /(^|\/)(task_router|task-router|agent_router|agent-routing|routing)\.md$/i)) anchors.push('task router');
+  if (hasAny(facts, /(^|\/)(commands|command_map|command-map|developer_commands|runbook)\.md$|(^|\/)makefile$/i)) anchors.push('command map');
+  if (hasAny(facts, ROOT_INSTRUCTION_RE)) anchors.push('root agent instructions');
+
+  if (anchors.length === 0) {
+    return {
+      status: 'fail' as const,
+      earned: 10,
+      evidence: ['No compact README, docs index, architecture summary, task router, command map, or root instruction anchor found.'],
+    };
+  }
+  if (anchors.length === 1) {
+    return {
+      status: 'partial' as const,
+      earned: 5,
+      evidence: [`Compact context anchor detected: ${anchors[0]}.`],
+    };
+  }
+  return {
+    status: 'pass' as const,
+    earned: 0,
+    evidence: [`Compact context anchors detected: ${anchors.join(', ')}.`],
+  };
+}
+
+function classifyFolderInstructionCoverage(facts: SignalFacts, nestedInstructions: string[]) {
+  const areas = relevantWorkAreas(facts);
+  if (areas.length <= 1 && facts.files.filter(file => !file.isDir && !file.generatedOrVendor && !file.binaryLike).length <= 8) {
+    return {
+      status: 'not-applicable' as const,
+      earned: 0,
+      evidence: ['Repository is small enough that root guidance is sufficient; folder-level instructions are not applicable.'],
+    };
+  }
+  if (areas.length === 0) {
+    return {
+      status: 'not-applicable' as const,
+      earned: 0,
+      evidence: ['No distinct source, docs, test, or service work areas detected for folder-level instructions.'],
+    };
+  }
+  if (nestedInstructions.length === 0) {
+    return {
+      status: 'fail' as const,
+      earned: 0,
+      evidence: [`Relevant work areas need local guidance: ${areas.join(', ')}. No nested instruction files detected.`],
+    };
+  }
+
+  const instructionFolders = nestedInstructions.map(path => path.split('/').slice(0, -1).join('/')).filter(Boolean);
+  const covered = areas.filter(area => instructionFolders.some(folder => area === folder || area.startsWith(`${folder}/`) || folder.startsWith(`${area}/`)));
+  if (covered.length >= areas.length) {
+    return {
+      status: 'pass' as const,
+      earned: 4,
+      evidence: [`Folder instruction coverage: ${covered.join(', ')}.`, `Nested instructions: ${nestedInstructions.join(', ')}`],
+    };
+  }
+  if (covered.length > 0) {
+    const missing = areas.filter(area => !covered.includes(area));
+    return {
+      status: 'partial' as const,
+      earned: 2,
+      evidence: [`Covered work areas: ${covered.join(', ')}.`, `Missing local guidance for: ${missing.join(', ')}.`],
+    };
+  }
+  return {
+    status: 'fail' as const,
+    earned: 0,
+    evidence: [`Nested instructions exist but do not cover detected work areas: ${areas.join(', ')}.`, `Nested instructions: ${nestedInstructions.join(', ')}`],
+  };
+}
+
+function relevantWorkAreas(facts: SignalFacts): string[] {
+  const areas = new Set<string>();
+  for (const folder of facts.sourceFolders) areas.add(folder);
+  if (facts.files.some(file => !file.isDir && file.activeDocumentation && /^docs\//i.test(file.path))) areas.add('docs');
+  if (facts.files.some(file => !file.isDir && file.kind === 'test')) areas.add('tests');
+  if (facts.files.some(file => !file.isDir && /^api\//i.test(file.path))) areas.add('api');
+  if (facts.files.some(file => !file.isDir && /^server\//i.test(file.path))) areas.add('server');
+  return [...areas].sort();
 }
 
 function deliveryConfidenceSignals(facts: SignalFacts): HealthSignal[] {
@@ -309,10 +410,6 @@ function hasAny(facts: SignalFacts, pattern: RegExp): boolean {
 
 function evidenceOr(paths: string[], fallback: string): string[] {
   return paths.length ? paths : [fallback];
-}
-
-function topFolders(paths: string[]): string[] {
-  return [...new Set(paths.map(path => path.split('/')[0]).filter(Boolean))].sort();
 }
 
 function sum(values: number[]): number {

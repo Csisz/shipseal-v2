@@ -121,5 +121,6 @@ export interface RepositoryHealthSignals {
   duplicateDocumentationGroups: DocumentationDuplicateGroup[];
   documentationFamilies: DocumentationFamilyGroup[];
   entryPointCandidates: string[];
+  sourceFolders: string[];
   blockers: HealthBlocker[];
 }

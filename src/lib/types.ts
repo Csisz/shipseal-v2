@@ -126,10 +126,11 @@ export interface RepoContextPackSummary {
   };
 }
 
-export type ScanSourceType = 'zip-upload' | 'github-url' | 'github-public';
+export type ScanSourceType = 'zip-upload' | 'github-url' | 'github-public' | 'github-app';
 
 export interface ScanSourceMetadata {
   sourceType: ScanSourceType;
+  originalSourceType?: Exclude<ScanSourceType, 'github-app'>;
   githubOwner?: string;
   githubRepo?: string;
   githubBranch?: string;

@@ -177,6 +177,92 @@ describe('Repository Health report and score.json integration', () => {
     expect(serialized).toContain('deterministic static repository estimate');
     expect(hasNoUndefined(scoreJson)).toBe(true);
   });
+
+  it('generates Python AGENTS.md without invented npm commands when no verification command is detected', () => {
+    const report = buildReport(scanInput([
+      'README.md',
+      'pyproject.toml',
+      'requirements.txt',
+      'contentflow_ai/__init__.py',
+      'contentflow_ai/routes.py',
+      'tests/test_routes.py',
+    ], {
+      'README.md': '# ContentFlow\n\nOverview and setup.\n',
+      'pyproject.toml': '[project]\ndependencies = ["flask"]\n',
+      'requirements.txt': 'flask\n',
+    }));
+    const agents = report.agentPack.find(file => file.name === 'AGENTS.md')?.content || '';
+
+    expect(report.stack.primary).toBe('Flask');
+    expect(report.summary.keyFolders).toContain('contentflow_ai');
+    expect(agents).not.toMatch(/npm run|pnpm|yarn|bun/);
+    expect(agents).toContain('No verified test, build, lint, or typecheck command was detected');
+    expect(agents).toContain('Manually verify the test command');
+  });
+
+  it('uses detected Python Makefile commands when generating AGENTS.md', () => {
+    const report = buildReport(scanInput([
+      'README.md',
+      'pyproject.toml',
+      'Makefile',
+      'contentflow_ai/__init__.py',
+      'contentflow_ai/app.py',
+      'tests/test_app.py',
+    ], {
+      'README.md': '# ContentFlow\n\nOverview and setup.\n',
+      'pyproject.toml': '[project]\ndependencies = ["flask"]\n',
+      'Makefile': 'test:\n\tpython -m unittest\nlint:\n\tpython -m compileall contentflow_ai\n',
+    }));
+    const agents = report.agentPack.find(file => file.name === 'AGENTS.md')?.content || '';
+
+    expect(agents).toContain('make test');
+    expect(agents).toContain('make lint');
+    expect(agents).not.toContain('npm run');
+  });
+
+  it('normalizes GitHub App source metadata across report, scan evidence, score.json, and Markdown', () => {
+    const report = buildReport({
+      ...normalInput(),
+      source: {
+        sourceType: 'github-url',
+        githubOwner: 'Csisz',
+        githubRepo: 'contentflow-ai',
+        githubBranch: 'main',
+        githubInstallationId: '12345',
+      },
+    });
+    const scoreJson = buildScoreJson(report);
+    const markdown = report.agentPack.find(file => file.name === 'AGENT_READINESS_REPORT.md')?.content || '';
+
+    expect(report.source.sourceType).toBe('github-app');
+    expect(report.source.originalSourceType).toBe('github-url');
+    expect(report.scanEvidence.sourceType).toBe('github-app');
+    expect(scoreJson.source.sourceType).toBe('github-app');
+    expect(scoreJson.scanEvidence.sourceType).toBe('github-app');
+    expect(markdown).toContain('- Source type: github-app');
+    expect(markdown).not.toContain('- Source type: github-url');
+  });
+
+  it('does not use blocker-remediation copy when blockers are empty but score is below ready threshold', () => {
+    const report = buildReport(scanInput([
+      'README.md',
+      'package.json',
+      'src/main.ts',
+      'src/main.test.ts',
+    ], {
+      'README.md': '# App\n\nOverview and setup.\n',
+      'package.json': JSON.stringify({ scripts: { build: 'vite build', test: 'vitest' }, dependencies: { vite: '^5.4.0' } }),
+    }));
+    const agents = report.agentPack.find(file => file.name === 'AGENTS.md')?.content || '';
+    const markdown = report.agentPack.find(file => file.name === 'AGENT_READINESS_REPORT.md')?.content || '';
+
+    expect(report.blockers).toHaveLength(0);
+    expect(report.isReady).toBe(false);
+    expect(report.aiNarrative.blockerExplanation).toContain('There are no critical blockers');
+    expect(agents).toContain('No critical blocker was detected');
+    expect(markdown).toContain('No critical blocker was detected, but the repository has not reached the readiness threshold');
+    expect(markdown).not.toContain('Resolve every critical blocker listed above');
+  });
 });
 
 function hasNoUndefined(value: unknown): boolean {

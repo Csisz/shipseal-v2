@@ -101,7 +101,7 @@ export function scoreRepositoryHealth(input: RepoScanInput): RepositoryHealthMod
       deliveryConfidence,
     },
     blockers,
-    topActions: buildRepositoryHealthRecommendations(extracted.signals, 5),
+    topActions: buildRepositoryHealthRecommendations(extracted.signals, 5, input),
     measurementBoundary: MEASUREMENT_BOUNDARY,
   };
 }

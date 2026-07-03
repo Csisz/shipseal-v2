@@ -40,6 +40,7 @@ const TEXT_CONFIG_FILES = [
   'next.config.js', 'next.config.mjs', 'next.config.ts',
   'requirements.txt', 'pyproject.toml', 'pom.xml', 'build.gradle',
   'go.mod', 'Cargo.toml', 'composer.json', 'Gemfile',
+  'Makefile', 'makefile', 'tox.ini', 'noxfile.py',
   'README.md', 'readme.md', 'README', 'CONTRIBUTING.md',
   'AGENTS.md', 'CLAUDE.md', '.cursorrules', 'CODEOWNERS',
   '.cursor/rules',
@@ -64,7 +65,7 @@ function summarizeLargeRepo(summary: ScanSummary) {
 }
 
 function sourceInputKind(file: File, source?: RepoScanInput['source']): ArchiveDiagnostics['inputKind'] {
-  if (source?.sourceType === 'github-url' || source?.sourceType === 'github-public') return 'github-zipball';
+  if (source?.sourceType === 'github-url' || source?.sourceType === 'github-public' || source?.sourceType === 'github-app') return 'github-zipball';
   return file.name.toLowerCase().endsWith('.zip') ? 'user-uploaded-zip' : 'unknown';
 }
 

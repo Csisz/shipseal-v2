@@ -70,7 +70,9 @@ export function detectStack(input: RepoScanInput): DetectedStack {
     if (/fastapi/i.test(req)) frameworks.add('FastAPI');
     if (/django/i.test(req)) frameworks.add('Django');
     if (/flask/i.test(req)) frameworks.add('Flask');
-    runCommands.push({ label: 'Install', cmd: 'pip install -r requirements.txt' });
+    for (const command of detectPythonCommands(input)) {
+      runCommands.push(command);
+    }
   }
 
   if (has('pom.xml') || has('build.gradle') || has('build.gradle.kts')) {
@@ -89,6 +91,7 @@ export function detectStack(input: RepoScanInput): DetectedStack {
     frameworks.has('Vue') ? 'Vue' :
     frameworks.has('FastAPI') ? 'FastAPI' :
     frameworks.has('Django') ? 'Django' :
+    frameworks.has('Flask') ? 'Flask' :
     [...languages][0] || 'Unknown';
 
   return {
@@ -100,4 +103,59 @@ export function detectStack(input: RepoScanInput): DetectedStack {
     runCommands,
     primary,
   };
+}
+
+function detectPythonCommands(input: RepoScanInput): { label: string; cmd: string }[] {
+  const commands: { label: string; cmd: string }[] = [];
+  const makefile = input.textContents['Makefile'] || input.textContents['makefile'] || '';
+  if (/^test\s*:/m.test(makefile)) commands.push({ label: 'Test', cmd: 'make test' });
+  if (/^build\s*:/m.test(makefile)) commands.push({ label: 'Build', cmd: 'make build' });
+  if (/^lint\s*:/m.test(makefile)) commands.push({ label: 'Lint', cmd: 'make lint' });
+  if (/^(typecheck|types)\s*:/m.test(makefile)) commands.push({ label: 'Typecheck', cmd: /^typecheck\s*:/m.test(makefile) ? 'make typecheck' : 'make types' });
+
+  const paths = new Set(input.files.map(file => file.path));
+  if (paths.has('tox.ini')) commands.push({ label: 'Test', cmd: 'tox' });
+  if (paths.has('noxfile.py')) commands.push({ label: 'Test', cmd: 'nox' });
+
+  const pyproject = input.textContents['pyproject.toml'] || '';
+  for (const script of parseToolScripts(pyproject)) {
+    commands.push(script);
+  }
+
+  return dedupeCommands(commands);
+}
+
+function parseToolScripts(pyproject: string): { label: string; cmd: string }[] {
+  if (!pyproject) return [];
+  const commands: { label: string; cmd: string }[] = [];
+  let inScripts = false;
+  for (const rawLine of pyproject.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const heading = line.match(/^\[([^\]]+)\]$/);
+    if (heading) {
+      inScripts = heading[1] === 'tool.shipseal.scripts' || heading[1] === 'tool.poe.tasks';
+      continue;
+    }
+    if (!inScripts) continue;
+    const match = line.match(/^(test|build|lint|typecheck|types)\s*=\s*["']([^"']+)["']/i);
+    if (!match) continue;
+    const label = match[1].toLowerCase() === 'types' ? 'Typecheck' : titleCase(match[1]);
+    commands.push({ label, cmd: match[2] });
+  }
+  return commands;
+}
+
+function dedupeCommands(commands: { label: string; cmd: string }[]) {
+  const seen = new Set<string>();
+  return commands.filter(command => {
+    const key = `${command.label}:${command.cmd}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function titleCase(value: string) {
+  return value.slice(0, 1).toUpperCase() + value.slice(1).toLowerCase();
 }
