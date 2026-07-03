@@ -188,7 +188,7 @@ function resolveSourceContent(
   if (path === '06-client-handoff/DELIVERY_MANIFEST.md') return deliveryManifest(projectName, input.scoreJson, input.repositoryHealth);
 
   if (path === '07-context/REPOSITORY_HEALTH.md') {
-    return repositoryHealthMarkdown(projectName, resolveRepositoryHealth(input.repositoryHealth, input.scoreJson));
+    return repositoryHealthMarkdown(projectName, resolveRepositoryHealth(input.repositoryHealth, input.scoreJson), input.scoreJson);
   }
 
   if (path === '07-context/REPO_CONTEXT_PACK.md') {
@@ -401,14 +401,15 @@ function deliveryManifest(projectName: string, scoreJson: unknown, repositoryHea
     `Branch / ref: ${branchOrRef}`,
     `Selected package: ${packageLabel}`,
     `Output count: ${typeof score.outputCount === 'number' ? score.outputCount : files.length}`,
-    `Readiness score: ${readinessScore}`,
-    `Readiness decision: ${readinessDecision}`,
     `Manifest schema version: 2`,
     `Repository Health file: 07-context/REPOSITORY_HEALTH.md`,
-    `Repository Health score: ${healthScore(repositoryHealth)}`,
+    `Repository Health: ${healthScore(repositoryHealth)}`,
     `Repository Health status: ${healthStatus(repositoryHealth)}`,
     `Repository Health confidence: ${healthConfidence(repositoryHealth)}`,
-    `Repository Health model: ${healthModelVersion(repositoryHealth)}`,
+    `Repository Health model version: ${healthModelVersion(repositoryHealth)}`,
+    `Context Waste Risk: ${contextWasteRiskScore(repositoryHealth)}`,
+    `Delivery and verification readiness score: ${readinessScore}`,
+    `Delivery and verification readiness status: ${readinessDecision}`,
     '',
     '## Scan Evidence',
     `- Source: ${sourceType}`,
@@ -423,9 +424,10 @@ function deliveryManifest(projectName: string, scoreJson: unknown, repositoryHea
   ].join('\n');
 }
 
-function repositoryHealthMarkdown(projectName: string, health: Record<string, unknown>) {
+function repositoryHealthMarkdown(projectName: string, health: Record<string, unknown>, scoreJson: unknown) {
   const dimensions = asRecord(health.dimensions);
   const contextWaste = asRecord(dimensions.contextWaste);
+  const metadata = repositoryHealthMetadata(projectName, scoreJson);
   const blockers = arrayValue(health.blockers)
     .map(blocker => asRecord(blocker))
     .map(blocker => {
@@ -462,6 +464,16 @@ function repositoryHealthMarkdown(projectName: string, health: Record<string, un
     '',
     'Repository Health is ShipSeal\'s primary AI Repository Intelligence summary. It is based on deterministic static scan signals and does not execute repository code.',
     '',
+    'Repository Health reflects the scanned repository before ShipSeal-generated improvements are applied.',
+    '',
+    '## Metadata',
+    `- Project name: ${projectName}`,
+    `- Repository owner/name: ${metadata.repositoryFullName}`,
+    `- Branch or ref: ${metadata.branchOrRef}`,
+    `- Scan timestamp: ${metadata.scanTimestamp}`,
+    `- Repository Health model version: ${healthModelVersion(health)}`,
+    `- Measurement method: ${stringField(health, 'measurementMethod') || 'deterministic-static-scan'}`,
+    '',
     '## Overall',
     `- Score: ${healthScore(health)}`,
     `- Status: ${healthStatus(health)}`,
@@ -485,6 +497,14 @@ function repositoryHealthMarkdown(projectName: string, health: Record<string, un
     '## Supporting Delivery Signals',
     '- Legacy readiness, AI Act readiness, testing, MCP, and client handoff outputs remain available elsewhere in this Delivery Pack.',
     '- Treat this assessment as static repository intelligence, not legal advice.',
+    ...(healthStatus(health) === 'Insufficient evidence'
+      ? [
+          '',
+          '## Recovery Guidance',
+          '- Re-run ShipSeal with a valid repository ZIP or GitHub archive.',
+          '- Confirm the archive contains real repository files rather than an HTML error response or synthetic fallback data.',
+        ]
+      : []),
     '',
   ].join('\n');
 }
@@ -513,6 +533,10 @@ function healthScore(health: Record<string, unknown>) {
   return scoreValue(asRecord(health.overall).score);
 }
 
+function contextWasteRiskScore(health: Record<string, unknown>) {
+  return scoreValue(asRecord(asRecord(health.dimensions).contextWaste).riskScore);
+}
+
 function healthStatus(health: Record<string, unknown>) {
   return stringField(asRecord(health.overall), 'status') || 'Not available';
 }
@@ -527,6 +551,19 @@ function healthModelVersion(health: Record<string, unknown>) {
 
 function scoreValue(value: unknown) {
   return typeof value === 'number' ? `${value}/100` : 'Not available';
+}
+
+function repositoryHealthMetadata(projectName: string, scoreJson: unknown) {
+  const score = asRecord(scoreJson);
+  const source = asRecord(score.source);
+  const evidence = asRecord(score.scanEvidence);
+  const owner = stringField(source, 'githubOwner');
+  const repo = stringField(source, 'githubRepo');
+  return {
+    repositoryFullName: stringField(evidence, 'repositoryFullName') || (owner && repo ? `${owner}/${repo}` : stringField(score, 'repositoryName') || projectName),
+    branchOrRef: stringField(evidence, 'branchOrRef') || stringField(source, 'githubBranch') || stringField(source, 'githubDefaultBranch') || 'default ref',
+    scanTimestamp: stringField(score, 'scanTimestamp') || 'Not available',
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

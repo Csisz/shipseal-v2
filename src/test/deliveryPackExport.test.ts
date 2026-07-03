@@ -95,15 +95,27 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
       repositoryHealthScore: report.repositoryHealth.overall.score,
       repositoryHealthStatus: report.repositoryHealth.overall.status,
       repositoryHealthConfidence: report.repositoryHealth.overall.confidence,
+      contextWasteRiskScore: report.repositoryHealth.dimensions.contextWaste.riskScore,
+      deliveryVerificationReadinessScore: report.score,
+      deliveryVerificationReadinessStatus: report.level,
     });
     expect(repositoryHealth).toContain('# Repository Health - sample-nextjs-app');
+    expect(repositoryHealth).toContain(`- Project name: ${report.repoName}`);
+    expect(repositoryHealth).toContain(`- Repository owner/name: ${report.repoName}`);
+    expect(repositoryHealth).toContain('- Branch or ref: default ref');
+    expect(repositoryHealth).toContain(`- Scan timestamp: ${report.scannedAt}`);
+    expect(repositoryHealth).toContain(`- Repository Health model version: ${report.repositoryHealth.modelVersion}`);
+    expect(repositoryHealth).toContain(`- Measurement method: ${report.repositoryHealth.measurementMethod}`);
+    expect(repositoryHealth).toContain('Repository Health reflects the scanned repository before ShipSeal-generated improvements are applied.');
     expect(repositoryHealth).toContain(`- Score: ${report.repositoryHealth.overall.score}/100`);
     expect(repositoryHealth).toContain(`- Status: ${report.repositoryHealth.overall.status}`);
     expect(repositoryHealth).toContain('## Top Repository Improvements');
     expect(repositoryHealth).not.toContain('- Score: 1/100');
     expect(manifest).toContain('Manifest schema version: 2');
     expect(manifest).toContain('Repository Health file: 07-context/REPOSITORY_HEALTH.md');
-    expect(manifest).toContain(`Repository Health score: ${report.repositoryHealth.overall.score}/100`);
+    expect(manifest).toContain(`Repository Health: ${report.repositoryHealth.overall.score}/100`);
+    expect(manifest).toContain(`Context Waste Risk: ${report.repositoryHealth.dimensions.contextWaste.riskScore}/100`);
+    expect(manifest).toContain(`Delivery and verification readiness score: ${report.score}/100`);
   });
 
   it('maps selected goals to focused Delivery Pack outputs', () => {
@@ -383,10 +395,11 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(manifest).toContain('Branch / ref:');
     expect(manifest).toContain(`Selected package: ${scoreJson.deliveryPackFocus?.packageLabel}`);
     expect(manifest).toContain(`Output count: ${scoreJson.outputCount}`);
-    expect(manifest).toContain(`Readiness score: ${scoreJson.score}/100`);
-    expect(manifest).toContain(`Readiness decision: ${scoreJson.status}`);
-    expect(manifest).toContain(`Repository Health score: ${scoreJson.repositoryHealth.overall.score}/100`);
+    expect(manifest).toContain(`Delivery and verification readiness score: ${scoreJson.score}/100`);
+    expect(manifest).toContain(`Delivery and verification readiness status: ${scoreJson.status}`);
+    expect(manifest).toContain(`Repository Health: ${scoreJson.repositoryHealth.overall.score}/100`);
     expect(manifest).toContain(`Repository Health status: ${scoreJson.repositoryHealth.overall.status}`);
+    expect(manifest).toContain(`Context Waste Risk: ${scoreJson.repositoryHealth.dimensions.contextWaste.riskScore}/100`);
     expect(manifest).toContain('07-context/REPOSITORY_HEALTH.md');
     expect(manifest).toContain('## Scan Evidence');
     expect(manifest).toContain('Code execution: ShipSeal did not execute repository code.');

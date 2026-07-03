@@ -127,6 +127,14 @@ export interface RepoContextPackSummary {
     confidence: HealthConfidence;
     contextWasteRiskScore: number | null;
     contextEfficiencyScore: number | null;
+    dimensions: {
+      repositoryIntelligence: number | null;
+      contextWasteRisk: number | null;
+      aiDevelopmentReadiness: number | null;
+      agentRouting: number | null;
+      deliveryConfidence: number | null;
+    };
+    topActionIds: string[];
     blockerCount: number;
     topActions: string[];
     measurementBoundary: string[];
@@ -410,6 +418,9 @@ export interface ScoreJsonExport {
     repositoryHealthScore: number | null;
     repositoryHealthStatus: RepositoryHealthStatus;
     repositoryHealthConfidence: HealthConfidence;
+    contextWasteRiskScore: number | null;
+    deliveryVerificationReadinessScore: number;
+    deliveryVerificationReadinessStatus: ReadinessLevel;
   };
   mcpReadiness: {
     score: number;

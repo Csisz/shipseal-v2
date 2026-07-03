@@ -113,6 +113,19 @@ describe('Repository Health pure core', () => {
     expect(signal?.evidence.join('\n')).toContain('src/giant.ts');
   });
 
+  it('excludes dependency lockfiles from oversized relevant-context detection', () => {
+    const input = healthyRepo(['pnpm-lock.yaml', 'Pipfile.lock', 'uv.lock'], {}, {
+      'package-lock.json': 700 * 1024,
+      'pnpm-lock.yaml': 700 * 1024,
+      'Pipfile.lock': 700 * 1024,
+      'uv.lock': 700 * 1024,
+    });
+    const signal = scoreRepositoryHealth(input).dimensions.contextWaste.signals.find(item => item.id === 'waste.large-relevant-files');
+
+    expect(signal?.status).toBe('pass');
+    expect(signal?.evidence.join('\n')).not.toMatch(/lock/i);
+  });
+
   it('groups exact duplicate readable documentation after normalization', () => {
     const input = healthyRepo(
       ['docs/duplicate-a.md', 'docs/duplicate-b.md'],
@@ -141,6 +154,47 @@ describe('Repository Health pure core', () => {
     expect(scoreRepositoryHealth(archived).dimensions.contextWaste.signals.find(signal => signal.id === 'waste.canonical-conflicts')?.status).toBe('pass');
     expect(scoreRepositoryHealth(archived).dimensions.contextWaste.riskScore)
       .toBeLessThan(scoreRepositoryHealth(conflicting).dimensions.contextWaste.riskScore || 0);
+  });
+
+  it('does not group unrelated planning documents as canonical conflicts', () => {
+    const result = scoreRepositoryHealth(healthyRepo([
+      'docs/GITHUB_APP_CONNECT_PLAN.md',
+      'docs/GITHUB_IMPORT_PROXY_PLAN.md',
+      'docs/CREATE_READINESS_PR_PLAN.md',
+      'docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md',
+      'docs/PRODUCT_BACKLOG.md',
+      'docs/Sprint-Omega-Repository-Health-Implementation-Blueprint.md',
+    ]));
+    const canonicalConflict = result.dimensions.contextWaste.signals.find(signal => signal.id === 'waste.canonical-conflicts');
+
+    expect(canonicalConflict?.status).toBe('pass');
+    expect(canonicalConflict?.evidence.join('\n')).not.toContain('PLAN');
+  });
+
+  it('still reports active same-topic roadmap variants as canonical conflicts', () => {
+    const result = scoreRepositoryHealth(healthyRepo(['ROADMAP.md', 'ROADMAP_2026.md', 'ROADMAP_V2.md']));
+    const conflictSignal = result.dimensions.contextWaste.signals.find(signal => signal.id === 'waste.canonical-conflicts');
+    const topActionIds = result.topActions.map(action => action.id);
+
+    expect(conflictSignal?.status).toBe('fail');
+    expect(conflictSignal?.evidence.join('\n')).toContain('roadmap:roadmap');
+    expect(topActionIds.filter(id => id === 'canonical-document-conflict')).toHaveLength(1);
+    expect(result.topActions.map(action => action.title).join('\n')).not.toContain('Resolve duplicate canonical documentation families');
+  });
+
+  it('separates active documentation sprawl from canonical conflicts', () => {
+    const manyDocs = Array.from({ length: 12 }, (_, index) => `docs/topic-${index}.md`);
+    const result = scoreRepositoryHealth(healthyRepo(manyDocs));
+    const sprawl = result.dimensions.contextWaste.signals.find(signal => signal.id === 'waste.active-doc-sprawl');
+    const conflicts = result.dimensions.contextWaste.signals.find(signal => signal.id === 'waste.canonical-conflicts');
+    const sprawlAction = result.topActions.find(action => action.id === 'documentation-sprawl');
+
+    expect(sprawl?.status).toBe('fail');
+    expect(sprawl?.evidence.join('\n')).toContain('Active documentation files:');
+    expect(sprawl?.evidence.join('\n')).toContain('Review the active documentation set');
+    expect(conflicts?.status).toBe('pass');
+    expect(sprawlAction?.title).toBe('Review the active documentation set');
+    expect(sprawlAction?.action).not.toMatch(/duplicate|competing/i);
   });
 
   it('detects nested instruction coverage and task routers', () => {

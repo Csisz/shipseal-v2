@@ -145,6 +145,9 @@ export function buildScoreJson(report: ReadinessReport, options: BuildScoreJsonO
       repositoryHealthScore: report.repositoryHealth.overall.score,
       repositoryHealthStatus: report.repositoryHealth.overall.status,
       repositoryHealthConfidence: report.repositoryHealth.overall.confidence,
+      contextWasteRiskScore: report.repositoryHealth.dimensions.contextWaste.riskScore,
+      deliveryVerificationReadinessScore: report.score,
+      deliveryVerificationReadinessStatus: report.level,
     },
     mcpReadiness: {
       score: report.mcpReadiness.score,

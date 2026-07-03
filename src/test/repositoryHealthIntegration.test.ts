@@ -156,6 +156,9 @@ describe('Repository Health report and score.json integration', () => {
       repositoryHealthScore: report.repositoryHealth.overall.score,
       repositoryHealthStatus: report.repositoryHealth.overall.status,
       repositoryHealthConfidence: report.repositoryHealth.overall.confidence,
+      contextWasteRiskScore: report.repositoryHealth.dimensions.contextWaste.riskScore,
+      deliveryVerificationReadinessScore: report.score,
+      deliveryVerificationReadinessStatus: report.level,
     });
     expect(scoreJson.generatedFiles).toContain('score.json');
     expect(scoreJson.generatedFiles).toContain('07-context/REPOSITORY_HEALTH.md');

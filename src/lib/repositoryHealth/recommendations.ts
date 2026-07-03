@@ -27,7 +27,7 @@ const RECOMMENDATION_TEMPLATES: Record<string, RecommendationTemplate> = {
   },
   'repo.canonical-docs': {
     id: 'repo.canonical-docs',
-    title: 'Resolve duplicate canonical documentation families',
+    title: 'Resolve canonical documentation conflicts',
     whyItMatters: 'Multiple active docs for the same topic make agents choose between competing sources.',
     action: 'Keep one active document per family and move obsolete versions under docs/archive/ with clear dates.',
     dimensions: ['repositoryIntelligence', 'contextWaste'],
@@ -96,9 +96,9 @@ const RECOMMENDATION_TEMPLATES: Record<string, RecommendationTemplate> = {
   },
   'waste.active-doc-sprawl': {
     id: 'waste.active-doc-sprawl',
-    title: 'Archive obsolete active documentation',
+    title: 'Review the active documentation set',
     whyItMatters: 'A large active doc set increases context selection work before coding can begin.',
-    action: 'Move obsolete documents under docs/archive/ and keep docs/README.md as the active index.',
+    action: 'Index, archive, or scope active documents so agents can find the right context without over-reading unrelated material.',
     dimensions: ['contextWaste'],
     suggestedTargetPath: 'docs/archive/',
     potentialDimensionGain: 10,
@@ -404,7 +404,7 @@ function dedupeRecommendations(recommendations: HealthRecommendation[]): HealthR
     const key = remediationKey(recommendation);
     const existing = byKey.get(key);
     if (!existing) {
-      byKey.set(key, recommendation);
+      byKey.set(key, { ...recommendation, id: key });
       continue;
     }
     byKey.set(key, mergeRecommendations(existing, recommendation, key));
@@ -413,16 +413,31 @@ function dedupeRecommendations(recommendations: HealthRecommendation[]): HealthR
 }
 
 function remediationKey(recommendation: HealthRecommendation) {
+  const explicit = REMEDIATION_KEYS[recommendation.id];
+  if (explicit) return explicit;
   const target = recommendation.suggestedTargetPath?.trim().toLowerCase();
   if (target === 'agents.md') return 'root-agent-instructions';
   return target || recommendation.id;
 }
 
+const REMEDIATION_KEYS: Record<string, string> = {
+  'repo.canonical-docs': 'canonical-document-conflict',
+  'waste.canonical-conflicts': 'canonical-document-conflict',
+  'waste.active-doc-sprawl': 'documentation-sprawl',
+  'repo.docs-index': 'documentation-index',
+  'route.task-router': 'task-routing',
+  'waste.entrypoint-ambiguity': 'task-routing',
+  'route.entry-point-clarity': 'task-routing',
+  'route.command-map': 'command-map',
+  'ai.package-scripts': 'command-map',
+  'ai.ci-script-cross-reference': 'command-map',
+};
+
 function mergeRecommendations(a: HealthRecommendation, b: HealthRecommendation, key: string): HealthRecommendation {
   const primary = compareRecommendations(a, b) <= 0 ? a : b;
   return {
     ...primary,
-    id: key === 'root-agent-instructions' ? 'root-agent-instructions' : [a.id, b.id].sort().join('+'),
+    id: key,
     dimensions: unique([...a.dimensions, ...b.dimensions]),
     evidence: unique([...a.evidence, ...b.evidence]),
     potentialDimensionGain: a.potentialDimensionGain + b.potentialDimensionGain,

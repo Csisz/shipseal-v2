@@ -77,6 +77,14 @@ export function buildRepoContextPack(input: RepoScanInput, stack: DetectedStack,
       confidence: meta.repositoryHealth.overall.confidence,
       contextWasteRiskScore: meta.repositoryHealth.dimensions.contextWaste.riskScore,
       contextEfficiencyScore: meta.repositoryHealth.dimensions.contextWaste.contextEfficiencyScore,
+      dimensions: {
+        repositoryIntelligence: meta.repositoryHealth.dimensions.repositoryIntelligence.score,
+        contextWasteRisk: meta.repositoryHealth.dimensions.contextWaste.riskScore,
+        aiDevelopmentReadiness: meta.repositoryHealth.dimensions.aiDevelopmentReadiness.score,
+        agentRouting: meta.repositoryHealth.dimensions.agentRouting.score,
+        deliveryConfidence: meta.repositoryHealth.dimensions.deliveryConfidence.score,
+      },
+      topActionIds: meta.repositoryHealth.topActions.slice(0, 5).map(action => action.id),
       blockerCount: meta.repositoryHealth.blockers.length,
       topActions: meta.repositoryHealth.topActions.slice(0, 5).map(action => action.title),
       measurementBoundary: [...meta.repositoryHealth.measurementBoundary],
@@ -159,6 +167,8 @@ ${mdList(pack.securityFindings, 'No secret-path findings in metadata.')}
 - Context efficiency score: ${pack.repositoryHealth.contextEfficiencyScore === null ? 'Not available' : `${pack.repositoryHealth.contextEfficiencyScore}/100`}
 - Health blockers: ${pack.repositoryHealth.blockerCount}
 - Model: ${pack.repositoryHealth.modelVersion} (${pack.repositoryHealth.measurementMethod})
+- Dimension scores: repository intelligence ${scoreText(pack.repositoryHealth.dimensions.repositoryIntelligence)}, context waste risk ${scoreText(pack.repositoryHealth.dimensions.contextWasteRisk)}, AI development readiness ${scoreText(pack.repositoryHealth.dimensions.aiDevelopmentReadiness)}, agent routing ${scoreText(pack.repositoryHealth.dimensions.agentRouting)}, delivery confidence ${scoreText(pack.repositoryHealth.dimensions.deliveryConfidence)}
+- Top action IDs: ${pack.repositoryHealth.topActionIds.join(', ') || 'none'}
 
 ## Repository Health top actions
 ${mdList(pack.repositoryHealth.topActions, 'No Repository Health actions available.')}
@@ -178,4 +188,8 @@ ${mdList(pack.repositoryHealth.measurementBoundary, 'No Repository Health bounda
 - Secrets included: ${pack.contentPolicy.secretsIncluded ? 'yes' : 'no'}
 - Uploaded code executed: ${pack.contentPolicy.uploadedCodeExecuted ? 'yes' : 'no'}
 `;
+}
+
+function scoreText(score: number | null) {
+  return score === null ? 'not available' : `${score}/100`;
 }

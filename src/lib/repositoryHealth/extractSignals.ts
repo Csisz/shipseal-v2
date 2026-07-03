@@ -17,7 +17,7 @@ const LARGE_RELEVANT_FILE_BYTES = 128 * 1024;
 const GIANT_RELEVANT_FILE_BYTES = 512 * 1024;
 
 const CI_WORKFLOW_RE = /(^|\/)\.github\/workflows\/[^/]+\.ya?ml$/i;
-const LOCKFILE_RE = /(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb|bun\.lock|poetry\.lock|cargo\.lock|go\.sum|gemfile\.lock|composer\.lock)$/i;
+const LOCKFILE_RE = /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lock|bun\.lockb|pipfile\.lock|poetry\.lock|uv\.lock|cargo\.lock|gemfile\.lock|composer\.lock|go\.sum)$/i;
 const ROOT_INSTRUCTION_RE = /^(agents\.md|claude\.md|codex\.md|\.cursorrules|\.cursor\/rules(?:\/.*)?)$/i;
 const FOLDER_INSTRUCTION_RE = /(^|\/)(agents\.md|claude\.md|codex\.md|\.cursor\/rules(?:\/.*)?$)/i;
 
@@ -103,7 +103,7 @@ function contextWasteSignals(facts: SignalFacts): HealthSignal[] {
   const generatedFiles = realFiles.filter(file => file.generatedOrVendor);
   const totalBytes = sum(realFiles.map(file => file.size));
   const generatedBytes = sum(generatedFiles.map(file => file.size));
-  const relevantFiles = realFiles.filter(file => !file.generatedOrVendor && !file.binaryLike);
+  const relevantFiles = realFiles.filter(file => !file.generatedOrVendor && !file.binaryLike && !isLockfilePath(file.path) && relevantContextKind(file));
   const largeRelevant = relevantFiles.filter(file => file.size >= LARGE_RELEVANT_FILE_BYTES);
   const giantRelevant = relevantFiles.filter(file => file.size >= GIANT_RELEVANT_FILE_BYTES);
   const activeDocs = facts.files.filter(file => file.activeDocumentation);
@@ -123,7 +123,11 @@ function contextWasteSignals(facts: SignalFacts): HealthSignal[] {
     riskSignal('waste.generated-byte-ratio', 'Generated/vendor byte ratio is controlled', generatedByteRatio > 0.5 ? 'fail' : generatedByteRatio > 0.15 ? 'partial' : 'pass', 15, generatedByteRatio > 0.5 ? 15 : generatedByteRatio > 0.15 ? 7.5 : 0, [`Generated/vendor bytes: ${generatedBytes} of ${totalBytes}.`], 'waste.generated-byte-ratio'),
     riskSignal('waste.large-relevant-files', 'Relevant files are not oversized', giantRelevant.length ? 'fail' : largeRelevant.length ? 'partial' : 'pass', 15, giantRelevant.length ? 15 : largeRelevant.length ? 7.5 : 0, giantRelevant.length ? giantRelevant.map(file => `Giant relevant file: ${file.path} (${file.size} bytes)`) : largeRelevant.length ? largeRelevant.map(file => `Large relevant file: ${file.path} (${file.size} bytes)`) : ['No oversized relevant files detected.'], 'waste.large-relevant-files'),
     riskSignal('waste.duplicate-docs', 'Readable documentation has no exact duplicates', facts.duplicateDocumentationGroups.length ? 'fail' : 'pass', 15, facts.duplicateDocumentationGroups.length ? 15 : 0, facts.duplicateDocumentationGroups.length ? facts.duplicateDocumentationGroups.map(group => `Duplicate docs: ${group.paths.join(', ')}`) : ['No exact duplicate readable documentation detected.'], 'waste.duplicate-docs'),
-    riskSignal('waste.active-doc-sprawl', 'Active documentation set is compact', activeDocs.length > 20 ? 'fail' : activeDocs.length > 10 ? 'partial' : 'pass', 10, activeDocs.length > 20 ? 10 : activeDocs.length > 10 ? 5 : 0, [`Active documentation files: ${activeDocs.length}.`], 'waste.active-doc-sprawl'),
+    riskSignal('waste.active-doc-sprawl', 'Active documentation set is compact', activeDocs.length > 20 ? 'fail' : activeDocs.length > 10 ? 'partial' : 'pass', 10, activeDocs.length > 20 ? 10 : activeDocs.length > 10 ? 5 : 0, [
+      `Active documentation files: ${activeDocs.length}.`,
+      docsIndexEvidence(facts),
+      'Review the active documentation set for indexing, archiving, or clearer scope before treating it as agent context.',
+    ], 'waste.active-doc-sprawl'),
     riskSignal('waste.canonical-conflicts', 'Canonical documentation families do not conflict', conflicts.length ? 'fail' : 'pass', 10, conflicts.length ? 10 : 0, conflicts.length ? conflicts.map(group => `${group.family}: ${group.activePaths.join(', ')}`) : ['No active canonical document conflicts detected.'], 'waste.canonical-conflicts'),
     riskSignal('waste.compact-anchor-missing', 'Compact context anchors are present', compactAnchors.status, 10, compactAnchors.earned, compactAnchors.evidence, 'waste.compact-anchor-missing'),
     riskSignal('waste.entrypoint-ambiguity', 'Entry point routing is not ambiguous', entryPointStatus, 5, entryPointStatus === 'fail' ? 5 : entryPointStatus === 'partial' ? 2.5 : 0, entryPointEvidence, 'waste.entrypoint-ambiguity'),
@@ -341,7 +345,16 @@ function groupDocumentationFamilies(files: ClassifiedRepositoryFile[]): Document
 function documentationFamily(path: string): string | null {
   const lower = path.toLowerCase();
   const base = lower.split('/').pop() || lower;
+  if (isLegacyDocumentationScope(lower)) return null;
   if (/^docs\/readme\.md$/.test(lower)) return null;
+  const type = canonicalDocumentType(base);
+  if (!type) return null;
+  const subject = canonicalDocumentSubject(base, type);
+  if (!subject) return null;
+  return `${type}:${subject}`;
+}
+
+function canonicalDocumentType(base: string): string | null {
   if (/readme(\.md)?$/.test(base)) return 'readme';
   if (/(architecture|arch|system-design)/.test(base)) return 'architecture';
   if (/(contributing|development|developer-guide)/.test(base)) return 'contributing';
@@ -349,8 +362,63 @@ function documentationFamily(path: string): string | null {
   if (/(testing|qa|quality)/.test(base)) return 'testing';
   if (/(deploy|deployment)/.test(base)) return 'deployment';
   if (/(release|rollback|runbook)/.test(base)) return 'release';
-  if (/(roadmap|product|business|implementation|blueprint|plan)/.test(base)) return 'planning';
+  if (/(roadmap)/.test(base)) return 'roadmap';
+  if (/(backlog)/.test(base)) return 'backlog';
+  if (/(plan|planning|blueprint)/.test(base)) return 'plan';
   return null;
+}
+
+function canonicalDocumentSubject(base: string, type: string): string | null {
+  const normalized = base
+    .replace(/\.(md|mdx|rst|adoc|txt)$/i, '')
+    .replace(/(^|[-_ ])(19|20)\d{2}(?=$|[-_ ])/g, '$1')
+    .replace(/(^|[-_ ])(v|version)[-_ ]?\d+(?=$|[-_ ])/g, '$1')
+    .replace(/\b(copy|draft|final|latest|new|old)\b/g, '')
+    .replace(/[-_ ]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  const tokens = normalized.split('-').filter(Boolean);
+  const typeTokens = canonicalTypeTokens(type);
+  const subjectTokens = tokens.filter(token => !typeTokens.has(token));
+  if (type === 'readme') return 'root';
+  if (subjectTokens.length === 0) return type;
+  return subjectTokens.join('-');
+}
+
+function canonicalTypeTokens(type: string): Set<string> {
+  const common: Record<string, string[]> = {
+    architecture: ['architecture', 'arch', 'system', 'design', 'system-design'],
+    contributing: ['contributing', 'development', 'developer', 'guide', 'developer-guide'],
+    security: ['security', 'privacy', 'data', 'protection', 'data-protection', 'data_privacy'],
+    testing: ['testing', 'qa', 'quality'],
+    deployment: ['deploy', 'deployment'],
+    release: ['release', 'rollback', 'runbook'],
+    roadmap: ['roadmap'],
+    backlog: ['backlog'],
+    plan: ['plan', 'planning', 'blueprint'],
+    readme: ['readme'],
+  };
+  return new Set(common[type] || [type]);
+}
+
+function isLegacyDocumentationScope(path: string): boolean {
+  return /(^|\/)(archive|archives|archived|legacy|obsolete|deprecated|old|history|historical|_archive)(\/|$)/i.test(path);
+}
+
+function relevantContextKind(file: ClassifiedRepositoryFile): boolean {
+  return file.kind === 'source'
+    || file.kind === 'documentation'
+    || file.kind === 'instruction'
+    || file.kind === 'config';
+}
+
+function isLockfilePath(path: string): boolean {
+  return LOCKFILE_RE.test(path);
+}
+
+function docsIndexEvidence(facts: SignalFacts): string {
+  return hasAny(facts, /(^|\/)(docs\/(index|readme)|documentation_(index|inventory)|docs\/documentation_inventory)\.md$/i)
+    ? 'Documentation index detected.'
+    : 'No docs index or documentation inventory file found.';
 }
 
 function normalizeDocumentationContent(content: string): string {

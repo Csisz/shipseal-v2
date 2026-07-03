@@ -828,7 +828,16 @@ describe('Sprint 6 AI provider and Repo Context Pack', () => {
       status: report.repositoryHealth.overall.status,
       confidence: report.repositoryHealth.overall.confidence,
       contextWasteRiskScore: report.repositoryHealth.dimensions.contextWaste.riskScore,
+      contextEfficiencyScore: report.repositoryHealth.dimensions.contextWaste.contextEfficiencyScore,
+      dimensions: {
+        repositoryIntelligence: report.repositoryHealth.dimensions.repositoryIntelligence.score,
+        contextWasteRisk: report.repositoryHealth.dimensions.contextWaste.riskScore,
+        aiDevelopmentReadiness: report.repositoryHealth.dimensions.aiDevelopmentReadiness.score,
+        agentRouting: report.repositoryHealth.dimensions.agentRouting.score,
+        deliveryConfidence: report.repositoryHealth.dimensions.deliveryConfidence.score,
+      },
     });
+    expect(json.repositoryHealth.topActionIds).toEqual(report.repositoryHealth.topActions.slice(0, 5).map(action => action.id));
     expect(json.repositoryHealth.topActions).toEqual(report.repositoryHealth.topActions.slice(0, 5).map(action => action.title));
     expect(json.contentPolicy.secretsIncluded).toBe(false);
   });
