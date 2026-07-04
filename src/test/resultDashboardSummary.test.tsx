@@ -76,9 +76,11 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: /75 \/ 100/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
+    expect(screen.getAllByText('Repository Intelligence').length).toBeGreaterThan(0);
     expect(screen.getByText('AI Workspace')).toBeInTheDocument();
     expect(screen.getAllByText('Workspace Quality').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(`${report.repositoryHealth.overall.score} / 100`).length).toBeGreaterThan(0);
     expect(screen.getByText('Workspace Overview')).toBeInTheDocument();
     expect(screen.getByText('Repository as an AI workspace')).toBeInTheDocument();
     expect(screen.getByText(`${report.repositoryHealth.overall.score} / 100`)).toBeInTheDocument();
@@ -174,7 +176,8 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByText('Workspace Quality unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Repository evidence incomplete')).toBeInTheDocument();
+    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Insufficient evidence').length).toBeGreaterThan(0);
     expect(screen.getByText('Low confidence')).toBeInTheDocument();
     expect(screen.getByText(/upload the complete ZIP/i)).toBeInTheDocument();

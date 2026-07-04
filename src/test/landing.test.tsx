@@ -31,11 +31,13 @@ describe('ShipSeal landing', () => {
 
     // Outcome goals plus the distinct full package remain available after the explanation.
     expect(screen.getByText(/Choose what to optimize first/i)).toBeInTheDocument();
-    expect(screen.getByText('Prepare for client handoff')).toBeInTheDocument();
-    expect(screen.getByText('Prepare for launch or production')).toBeInTheDocument();
-    expect(screen.getByText('Make it safer')).toBeInTheDocument();
-    expect(screen.getByText('MCP readiness and tool integration')).toBeInTheDocument();
-    expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
+    expect(screen.getByText('Build with AI')).toBeInTheDocument();
+    expect(screen.getByText('Ship to Client')).toBeInTheDocument();
+    expect(screen.getByText('Production Readiness')).toBeInTheDocument();
+    expect(screen.getByText('Security Review')).toBeInTheDocument();
+    expect(screen.getAllByText('Full Workspace Analysis').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Advanced goals').length).toBeGreaterThan(0);
+    expect(screen.queryByText('MCP readiness and tool integration')).not.toBeInTheDocument();
 
     // Minimal workflow.
     expect(screen.getByText('How it works.')).toBeInTheDocument();
@@ -101,7 +103,7 @@ describe('ShipSeal landing', () => {
       <Landing onSampleReport={vi.fn()} onScrollScan={vi.fn()} onPickPackage={onPickPackage} scanSlot={null} />
     );
 
-    screen.getByRole('button', { name: /Prepare for client handoff/i }).click();
+    screen.getByRole('button', { name: /Ship to Client/i }).click();
 
     expect(onPickPackage).toHaveBeenCalledWith('client-handoff');
   });

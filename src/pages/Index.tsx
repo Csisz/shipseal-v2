@@ -14,7 +14,7 @@ import { createDefaultProjectIntake, hasMeaningfulProjectContext } from '@/lib/i
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import { Button } from '@/components/ui/button';
 import { PackageCards } from '@/components/agentready/PackageCards';
-import { FULL_PACKAGE_ID, type ShipSealPackageId } from '@/lib/packages';
+import { FULL_PACKAGE_ID, getShipSealPackage, type ShipSealPackageId } from '@/lib/packages';
 import { AGENT_OPERATING_MODES, DEFAULT_AGENT_OPERATING_MODE, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
 import { getGitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
@@ -218,12 +218,7 @@ const Index = () => {
   }, []);
 
   const togglePackage = useCallback((id: string) => {
-    setSelectedPackages(current => {
-      if (current.includes(id)) return current.filter(item => item !== id);
-      // Choosing the full package clears individual picks; picking an individual pack clears "full".
-      if (id === FULL_PACKAGE_ID) return [FULL_PACKAGE_ID];
-      return [...current.filter(item => item !== FULL_PACKAGE_ID), id];
-    });
+    setSelectedPackages([id]);
   }, []);
 
   const handleNavAnchor = useCallback((href: string) => {
@@ -514,6 +509,8 @@ function ProjectContextStep({
   onContinue: () => void;
 }) {
   const hasGoalSelection = selectedPackages.length > 0;
+  const selectedGoal = selectedPackages[0] ? getShipSealPackage(selectedPackages[0]) : null;
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -533,28 +530,49 @@ function ProjectContextStep({
       </div>
 
       <div className="glass rounded-2xl p-6">
-        <div className="max-w-2xl">
-          <h2 className="font-display text-2xl font-semibold">What do you want ShipSeal to help with?</h2>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-            Choose the outcome you need. ShipSeal will scan your project and prepare review notes, improvement suggestions and delivery-ready files.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="max-w-2xl">
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Goal</div>
+            <h2 className="mt-1 font-display text-2xl font-semibold">What do you want?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Pick one. ShipSeal can scan now; optional details can wait.
+            </p>
+          </div>
+          {selectedGoal && (
+            <div className="rounded-full border border-primary/45 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary-glow">
+              Selected: {selectedGoal.id === FULL_PACKAGE_ID ? 'Full Workspace Analysis' : selectedGoal.title}
+            </div>
+          )}
         </div>
         <div className="mt-6">
-        <PackageCards variant="select" selected={selectedPackages} onToggle={onTogglePackage} />
+          <PackageCards variant="select" selected={selectedPackages} onToggle={onTogglePackage} />
         </div>
       </div>
 
       {hasGoalSelection && (
-        <>
-          {selectionUsesAgentDevelopment(selectedPackages) && (
-            <AgentOperatingModeSelector value={agentOperatingMode} onChange={onAgentOperatingModeChange} />
+        <div className="rounded-2xl border border-border/60 bg-secondary/15">
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen(open => !open)}
+            aria-expanded={advancedOpen}
+            className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <span>Advanced options</span>
+            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+          </button>
+          {advancedOpen && (
+            <div className="space-y-5 border-t border-border/50 p-5">
+              {selectionUsesAgentDevelopment(selectedPackages) && (
+                <AgentOperatingModeSelector value={agentOperatingMode} onChange={onAgentOperatingModeChange} compact />
+              )}
+              <ProjectIntakeForm value={intake} onChange={onChange} />
+              <OutputPreview selectedPackages={selectedPackages} />
+              <div className="rounded-xl border border-border/60 bg-background/25 px-4 py-3 text-sm text-muted-foreground">
+                These details improve Delivery Outputs. They are optional for the first scan.
+              </div>
+            </div>
           )}
-          <ProjectIntakeForm value={intake} onChange={onChange} />
-          <OutputPreview selectedPackages={selectedPackages} />
-          <div className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-muted-foreground">
-            You can continue without project context, but the client report will be more generic.
-          </div>
-        </>
+        </div>
       )}
 
       <div className="flex flex-col sm:flex-row gap-3 justify-end">
@@ -570,12 +588,14 @@ function ProjectContextStep({
 function AgentOperatingModeSelector({
   value,
   onChange,
+  compact = false,
 }: {
   value: AgentOperatingModeId;
   onChange: (mode: AgentOperatingModeId) => void;
+  compact?: boolean;
 }) {
   return (
-    <div className="glass rounded-2xl p-6">
+    <div className={compact ? 'rounded-2xl border border-border/60 bg-background/25 p-5' : 'glass rounded-2xl p-6'}>
       <div className="max-w-3xl">
         <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-primary-glow">Agent Cost Optimizer</div>
         <h3 className="mt-2 font-display text-xl font-semibold">Choose how AI agents should spend attention</h3>
@@ -634,9 +654,9 @@ function AgentOperatingModeSelector({
 
 function FlowSteps({ activeStep }: { activeStep: number }) {
   const steps = [
-    'Step 1: Upload your project',
-    'Step 2: Choose your goal',
-    'Step 3: Download your ShipSeal pack',
+    'Step 1: Which project?',
+    'Step 2: What do you want?',
+    'Step 3: Scan',
   ];
 
   return (

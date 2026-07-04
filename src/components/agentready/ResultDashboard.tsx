@@ -99,8 +99,6 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
       <AiWorkspaceHero
         report={report}
         limitationReason={limitedScanReason}
-        onExportReport={() => readinessReport && downloadTextFile('AGENT_READINESS_REPORT.md', readinessReport.content)}
-        onExportScoreJson={() => downloadJsonFile('score.json', buildScoreJson(report, { selectedPackages: resolvedPackages, agentOperatingMode: resolvedAgentMode }))}
         onReset={onReset}
       />
 
@@ -536,34 +534,32 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
 function AiWorkspaceHero({
   report,
   limitationReason,
-  onExportReport,
-  onExportScoreJson,
   onReset,
 }: {
   report: ReadinessReport;
   limitationReason?: string;
-  onExportReport: () => void;
-  onExportScoreJson: () => void;
   onReset: () => void;
 }) {
   const health = report.repositoryHealth;
   const contextWaste = health.dimensions.contextWaste;
   const topAction = health.topActions[0];
   const unavailable = health.overall.score === null;
+  const memoryAnchors = report.summary.instructionFiles.length + report.summary.keyFolders.length + report.stack.runCommands.length;
+  const ignoredFolders = report.scanSummary.ignoredGeneratedFolders.length;
 
   return (
-    <section className="glass rounded-3xl p-6 md:p-10 mb-8 relative overflow-hidden" aria-labelledby="workspace-quality-heading">
+    <section className="glass rounded-3xl p-6 md:p-10 mb-8 relative overflow-hidden" aria-labelledby="repository-intelligence-heading">
       <div className="absolute inset-0 bg-gradient-glow opacity-25 pointer-events-none" />
       <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3 mb-3">
-            <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">AI Workspace</span>
-            <Badge variant="outline" className={unavailable ? 'border-warning/60 text-warning' : 'border-primary/45 text-primary-glow'}>
-              Workspace Quality
+            <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Intelligence</span>
+            <Badge variant="outline" className="border-primary/45 text-primary-glow">
+              AI Workspace
             </Badge>
           </div>
-          <h1 id="workspace-quality-heading" className="font-display text-3xl md:text-5xl font-bold leading-tight">
-            {unavailable ? 'Workspace Quality unavailable' : `${health.overall.score} / 100`}
+          <h1 id="repository-intelligence-heading" className="font-display text-3xl md:text-5xl font-bold leading-tight">
+            {unavailable ? 'Repository evidence incomplete' : 'Repository understood'}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge variant="outline" className={repositoryHealthStatusClass(health.overall.status)}>
@@ -583,25 +579,33 @@ function AiWorkspaceHero({
           ) : (
             <>
               <p className="mt-5 max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">
-                {repositoryHealthSummarySentence(health.overall.status)}
+                ShipSeal mapped the repository as an AI workspace: project shape, memory anchors, friction points and the next useful route for an agent.
               </p>
-              <div className="mt-5 rounded-2xl border border-border/60 bg-secondary/20 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">Repository Friction</span>
-                  <Badge variant="outline" className={contextWasteRiskClass(contextWaste.riskScore)}>
-                    {contextWaste.riskScore} / 100 - {contextWasteRiskLabel(contextWaste.riskScore)}
-                  </Badge>
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                  Higher friction means more context discovery before agent work.
-                </p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <UnderstandingPill label="Stack" value={report.stack.primary} />
+                <UnderstandingPill label="Memory anchors" value={String(memoryAnchors)} />
+                <UnderstandingPill label="Generated folders skipped" value={String(ignoredFolders)} />
               </div>
             </>
           )}
         </div>
 
         <aside className="rounded-2xl border border-border/60 bg-secondary/20 p-5">
-          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Workspace action</div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Workspace Quality</div>
+          <div className="mt-3 font-display text-3xl font-semibold">
+            {unavailable ? 'Unavailable' : `${health.overall.score} / 100`}
+          </div>
+          <div className="mt-3 rounded-xl border border-border/60 bg-background/20 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">Repository Friction</span>
+              <Badge variant="outline" className={contextWasteRiskClass(contextWaste.riskScore)}>
+                {contextWaste.riskScore} / 100 - {contextWasteRiskLabel(contextWaste.riskScore)}
+              </Badge>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              Higher friction means more context discovery before agent work.
+            </p>
+          </div>
           {topAction && !unavailable ? (
             <div className="mt-4">
               <div className="text-sm font-semibold text-foreground">Next improvement</div>
@@ -614,12 +618,6 @@ function AiWorkspaceHero({
             </p>
           )}
           <div className="mt-5 grid gap-2">
-            <Button variant="outline" size="sm" onClick={onExportReport} className="justify-start border-border/60">
-              <Download className="h-3.5 w-3.5 mr-1.5" /> Export report
-            </Button>
-            <Button variant="outline" size="sm" onClick={onExportScoreJson} className="justify-start border-border/60">
-              <Download className="h-3.5 w-3.5 mr-1.5" /> Export score.json
-            </Button>
             <Button variant="outline" size="sm" onClick={onReset} className="justify-start border-border/60">
               <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
             </Button>
@@ -630,6 +628,15 @@ function AiWorkspaceHero({
         </aside>
       </div>
     </section>
+  );
+}
+
+function UnderstandingPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4">
+      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-2 truncate text-base font-semibold text-foreground">{value || 'Unknown'}</div>
+    </div>
   );
 }
 
