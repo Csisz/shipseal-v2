@@ -2,6 +2,12 @@
 
 ShipSeal is currently a local-first React/Vite application. Repository ZIP files are scanned in the browser, readiness reports are generated locally, and exports are produced with browser Blob downloads.
 
+The ShipSeal 2.0 architecture direction is an AI Workspace Optimizer pipeline:
+
+Repository -> Repository Intelligence Engine -> Project Memory Engine -> Context Compression Engine -> Agent Routing Engine -> AI Workspace Analytics -> Delivery Outputs.
+
+Delivery Packs, reports, manifests, `score.json`, and readiness PR files are Delivery Outputs. They remain important, but they should be generated from the workspace engine rather than treated as the product core.
+
 ## Current Local Architecture
 
 - UI: React, Vite, shadcn/ui, local state and hooks.
@@ -14,8 +20,60 @@ ShipSeal is currently a local-first React/Vite application. Repository ZIP files
 - Sanitized context layer: `src/lib/repoContextPack.ts`.
 - Exports: `src/lib/exports.ts`.
 - Local history: metadata-only `localStorage` via `src/lib/scanHistory.ts`.
+- Workspace foundation: `src/lib/workspace/` contains shared AI Workspace terminology, future navigation constants, and a lightweight domain model for Workspace Metrics, Repository Intelligence, Project Memory, Context Compression, Agent Routing, and Delivery Outputs.
 
 Uploaded code is never executed. ShipSeal reads filenames, sizes, and selected small text/config files only.
+
+## AI Workspace Foundation
+
+Sprint Omega.3 introduces an additive workspace boundary in `src/lib/workspace/`.
+
+This boundary defines shared terminology and types for:
+
+- AI Workspace
+- AI Workspace Quality
+- Repository Intelligence
+- Repository Friction
+- Project Memory
+- Context Efficiency
+- Agent Productivity
+- Delivery Outputs
+
+The workspace foundation does not change scoring behavior. The current deterministic delivery/readiness score remains the root `ReadinessReport.score` and root `score.json.score` for schema v2 compatibility. Repository Health remains the current bridge dashboard metric and is expected to become supporting evidence when AI Workspace Quality is implemented.
+
+Future workspace model construction should reuse existing static scan signals, Repository Health, Repo Context Pack, Context Compression, Agent Operating Mode, and Delivery Pack focus metadata without executing repository code.
+
+## AI Workspace Dashboard
+
+Sprint Omega.4 starts the dashboard transformation without changing backend logic or score calculations.
+
+The dashboard hierarchy is now:
+
+- AI Workspace hero with Workspace Quality as the primary metric.
+- Workspace Overview cards for Workspace Quality, Repository Friction, Project Memory, and Agent Productivity.
+- Live Agent Simulator MVP as an evidence-driven dashboard section.
+- Planned module cards for Project Memory, Agent Heatmap, and Context Timeline.
+- Collapsible Workspace evidence for Repository Health, scan evidence, measurement boundaries, and decision details.
+- Delivery Outputs section for Delivery Pack preview, PDF/report export, `score.json`, package scope, and project intake.
+
+Repository Health is still the underlying bridge score for Workspace Quality in the current UI. It remains available as supporting evidence and in exports. Agent Heatmap, Context Timeline, Repository Intelligence Engine, and new backend analytics are not implemented in this sprint.
+
+## Live Agent Simulator MVP
+
+The first simulator surface is implemented in `ResultDashboard.tsx` as a UI-only exploration plan. It answers: if an AI coding agent started working on this repository, what would it probably inspect first?
+
+The simulator reuses existing scan evidence from `ReadinessReport`:
+
+- repository source and repository label from `scanEvidence`
+- primary stack, languages, frameworks, and run commands from `stack`
+- README, architecture, instruction, manifest, and sampled file paths from summary/context-pack file lists
+- key folders from `summary.keyFolders`
+- generated/vendor ignore signals from `scanSummary`
+- current agent-routing and context-waste dimensions from `repositoryHealth`
+
+The simulator does not expose or claim to expose Claude, Codex, GPT, or other model internals. It is labelled as estimated repository exploration based on ShipSeal Repository Intelligence. Context reduction and routing quality are temporary heuristics until a real Repository Intelligence Engine and Workspace Analytics layer exist.
+
+The MVP intentionally does not change scoring weights, Repository Health calculation, score.json, Delivery Pack exports, manifest paths, or GitHub PR behavior.
 
 ## Public GitHub Import Flow
 
@@ -142,6 +200,12 @@ Browser ZIP scanning is good for privacy-first MVP validation, but production te
 - `POST /api/ai/readiness-narrative`
 - `POST /api/ai/agent-pack-enhance`
 - `POST /api/ai/mcp-governance-narrative`
+
+Future Workspace API candidates:
+
+- `GET /api/scans/:id/workspace`
+- `GET /api/scans/:id/workspace-metrics`
+- `GET /api/scans/:id/delivery-outputs`
 
 `src/lib/api/localScanAdapter.ts` mimics this behavior in memory without persisting raw files or generated contents.
 

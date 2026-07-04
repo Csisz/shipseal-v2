@@ -301,9 +301,13 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 ## Docs
 
 - [Product Vision](docs/SHIPSEAL_VISION.md)
+- [AI Workspace Product Bible](docs/THE_AI_WORKSPACE_BOOK_v0.75.md)
 - [Positioning](docs/POSITIONING.md)
 - [Messaging](docs/MESSAGING.md)
 - [Documentation Inventory](docs/DOCUMENTATION_INVENTORY.md)
+- [Product Position Audit](docs/PRODUCT_POSITION_AUDIT.md)
+- [Workspace Transformation Plan](docs/WORKSPACE_TRANSFORMATION_PLAN.md)
+- [Dashboard Redesign Plan](docs/DASHBOARD_REDESIGN_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Production Roadmap](docs/PRODUCTION_ROADMAP.md)
 - [Deployment](docs/DEPLOYMENT.md)

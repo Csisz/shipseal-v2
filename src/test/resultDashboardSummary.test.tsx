@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildReport, buildSampleReport } from '@/lib/readiness';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
@@ -63,7 +63,7 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(/Available ShipSeal improvements/i)).toBeInTheDocument();
   });
 
-  it('makes Repository Health the primary dashboard summary', () => {
+  it('makes Workspace Quality the primary dashboard summary and keeps Repository Health secondary', () => {
     const report = buildSampleReport();
     const topAction = report.repositoryHealth.topActions[0];
 
@@ -76,17 +76,70 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: /repository health/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /75 \/ 100/i })).toBeInTheDocument();
+    expect(screen.getByText('AI Workspace')).toBeInTheDocument();
+    expect(screen.getAllByText('Workspace Quality').length).toBeGreaterThan(0);
+    expect(screen.getByText('Workspace Overview')).toBeInTheDocument();
+    expect(screen.getByText('Repository as an AI workspace')).toBeInTheDocument();
     expect(screen.getByText(`${report.repositoryHealth.overall.score} / 100`)).toBeInTheDocument();
     expect(screen.getByText(report.repositoryHealth.overall.status)).toBeInTheDocument();
     expect(screen.getAllByText(`${report.repositoryHealth.overall.confidence} confidence`).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Context Waste Risk').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Higher Context Waste means higher risk/i)).toBeInTheDocument();
+    expect(screen.getAllByText('Repository Friction').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Repository Health is the current supporting score/i)).toBeInTheDocument();
+    expect(screen.getByText('Live Agent Simulator')).toBeInTheDocument();
+    expect(screen.getByText('Agent Heatmap')).toBeInTheDocument();
+    expect(screen.getByText('Context Timeline')).toBeInTheDocument();
+    expect(screen.getAllByText('Coming in upcoming Workspace Optimization updates.').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Repository Intelligence').length).toBeGreaterThan(0);
     expect(screen.getAllByText('AI Development Readiness').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Agent Routing').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Delivery Confidence').length).toBeGreaterThan(0);
     expect(screen.getAllByText(topAction.title).length).toBeGreaterThan(0);
+  });
+
+  it('runs the Live Agent Simulator from repository evidence without model-reasoning claims', () => {
+    vi.useFakeTimers();
+
+    try {
+      render(
+        <ResultDashboard
+          report={buildSampleReport()}
+          history={[]}
+          onReset={vi.fn()}
+          onClearHistory={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole('heading', { name: /estimated repository exploration/i })).toBeInTheDocument();
+      expect(screen.getByText(/Estimated repository exploration based on ShipSeal Repository Intelligence/i)).toBeInTheDocument();
+      expect(screen.getByText('Repository detected')).toBeInTheDocument();
+      expect(screen.getByText('Framework identified')).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(7000);
+      });
+
+      expect(screen.getAllByText(/Workspace understanding complete/i).length).toBeGreaterThan(0);
+      expect(screen.getByText('Likely first files')).toBeInTheDocument();
+      expect(screen.getAllByText('README.md').length).toBeGreaterThan(0);
+      expect(screen.getByText('Likely ignored folders')).toBeInTheDocument();
+      expect(screen.getAllByText('node_modules').length).toBeGreaterThan(0);
+      expect(screen.getByText('Context reduction')).toBeInTheDocument();
+      expect(screen.getByText('Routing quality')).toBeInTheDocument();
+      expect(screen.getByText('Temporary heuristics')).toBeInTheDocument();
+      expect(document.body.textContent).not.toMatch(/internal reasoning|chain of thought|model reasoning/i);
+
+      fireEvent.click(screen.getByRole('button', { name: /replay/i }));
+      expect(screen.getByText(/Workspace understanding in progress/i)).toBeInTheDocument();
+
+      act(() => {
+        vi.advanceTimersByTime(7000);
+      });
+
+      expect(screen.getAllByText(/Workspace understanding complete/i).length).toBeGreaterThan(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('shows insufficient evidence without synthetic dimension values', () => {
@@ -121,12 +174,12 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByText('Repository Health unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Workspace Quality unavailable')).toBeInTheDocument();
     expect(screen.getAllByText('Insufficient evidence').length).toBeGreaterThan(0);
     expect(screen.getByText('Low confidence')).toBeInTheDocument();
     expect(screen.getByText(/upload the complete ZIP/i)).toBeInTheDocument();
     expect(screen.queryByText('0 / 100')).not.toBeInTheDocument();
-    expect(screen.queryByText('Repository Intelligence')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Repository Intelligence' })).not.toBeInTheDocument();
   });
 
   it('labels high Context Waste as risk and does not imply it is positive', () => {
@@ -157,7 +210,7 @@ describe('ResultDashboard summary copy', () => {
 
     expect(screen.getAllByText(/82 \/ 100/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Very high/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Higher Context Waste means higher risk/i)).toBeInTheDocument();
+    expect(screen.getByText(/Higher friction means more context discovery/i)).toBeInTheDocument();
     expect(screen.queryByText(/high context waste is good/i)).not.toBeInTheDocument();
   });
 
@@ -191,7 +244,9 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByText('Technical readiness details')).toBeInTheDocument();
+    expect(screen.getByText('Delivery Outputs')).toBeInTheDocument();
+    expect(screen.getByText('Export what the workspace produced')).toBeInTheDocument();
+    expect(screen.getByText('Delivery readiness details')).toBeInTheDocument();
     expect(screen.getByText('Delivery readiness categories')).toBeInTheDocument();
     expect(screen.getByText('Category breakdown mock')).toBeInTheDocument();
     expect(screen.getByText('Delivery Pack preview mock')).toBeInTheDocument();
@@ -241,7 +296,7 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getByText('Agent development pack')).toBeInTheDocument();
-    expect(screen.getByText(`${resolveDeliveryPackFocus(['agent-readiness'], { folderAgentPaths }).generatedPaths.length} outputs`)).toBeInTheDocument();
+    expect(screen.getAllByText(`${resolveDeliveryPackFocus(['agent-readiness'], { folderAgentPaths }).generatedPaths.length} outputs`).length).toBeGreaterThan(0);
     expect(screen.getByText(/Context Compression Pack generated/i)).toBeInTheDocument();
     expect(screen.getByText(/Folder-level AGENTS suggestions generated/i)).toBeInTheDocument();
     expect(screen.getByText(/Specialized context packs generated/i)).toBeInTheDocument();
@@ -284,7 +339,7 @@ describe('ResultDashboard summary copy', () => {
 
     expect(screen.getByText('Project package')).toBeInTheDocument();
     expect(screen.getByText('Security and data pre-screen')).toBeInTheDocument();
-    expect(screen.getByText(`${resolveDeliveryPackFocus(['safety-risk']).generatedPaths.length} outputs`)).toBeInTheDocument();
+    expect(screen.getAllByText(`${resolveDeliveryPackFocus(['safety-risk']).generatedPaths.length} outputs`).length).toBeGreaterThan(0);
     expect(screen.queryByText(/Security and data pre-screen - 8 outputs/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Env\/secrets signals, data\/privacy checklist, red-team prompts, and risk summary/i)).toBeInTheDocument();
   });
@@ -333,7 +388,7 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getAllByText(/Client report quality is limited because project intake was skipped/i).length).toBeGreaterThan(0);
-    expect(screen.getByText('Project context used for this report')).toBeInTheDocument();
+    expect(screen.getByText('Project context used for Delivery Outputs')).toBeInTheDocument();
     expect(screen.getByText('Edit project context')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Client name'), { target: { value: 'Acme Client' } });

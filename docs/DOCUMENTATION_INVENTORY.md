@@ -5,12 +5,17 @@ Last updated: 2026-07-02
 ## Current Source-of-truth Documents
 
 - `README.md` - local setup, demo flow, GitHub import, exports, and current positioning overview.
+- `docs/THE_AI_WORKSPACE_BOOK_v0.75.md` - current Product Bible for the AI Workspace Optimizer engine, UX direction, information architecture, and implementation priorities.
+- `docs/SHIPSEAL_BOOK.md` - concise product source-of-truth draft naming ShipSeal as an AI Workspace Optimizer.
 - `docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md` - long-term product roadmap and phase sequencing.
 - `docs/SHIPSEAL_VISION.md` - current vision for AI repository optimization and agent efficiency.
 - `docs/POSITIONING.md` - approved product category, positioning, package language, and anti-positioning.
 - `docs/MESSAGING.md` - landing-page messaging, approved phrases, and phrases to avoid.
 - `docs/SELLABLE_PRODUCT_BACKLOG.md` - sellable MVP backlog and prioritized product work.
 - `docs/ARCHITECTURE.md` - technical architecture and scan/export boundaries.
+- `docs/PRODUCT_POSITION_AUDIT.md` - Sprint Omega.3 audit of readiness/audit/report/Delivery Pack language that should become secondary.
+- `docs/WORKSPACE_TRANSFORMATION_PLAN.md` - migration plan from Repository Health as the current bridge score to future AI Workspace Quality.
+- `docs/DASHBOARD_REDESIGN_PLAN.md` - planned dashboard classification, future navigation, and non-goals for simulator/heatmap/timeline work.
 - `docs/CRITICAL_FILES_POLICY.md` - files that require careful review before AI-assisted changes.
 - `docs/RELEASE_CHECKLIST.md` - release readiness checks.
 - `docs/READINESS_FIX_PACK.md` - generated repository improvement pack workflow.
@@ -69,3 +74,4 @@ Active Markdown files were scanned for obvious mojibake markers during Sprint 0.
 - `AGENTS copy.md` was removed as a duplicate/noisy file.
 - `AGENTS.md` remains the active repository instruction file.
 - The current active docs should use ShipSeal's AI repository optimization positioning, with Delivery Pack export as an output rather than the primary identity.
+- Sprint Omega.3 adds the AI Workspace Foundation docs and `src/lib/workspace/` model boundary. Repository Health remains the current bridge metric until AI Workspace Quality is implemented.

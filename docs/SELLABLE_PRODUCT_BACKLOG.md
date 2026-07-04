@@ -6,16 +6,18 @@ This document lists the remaining functionality needed to turn ShipSeal from a s
 
 ## Product Positioning
 
-ShipSeal turns AI-built or AI-assisted software projects into client-ready, agent-ready delivery packages.
+ShipSeal turns AI-built or AI-assisted software projects into AI-optimized workspaces.
+
+The strategic product is an AI Workspace Optimizer: Repository Intelligence, Project Memory, Context Compression, Agent Routing, AI Workspace Analytics, and Delivery Outputs working together. Client-ready and agent-ready Delivery Packs remain valuable outputs, but they are not the core product identity.
 
 The product should help users answer four practical questions:
 
-1. Is this project ready to hand over?
-2. Can AI coding agents work on it safely and efficiently?
-3. What files, reports, tests, policies, and instructions are missing?
-4. How can the project be improved without wasting token budget, rate limits, or developer time?
+1. How good is this repository as an AI Workspace?
+2. Where is Repository Friction wasting agent context or human review time?
+3. What project memory, routing, instructions, and verification signals should agents receive first?
+4. Which files, reports, tests, policies, and instructions should be generated as Delivery Outputs?
 
-ShipSeal is not a general AI governance platform, a legal advisor, or a generic code quality scanner. It is a focused delivery-readiness and AI-agent-readiness tool for builders, freelancers, small agencies, and teams using AI coding tools.
+ShipSeal is not a general AI governance platform, a legal advisor, or a generic code quality scanner. It is an AI Workspace Optimizer for builders, freelancers, small agencies, and teams using AI coding tools. Delivery readiness, reports, and Delivery Packs support that workspace optimization story.
 
 ## Current Working Baseline
 

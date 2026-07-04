@@ -272,6 +272,12 @@ ShipSeal should become an AI Workspace Optimizer.
 
 The long-term product is not only a report generator and not only a compliance checklist. It is a system for keeping AI-built software projects understandable, reviewable, context-efficient, and ready for repeated agent collaboration.
 
+The engine direction is:
+
+Repository -> Repository Intelligence Engine -> Project Memory Engine -> Context Compression Engine -> Agent Routing Engine -> AI Workspace Analytics -> Delivery Outputs.
+
+Future roadmap work should treat AI Workspace Quality as the primary product score. Repository Health remains a supporting repository-state metric, and Delivery Packs, reports, manifests, `score.json`, and readiness PRs remain Delivery Outputs.
+
 In mature form, ShipSeal should:
 
 - compress project context,

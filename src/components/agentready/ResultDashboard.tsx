@@ -96,7 +96,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
 
-      <RepositoryHealthHero
+      <AiWorkspaceHero
         report={report}
         limitationReason={limitedScanReason}
         onExportReport={() => readinessReport && downloadTextFile('AGENT_READINESS_REPORT.md', readinessReport.content)}
@@ -104,17 +104,36 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         onReset={onReset}
       />
 
-      {repositoryHealth.overall.score !== null && (
-        <>
-          <RepositoryHealthActions repositoryHealth={repositoryHealth} />
-          <RepositoryHealthDimensions repositoryHealth={repositoryHealth} />
-        </>
-      )}
+      <WorkspaceOverview report={report} />
+      <LiveAgentSimulator report={report} />
+      <WorkspaceModulePlaceholders />
 
-      <div className="grid gap-6 mb-8 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
-        <ScanEvidencePanel report={report} />
-        <MeasurementBoundary repositoryHealth={repositoryHealth} />
-      </div>
+      <Disclosure title="Workspace evidence">
+        {repositoryHealth.overall.score !== null && (
+          <>
+            <RepositoryHealthActions repositoryHealth={repositoryHealth} />
+            <RepositoryHealthDimensions repositoryHealth={repositoryHealth} />
+          </>
+        )}
+
+        <div className="grid gap-6 mb-8 lg:grid-cols-[minmax(0,2fr)_minmax(280px,1fr)]">
+          <ScanEvidencePanel report={report} />
+          <MeasurementBoundary repositoryHealth={repositoryHealth} />
+        </div>
+
+        <DecisionSummary report={report} ready={ready} nextActions={report.aiNarrative.nextBestActions.slice(0, 3)} />
+      </Disclosure>
+
+      <section className="mb-8" aria-labelledby="delivery-outputs-heading">
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Delivery Outputs</div>
+            <h2 id="delivery-outputs-heading" className="mt-1 font-display text-2xl font-semibold">Export what the workspace produced</h2>
+          </div>
+          <Badge variant="outline" className="border-primary/40 text-primary-glow">
+            Export scope
+          </Badge>
+        </div>
 
       <div className="glass rounded-3xl p-6 md:p-10 mb-8 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-glow opacity-30 pointer-events-none" />
@@ -209,7 +228,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
           </div>
           <div className="flex flex-col items-stretch gap-3 lg:w-64">
             <div className="rounded-2xl border border-border/60 bg-secondary/25 p-4 text-sm leading-relaxed text-muted-foreground">
-              Repository Health reflects the scanned repository before ShipSeal-generated improvements are applied.
+              Delivery Outputs package the workspace findings for review, handoff, and export.
             </div>
             <div className="flex flex-col sm:flex-row lg:flex-col gap-2 w-full">
               <Button
@@ -236,12 +255,12 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         </div>
       </div>
 
-      <Disclosure title="Technical readiness details">
+      <Disclosure title="Delivery readiness details">
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
           <div className="glass rounded-2xl p-6 flex flex-col items-center justify-center">
             <ScoreGauge score={report.score} size={200} label="delivery / 100" />
             <div className="mt-3 text-center text-sm text-muted-foreground">
-              Supporting delivery and verification score. Repository Health is the primary dashboard summary above.
+              Supporting delivery and verification score.
             </div>
           </div>
           <div>
@@ -251,13 +270,9 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         </div>
       </Disclosure>
 
-      <div className="mb-8">
-        <DecisionSummary report={report} ready={ready} nextActions={report.aiNarrative.nextBestActions.slice(0, 3)} />
-      </div>
-
       <DeliveryPackPreview report={report} agentFiles={modeAgentPack} intake={appliedIntake} intakeSkipped={wasIntakeSkipped} selectedPackages={resolvedPackages} agentOperatingMode={resolvedAgentMode} />
 
-      <Disclosure title="Project context used for this report" defaultOpen={wasIntakeSkipped || intakeDirty}>
+      <Disclosure title="Project context used for Delivery Outputs" defaultOpen={wasIntakeSkipped || intakeDirty}>
         <ProjectContextPanel
           appliedIntake={appliedIntake}
           draftIntake={draftIntake}
@@ -268,8 +283,9 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
           onClear={clearIntake}
         />
       </Disclosure>
+      </section>
 
-      <Disclosure title="Available ShipSeal improvements — optional fixes you can add back">
+      <Disclosure title="Available ShipSeal improvements - optional fixes you can add back">
         <SuggestedReadinessFixPack report={report} githubConnection={githubConnection} selectedPackages={resolvedPackages} />
       </Disclosure>
 
@@ -400,7 +416,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4 text-sm text-muted-foreground">
-        Delivery readiness categories are available in Technical readiness details above. This advanced section keeps scanner, MCP and generated-file details available without changing the Repository Health score.
+        Delivery readiness categories are available in Delivery readiness details above. Scanner, MCP and generated-file details stay available without changing Workspace Quality or Repository Health.
       </div>
 
       <div className="mt-8 glass rounded-2xl p-6">
@@ -459,7 +475,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
           </div>
         </div>
         <div className="mt-4 text-sm font-medium text-foreground/90">
-          ShipSeal readiness remains the primary handoff signal. MCP readiness is a separate governance dimension for tool access and requires human approval for high-risk categories.
+          MCP readiness is a separate governance dimension for tool access and requires human approval for high-risk categories.
         </div>
         <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
           {report.mcpReadiness.generatedFiles.map(file => (
@@ -517,7 +533,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
   );
 }
 
-function RepositoryHealthHero({
+function AiWorkspaceHero({
   report,
   limitationReason,
   onExportReport,
@@ -536,18 +552,18 @@ function RepositoryHealthHero({
   const unavailable = health.overall.score === null;
 
   return (
-    <section className="glass rounded-3xl p-6 md:p-10 mb-8 relative overflow-hidden" aria-labelledby="repository-health-heading">
+    <section className="glass rounded-3xl p-6 md:p-10 mb-8 relative overflow-hidden" aria-labelledby="workspace-quality-heading">
       <div className="absolute inset-0 bg-gradient-glow opacity-25 pointer-events-none" />
       <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-3 mb-3">
-            <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Health</span>
+            <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">AI Workspace</span>
             <Badge variant="outline" className={unavailable ? 'border-warning/60 text-warning' : 'border-primary/45 text-primary-glow'}>
-              {health.measurementMethod}
+              Workspace Quality
             </Badge>
           </div>
-          <h1 id="repository-health-heading" className="font-display text-3xl md:text-5xl font-bold leading-tight">
-            {unavailable ? 'Repository Health unavailable' : `${health.overall.score} / 100`}
+          <h1 id="workspace-quality-heading" className="font-display text-3xl md:text-5xl font-bold leading-tight">
+            {unavailable ? 'Workspace Quality unavailable' : `${health.overall.score} / 100`}
           </h1>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge variant="outline" className={repositoryHealthStatusClass(health.overall.status)}>
@@ -560,24 +576,24 @@ function RepositoryHealthHero({
 
           {unavailable ? (
             <div className="mt-5 rounded-2xl border border-warning/35 bg-warning/10 p-4 text-sm leading-relaxed text-warning">
-              <p className="font-medium">ShipSeal does not have enough repository evidence to calculate a trustworthy health score.</p>
+              <p className="font-medium">ShipSeal needs complete repository evidence before it can show Workspace Quality.</p>
               <p className="mt-2 text-warning/90">{limitationReason || health.blockers[0]?.detail || 'The scan was limited or synthetic fallback data was used.'}</p>
               <p className="mt-2 text-warning/90">Next action: reconnect GitHub, upload the complete ZIP, or retry the full scan.</p>
             </div>
           ) : (
             <>
               <p className="mt-5 max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">
-                {repositoryHealthSummarySentence(health.overall.status)} Repository Health reflects the scanned repository before ShipSeal-generated improvements are applied.
+                {repositoryHealthSummarySentence(health.overall.status)}
               </p>
               <div className="mt-5 rounded-2xl border border-border/60 bg-secondary/20 p-4">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold text-foreground">Context Waste Risk</span>
+                  <span className="text-sm font-semibold text-foreground">Repository Friction</span>
                   <Badge variant="outline" className={contextWasteRiskClass(contextWaste.riskScore)}>
                     {contextWaste.riskScore} / 100 - {contextWasteRiskLabel(contextWaste.riskScore)}
                   </Badge>
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                  Higher Context Waste means higher risk. This static estimate is based on generated noise, oversized files, documentation duplication, context anchors and routing clarity.
+                  Higher friction means more context discovery before agent work.
                 </p>
               </div>
             </>
@@ -585,10 +601,10 @@ function RepositoryHealthHero({
         </div>
 
         <aside className="rounded-2xl border border-border/60 bg-secondary/20 p-5">
-          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">How prepared is this repository for efficient and reliable AI-agent work?</div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Workspace action</div>
           {topAction && !unavailable ? (
             <div className="mt-4">
-              <div className="text-sm font-semibold text-foreground">Top improvement</div>
+              <div className="text-sm font-semibold text-foreground">Next improvement</div>
               <div className="mt-1 text-base font-medium leading-snug text-foreground">{topAction.title}</div>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{topAction.action}</p>
             </div>
@@ -608,7 +624,485 @@ function RepositoryHealthHero({
               <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
             </Button>
           </div>
+          <div className="mt-4 rounded-xl border border-border/60 bg-background/20 p-3 text-xs text-muted-foreground">
+            Repository Health is the current supporting score behind this Workspace Quality view.
+          </div>
         </aside>
+      </div>
+    </section>
+  );
+}
+
+function WorkspaceOverview({ report }: { report: ReadinessReport }) {
+  const health = report.repositoryHealth;
+  const friction = health.dimensions.contextWaste.riskScore;
+  const projectMemoryAnchors = report.summary.instructionFiles.length + report.repoContextPack.keyFolders.length;
+
+  const cards = [
+    {
+      label: 'Workspace Quality',
+      value: health.overall.score === null ? 'Unavailable' : `${health.overall.score}/100`,
+      detail: 'Primary workspace metric',
+      badge: 'Current',
+      badgeClass: 'border-primary/45 text-primary-glow',
+    },
+    {
+      label: 'Repository Friction',
+      value: friction === null ? 'Unavailable' : `${friction}/100`,
+      detail: 'Lower is calmer',
+      badge: contextWasteRiskLabel(friction),
+      badgeClass: contextWasteRiskClass(friction),
+    },
+    {
+      label: 'Project Memory',
+      value: projectMemoryAnchors ? `${projectMemoryAnchors} anchors` : 'Planned',
+      detail: 'Instructions, folders, context',
+      badge: projectMemoryAnchors ? 'Detected' : 'Upcoming',
+      badgeClass: projectMemoryAnchors ? 'border-primary/45 text-primary-glow' : 'border-border/70 text-muted-foreground',
+    },
+    {
+      label: 'Agent Productivity',
+      value: 'Planned',
+      detail: 'Future workspace analytics',
+      badge: 'Upcoming',
+      badgeClass: 'border-border/70 text-muted-foreground',
+    },
+  ];
+
+  return (
+    <section className="mb-8" aria-labelledby="workspace-overview-heading">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Workspace Overview</div>
+          <h2 id="workspace-overview-heading" className="mt-1 font-display text-2xl font-semibold">Repository as an AI workspace</h2>
+        </div>
+        <Badge variant="outline" className="border-border/70 bg-background/25">
+          Static scan
+        </Badge>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {cards.map(card => (
+          <article key={card.label} className="glass rounded-2xl p-5 min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="font-display text-base font-semibold">{card.label}</h3>
+                <p className="mt-1 text-xs text-muted-foreground">{card.detail}</p>
+              </div>
+              <Badge variant="outline" className={card.badgeClass}>{card.badge}</Badge>
+            </div>
+            <div className="mt-5 text-2xl font-semibold tracking-tight">{card.value}</div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+type SimulatorSignalSource = 'Evidence' | 'Heuristic';
+
+interface SimulatorStep {
+  title: string;
+  detail: string;
+  source: SimulatorSignalSource;
+}
+
+interface SimulatorRecommendation {
+  label: string;
+  reason: string;
+  source: SimulatorSignalSource;
+}
+
+interface SimulatorPlan {
+  steps: SimulatorStep[];
+  likelyFirstFiles: SimulatorRecommendation[];
+  likelyIgnoredFolders: SimulatorRecommendation[];
+  contextReduction: string;
+  routingQuality: string;
+  heuristics: string[];
+}
+
+function LiveAgentSimulator({ report }: { report: ReadinessReport }) {
+  const plan = buildAgentSimulatorPlan(report);
+  const [activeStep, setActiveStep] = useState(0);
+  const [runId, setRunId] = useState(0);
+  const complete = activeStep >= plan.steps.length - 1;
+
+  useEffect(() => {
+    setActiveStep(0);
+    const interval = window.setInterval(() => {
+      setActiveStep(current => {
+        if (current >= plan.steps.length - 1) {
+          window.clearInterval(interval);
+          return current;
+        }
+        return current + 1;
+      });
+    }, 650);
+
+    return () => window.clearInterval(interval);
+  }, [report.scannedAt, report.repoName, plan.steps.length, runId]);
+
+  return (
+    <section className="mb-8" aria-labelledby="live-agent-simulator-heading">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Live Agent Simulator</div>
+          <h2 id="live-agent-simulator-heading" className="mt-1 font-display text-2xl font-semibold">Estimated repository exploration</h2>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setActiveStep(0);
+            setRunId(current => current + 1);
+          }}
+          className="border-border/60"
+        >
+          <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Replay
+        </Button>
+      </div>
+
+      <div className="glass rounded-3xl p-6 md:p-8">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <div>
+            <div className="mb-5 rounded-2xl border border-border/60 bg-secondary/15 p-4 text-sm text-muted-foreground">
+              Estimated repository exploration based on ShipSeal Repository Intelligence.
+            </div>
+            <div className="space-y-3">
+              {plan.steps.map((step, index) => {
+                const state = index < activeStep ? 'done' : index === activeStep ? 'active' : 'upcoming';
+                return (
+                  <div
+                    key={step.title}
+                    className={`rounded-2xl border p-4 transition-all duration-500 ${
+                      state === 'active'
+                        ? 'border-primary/45 bg-primary/10 shadow-sm shadow-primary/10'
+                        : state === 'done'
+                          ? 'border-success/30 bg-success/5'
+                          : 'border-border/50 bg-secondary/10 opacity-70'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                        state === 'done'
+                          ? 'border-success/50 text-success'
+                          : state === 'active'
+                            ? 'border-primary/60 text-primary-glow'
+                            : 'border-border/70 text-muted-foreground'
+                      }`}>
+                        {state === 'done' ? <Check className="h-3 w-3" /> : index + 1}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-sm font-semibold text-foreground">{step.title}</h3>
+                          <Badge variant="outline" className={step.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/70 text-muted-foreground'}>
+                            {step.source}
+                          </Badge>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">{step.detail}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className={`rounded-2xl border border-border/60 bg-secondary/15 p-5 transition-opacity duration-500 ${complete ? 'opacity-100' : 'opacity-55'}`}>
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary-glow" />
+                <h3 className="font-display font-semibold">Workspace understanding {complete ? 'complete' : 'in progress'}</h3>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                <SummaryTile label="Context reduction" value={plan.contextReduction} />
+                <SummaryTile label="Routing quality" value={plan.routingQuality} />
+              </div>
+            </div>
+
+            {complete && (
+              <>
+                <SimulatorRecommendationList title="Likely first files" items={plan.likelyFirstFiles} />
+                <SimulatorRecommendationList title="Likely ignored folders" items={plan.likelyIgnoredFolders} />
+                <details className="rounded-2xl border border-border/60 bg-secondary/15 p-4">
+                  <summary className="cursor-pointer select-none text-sm font-semibold">Temporary heuristics</summary>
+                  <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    {plan.heuristics.map(item => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </details>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SimulatorRecommendationList({ title, items }: { title: string; items: SimulatorRecommendation[] }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-secondary/15 p-5">
+      <h3 className="font-display font-semibold">{title}</h3>
+      <div className="mt-4 space-y-3">
+        {items.map(item => (
+          <div key={`${title}-${item.label}`} className="rounded-xl border border-border/50 bg-background/20 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">{item.label}</span>
+              <Badge variant="outline" className={item.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/70 text-muted-foreground'}>
+                {item.source}
+              </Badge>
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.reason}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function buildAgentSimulatorPlan(report: ReadinessReport): SimulatorPlan {
+  const files = normalizedReportFiles(report);
+  const docs = firstMatchingFiles(files, [
+    /(^|\/)readme\.md$/i,
+    /(^|\/)docs\/readme\.md$/i,
+    /(^|\/)documentation\.md$/i,
+  ], 2);
+  const architecture = firstMatchingFiles(files, [
+    /(^|\/)architecture(\.md)?$/i,
+    /(^|\/)docs\/architecture(\.md)?$/i,
+    /(^|\/)system[-_ ]?design(\.md)?$/i,
+    /(^|\/)docs\/.*architecture.*\.md$/i,
+  ], 2);
+  const instructionFiles = uniqueStrings([
+    ...report.summary.instructionFiles,
+    ...firstMatchingFiles(files, [
+      /(^|\/)agents\.md$/i,
+      /(^|\/)claude\.md$/i,
+      /(^|\/)\.cursorrules$/i,
+      /(^|\/)\.cursor\/rules/i,
+    ], 3),
+  ]).slice(0, 3);
+  const manifestFiles = firstMatchingFiles(files, [
+    /(^|\/)package\.json$/i,
+    /(^|\/)pyproject\.toml$/i,
+    /(^|\/)go\.mod$/i,
+    /(^|\/)cargo\.toml$/i,
+    /(^|\/)pom\.xml$/i,
+  ], 2);
+  const sourceFolders = report.summary.keyFolders.slice(0, 4);
+  const ignoredFolders = likelyIgnoredFolders(report);
+  const likelyFirstFiles = likelyFirstFilesForSimulator(report, docs, architecture, instructionFiles, manifestFiles, files);
+
+  const steps: SimulatorStep[] = [
+    {
+      title: 'Repository detected',
+      detail: `${report.scanEvidence.repositoryFullName} from ${displayEvidenceSource(report.scanEvidence.sourceType)}.`,
+      source: 'Evidence',
+    },
+    {
+      title: 'Framework identified',
+      detail: report.stack.primary !== 'Unknown'
+        ? `${report.stack.primary}; ${report.stack.languages.join(', ') || 'language signals unavailable'}.`
+        : 'No strong framework signal was detected; the simulator falls back to file and manifest heuristics.',
+      source: report.stack.primary !== 'Unknown' ? 'Evidence' : 'Heuristic',
+    },
+    {
+      title: 'Looking for project documentation',
+      detail: docs.length ? `Starts with ${docs.join(', ')}.` : 'No README-like file was found in scanned evidence.',
+      source: docs.length ? 'Evidence' : 'Heuristic',
+    },
+    {
+      title: 'Searching architecture',
+      detail: architecture.length ? `Architecture signal: ${architecture.join(', ')}.` : 'No architecture file was detected; folder map and stack signals become more important.',
+      source: architecture.length ? 'Evidence' : 'Heuristic',
+    },
+    {
+      title: 'Locating AI instruction files',
+      detail: instructionFiles.length ? `Instruction signal: ${instructionFiles.join(', ')}.` : 'No AGENTS, CLAUDE or tool instruction file was detected.',
+      source: instructionFiles.length ? 'Evidence' : 'Heuristic',
+    },
+    {
+      title: 'Finding build and test commands',
+      detail: report.stack.runCommands.length ? report.stack.runCommands.slice(0, 3).map(command => `${command.label}: ${command.cmd}`).join('; ') : 'No declared build or test commands were detected.',
+      source: report.stack.runCommands.length ? 'Evidence' : 'Heuristic',
+    },
+    {
+      title: 'Ignoring generated folders',
+      detail: ignoredFolders.length ? `Likely skipped: ${ignoredFolders.slice(0, 5).map(folder => folder.label).join(', ')}.` : 'No generated/vendor folders were reported by the scan.',
+      source: ignoredFolders.length ? 'Evidence' : 'Heuristic',
+    },
+    {
+      title: 'Identifying critical source folders',
+      detail: sourceFolders.length ? `Likely starting folders: ${sourceFolders.join(', ')}.` : 'Source folders are inferred from common project layouts.',
+      source: sourceFolders.length ? 'Evidence' : 'Heuristic',
+    },
+    {
+      title: 'Workspace understanding complete',
+      detail: 'The plan is ready for a first-pass coding-agent handoff.',
+      source: 'Heuristic',
+    },
+  ];
+
+  return {
+    steps,
+    likelyFirstFiles,
+    likelyIgnoredFolders: ignoredFolders.length ? ignoredFolders : fallbackIgnoredFolders(),
+    contextReduction: estimatedContextReduction(report),
+    routingQuality: estimatedRoutingQuality(report),
+    heuristics: [
+      'Context reduction is estimated from ignored/generated file counts, not measured token usage.',
+      'Routing quality is estimated from Repository Health agent-routing signals and instruction coverage.',
+      'The simulator does not expose Claude, Codex, GPT, or other model internals.',
+    ],
+  };
+}
+
+function likelyFirstFilesForSimulator(
+  report: ReadinessReport,
+  docs: string[],
+  architecture: string[],
+  instructionFiles: string[],
+  manifestFiles: string[],
+  files: string[]
+): SimulatorRecommendation[] {
+  const candidates: SimulatorRecommendation[] = [];
+  for (const file of docs) {
+    candidates.push({ label: file, reason: 'Project documentation is the highest-signal place to understand purpose and setup.', source: 'Evidence' });
+  }
+  for (const file of instructionFiles) {
+    candidates.push({ label: file, reason: 'Agent instruction files define repository-specific working rules and boundaries.', source: 'Evidence' });
+  }
+  for (const file of architecture) {
+    candidates.push({ label: file, reason: 'Architecture documentation helps route work before opening source files.', source: 'Evidence' });
+  }
+  for (const file of manifestFiles) {
+    candidates.push({ label: file, reason: 'Stack manifests reveal scripts, dependencies and project shape.', source: 'Evidence' });
+  }
+
+  if (candidates.length < 5) {
+    for (const folder of report.summary.keyFolders.slice(0, 3)) {
+      candidates.push({
+        label: `${folder}/`,
+        reason: 'A key folder was detected in the repository summary and may contain the first source files to inspect.',
+        source: 'Evidence',
+      });
+    }
+  }
+
+  if (candidates.length < 5) {
+    for (const file of firstMatchingFiles(files, [/src\/main\./i, /src\/index\./i, /app\/page\./i, /pages\/index\./i], 3)) {
+      candidates.push({
+        label: file,
+        reason: 'Common entry-point heuristic used when stronger documentation or routing evidence is limited.',
+        source: 'Heuristic',
+      });
+    }
+  }
+
+  return dedupeRecommendations(candidates).slice(0, 6);
+}
+
+function likelyIgnoredFolders(report: ReadinessReport): SimulatorRecommendation[] {
+  const fromScan = report.scanSummary.ignoredGeneratedFolders.map(folder => ({
+    label: folder,
+    reason: 'Reported by the scanner as generated or vendor context that should not anchor first-pass exploration.',
+    source: 'Evidence' as const,
+  }));
+  const common = fallbackIgnoredFolders().filter(folder => !fromScan.some(item => normalizePath(item.label) === normalizePath(folder.label)));
+  return [...fromScan, ...common].slice(0, 6);
+}
+
+function fallbackIgnoredFolders(): SimulatorRecommendation[] {
+  return ['node_modules', 'dist', 'coverage', 'build', '.tmp'].map(folder => ({
+    label: folder,
+    reason: 'Common generated or temporary folder heuristic; skip unless the task specifically targets build artifacts.',
+    source: 'Heuristic' as const,
+  }));
+}
+
+function estimatedContextReduction(report: ReadinessReport) {
+  const total = Math.max(report.scanSummary.totalFilesFound || report.fileCount, 1);
+  const ignored = Math.max(report.scanSummary.filesIgnored, report.scanSummary.generatedVendorFilesIgnored + report.scanSummary.binaryFilesIgnored);
+  const percent = Math.max(0, Math.min(95, Math.round((ignored / total) * 100)));
+  if (percent > 0) return `${percent}% estimated`;
+  if (report.repositoryHealth.dimensions.contextWaste.riskScore !== null && report.repositoryHealth.dimensions.contextWaste.riskScore <= 25) {
+    return 'Low waste';
+  }
+  return 'Not enough evidence';
+}
+
+function estimatedRoutingQuality(report: ReadinessReport) {
+  const score = report.repositoryHealth.dimensions.agentRouting.score;
+  if (score === null) return 'Unavailable';
+  if (score >= 85) return 'Strong';
+  if (score >= 70) return 'Workable';
+  if (score >= 50) return 'Needs routing';
+  return 'High friction';
+}
+
+function normalizedReportFiles(report: ReadinessReport) {
+  return uniqueStrings([
+    ...report.sampleFiles.map(file => file.path),
+    ...report.repoContextPack.sampleFiles,
+    ...report.repoContextPack.existingInstructionFiles,
+    ...report.summary.instructionFiles,
+  ]).map(path => path.replace(/\\/g, '/'));
+}
+
+function firstMatchingFiles(files: string[], patterns: RegExp[], max: number) {
+  const matches: string[] = [];
+  for (const pattern of patterns) {
+    for (const file of files) {
+      if (pattern.test(file) && !matches.includes(file)) {
+        matches.push(file);
+        if (matches.length >= max) return matches;
+      }
+    }
+  }
+  return matches;
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function dedupeRecommendations(items: SimulatorRecommendation[]) {
+  const seen = new Set<string>();
+  return items.filter(item => {
+    const key = normalizePath(item.label);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizePath(path: string) {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '').toLowerCase();
+}
+
+function WorkspaceModulePlaceholders() {
+  const modules = ['Project Memory', 'Agent Heatmap', 'Context Timeline'];
+
+  return (
+    <section className="mb-8" aria-labelledby="workspace-modules-heading">
+      <div className="mb-4">
+        <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Workspace modules</div>
+        <h2 id="workspace-modules-heading" className="mt-1 font-display text-2xl font-semibold">Next workspace surfaces</h2>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {modules.map(module => (
+          <article key={module} className="rounded-2xl border border-border/60 bg-secondary/15 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="font-display text-base font-semibold">{module}</h3>
+              <Badge variant="outline" className="border-border/70 text-muted-foreground">Planned</Badge>
+            </div>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Coming in upcoming Workspace Optimization updates.
+            </p>
+          </article>
+        ))}
       </div>
     </section>
   );
