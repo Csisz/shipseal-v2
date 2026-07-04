@@ -167,7 +167,7 @@ function verificationBullets(source: FolderAgentSource) {
   const bullets = [
     source.scripts.test ? `Focused tests: use \`${source.scripts.test}\` or a narrower project-supported variant when available.` : 'Focused tests: no test script was detected.',
     source.scripts.build ? `Full build: use \`${source.scripts.build}\` for production preparation or shared logic changes.` : 'Full build: no build script was detected.',
-    'For Token Saver work, list manual verification commands unless the user asks you to run them.',
+    'For Focused Context work, list manual verification commands unless the user asks you to run them.',
   ];
 
   return bullets.map(item => `- ${item}`);
@@ -185,8 +185,8 @@ function normalizeFolder(folder: string) {
 
 function operatingModeLabel(id: AgentOperatingModeId | '') {
   if (id === 'maximum-reliability') return 'Maximum Reliability';
-  if (id === 'token-saver') return 'Token Saver';
-  return 'Balanced Productivity';
+  if (id === 'token-saver') return 'Focused Context';
+  return 'Balanced Context';
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

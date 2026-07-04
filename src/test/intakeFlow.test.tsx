@@ -161,14 +161,14 @@ describe('ShipSeal pre-scan intake flow', () => {
 
     expect(screen.getByText('Agent Cost Optimizer')).toBeInTheDocument();
     expect(screen.getByText('Choose how AI agents should spend attention')).toBeInTheDocument();
-    expect(screen.getByText('Balanced token usage')).toBeInTheDocument();
+    expect(screen.getByText('Balanced context use')).toBeInTheDocument();
     expect(screen.getByText('Recommended default')).toBeInTheDocument();
-    expect(screen.getByText('Lowest token cost')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Balanced Productivity/i })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(screen.getByRole('button', { name: /Token Saver/i }));
+    expect(screen.getByText('Lowest context use')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Balanced Context/i })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /Focused Context/i }));
 
-    expect(screen.getByRole('button', { name: /Token Saver/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /Balanced Productivity/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /Focused Context/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Balanced Context/i })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('recognizes GitHub App callback query params and exposes repository listing state', async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createEmptyScanSummary } from '@/lib/scannerLimits';
 import { extractRepositoryHealthSignals, scoreRepositoryHealth } from '@/lib/repositoryHealth';
 import { hasRecommendationForFailedSignal } from '@/lib/repositoryHealth/recommendations';
+import { detectEntryPointClassification } from '@/lib/sourceDetection';
 import type { RepoFileSummary, RepoScanInput, ScanSummary } from '@/lib/types';
 
 function repo(
@@ -257,6 +258,57 @@ describe('Repository Health pure core', () => {
     ]));
   });
 
+  it('classifies internal index files as module boundaries instead of runtime entry points', () => {
+    const input = healthyRepo([
+      'src/lib/report/index.ts',
+      'src/lib/repositoryHealth/index.ts',
+      'src/lib/scanEngine/index.ts',
+      'src/lib/deliveryPack/index.ts',
+    ]);
+    const classification = detectEntryPointClassification(input);
+    const extracted = extractRepositoryHealthSignals(input);
+    const ambiguity = scoreRepositoryHealth(input).dimensions.contextWaste.signals.find(item => item.id === 'waste.entrypoint-ambiguity');
+    const clarity = scoreRepositoryHealth(input).dimensions.agentRouting.signals.find(item => item.id === 'route.entry-point-clarity');
+
+    expect(classification.runtime).toEqual(['src/main.tsx']);
+    expect(classification.moduleBoundaries).toEqual([
+      'src/lib/deliveryPack/index.ts',
+      'src/lib/report/index.ts',
+      'src/lib/repositoryHealth/index.ts',
+      'src/lib/scanEngine/index.ts',
+    ]);
+    expect(extracted.entryPointCandidates).toEqual(['src/main.tsx']);
+    expect(ambiguity?.status).toBe('pass');
+    expect(ambiguity?.evidence.join('\n')).toContain('Runtime entry point: src/main.tsx');
+    expect(ambiguity?.evidence.join('\n')).toContain('Internal module boundaries: 4 detected.');
+    expect(ambiguity?.evidence.join('\n')).not.toContain('Entry point candidates:');
+    expect(clarity?.status).toBe('pass');
+  });
+
+  it('reports importable module-boundary-only packages without treating them as ambiguous runtime apps', () => {
+    const input = repo([
+      'README.md',
+      'package.json',
+      'src/lib/report/index.ts',
+      'src/lib/report/build.ts',
+    ], {
+      'README.md': '# Library\n',
+      'package.json': JSON.stringify({ scripts: { build: 'tsc' } }),
+    });
+    const classification = detectEntryPointClassification(input);
+    const result = scoreRepositoryHealth(input);
+    const ambiguity = result.dimensions.contextWaste.signals.find(item => item.id === 'waste.entrypoint-ambiguity');
+    const clarity = result.dimensions.agentRouting.signals.find(item => item.id === 'route.entry-point-clarity');
+
+    expect(classification.runtime).toEqual([]);
+    expect(classification.moduleBoundaries).toEqual(['src/lib/report/index.ts']);
+    expect(ambiguity?.status).toBe('pass');
+    expect(clarity?.status).toBe('fail');
+    expect(clarity?.evidence.join('\n')).toContain('Internal module boundaries: 1 detected.');
+    expect(clarity?.evidence.join('\n')).toContain('Runtime application entry point not detected.');
+    expect(clarity?.evidence.join('\n')).not.toContain('No entry point candidate or source package detected.');
+  });
+
   it('distinguishes an importable Python package from a missing executable entry point', () => {
     const result = scoreRepositoryHealth(repo([
       'README.md',
@@ -271,20 +323,30 @@ describe('Repository Health pure core', () => {
 
     expect(signal?.status).toBe('fail');
     expect(signal?.evidence.join('\n')).toContain('Importable source package or source folder detected: contentflow_ai');
-    expect(signal?.evidence.join('\n')).toContain('Executable entry point not detected');
+    expect(signal?.evidence.join('\n')).toContain('Runtime application entry point not detected');
   });
 
-  it('flags entry-point ambiguity when too many entry candidates exist', () => {
-    const ambiguous = healthyRepo([
+  it('flags entry-point ambiguity when unrelated runtime bootstraps lack routing guidance', () => {
+    const ambiguous = repo([
+      'README.md',
+      'package.json',
       'src/index.ts',
       'src/main.ts',
-      'app/page.tsx',
       'cmd/api/main.go',
       'cmd/worker/main.go',
       'main.py',
-    ]);
+    ], {
+      'README.md': '# App\n',
+      'package.json': JSON.stringify({ scripts: { build: 'vite build' } }),
+    });
 
-    expect(scoreRepositoryHealth(ambiguous).dimensions.contextWaste.signals.find(signal => signal.id === 'waste.entrypoint-ambiguity')?.status).toBe('partial');
+    const result = scoreRepositoryHealth(ambiguous);
+    const ambiguity = result.dimensions.contextWaste.signals.find(signal => signal.id === 'waste.entrypoint-ambiguity');
+    const clarity = result.dimensions.agentRouting.signals.find(signal => signal.id === 'route.entry-point-clarity');
+
+    expect(ambiguity?.status).toBe('fail');
+    expect(ambiguity?.evidence.join('\n')).toContain('Runtime entry points:');
+    expect(clarity?.status).toBe('fail');
   });
 
   it('detects CI and package-script cross-reference from readable workflow content', () => {

@@ -71,7 +71,7 @@ function normalInput(extraPaths: string[] = [], extraText: Record<string, string
 }
 
 describe('Repository Health report and score.json integration', () => {
-  it('attaches Repository Health to the central report without changing legacy readiness scoring', () => {
+  it('attaches Repository Health to the central report without changing delivery readiness scoring', () => {
     const input = normalInput();
     const report = buildReport(input);
     const legacyScoring = scoreRepo(input, detectStack(input));
@@ -164,7 +164,7 @@ describe('Repository Health report and score.json integration', () => {
     expect(scoreJson.generatedFiles).toContain('07-context/REPOSITORY_HEALTH.md');
   });
 
-  it('places schema v2, legacy readiness, and Repository Health inside nested Delivery Pack score.json content', async () => {
+  it('places schema v2, delivery readiness, and Repository Health inside nested Delivery Pack score.json content', async () => {
     const report = buildReport(normalInput());
     const expectedScoreJson = buildScoreJson(report);
     const blob = await buildAgentPackZipBlob(

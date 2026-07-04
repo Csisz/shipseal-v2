@@ -20,7 +20,7 @@ export const AGENT_OPERATING_MODES: AgentOperatingMode[] = [
     id: 'maximum-reliability',
     label: 'Maximum Reliability',
     shortLabel: 'Reliability',
-    expectedTokenUsage: 'Higher token cost',
+    expectedTokenUsage: 'Broader context coverage',
     confidence: 'Maximum confidence',
     summary: 'Best for production preparation, large refactors, and security-sensitive work.',
     bestFor: ['Production preparation', 'Large refactors', 'Security-sensitive work'],
@@ -43,9 +43,9 @@ export const AGENT_OPERATING_MODES: AgentOperatingMode[] = [
   },
   {
     id: 'balanced-productivity',
-    label: 'Balanced Productivity',
+    label: 'Balanced Context',
     shortLabel: 'Balanced',
-    expectedTokenUsage: 'Balanced token usage',
+    expectedTokenUsage: 'Balanced context use',
     confidence: 'Recommended default',
     summary: 'Recommended default for normal development without excessive context or verification cycles.',
     bestFor: ['Daily development', 'Feature work', 'Normal iterations'],
@@ -68,12 +68,12 @@ export const AGENT_OPERATING_MODES: AgentOperatingMode[] = [
   },
   {
     id: 'token-saver',
-    label: 'Token Saver',
-    shortLabel: 'Token Saver',
-    expectedTokenUsage: 'Lowest token cost',
+    label: 'Focused Context',
+    shortLabel: 'Focused',
+    expectedTokenUsage: 'Lowest context use',
     confidence: 'Fastest iteration',
-    summary: 'Best for vibe coding, UI tweaks, Plus/Pro limits, and short iterations.',
-    bestFor: ['Vibe coding', 'UI tweaks', 'Plus/Pro limits', 'Short iterations'],
+    summary: 'Best for low-risk UI tweaks and short iterations where a narrow working set is enough.',
+    bestFor: ['Low-risk UI tweaks', 'Short iterations', 'Narrow working sets'],
     rules: [
       'Do not scan the whole repository unless needed.',
       'Do not open large files unless directly relevant.',
@@ -155,7 +155,7 @@ function agentModeSection(report: ReadinessReport, mode: AgentOperatingMode) {
     '## Agent Cost Optimizer',
     `Recommended operating mode: ${mode.label}`,
     '',
-    `Expected token usage: ${mode.expectedTokenUsage}`,
+    `Expected context use: ${mode.expectedTokenUsage}`,
     `Confidence profile: ${mode.confidence}`,
     '',
     mode.summary,
@@ -183,7 +183,7 @@ function claudeModeSection(mode: AgentOperatingMode) {
     '## Agent operating mode',
     `Recommended operating mode: ${mode.label}`,
     '',
-    `Expected token usage: ${mode.expectedTokenUsage}`,
+    `Expected context use: ${mode.expectedTokenUsage}`,
     '',
     mode.summary,
     '',
@@ -202,7 +202,7 @@ function buildAgentCostOptimizationFile(report: ReadinessReport, mode: AgentOper
     '',
     `Recommended operating mode: ${mode.label}`,
     '',
-    `Expected token usage: ${mode.expectedTokenUsage}`,
+    `Expected context use: ${mode.expectedTokenUsage}`,
     `Confidence profile: ${mode.confidence}`,
     '',
     mode.summary,
@@ -264,7 +264,7 @@ function commandsByLabel(report: ReadinessReport, label: string) {
 
 function modeReason(report: ReadinessReport | undefined, mode: AgentOperatingMode) {
   if (mode.id === 'maximum-reliability') {
-    return 'Use this when confidence matters more than token cost, especially around production, large refactors, security, data handling, or deployment changes.';
+    return 'Use this when confidence matters more than a narrow working set, especially around production, large refactors, security, data handling, or deployment changes.';
   }
   if (mode.id === 'token-saver') {
     return 'Use this for short, low-risk iterations where avoiding extra file reads, broad repo scans, and full verification cycles matters most.';

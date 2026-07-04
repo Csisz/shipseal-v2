@@ -1,4 +1,7 @@
 import type { CriticalBlocker } from '../types';
+import type { EntryPointClassification } from '../sourceDetection';
+
+export type { EntryPointClassification } from '../sourceDetection';
 
 export type RepositoryHealthModelVersion = 'repository-health-v1';
 export type RepositoryHealthMeasurementMethod = 'deterministic-static-scan';
@@ -121,6 +124,7 @@ export interface RepositoryHealthSignals {
   duplicateDocumentationGroups: DocumentationDuplicateGroup[];
   documentationFamilies: DocumentationFamilyGroup[];
   entryPointCandidates: string[];
+  entryPointClassification: EntryPointClassification;
   sourceFolders: string[];
   blockers: HealthBlocker[];
 }

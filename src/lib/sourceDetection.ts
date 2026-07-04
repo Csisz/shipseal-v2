@@ -5,10 +5,20 @@ const SOURCE_EXT_RE = /\.(tsx?|jsx?|mjs|cjs|py|go|rs|java|kt|cs|php|rb|swift|sca
 const PY_SOURCE_RE = /\.py$/i;
 const TEST_PATH_RE = /(^|\/)(__tests__|tests?|specs?|e2e)(\/|$)|(\.|-)(test|spec)\.[cm]?[jt]sx?$|(^|\/)test_.*\.py$|(^|\/).*_test\.py$/i;
 const EXCLUDED_AREA_RE = /(^|\/)(docs?|tests?|__tests__|specs?|e2e|migrations?|\.venv|venv|env|node_modules|vendor|dist|build|coverage|__pycache__)(\/|$)/i;
-const PYTHON_ENTRY_FILE_RE = /(^|\/)(main|app|run|wsgi|manage|__main__|cli)\.py$/i;
-const JS_ENTRY_FILE_RE = /(^|\/)(src\/)?(main|index)\.[cm]?[jt]sx?$|(^|\/)app\/page\.[jt]sx?$/i;
+const PYTHON_RUNTIME_FILE_RE = /(^|\/)(main|app|run|wsgi|manage|__main__|cli)\.py$/i;
+const JS_RUNTIME_FILE_RE = /(^|\/)(src\/)?(main)\.[cm]?[jt]sx?$|^(src\/)?index\.[cm]?[jt]sx?$/i;
+const JS_ROUTE_FILE_RE = /(^|\/)(app\/.*\/)?page\.[jt]sx?$|(^|\/)(app\/api\/.*\/route|pages\/api\/.*|api\/.*|server\/routes\/.*|src\/routes\/.*|src\/pages\/.*|pages\/.*)\.[cm]?[jt]sx?$/i;
+const MODULE_BOUNDARY_RE = /(^|\/)(src\/)?(lib|components|features|modules|services|utils|hooks|stores|repositoryHealth|report|scanEngine|deliveryPack)\/.*\/index\.[cm]?[jt]sx?$|(^|\/)src\/lib\/[^/]+\/index\.[cm]?[jt]sx?$/i;
+const UNKNOWN_ENTRY_FILE_RE = /(^|\/)index\.[cm]?[jt]sx?$/i;
 const GO_ENTRY_FILE_RE = /(^|\/)cmd\/[^/]+\/main\.go$/i;
 const FLASK_FACTORY_RE = /\b(create_app\s*\(|Flask\s*\(\s*__name__\s*\))/;
+
+export interface EntryPointClassification {
+  runtime: string[];
+  routes: string[];
+  moduleBoundaries: string[];
+  unknown: string[];
+}
 
 function normalizedFiles(input: RepoScanInput) {
   return input.files.map(file => ({
@@ -78,26 +88,77 @@ export function detectSourceFolders(input: RepoScanInput): string[] {
 }
 
 export function detectEntryPointCandidates(input: RepoScanInput): string[] {
+  const classification = detectEntryPointClassification(input);
+  return sortedUnique([
+    ...classification.runtime,
+    ...classification.routes,
+    ...classification.unknown,
+  ]);
+}
+
+export function detectEntryPointClassification(input: RepoScanInput): EntryPointClassification {
   const files = normalizedFiles(input).filter(file => !file.isDir);
-  const candidates = new Set<string>();
+  const runtime = new Set<string>();
+  const routes = new Set<string>();
+  const moduleBoundaries = new Set<string>();
+  const unknown = new Set<string>();
 
   for (const file of files) {
     const path = file.path;
     if (!isRelevantSourcePath(path, file.ignored, file.ignoredReason)) continue;
-    if (JS_ENTRY_FILE_RE.test(path) || GO_ENTRY_FILE_RE.test(path) || PYTHON_ENTRY_FILE_RE.test(path)) {
-      candidates.add(path);
+    if (isModuleBoundary(path)) {
+      moduleBoundaries.add(path);
+      continue;
+    }
+    if (isRuntimeEntryPoint(path)) {
+      runtime.add(path);
+      continue;
+    }
+    if (isRouteEntryPoint(path)) {
+      routes.add(path);
       continue;
     }
     if (PY_SOURCE_RE.test(path) && FLASK_FACTORY_RE.test(input.textContents[path] || '')) {
-      candidates.add(path);
+      runtime.add(path);
+      continue;
+    }
+    if (UNKNOWN_ENTRY_FILE_RE.test(path)) {
+      unknown.add(path);
     }
   }
 
   for (const script of parsePythonScriptDeclarations(input.textContents['pyproject.toml'])) {
-    candidates.add(`pyproject.toml: ${script}`);
+    routes.add(`pyproject.toml: ${script}`);
   }
 
-  return [...candidates].sort();
+  return {
+    runtime: sortedUnique([...runtime]),
+    routes: sortedUnique([...routes]),
+    moduleBoundaries: sortedUnique([...moduleBoundaries]),
+    unknown: sortedUnique([...unknown]),
+  };
+}
+
+function isRuntimeEntryPoint(path: string) {
+  return JS_RUNTIME_FILE_RE.test(path)
+    || GO_ENTRY_FILE_RE.test(path)
+    || PYTHON_RUNTIME_FILE_RE.test(path);
+}
+
+function isRouteEntryPoint(path: string) {
+  return JS_ROUTE_FILE_RE.test(path);
+}
+
+function isModuleBoundary(path: string) {
+  if (!UNKNOWN_ENTRY_FILE_RE.test(path)) return false;
+  if (/^(src\/)?index\.[cm]?[jt]sx?$/i.test(path)) return false;
+  return MODULE_BOUNDARY_RE.test(path)
+    || /(^|\/)src\/[^/]+\/index\.[cm]?[jt]sx?$/i.test(path)
+    || /(^|\/)packages\/[^/]+\/src\/index\.[cm]?[jt]sx?$/i.test(path);
+}
+
+function sortedUnique(values: string[]) {
+  return [...new Set(values)].sort();
 }
 
 function parsePythonScriptDeclarations(pyproject: string | undefined): string[] {

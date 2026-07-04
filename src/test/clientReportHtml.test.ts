@@ -28,10 +28,10 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('Repository evidence');
     expect(html).toContain('Top repository improvements');
     expect(html).toContain('Measurement boundary');
-    expect(html).toContain('Legacy readiness score');
+    expect(html).toContain('Delivery readiness score');
     expect(html).toContain('class="score-number"');
     expect(html).toContain('class="score-denominator"');
-    expect(html).toContain('Legacy readiness decision');
+    expect(html).toContain('Delivery readiness decision');
     expect(html).toContain('Delivery and verification signals');
     expect(html).toContain('AI Act readiness pre-screen');
     expect(html).toContain('Delivery and verification signals');

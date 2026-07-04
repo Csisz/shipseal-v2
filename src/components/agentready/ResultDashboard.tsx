@@ -134,7 +134,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
             </div>
 
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <SummaryTile label="Legacy readiness" value={`${report.score}/100`} />
+              <SummaryTile label="Delivery readiness" value={`${report.score}/100`} />
               <SummaryTile label="Readiness status" value={displayReadinessLevel(readiness.level)} />
               <SummaryTile label="Critical blockers" value={String(report.blockers.length)} />
             </div>
@@ -239,13 +239,13 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
       <Disclosure title="Technical readiness details">
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
           <div className="glass rounded-2xl p-6 flex flex-col items-center justify-center">
-            <ScoreGauge score={report.score} size={200} label="legacy / 100" />
+            <ScoreGauge score={report.score} size={200} label="delivery / 100" />
             <div className="mt-3 text-center text-sm text-muted-foreground">
-              Existing ShipSeal readiness score. Repository Health is the primary dashboard summary above.
+              Supporting delivery and verification score. Repository Health is the primary dashboard summary above.
             </div>
           </div>
           <div>
-            <h2 className="font-display text-2xl font-semibold mb-4">Legacy readiness categories</h2>
+            <h2 className="font-display text-2xl font-semibold mb-4">Delivery readiness categories</h2>
             <CategoryBreakdown categories={report.categories} />
           </div>
         </div>
@@ -400,7 +400,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4 text-sm text-muted-foreground">
-        Legacy readiness categories are available in Technical readiness details above. This advanced section keeps scanner, MCP and generated-file details available without changing the Repository Health score.
+        Delivery readiness categories are available in Technical readiness details above. This advanced section keeps scanner, MCP and generated-file details available without changing the Repository Health score.
       </div>
 
       <div className="mt-8 glass rounded-2xl p-6">

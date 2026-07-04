@@ -1,12 +1,13 @@
 import { detectStack } from '../stack';
 import { scoreRepo } from '../scoring';
-import { detectEntryPointCandidates, detectSourceFolders } from '../sourceDetection';
+import { detectEntryPointCandidates, detectEntryPointClassification, detectSourceFolders } from '../sourceDetection';
 import type { RepoScanInput } from '../types';
 import { classifyRepositoryFiles, isInstructionPath } from './classifyFiles';
 import type {
   ClassifiedRepositoryFile,
   DocumentationDuplicateGroup,
   DocumentationFamilyGroup,
+  EntryPointClassification,
   HealthBlocker,
   HealthDimensionId,
   HealthSignal,
@@ -31,6 +32,7 @@ type SignalFacts = {
   duplicateDocumentationGroups: DocumentationDuplicateGroup[];
   documentationFamilies: DocumentationFamilyGroup[];
   entryPointCandidates: string[];
+  entryPointClassification: EntryPointClassification;
   sourceFolders: string[];
   blockers: HealthBlocker[];
 };
@@ -44,6 +46,7 @@ export function extractRepositoryHealthSignals(input: RepoScanInput): Repository
   }));
   const duplicateDocumentationGroups = findExactDuplicateDocumentation(input, files);
   const documentationFamilies = groupDocumentationFamilies(files);
+  const entryPointClassification = detectEntryPointClassification(input);
   const entryPointCandidates = detectEntryPointCandidates(input);
   const sourceFolders = detectSourceFolders(input);
 
@@ -57,6 +60,7 @@ export function extractRepositoryHealthSignals(input: RepoScanInput): Repository
     duplicateDocumentationGroups,
     documentationFamilies,
     entryPointCandidates,
+    entryPointClassification,
     sourceFolders,
     blockers,
   };
@@ -73,6 +77,7 @@ export function extractRepositoryHealthSignals(input: RepoScanInput): Repository
     duplicateDocumentationGroups,
     documentationFamilies,
     entryPointCandidates,
+    entryPointClassification,
     sourceFolders,
     blockers,
   };
@@ -111,12 +116,7 @@ function contextWasteSignals(facts: SignalFacts): HealthSignal[] {
   const compactAnchors = findCompactContextAnchors(facts);
   const generatedRatio = realFiles.length ? generatedFiles.length / realFiles.length : 0;
   const generatedByteRatio = totalBytes ? generatedBytes / totalBytes : 0;
-  const entryPointStatus = facts.entryPointCandidates.length === 0 ? 'fail' : facts.entryPointCandidates.length > 5 ? 'partial' : 'pass';
-  const entryPointEvidence = facts.entryPointCandidates.length
-    ? [`Entry point candidates: ${facts.entryPointCandidates.join(', ')}`]
-    : facts.sourceFolders.length
-      ? [`Importable source package or source folder detected: ${facts.sourceFolders.join(', ')}. Executable entry point not detected.`]
-      : ['No entry point candidate or source package detected.'];
+  const entryPointAmbiguity = classifyEntryPointAmbiguity(facts);
 
   return [
     riskSignal('waste.generated-file-ratio', 'Generated/vendor file ratio is controlled', generatedRatio > 0.5 ? 'fail' : generatedRatio > 0.15 ? 'partial' : 'pass', 20, generatedRatio > 0.5 ? 20 : generatedRatio > 0.15 ? 10 : 0, [`Generated/vendor files: ${generatedFiles.length} of ${realFiles.length}.`], 'waste.generated-file-ratio'),
@@ -130,7 +130,7 @@ function contextWasteSignals(facts: SignalFacts): HealthSignal[] {
     ], 'waste.active-doc-sprawl'),
     riskSignal('waste.canonical-conflicts', 'Canonical documentation families do not conflict', conflicts.length ? 'fail' : 'pass', 10, conflicts.length ? 10 : 0, conflicts.length ? conflicts.map(group => `${group.family}: ${group.activePaths.join(', ')}`) : ['No active canonical document conflicts detected.'], 'waste.canonical-conflicts'),
     riskSignal('waste.compact-anchor-missing', 'Compact context anchors are present', compactAnchors.status, 10, compactAnchors.earned, compactAnchors.evidence, 'waste.compact-anchor-missing'),
-    riskSignal('waste.entrypoint-ambiguity', 'Entry point routing is not ambiguous', entryPointStatus, 5, entryPointStatus === 'fail' ? 5 : entryPointStatus === 'partial' ? 2.5 : 0, entryPointEvidence, 'waste.entrypoint-ambiguity'),
+    riskSignal('waste.entrypoint-ambiguity', 'Entry point routing is not ambiguous', entryPointAmbiguity.status, 5, entryPointAmbiguity.earned, entryPointAmbiguity.evidence, 'waste.entrypoint-ambiguity'),
   ];
 }
 
@@ -165,13 +165,8 @@ function agentRoutingSignals(facts: SignalFacts): HealthSignal[] {
   const commandMap = findPaths(facts, /(^|\/)(commands|command_map|command-map|developer_commands|runbook)\.md$|(^|\/)makefile$/i);
   const criticalPolicy = findPaths(facts, /(^|\/)(critical_files_policy|critical-files-policy|codeowners|security)\.md$|(^|\/)codeowners$/i);
   const knownRisks = findPaths(facts, /(^|\/)(risks|risk_register|known_risks|security)\.md$/i);
-  const entryStatus = facts.entryPointCandidates.length === 0 ? 'fail' : facts.entryPointCandidates.length > 5 ? 'partial' : 'pass';
+  const entryPointClarity = classifyEntryPointClarity(facts);
   const folderInstructionCoverage = classifyFolderInstructionCoverage(facts, nestedInstructions);
-  const entryPointEvidence = facts.entryPointCandidates.length
-    ? [`Entry point candidates: ${facts.entryPointCandidates.join(', ')}`]
-    : facts.sourceFolders.length
-      ? [`Importable source package or source folder detected: ${facts.sourceFolders.join(', ')}. Executable entry point not detected.`]
-      : ['No entry point candidate or source package detected.'];
 
   return [
     signal('route.root-instructions', 'agentRouting', 'Root agent instruction file is available', rootInstructions.length ? 'pass' : 'fail', 6, rootInstructions.length ? 6 : 0, evidenceOr(rootInstructions, 'No root agent instruction file detected.'), 'route.root-instructions'),
@@ -180,8 +175,94 @@ function agentRoutingSignals(facts: SignalFacts): HealthSignal[] {
     signal('route.command-map', 'agentRouting', 'Command map is documented', commandMap.length ? 'pass' : Object.keys(facts.stack.scripts).length ? 'partial' : 'fail', 4, commandMap.length ? 4 : Object.keys(facts.stack.scripts).length ? 2 : 0, commandMap.length ? commandMap : Object.keys(facts.stack.scripts).length ? [`Package scripts can seed a command map: ${Object.keys(facts.stack.scripts).join(', ')}`] : ['No command map or package scripts detected.'], 'route.command-map'),
     signal('route.critical-policy', 'agentRouting', 'Critical file policy is discoverable', criticalPolicy.length ? 'pass' : 'fail', 4, criticalPolicy.length ? 4 : 0, evidenceOr(criticalPolicy, 'No critical files policy, SECURITY.md, or CODEOWNERS signal detected.'), 'route.critical-policy'),
     signal('route.known-risks', 'agentRouting', 'Known risks are documented', knownRisks.length ? 'pass' : 'fail', 3, knownRisks.length ? 3 : 0, evidenceOr(knownRisks, 'No known risks, risk register, or security review document detected.'), 'route.known-risks'),
-    signal('route.entry-point-clarity', 'agentRouting', 'Entry points are clear enough to route tasks', entryStatus, 4, entryStatus === 'pass' ? 4 : entryStatus === 'partial' ? 2 : 0, entryPointEvidence, 'route.entry-point-clarity'),
+    signal('route.entry-point-clarity', 'agentRouting', 'Entry points are clear enough to route tasks', entryPointClarity.status, 4, entryPointClarity.earned, entryPointClarity.evidence, 'route.entry-point-clarity'),
   ];
+}
+
+function classifyEntryPointAmbiguity(facts: SignalFacts) {
+  const classification = facts.entryPointClassification;
+  const runtimeCount = classification.runtime.length;
+  const unknownCount = classification.unknown.length;
+  const hasGuidance = hasRoutingGuidance(facts);
+
+  if ((runtimeCount > 3 || unknownCount > 3) && !hasGuidance) {
+    return {
+      status: 'fail' as const,
+      earned: 5,
+      evidence: entryPointEvidence(classification, facts.sourceFolders),
+    };
+  }
+
+  if ((runtimeCount > 1 || unknownCount > 0) && !hasGuidance) {
+    return {
+      status: 'partial' as const,
+      earned: 2.5,
+      evidence: entryPointEvidence(classification, facts.sourceFolders),
+    };
+  }
+
+  return {
+    status: 'pass' as const,
+    earned: 0,
+    evidence: entryPointEvidence(classification, facts.sourceFolders),
+  };
+}
+
+function classifyEntryPointClarity(facts: SignalFacts) {
+  const classification = facts.entryPointClassification;
+  const runtimeCount = classification.runtime.length;
+  const routeCount = classification.routes.length;
+  const unknownCount = classification.unknown.length;
+  const hasGuidance = hasRoutingGuidance(facts);
+  const evidence = entryPointEvidence(classification, facts.sourceFolders);
+
+  if (runtimeCount === 1) {
+    return { status: 'pass' as const, earned: 4, evidence };
+  }
+
+  if (runtimeCount > 1) {
+    if (hasGuidance) return { status: 'partial' as const, earned: 2, evidence };
+    return { status: runtimeCount > 3 ? 'fail' as const : 'partial' as const, earned: runtimeCount > 3 ? 0 : 2, evidence };
+  }
+
+  if (routeCount > 0) {
+    if (routeCount === 1 || hasGuidance) return { status: 'pass' as const, earned: 4, evidence };
+    return { status: 'partial' as const, earned: 2, evidence };
+  }
+
+  if (unknownCount > 0) {
+    return { status: 'partial' as const, earned: 2, evidence };
+  }
+
+  return { status: 'fail' as const, earned: 0, evidence };
+}
+
+function entryPointEvidence(classification: EntryPointClassification, sourceFolders: string[]) {
+  const evidence: string[] = [];
+  if (classification.runtime.length) evidence.push(compactGroupEvidence('Runtime entry point', classification.runtime));
+  if (classification.routes.length) evidence.push(compactGroupEvidence('Application route', classification.routes));
+  if (classification.moduleBoundaries.length) evidence.push(`Internal module boundaries: ${classification.moduleBoundaries.length} detected.`);
+  if (classification.unknown.length) evidence.push(compactGroupEvidence('Unclassified entry-point candidate', classification.unknown));
+
+  if (!classification.runtime.length && !classification.routes.length && !classification.unknown.length && sourceFolders.length) {
+    evidence.push(`Importable source package or source folder detected: ${sourceFolders.join(', ')}. Runtime application entry point not detected.`);
+  }
+  if (evidence.length) return evidence;
+  if (sourceFolders.length) {
+    return [`Importable source package or source folder detected: ${sourceFolders.join(', ')}. Runtime application entry point not detected.`];
+  }
+  return ['No runtime entry point, route file, or source package detected.'];
+}
+
+function compactGroupEvidence(label: string, paths: string[]) {
+  const suffix = paths.length === 1 ? '' : 's';
+  if (paths.length <= 2) return `${label}${suffix}: ${paths.join(', ')}`;
+  return `${label}${suffix}: ${paths.length} detected (${paths.slice(0, 2).join(', ')}, +${paths.length - 2} more).`;
+}
+
+function hasRoutingGuidance(facts: SignalFacts) {
+  return hasAny(facts, /(^|\/)(task_router|task-router|agent_router|agent-routing|routing)\.md$/i)
+    || hasAny(facts, /(^|\/)(routes|router|command_map|command-map|developer_commands|runbook)\.md$|(^|\/)makefile$/i);
 }
 
 function findCompactContextAnchors(facts: SignalFacts) {

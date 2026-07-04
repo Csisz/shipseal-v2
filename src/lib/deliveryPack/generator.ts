@@ -495,7 +495,7 @@ function repositoryHealthMarkdown(projectName: string, health: Record<string, un
     ...(measurementBoundary.length ? measurementBoundary.map(item => `- ${item}`) : ['- No measurement boundary notes available.']),
     '',
     '## Supporting Delivery Signals',
-    '- Legacy readiness, AI Act readiness, testing, MCP, and client handoff outputs remain available elsewhere in this Delivery Pack.',
+    '- Delivery and verification readiness, AI Act readiness, testing, MCP, and client handoff outputs remain available elsewhere in this Delivery Pack.',
     '- Treat this assessment as static repository intelligence, not legal advice.',
     ...(healthStatus(health) === 'Insufficient evidence'
       ? [

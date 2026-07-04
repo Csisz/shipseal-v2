@@ -217,14 +217,14 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     expect(scoreJson.deliveryPackFocus?.emphasizedFiles).not.toContain('04-testing/EVAL_TEST_CASES.md');
   });
 
-  it('defaults score.json to Balanced Productivity operating mode', () => {
+  it('defaults score.json to Balanced Context operating mode', () => {
     const report = buildSampleReport();
     const scoreJson = buildScoreJson(report, { selectedPackages: ['agent-readiness'] });
 
     expect(scoreJson.agentOperatingMode).toMatchObject({
       id: 'balanced-productivity',
-      label: 'Balanced Productivity',
-      expectedTokenUsage: 'Balanced token usage',
+      label: 'Balanced Context',
+      expectedTokenUsage: 'Balanced context use',
       confidence: 'Recommended default',
     });
   });
@@ -261,23 +261,23 @@ describe('ShipSeal Delivery Pack ZIP export', () => {
     const rootAgents = await zipText(zip, '07-context/folder-agents/root/AGENTS.md');
     const docsAgents = await zipText(zip, '07-context/folder-agents/docs/AGENTS.md');
 
-    expect(tokenSaverAgents).toContain('Recommended operating mode: Token Saver');
-    expect(tokenSaverAgents).not.toContain('Recommended operating mode: Balanced Productivity');
-    expect(tokenSaverAgents).toContain('Expected token usage: Lowest token cost');
+    expect(tokenSaverAgents).toContain('Recommended operating mode: Focused Context');
+    expect(tokenSaverAgents).not.toContain('Recommended operating mode: Balanced Context');
+    expect(tokenSaverAgents).toContain('Expected context use: Lowest context use');
     expect(tokenSaverAgents).toContain('Reason: Use this for short, low-risk iterations');
     expect(tokenSaverAgents).toContain('ShipSeal helps AI coding agents avoid unnecessary context usage and excessive verification cycles');
     expect(reliabilityAgents).toContain('Recommended operating mode: Maximum Reliability');
-    expect(reliabilityAgents).toContain('Expected token usage: Higher token cost');
+    expect(reliabilityAgents).toContain('Expected context use: Broader context coverage');
     expect(reliabilityAgents).toContain('Run full test/build commands when the change touches shared logic');
     expect(tokenSaverAgents).not.toBe(reliabilityAgents);
-    expect(tokenSaverClaude).toContain('Recommended operating mode: Token Saver');
+    expect(tokenSaverClaude).toContain('Recommended operating mode: Focused Context');
     expect(reliabilityClaude).toContain('Recommended operating mode: Maximum Reliability');
     expect(tokenSaverClaude).not.toBe(reliabilityClaude);
     expect(scoreJson.generatedFiles).toContain('01-agent-instructions/AGENT_COST_OPTIMIZATION.md');
-    expect(scoreJson.agentOperatingMode?.label).toBe('Token Saver');
-    expect(scoreJson.agentOperatingMode?.expectedTokenUsage).toBe('Lowest token cost');
-    expect(costOptimization).toContain('Recommended operating mode: Token Saver');
-    expect(costOptimization).toContain('Expected token usage: Lowest token cost');
+    expect(scoreJson.agentOperatingMode?.label).toBe('Focused Context');
+    expect(scoreJson.agentOperatingMode?.expectedTokenUsage).toBe('Lowest context use');
+    expect(costOptimization).toContain('Recommended operating mode: Focused Context');
+    expect(costOptimization).toContain('Expected context use: Lowest context use');
     expect(costOptimization).toContain('## Expected tradeoffs');
     expect(costOptimization).toContain('Avoid full build/test unless explicitly requested');
     expect(architecture).toContain('sample-nextjs-app');

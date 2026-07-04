@@ -181,7 +181,7 @@ describe('ResultDashboard summary copy', () => {
     expect(document.body.textContent?.toLowerCase()).not.toMatch(/token-saving|financial savings|guaranteed speed/);
   });
 
-  it('keeps legacy readiness details, package controls, and export buttons available', () => {
+  it('keeps delivery readiness details, package controls, and export buttons available', () => {
     render(
       <ResultDashboard
         report={buildSampleReport()}
@@ -192,7 +192,7 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getByText('Technical readiness details')).toBeInTheDocument();
-    expect(screen.getByText('Legacy readiness categories')).toBeInTheDocument();
+    expect(screen.getByText('Delivery readiness categories')).toBeInTheDocument();
     expect(screen.getByText('Category breakdown mock')).toBeInTheDocument();
     expect(screen.getByText('Delivery Pack preview mock')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /export score\.json/i }).length).toBeGreaterThan(0);
@@ -246,8 +246,8 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(/Folder-level AGENTS suggestions generated/i)).toBeInTheDocument();
     expect(screen.getByText(/Specialized context packs generated/i)).toBeInTheDocument();
     expect(screen.getByText('Recommended operating mode')).toBeInTheDocument();
-    expect(screen.getByText('Balanced Productivity')).toBeInTheDocument();
-    expect(screen.getAllByText('Balanced token usage').length).toBeGreaterThan(0);
+    expect(screen.getByText('Balanced Context')).toBeInTheDocument();
+    expect(screen.getAllByText('Balanced context use').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Recommended default').length).toBeGreaterThan(0);
     expect(screen.queryByText('Full ShipSeal package')).not.toBeInTheDocument();
     expect(screen.getByText(/AGENTS.md, CLAUDE.md, Codex guidance, repo context, role-specific context packs, agent safety notes, and tooling recommendations/i)).toBeInTheDocument();
@@ -266,9 +266,9 @@ describe('ResultDashboard summary copy', () => {
     );
 
     expect(screen.getByText('Recommended operating mode')).toBeInTheDocument();
-    expect(screen.getByText('Token Saver')).toBeInTheDocument();
-    expect(screen.getAllByText('Lowest token cost').length).toBeGreaterThan(0);
-    expect(screen.getByText(/vibe coding, UI tweaks, Plus\/Pro limits, and short iterations/i)).toBeInTheDocument();
+    expect(screen.getByText('Focused Context')).toBeInTheDocument();
+    expect(screen.getAllByText('Lowest context use').length).toBeGreaterThan(0);
+    expect(screen.getByText(/low-risk UI tweaks and short iterations/i)).toBeInTheDocument();
   });
 
   it('shows long selected package labels without combining them into the compact metric value', () => {

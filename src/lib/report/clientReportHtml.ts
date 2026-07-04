@@ -447,11 +447,11 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       </div>
       <div class="score-grid">
         <div class="card score-card">
-          <div class="label">Legacy readiness score</div>
+          <div class="label">Delivery readiness score</div>
           ${renderScore(summary.score)}
         </div>
         <div class="card decision-card">
-          <div class="label">Legacy readiness decision</div>
+          <div class="label">Delivery readiness decision</div>
           <strong>${escapeHtml(summary.status)}</strong>
           <div class="small muted">${escapeHtml(summary.goNoGo)}</div>
         </div>
@@ -543,7 +543,7 @@ export function generateClientReportHtml(input: ClientReportHtmlInput): string {
       <section class="three-grid avoid-break">
         <div class="card">
           <h3>Delivery and verification signals</h3>
-          <p class="compact">Legacy readiness: ${escapeHtml(summary.score)} (${escapeHtml(summary.status)}). ${escapeHtml(summary.testingSummary)}</p>
+          <p class="compact">Delivery readiness: ${escapeHtml(summary.score)} (${escapeHtml(summary.status)}). ${escapeHtml(summary.testingSummary)}</p>
         </div>
         <div class="card">
           <h3>AI Act readiness pre-screen</h3>
@@ -1087,7 +1087,7 @@ function strengthsFromScore(score: Record<string, unknown>, health: unknown) {
   strengths.push(...categories
     .filter(category => numeric(category.earned) >= numeric(category.max) * 0.7 && numeric(category.max) > 0)
     .slice(0, 4)
-    .map(category => `${stringValue(category.name) || 'Readiness area'} has a supporting legacy readiness signal (${numeric(category.earned)}/${numeric(category.max)}).`));
+    .map(category => `${stringValue(category.name) || 'Readiness area'} has a supporting delivery readiness signal (${numeric(category.earned)}/${numeric(category.max)}).`));
 
   if (outputCount(score)) {
     strengths.push(`ShipSeal Delivery Pack manifest outputs detected: ${outputCount(score)}.`);

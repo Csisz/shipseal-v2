@@ -13,7 +13,7 @@ import type {
 import { buildRepositorySummary } from './repositorySummary';
 import { isGeneratedOrVendorPath } from './scannerLimits';
 import { displayReadinessLevel } from './uiCopy';
-import { detectEntryPointCandidates } from './sourceDetection';
+import { detectEntryPointClassification, type EntryPointClassification } from './sourceDetection';
 
 function pickPm(stack: DetectedStack): string {
   return stack.packageManagers[0] || 'not detected';
@@ -67,7 +67,7 @@ export function buildContextPack(input: RepoScanInput, stack: DetectedStack): st
     if (top && !top.startsWith('.')) topDirs.add(top);
   }
 
-  const entryPoints = detectEntryPointCandidates(input).slice(0, 5);
+  const entryPoints = entryPointSummary(detectEntryPointClassification(input));
 
   return [
     `# Repo Context Pack - ${input.repoName}`,
@@ -88,7 +88,7 @@ export function buildContextPack(input: RepoScanInput, stack: DetectedStack): st
     summary.instructionFiles.length ? summary.instructionFiles.map(file => `- ${file}`).join('\n') : '- (none detected)',
     '',
     '## Likely entry points',
-    entryPoints.length ? entryPoints.map(e => `- ${e}`).join('\n') : '- (none auto-detected)',
+    entryPoints.length ? entryPoints.join('\n') : '- (none auto-detected)',
     '',
     '## Suggested run commands',
     verificationCommandList(stack),
@@ -435,6 +435,21 @@ ${mcpNarrative.recommendedGovernanceActions.map(action => `- ${action}`).join('\
     { name: 'CI_QUALITY_GATE.yml', language: 'yaml', description: 'GitHub Actions workflow to enforce the gate.', content: ciYml },
     { name: 'AGENT_READINESS_REPORT.md', language: 'markdown', description: 'Full readiness report snapshot.', content: reportMd },
   ];
+}
+
+function entryPointSummary(classification: EntryPointClassification) {
+  return [
+    ...entryPointLines('Runtime entry point', classification.runtime),
+    ...entryPointLines('Application route', classification.routes),
+    classification.moduleBoundaries.length ? `- Internal module boundaries: ${classification.moduleBoundaries.length} detected.` : '',
+    ...entryPointLines('Unclassified entry-point candidate', classification.unknown),
+  ].filter(Boolean);
+}
+
+function entryPointLines(label: string, paths: string[]) {
+  if (paths.length === 0) return [];
+  if (paths.length <= 3) return [`- ${label}${paths.length === 1 ? '' : 's'}: ${paths.join(', ')}`];
+  return [`- ${label}s: ${paths.length} detected (${paths.slice(0, 3).join(', ')}, +${paths.length - 3} more).`];
 }
 
 function stripHeading(content: string | undefined, heading: string) {
