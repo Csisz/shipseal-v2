@@ -1,4 +1,22 @@
-import { CheckCircle2, Loader2, Circle, X, ShieldCheck, Github, FileSearch, Sparkles, BrainCircuit, Database, Route, Layers } from 'lucide-react';
+import {
+  Archive,
+  CheckCircle2,
+  Circle,
+  FileText,
+  GitBranch,
+  Github,
+  KeyRound,
+  Layers,
+  Loader2,
+  Network,
+  Route,
+  ShieldCheck,
+  Sparkles,
+  TestTube2,
+  Workflow,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -28,22 +46,30 @@ export function ScanProgress({
   const safeProgress = Math.min(100, Math.max(0, Math.round(progress)));
   const understanding = repositoryUnderstandingLevel(safeProgress, discoveredFileCount, analyzedFileCount);
   const skippedFiles = skippedFileCount(discoveredFileCount, analyzedFileCount);
-  const intelligenceStages = buildIntelligenceStages(safeProgress, steps, currentStepIndex);
-  const agentTrail = buildAgentTrail(safeProgress, repositoryLabel, skippedFiles);
+  const livingSignals = buildLivingSignals(safeProgress, steps, currentStepIndex, skippedFiles);
+  const activeSignal = livingSignals.find(signal => signal.active) || livingSignals.filter(signal => signal.done).at(-1) || livingSignals[0];
+  const finalReveal = safeProgress >= 96;
 
   return (
-    <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-3xl border border-primary/25 bg-[hsl(225_28%_8%)] p-6 shadow-glow animate-scale-in md:p-8">
-      <div className="absolute inset-0 bg-gradient-glow opacity-18 pointer-events-none" />
+    <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-6 shadow-glow animate-scale-in md:p-8">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,hsl(var(--primary)/0.22),transparent_38%),radial-gradient(circle_at_80%_70%,hsl(var(--accent)/0.12),transparent_34%)] pointer-events-none" />
       <div className="relative">
         <div className="flex items-start justify-between gap-4 mb-8">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-xs font-mono uppercase tracking-wider text-muted-foreground">
-              <BrainCircuit className="h-3.5 w-3.5 text-primary-glow" />
-              <span>Repository Intelligence</span>
+              <Network className="h-3.5 w-3.5 text-primary-glow" />
+              <span>Living Repository</span>
               {sourceLabel && <span className="rounded-full border border-primary/30 px-2 py-0.5 text-primary-glow">{sourceLabel}</span>}
             </div>
-            <h2 className="mt-3 font-display text-3xl font-semibold text-foreground md:text-4xl">Understanding your repository</h2>
-            <div className="mt-3 flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <h2 className="mt-3 font-display text-3xl font-semibold text-foreground md:text-5xl">
+              {finalReveal ? 'Repository understood.' : 'The workspace is forming.'}
+            </h2>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
+              {finalReveal
+                ? 'AI Workspace created. Ready for intelligent development.'
+                : 'ShipSeal is turning repository evidence into a usable AI workspace map.'}
+            </p>
+            <div className="mt-4 flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <Github className="h-4 w-4 text-primary-glow" />
               <span className="truncate text-foreground/90">{repositoryLabel || 'Preparing repository'}</span>
             </div>
@@ -55,68 +81,46 @@ export function ScanProgress({
           )}
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
-          <div className="space-y-5">
-            <div className="rounded-3xl border border-primary/20 bg-background/20 p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <LivingRepositoryCanvas
+            progress={safeProgress}
+            understanding={understanding}
+            activeSignal={activeSignal}
+            signals={livingSignals}
+          />
+
+          <aside className="rounded-3xl border border-border/60 bg-secondary/15 p-5">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Understanding stream</div>
+                <h3 className="mt-1 font-display text-xl font-semibold">{finalReveal ? 'AI Workspace created' : activeSignal.label}</h3>
+              </div>
+              <Sparkles className={cn('h-4 w-4 text-primary-glow', !finalReveal && 'animate-pulse')} />
+            </div>
+
+            <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository understanding</div>
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Repository understanding</div>
                   <div className="mt-1 text-2xl font-semibold text-foreground">{understanding}</div>
                 </div>
                 <span className="font-mono text-xs text-primary-glow">{safeProgress}%</span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-secondary/70">
-                <div
-                  className="h-full bg-gradient-primary transition-all duration-500 ease-out"
-                  style={{ width: `${safeProgress}%` }}
-                />
-              </div>
-              <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <ProgressMetric label="Files found" value={discoveredFileCount == null ? 'Reading' : discoveredFileCount.toLocaleString()} />
-                <ProgressMetric label="Files analyzed" value={analyzedFileCount == null ? 'Pending' : analyzedFileCount.toLocaleString()} />
-                <ProgressMetric label="Files skipped" value={skippedFiles == null ? 'Estimating' : skippedFiles.toLocaleString()} />
+              <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-secondary/70">
+                <div className="h-full bg-gradient-primary transition-all duration-700 ease-out" style={{ width: `${safeProgress}%` }} />
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              {intelligenceStages.map(stage => (
-                <IntelligenceStage key={stage.label} {...stage} />
+            <div className="mt-5 space-y-3">
+              {livingSignals.map(signal => (
+                <SignalCard key={signal.label} signal={signal} />
               ))}
             </div>
-          </div>
 
-          <aside className="rounded-3xl border border-border/60 bg-secondary/15 p-5">
-            <div className="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Live Agent Simulator</div>
-                <h3 className="mt-1 font-display text-xl font-semibold">Estimated first pass</h3>
-              </div>
-              <Sparkles className="h-4 w-4 text-primary-glow" />
-            </div>
-            <div className="space-y-3">
-              {agentTrail.map((item, index) => (
-                <div
-                  key={item.label}
-                  className={cn(
-                    'rounded-2xl border px-4 py-3 transition-all duration-500',
-                    item.active ? 'border-primary/45 bg-primary/10' : item.done ? 'border-success/30 bg-success/5' : 'border-border/50 bg-background/20 opacity-70'
-                  )}
-                >
-                  <div className="flex items-start gap-3">
-                    <span className={cn('mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px]', item.done ? 'border-success/50 text-success' : item.active ? 'border-primary/60 text-primary-glow' : 'border-border/70 text-muted-foreground')}>
-                      {item.done ? <CheckCircle2 className="h-3 w-3" /> : index + 1}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="text-sm font-semibold text-foreground">{item.label}</div>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.detail}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-              <ProgressMetric label="Context saved" value={skippedFiles == null ? 'Estimating' : `${skippedFiles} skipped`} />
-              <ProgressMetric label="Token reduction" value="Heuristic" />
+            <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              <ProgressMetric label="Files found" value={discoveredFileCount == null ? 'Reading' : discoveredFileCount.toLocaleString()} />
+              <ProgressMetric label="Files analyzed" value={analyzedFileCount == null ? 'Pending' : analyzedFileCount.toLocaleString()} />
+              <ProgressMetric label="Context skipped" value={skippedFiles == null ? 'Heuristic' : skippedFiles.toLocaleString()} />
             </div>
           </aside>
         </div>
@@ -150,34 +154,136 @@ function ProgressMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-interface IntelligenceStageProps {
+interface LivingSignal {
   label: string;
   detail: string;
-  icon: typeof FileSearch;
+  source: 'Evidence' | 'Heuristic';
+  threshold: number;
+  icon: LucideIcon;
   done: boolean;
   active: boolean;
 }
 
-function IntelligenceStage({ label, detail, icon: Icon, done, active }: IntelligenceStageProps) {
+function LivingRepositoryCanvas({
+  progress,
+  understanding,
+  activeSignal,
+  signals,
+}: {
+  progress: number;
+  understanding: string;
+  activeSignal: LivingSignal;
+  signals: LivingSignal[];
+}) {
+  const complete = progress >= 96;
+  return (
+    <div className="relative min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/15 p-5 md:p-6">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.16),transparent_42%)]" />
+      <div className="absolute left-1/2 top-1/2 h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/10" />
+      <div className="absolute left-1/2 top-1/2 h-[300px] w-[300px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/15" />
+      <div className="absolute left-1/2 top-1/2 h-[180px] w-[180px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/25" />
+
+      <div className="relative flex h-full min-h-[510px] items-center justify-center">
+        <div className={cn(
+          'relative z-10 flex h-44 w-44 flex-col items-center justify-center rounded-full border text-center transition-all duration-700',
+          complete ? 'border-success/50 bg-success/10 shadow-[0_0_70px_hsl(var(--success)/0.18)]' : 'border-primary/50 bg-primary/10 shadow-glow'
+        )}>
+          <div className="absolute inset-0 rounded-full border border-primary/30 animate-pulse" />
+          {complete ? <CheckCircle2 className="h-7 w-7 text-success" /> : <Loader2 className="h-7 w-7 animate-spin text-primary-glow" />}
+          <div className="mt-3 px-5 font-display text-lg font-semibold leading-tight">
+            {complete ? 'Workspace created' : 'Building workspace'}
+          </div>
+          <div className="mt-2 px-5 text-xs leading-relaxed text-muted-foreground">{understanding}</div>
+        </div>
+
+        {signals.map((signal, index) => (
+          <RepositoryNode key={signal.label} signal={signal} index={index} total={signals.length} />
+        ))}
+      </div>
+
+      <div className="relative mt-4 rounded-2xl border border-border/60 bg-background/35 p-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <activeSignal.icon className="h-4 w-4 text-primary-glow" />
+          <span className="text-sm font-semibold text-foreground">{complete ? 'Repository understood' : activeSignal.label}</span>
+          <span className={cn(
+            'rounded-full border px-2 py-0.5 text-[10px]',
+            activeSignal.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/60 text-muted-foreground'
+          )}>
+            {complete ? 'Evidence-backed' : activeSignal.source}
+          </span>
+        </div>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          {complete ? 'ShipSeal has created the first AI workspace view from static repository evidence.' : activeSignal.detail}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function RepositoryNode({ signal, index, total }: { signal: LivingSignal; index: number; total: number }) {
+  const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
+  const radius = 42;
+  const x = 50 + Math.cos(angle) * radius;
+  const y = 50 + Math.sin(angle) * radius;
+  const Icon = signal.icon;
+
+  return (
+    <div
+      title={`${signal.label} - ${signal.source}`}
+      className={cn(
+        'absolute z-20 w-11 -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-2 transition-all duration-700 sm:w-36 sm:px-3 sm:py-2',
+        signal.active && 'scale-105 border-primary/55 bg-primary/15 shadow-glow',
+        signal.done && !signal.active && 'border-success/35 bg-success/10',
+        !signal.done && !signal.active && 'border-border/45 bg-background/30 opacity-60'
+      )}
+      style={{ left: `${x}%`, top: `${y}%` }}
+    >
+      <div className="flex items-center justify-center gap-2 sm:justify-start">
+        <span className={cn(
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border',
+          signal.active ? 'border-primary/50 text-primary-glow' : signal.done ? 'border-success/40 text-success' : 'border-border/60 text-muted-foreground'
+        )}>
+          <Icon className="h-3.5 w-3.5" />
+        </span>
+        <span className="hidden min-w-0 text-xs font-semibold leading-tight text-foreground sm:inline">{signal.label}</span>
+      </div>
+      <div className="mt-2 hidden items-center gap-1.5 sm:flex">
+        {signal.done ? <CheckCircle2 className="h-3 w-3 text-success" /> : signal.active ? <Loader2 className="h-3 w-3 animate-spin text-primary-glow" /> : <Circle className="h-3 w-3 text-muted-foreground" />}
+        <span className="text-[10px] text-muted-foreground">{signal.source}</span>
+      </div>
+    </div>
+  );
+}
+
+function SignalCard({ signal }: { signal: LivingSignal }) {
+  const Icon = signal.icon;
   return (
     <div
       className={cn(
-        'rounded-2xl border p-4 transition-all duration-500',
-        active && 'border-primary/45 bg-primary/10 shadow-sm shadow-primary/10',
-        done && !active && 'border-success/30 bg-success/5',
-        !done && !active && 'border-border/50 bg-secondary/15 text-muted-foreground'
+        'rounded-2xl border px-4 py-3 transition-all duration-500',
+        signal.active && 'border-primary/45 bg-primary/10 shadow-sm shadow-primary/10',
+        signal.done && !signal.active && 'border-success/30 bg-success/5',
+        !signal.done && !signal.active && 'border-border/50 bg-background/20 opacity-70'
       )}
     >
       <div className="flex items-start gap-3">
-        <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border', active ? 'border-primary/50 text-primary-glow' : done ? 'border-success/40 text-success' : 'border-border/60 text-muted-foreground')}>
+        <span className={cn(
+          'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border',
+          signal.active ? 'border-primary/50 text-primary-glow' : signal.done ? 'border-success/40 text-success' : 'border-border/60 text-muted-foreground'
+        )}>
           <Icon className="h-4 w-4" />
         </span>
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">{label}</span>
-            {active && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary-glow" />}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-foreground">{signal.label}</span>
+            <span className={cn(
+              'rounded-full border px-2 py-0.5 text-[10px]',
+              signal.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/60 text-muted-foreground'
+            )}>
+              {signal.source}
+            </span>
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{detail}</p>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{signal.detail}</p>
         </div>
       </div>
     </div>
@@ -185,9 +291,9 @@ function IntelligenceStage({ label, detail, icon: Icon, done, active }: Intellig
 }
 
 function repositoryUnderstandingLevel(progress: number, discoveredFileCount?: number | null, analyzedFileCount?: number | null) {
-  if (progress >= 96) return 'Workspace model ready';
-  if (progress >= 74) return 'Routing map forming';
-  if (progress >= 52) return 'Architecture signals detected';
+  if (progress >= 96) return 'High';
+  if (progress >= 74) return 'Workspace map forming';
+  if (progress >= 52) return 'Architecture emerging';
   if (progress >= 28) return 'Project shape detected';
   if (discoveredFileCount || analyzedFileCount) return 'Repository opened';
   return 'Connecting signals';
@@ -198,62 +304,75 @@ function skippedFileCount(discoveredFileCount?: number | null, analyzedFileCount
   return Math.max(0, discoveredFileCount - analyzedFileCount);
 }
 
-function buildIntelligenceStages(progress: number, steps: readonly string[], currentStepIndex: number) {
+function buildLivingSignals(progress: number, steps: readonly string[], currentStepIndex: number, skippedFiles?: number | null): LivingSignal[] {
   const activeStep = steps[currentStepIndex] || 'Finalizing scan';
-  const stages = [
-    { label: 'Repository detected', detail: 'Source selected and archive boundary established.', icon: Github, threshold: 5 },
-    { label: 'Structure mapped', detail: activeStep, icon: Layers, threshold: 24 },
-    { label: 'Framework signals', detail: 'Looking for manifests, language markers and project commands.', icon: FileSearch, threshold: 44 },
-    { label: 'Memory anchors', detail: 'Locating README, instructions, architecture notes and context files.', icon: BrainCircuit, threshold: 62 },
-    { label: 'Generated folders skipped', detail: 'Reducing noise from vendor, build and coverage folders.', icon: Database, threshold: 78 },
-    { label: 'Agent route prepared', detail: 'Preparing the first-pass workspace handoff.', icon: Route, threshold: 94 },
-  ];
-
-  return stages.map((stage, index) => {
-    const nextThreshold = stages[index + 1]?.threshold ?? 101;
-    return {
-      ...stage,
-      done: progress >= stage.threshold,
-      active: progress >= stage.threshold && progress < nextThreshold,
-    };
-  });
-}
-
-function buildAgentTrail(progress: number, repositoryLabel?: string | null, skippedFiles?: number | null) {
-  const items = [
+  const signals = [
     {
-      label: 'Repository detected',
-      detail: repositoryLabel ? `${repositoryLabel} is ready for static analysis.` : 'Waiting for repository metadata.',
+      label: 'Structure',
+      detail: `Evidence from the live scanner: ${activeStep}.`,
+      source: 'Evidence' as const,
+      icon: Layers,
       threshold: 5,
     },
     {
-      label: 'Reading project entry points',
-      detail: 'README, manifests and common project files are prioritized when present.',
-      threshold: 28,
+      label: 'Architecture',
+      detail: 'Inferring module boundaries from repository structure until architecture files are available in the completed report.',
+      source: 'Heuristic' as const,
+      icon: Network,
+      threshold: 20,
     },
     {
-      label: 'Searching architecture and instructions',
-      detail: 'Looking for architecture notes, AGENTS.md, CLAUDE.md and tool rules.',
-      threshold: 52,
+      label: 'Business domains',
+      detail: 'Looking for concentrated feature areas, source folders and domain-style naming patterns.',
+      source: 'Heuristic' as const,
+      icon: GitBranch,
+      threshold: 34,
     },
     {
-      label: 'Ignoring generated context',
-      detail: skippedFiles == null ? 'Generated/vendor folders are being estimated.' : `${skippedFiles} files are outside the useful first-pass context.`,
+      label: 'Authentication',
+      detail: 'Searching for auth and access-control signals; this is estimated during scan and confirmed after analysis.',
+      source: 'Heuristic' as const,
+      icon: KeyRound,
+      threshold: 48,
+    },
+    {
+      label: 'AI instructions',
+      detail: 'Looking for AGENTS.md, CLAUDE.md, Cursor rules and other agent onboarding anchors.',
+      source: 'Heuristic' as const,
+      icon: FileText,
+      threshold: 60,
+    },
+    {
+      label: 'Tests',
+      detail: 'Looking for test files and verification commands that can guide safe AI edits.',
+      source: 'Heuristic' as const,
+      icon: TestTube2,
       threshold: 72,
     },
     {
-      label: 'Ready to code with context',
-      detail: 'ShipSeal will show the evidence-backed workspace view when the scan completes.',
-      threshold: 94,
+      label: 'CI pipeline',
+      detail: 'Checking for workflow and build automation signals.',
+      source: 'Heuristic' as const,
+      icon: Workflow,
+      threshold: 84,
+    },
+    {
+      label: 'Context compression',
+      detail: skippedFiles == null
+        ? 'Estimating generated/vendor context until file counts are available.'
+        : `Evidence from scan counters: ${skippedFiles} files can stay outside the first-pass context.`,
+      source: skippedFiles == null ? 'Heuristic' as const : 'Evidence' as const,
+      icon: Archive,
+      threshold: 92,
     },
   ];
 
-  return items.map((item, index) => {
-    const nextThreshold = items[index + 1]?.threshold ?? 101;
+  return signals.map((signal, index) => {
+    const nextThreshold = signals[index + 1]?.threshold ?? 101;
     return {
-      ...item,
-      done: progress >= nextThreshold,
-      active: progress >= item.threshold && progress < nextThreshold,
+      ...signal,
+      done: progress >= signal.threshold,
+      active: progress >= signal.threshold && progress < nextThreshold,
     };
   });
 }

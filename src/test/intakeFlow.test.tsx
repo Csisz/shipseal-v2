@@ -158,7 +158,8 @@ describe('ShipSeal pre-scan intake flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Scan project$/i }));
 
-    expect(screen.getByText(/Understanding your repository/i)).toBeInTheDocument();
+    expect(screen.getByText(/The workspace is forming/i)).toBeInTheDocument();
+    expect(screen.getByText(/Living Repository/i)).toBeInTheDocument();
   });
 
   it('shows and updates Agent Operating Mode for AI Agent Development package', async () => {
@@ -225,7 +226,7 @@ describe('ShipSeal pre-scan intake flow', () => {
       repo: 'shipseal',
       ref: 'main',
     });
-    expect(screen.getByText(/Understanding your repository/i)).toBeInTheDocument();
+    expect(screen.getByText(/The workspace is forming/i)).toBeInTheDocument();
   });
 
   it('opens popup connect, receives postMessage, persists installation, retries and disconnects', async () => {
