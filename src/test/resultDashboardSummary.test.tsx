@@ -76,9 +76,13 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /This repository has a usable AI workspace forming/i })).toBeInTheDocument();
     expect(screen.getAllByText('Repository Intelligence').length).toBeGreaterThan(0);
     expect(screen.getByText('AI Workspace')).toBeInTheDocument();
+    expect(screen.getByText(/ShipSeal connected the project shape/i)).toBeInTheDocument();
+    expect(screen.getByText(/Mental model built/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Architecture appears modular/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Documentation connected/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Workspace Quality').length).toBeGreaterThan(0);
     expect(screen.getAllByText(`${report.repositoryHealth.overall.score} / 100`).length).toBeGreaterThan(0);
     expect(screen.getByText('Workspace Overview')).toBeInTheDocument();
@@ -87,7 +91,6 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(report.repositoryHealth.overall.status)).toBeInTheDocument();
     expect(screen.getAllByText(`${report.repositoryHealth.overall.confidence} confidence`).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Repository Friction').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Repository Health is the current supporting score/i)).toBeInTheDocument();
     expect(screen.getByText('Live Agent Simulator')).toBeInTheDocument();
     expect(screen.getByText('Agent Heatmap')).toBeInTheDocument();
     expect(screen.getByText('Context Timeline')).toBeInTheDocument();
@@ -176,7 +179,8 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByText('Repository evidence incomplete')).toBeInTheDocument();
+    expect(screen.getByText(/I need more evidence to understand this repository/i)).toBeInTheDocument();
+    expect(screen.getByText(/The repository model is incomplete/i)).toBeInTheDocument();
     expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Insufficient evidence').length).toBeGreaterThan(0);
     expect(screen.getByText('Low confidence')).toBeInTheDocument();

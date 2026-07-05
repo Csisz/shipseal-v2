@@ -19,7 +19,7 @@ import { AGENT_OPERATING_MODES, DEFAULT_AGENT_OPERATING_MODE, selectionUsesAgent
 import { getGitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
-import { ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
+import { CheckCircle2, ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 
 type PendingSource =
@@ -105,6 +105,7 @@ const Index = () => {
   const [githubRepositories, setGithubRepositories] = useState<GitHubAppRepository[]>([]);
   const [githubInstallations, setGithubInstallations] = useState<GitHubAppInstallation[]>([]);
   const [repositoryListMessage, setRepositoryListMessage] = useState('');
+  const [intelligenceReveal, setIntelligenceReveal] = useState<{ key: string; visible: boolean } | null>(null);
   const savedReportKey = useRef<string | null>(null);
   const lastError = useRef<string | null>(null);
   const scanSectionRef = useRef<HTMLDivElement>(null);
@@ -112,6 +113,12 @@ const Index = () => {
   const activeReport = sampleReport || scan.report;
   const activeGithubConnection = pendingSource?.type === 'github-app' ? pendingSource.connection : undefined;
   const isScanning = scan.status === 'scanning';
+  const showIntelligenceReveal = Boolean(
+    activeReport &&
+    scan.report &&
+    intelligenceReveal?.key === `${scan.report.repoName}-${scan.report.scannedAt}` &&
+    intelligenceReveal.visible
+  );
 
   useEffect(() => {
     setHistory(getScanHistory());
@@ -199,6 +206,16 @@ const Index = () => {
   }, [scan.report]);
 
   useEffect(() => {
+    if (!scan.report) return;
+    const key = `${scan.report.repoName}-${scan.report.scannedAt}`;
+    setIntelligenceReveal({ key, visible: true });
+    const timer = window.setTimeout(() => {
+      setIntelligenceReveal(current => current?.key === key ? { ...current, visible: false } : current);
+    }, 1250);
+    return () => window.clearTimeout(timer);
+  }, [scan.report]);
+
+  useEffect(() => {
     if (!scan.error || lastError.current === scan.error) return;
     lastError.current = scan.error;
     toast({
@@ -229,6 +246,7 @@ const Index = () => {
     setAgentOperatingMode(DEFAULT_AGENT_OPERATING_MODE);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
+    setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
     window.setTimeout(() => {
@@ -247,6 +265,7 @@ const Index = () => {
     setAgentOperatingMode(DEFAULT_AGENT_OPERATING_MODE);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
+    setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
     window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0);
@@ -254,6 +273,7 @@ const Index = () => {
 
   const handleFile = useCallback((file: File) => {
     setSampleReport(null);
+    setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
     const projectName = file.name.replace(/\.zip$/i, '') || 'repository';
@@ -265,6 +285,7 @@ const Index = () => {
 
   const handleGitHubImport = useCallback((url: string, branch?: string) => {
     setSampleReport(null);
+    setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
     const projectName = githubProjectName(url);
@@ -276,6 +297,7 @@ const Index = () => {
 
   const handleGitHubAppRepository = useCallback((repository: GitHubAppRepository) => {
     setSampleReport(null);
+    setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
     const connection = createConnectedGitHubConnection({
@@ -335,6 +357,7 @@ const Index = () => {
     setSubmittedIntake(intake);
     setSubmittedIntakeSkipped(!hasProjectContext);
     setSampleReport(null);
+    setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
 
@@ -359,6 +382,7 @@ const Index = () => {
     setAgentOperatingMode(DEFAULT_AGENT_OPERATING_MODE);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
+    setIntelligenceReveal(null);
     const report = buildSampleReport();
     setSampleReport(report);
     setHistory(saveScanHistory(report));
@@ -372,6 +396,7 @@ const Index = () => {
     setAgentOperatingMode(DEFAULT_AGENT_OPERATING_MODE);
     setSubmittedIntake(undefined);
     setSubmittedIntakeSkipped(false);
+    setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
     queueMicrotask(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
@@ -384,9 +409,11 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Nav onNavigateAnchor={handleNavAnchor} onHome={handleHome} />
+      {!showIntelligenceReveal && <Nav onNavigateAnchor={handleNavAnchor} onHome={handleHome} />}
 
-      {activeReport ? (
+      {showIntelligenceReveal && scan.report ? (
+        <IntelligenceReveal repoName={scan.report.repoName} />
+      ) : activeReport ? (
         <main className="pt-20">
           <Suspense fallback={<div className="container py-24 text-sm text-muted-foreground">Loading report...</div>}>
             <ResultDashboard
@@ -773,6 +800,29 @@ function OutputPreview({ selectedPackages }: { selectedPackages: string[] }) {
         </div>
       </details>
     </div>
+  );
+}
+
+function IntelligenceReveal({ repoName }: { repoName: string }) {
+  return (
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[hsl(225_28%_5%)] px-6 pt-20 text-center animate-fade-in">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.24),transparent_34%),radial-gradient(circle_at_50%_82%,hsl(var(--accent)/0.14),transparent_38%)]" />
+      <div className="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/15 animate-pulse" />
+      <div className="absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/25" />
+      <section className="relative max-w-3xl">
+        <div className="mx-auto mb-7 flex h-14 w-14 items-center justify-center rounded-2xl border border-success/40 bg-success/10 shadow-[0_0_60px_hsl(var(--success)/0.18)]">
+          <CheckCircle2 className="h-7 w-7 text-success" />
+        </div>
+        <div className="text-xs font-mono uppercase tracking-[0.28em] text-primary-glow">Repository Intelligence</div>
+        <h1 className="mt-5 font-display text-4xl font-semibold leading-tight text-foreground md:text-6xl">
+          Repository understood.
+        </h1>
+        <p className="mt-5 text-lg text-muted-foreground md:text-xl">
+          Your AI Workspace is ready.
+        </p>
+        <p className="mt-7 truncate text-sm text-muted-foreground/70">{repoName}</p>
+      </section>
+    </main>
   );
 }
 

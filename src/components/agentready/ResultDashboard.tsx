@@ -541,103 +541,218 @@ function AiWorkspaceHero({
   onReset: () => void;
 }) {
   const health = report.repositoryHealth;
-  const contextWaste = health.dimensions.contextWaste;
-  const topAction = health.topActions[0];
   const unavailable = health.overall.score === null;
-  const memoryAnchors = report.summary.instructionFiles.length + report.summary.keyFolders.length + report.stack.runCommands.length;
-  const ignoredFolders = report.scanSummary.ignoredGeneratedFolders.length;
+  const insights = buildWorkspaceInsights(report);
+  const primarySentence = workspaceUnderstandingSentence(report);
+  const topAction = health.topActions[0];
 
   return (
-    <section className="glass rounded-3xl p-6 md:p-10 mb-8 relative overflow-hidden" aria-labelledby="repository-intelligence-heading">
-      <div className="absolute inset-0 bg-gradient-glow opacity-25 pointer-events-none" />
-      <div className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] lg:items-start">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-3 mb-3">
-            <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Intelligence</span>
-            <Badge variant="outline" className="border-primary/45 text-primary-glow">
-              AI Workspace
-            </Badge>
+    <section className="mb-8 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-6 shadow-glow md:p-10 animate-fade-in-up" aria-labelledby="repository-intelligence-heading">
+      <div className="relative">
+        <div className="absolute inset-0 -m-10 bg-[radial-gradient(circle_at_28%_18%,hsl(var(--primary)/0.22),transparent_35%),radial-gradient(circle_at_74%_68%,hsl(var(--accent)/0.13),transparent_34%)] pointer-events-none" />
+        <div className="relative grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] lg:items-center">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3 mb-3">
+              <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Intelligence</span>
+              <Badge variant="outline" className="border-primary/45 text-primary-glow">
+                AI Workspace
+              </Badge>
+            </div>
+            <h1 id="repository-intelligence-heading" className="font-display text-3xl font-semibold leading-tight md:text-5xl">
+              {unavailable ? 'I need more evidence to understand this repository.' : primarySentence}
+            </h1>
+            {unavailable ? (
+              <div className="mt-5 rounded-2xl border border-warning/35 bg-warning/10 p-4 text-sm leading-relaxed text-warning">
+                <p className="font-medium">The repository model is incomplete.</p>
+                <p className="mt-2 text-warning/90">{limitationReason || health.blockers[0]?.detail || 'The scan was limited or synthetic fallback data was used.'}</p>
+                <p className="mt-2 text-warning/90">Reconnect GitHub, upload the complete ZIP, or retry the full scan.</p>
+              </div>
+            ) : (
+              <>
+                <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted-foreground md:text-lg">
+                  ShipSeal connected the project shape, memory anchors, verification paths and agent routes into a workspace an AI coding agent can use.
+                </p>
+                <div className="mt-7 grid gap-3 sm:grid-cols-2">
+                  {insights.slice(0, 6).map((insight, index) => (
+                    <UnderstandingInsight key={insight.label} insight={insight} index={index} />
+                  ))}
+                </div>
+                {topAction && (
+                  <div className="mt-7 rounded-2xl border border-border/60 bg-background/25 p-4">
+                    <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">The first improvement I would make</div>
+                    <div className="mt-2 text-base font-semibold text-foreground">{topAction.title}</div>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{topAction.action}</p>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          <h1 id="repository-intelligence-heading" className="font-display text-3xl md:text-5xl font-bold leading-tight">
-            {unavailable ? 'Repository evidence incomplete' : 'Repository understood'}
-          </h1>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+
+          <aside className="relative min-h-[420px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-6">
+            <MentalModelGraph insights={insights} unavailable={unavailable} />
+          </aside>
+        </div>
+
+        <div className="relative mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/15 px-4 py-3 text-sm text-muted-foreground">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className={repositoryHealthStatusClass(health.overall.status)}>
               {health.overall.status}
             </Badge>
-            <Badge variant="outline" className="border-border/70 bg-background/25">
-              {health.overall.confidence} confidence
-            </Badge>
+            <span>{health.overall.confidence} confidence</span>
+            {health.overall.score !== null && <span>Workspace Quality {health.overall.score} / 100</span>}
           </div>
-
-          {unavailable ? (
-            <div className="mt-5 rounded-2xl border border-warning/35 bg-warning/10 p-4 text-sm leading-relaxed text-warning">
-              <p className="font-medium">ShipSeal needs complete repository evidence before it can show Workspace Quality.</p>
-              <p className="mt-2 text-warning/90">{limitationReason || health.blockers[0]?.detail || 'The scan was limited or synthetic fallback data was used.'}</p>
-              <p className="mt-2 text-warning/90">Next action: reconnect GitHub, upload the complete ZIP, or retry the full scan.</p>
-            </div>
-          ) : (
-            <>
-              <p className="mt-5 max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">
-                ShipSeal mapped the repository as an AI workspace: project shape, memory anchors, friction points and the next useful route for an agent.
-              </p>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <UnderstandingPill label="Stack" value={report.stack.primary} />
-                <UnderstandingPill label="Memory anchors" value={String(memoryAnchors)} />
-                <UnderstandingPill label="Generated folders skipped" value={String(ignoredFolders)} />
-              </div>
-            </>
-          )}
+          <Button variant="outline" size="sm" onClick={onReset} className="border-border/60">
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
+          </Button>
         </div>
-
-        <aside className="rounded-2xl border border-border/60 bg-secondary/20 p-5">
-          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Workspace Quality</div>
-          <div className="mt-3 font-display text-3xl font-semibold">
-            {unavailable ? 'Unavailable' : `${health.overall.score} / 100`}
-          </div>
-          <div className="mt-3 rounded-xl border border-border/60 bg-background/20 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">Repository Friction</span>
-              <Badge variant="outline" className={contextWasteRiskClass(contextWaste.riskScore)}>
-                {contextWaste.riskScore} / 100 - {contextWasteRiskLabel(contextWaste.riskScore)}
-              </Badge>
-            </div>
-            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-              Higher friction means more context discovery before agent work.
-            </p>
-          </div>
-          {topAction && !unavailable ? (
-            <div className="mt-4">
-              <div className="text-sm font-semibold text-foreground">Next improvement</div>
-              <div className="mt-1 text-base font-medium leading-snug text-foreground">{topAction.title}</div>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{topAction.action}</p>
-            </div>
-          ) : (
-            <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
-              Complete repository evidence is required before ShipSeal can rank improvement actions.
-            </p>
-          )}
-          <div className="mt-5 grid gap-2">
-            <Button variant="outline" size="sm" onClick={onReset} className="justify-start border-border/60">
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
-            </Button>
-          </div>
-          <div className="mt-4 rounded-xl border border-border/60 bg-background/20 p-3 text-xs text-muted-foreground">
-            Repository Health is the current supporting score behind this Workspace Quality view.
-          </div>
-        </aside>
       </div>
     </section>
   );
 }
 
-function UnderstandingPill({ label, value }: { label: string; value: string }) {
+interface WorkspaceInsight {
+  label: string;
+  detail: string;
+  source: 'Evidence' | 'Heuristic';
+  strength: 'strong' | 'workable' | 'watch';
+}
+
+function UnderstandingInsight({ insight, index }: { insight: WorkspaceInsight; index: number }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-2 truncate text-base font-semibold text-foreground">{value || 'Unknown'}</div>
+    <article
+      className="rounded-2xl border border-border/60 bg-secondary/15 p-4 animate-fade-in-up"
+      style={{ animationDelay: `${index * 0.06}s` }}
+    >
+      <div className="flex items-start gap-3">
+        <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border ${insightStrengthClass(insight.strength)}`}>
+          <CheckCircle2 className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold text-foreground">{insight.label}</h3>
+            <Badge variant="outline" className={insight.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/70 text-muted-foreground'}>
+              {insight.source}
+            </Badge>
+          </div>
+          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{insight.detail}</p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function MentalModelGraph({ insights, unavailable }: { insights: WorkspaceInsight[]; unavailable: boolean }) {
+  const nodes = insights.slice(0, 6);
+  return (
+    <div className="relative flex min-h-[372px] items-center justify-center">
+      <div className="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/10" />
+      <div className="absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/20" />
+      <div className="absolute left-1/2 top-1/2 h-px w-[72%] -translate-x-1/2 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+      <div className="absolute left-1/2 top-1/2 h-[72%] w-px -translate-y-1/2 bg-gradient-to-b from-transparent via-primary/25 to-transparent" />
+      <div className="relative z-10 flex h-36 w-36 flex-col items-center justify-center rounded-full border border-primary/50 bg-primary/10 text-center shadow-glow">
+        <Sparkles className={unavailable ? 'h-6 w-6 text-warning' : 'h-6 w-6 text-primary-glow animate-pulse'} />
+        <div className="mt-3 px-4 font-display text-base font-semibold leading-tight">
+          {unavailable ? 'More evidence needed' : 'Mental model built'}
+        </div>
+      </div>
+      {nodes.map((node, index) => {
+        const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2 - Math.PI / 2;
+        const radius = 42;
+        const x = 50 + Math.cos(angle) * radius;
+        const y = 50 + Math.sin(angle) * radius;
+        return (
+          <div
+            key={node.label}
+            className="absolute z-20 w-12 -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-primary/30 bg-background/45 p-2 text-primary-glow shadow-sm shadow-primary/10 transition-all duration-700 sm:w-36 sm:px-3 sm:py-2"
+            style={{ left: `${x}%`, top: `${y}%`, animationDelay: `${index * 0.08}s` }}
+            title={`${node.label} - ${node.source}`}
+          >
+            <div className="flex items-center justify-center gap-2 sm:justify-start">
+              <span className={`h-3 w-3 shrink-0 rounded-full ${node.strength === 'watch' ? 'bg-warning' : node.strength === 'workable' ? 'bg-primary-glow' : 'bg-success'}`} />
+              <span className="hidden text-xs font-semibold leading-tight text-foreground sm:inline">{node.label}</span>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
+}
+
+function buildWorkspaceInsights(report: ReadinessReport): WorkspaceInsight[] {
+  const keyFiles = report.scanEvidence.keyFilesFound;
+  const hasDocs = keyFiles.readme || normalizedReportFiles(report).some(file => /(^|\/)docs\//i.test(file));
+  const hasAgentInstructions = keyFiles.agentInstructions || keyFiles.claudeInstructions || report.summary.instructionFiles.length > 0;
+  const hasTests = keyFiles.tests || report.stack.testFrameworks.length > 0;
+  const hasPipeline = keyFiles.ciConfig || report.stack.runCommands.some(command => /build|test|lint|type/i.test(command.label));
+  const sourceFolders = report.summary.keyFolders.slice(0, 3);
+  const ignoredCount = report.scanSummary.generatedVendorFilesIgnored + report.scanSummary.binaryFilesIgnored;
+  const routingScore = report.repositoryHealth.dimensions.agentRouting.score;
+  const contextEfficiency = report.repositoryHealth.dimensions.contextWaste.contextEfficiencyScore;
+
+  return [
+    {
+      label: sourceFolders.length >= 2 ? 'Architecture appears modular' : 'Architecture shape detected',
+      detail: sourceFolders.length
+        ? `Work appears organized around ${sourceFolders.join(', ')}.`
+        : `${report.stack.primary} gives ShipSeal the first project-shape signal.`,
+      source: sourceFolders.length || report.stack.primary !== 'Unknown' ? 'Evidence' : 'Heuristic',
+      strength: sourceFolders.length >= 2 ? 'strong' : 'workable',
+    },
+    {
+      label: hasDocs ? 'Documentation connected' : 'Documentation path is thin',
+      detail: hasDocs ? 'Project documentation is available as a starting point for agent onboarding.' : 'No strong README/docs signal was found, so agents may need source-first discovery.',
+      source: hasDocs ? 'Evidence' : 'Heuristic',
+      strength: hasDocs ? 'strong' : 'watch',
+    },
+    {
+      label: hasAgentInstructions ? 'Agent instructions detected' : 'Agent onboarding needs a home',
+      detail: hasAgentInstructions ? `Instruction anchors: ${report.summary.instructionFiles.join(', ') || 'agent instruction files found'}.` : 'No AGENTS or tool-specific instruction file was detected.',
+      source: hasAgentInstructions ? 'Evidence' : 'Heuristic',
+      strength: hasAgentInstructions ? 'strong' : 'watch',
+    },
+    {
+      label: hasTests ? 'Verification route detected' : 'Verification route is unclear',
+      detail: hasTests ? `${report.stack.testFrameworks.join(', ') || 'Test files'} can help agents check changes safely.` : 'No strong test signal was found in the scan evidence.',
+      source: hasTests ? 'Evidence' : 'Heuristic',
+      strength: hasTests ? 'strong' : 'watch',
+    },
+    {
+      label: hasPipeline ? 'Build pipeline reproducible' : 'Build path needs clarification',
+      detail: hasPipeline ? `Detected commands: ${report.stack.runCommands.slice(0, 3).map(command => command.label).join(', ') || 'CI workflow'}.` : 'No declared build, test, lint or CI signal was detected.',
+      source: hasPipeline ? 'Evidence' : 'Heuristic',
+      strength: hasPipeline ? 'strong' : 'watch',
+    },
+    {
+      label: ignoredCount > 0 ? 'Context can be compressed' : 'Context compression estimated',
+      detail: ignoredCount > 0
+        ? `${ignoredCount.toLocaleString()} generated, vendor or binary files can stay outside first-pass agent context.`
+        : contextEfficiency !== null ? `Context efficiency is estimated at ${contextEfficiency}/100 from repository health signals.` : 'ShipSeal needs more scan evidence to estimate avoidable context.',
+      source: ignoredCount > 0 || contextEfficiency !== null ? 'Evidence' : 'Heuristic',
+      strength: contextEfficiency !== null && contextEfficiency >= 75 ? 'strong' : ignoredCount > 0 ? 'workable' : 'watch',
+    },
+    {
+      label: routingScore !== null && routingScore >= 70 ? 'Agent routing possible' : 'Agent routing needs focus',
+      detail: routingScore !== null ? `Routing signal is ${dimensionQualityLabel(routingScore).toLowerCase()} from repository health evidence.` : 'Routing quality could not be calculated from this scan.',
+      source: routingScore !== null ? 'Evidence' : 'Heuristic',
+      strength: routingScore !== null && routingScore >= 85 ? 'strong' : routingScore !== null && routingScore >= 70 ? 'workable' : 'watch',
+    },
+  ];
+}
+
+function workspaceUnderstandingSentence(report: ReadinessReport) {
+  const status = report.repositoryHealth.overall.status;
+  if (status === 'AI-ready workspace') return 'This repository is well prepared for AI-assisted development.';
+  if (status === 'Workable with optimization') return 'This repository has a usable AI workspace forming.';
+  if (status === 'Fragmented workspace') return 'This repository has useful signals, but the workspace is fragmented.';
+  if (status === 'High agent friction') return 'This repository can be understood, but agents will hit friction.';
+  if (status === 'Blocked') return 'ShipSeal found a blocker before this can become a reliable AI workspace.';
+  return 'ShipSeal built the first map of this repository.';
+}
+
+function insightStrengthClass(strength: WorkspaceInsight['strength']) {
+  if (strength === 'strong') return 'border-success/40 bg-success/10 text-success';
+  if (strength === 'workable') return 'border-primary/45 bg-primary/10 text-primary-glow';
+  return 'border-warning/50 bg-warning/10 text-warning';
 }
 
 function WorkspaceOverview({ report }: { report: ReadinessReport }) {
@@ -648,15 +763,15 @@ function WorkspaceOverview({ report }: { report: ReadinessReport }) {
   const cards = [
     {
       label: 'Workspace Quality',
-      value: health.overall.score === null ? 'Unavailable' : `${health.overall.score}/100`,
+      value: health.overall.score === null ? 'Unavailable' : `${health.overall.score} / 100`,
       detail: 'Primary workspace metric',
       badge: 'Current',
       badgeClass: 'border-primary/45 text-primary-glow',
     },
     {
       label: 'Repository Friction',
-      value: friction === null ? 'Unavailable' : `${friction}/100`,
-      detail: 'Lower is calmer',
+      value: friction === null ? 'Unavailable' : `${friction} / 100`,
+      detail: 'Higher friction means more context discovery',
       badge: contextWasteRiskLabel(friction),
       badgeClass: contextWasteRiskClass(friction),
     },
