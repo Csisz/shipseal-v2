@@ -543,6 +543,7 @@ function AiWorkspaceHero({
   const health = report.repositoryHealth;
   const unavailable = health.overall.score === null;
   const insights = buildWorkspaceInsights(report);
+  const repositoryDna = buildRepositoryDna(report);
   const primarySentence = workspaceUnderstandingSentence(report);
   const topAction = health.topActions[0];
 
@@ -555,7 +556,7 @@ function AiWorkspaceHero({
             <div className="flex flex-wrap items-center gap-3 mb-3">
               <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Intelligence</span>
               <Badge variant="outline" className="border-primary/45 text-primary-glow">
-                AI Workspace
+                Repository DNA
               </Badge>
             </div>
             <h1 id="repository-intelligence-heading" className="font-display text-3xl font-semibold leading-tight md:text-5xl">
@@ -588,8 +589,8 @@ function AiWorkspaceHero({
             )}
           </div>
 
-          <aside className="relative min-h-[420px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-6">
-            <MentalModelGraph insights={insights} unavailable={unavailable} />
+          <aside className="relative min-h-[520px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
+            <RepositoryDnaVisualization dimensions={repositoryDna} unavailable={unavailable} />
           </aside>
         </div>
 
@@ -641,41 +642,459 @@ function UnderstandingInsight({ insight, index }: { insight: WorkspaceInsight; i
   );
 }
 
-function MentalModelGraph({ insights, unavailable }: { insights: WorkspaceInsight[]; unavailable: boolean }) {
-  const nodes = insights.slice(0, 6);
+type RepositoryDnaDimensionId =
+  | 'documentation'
+  | 'architecture'
+  | 'projectMemory'
+  | 'contextEfficiency'
+  | 'aiRouting'
+  | 'verification';
+
+interface RepositoryDnaDimension {
+  id: RepositoryDnaDimensionId;
+  label: string;
+  shortLabel: string;
+  description: string;
+  score: number | null;
+  potentialScore: number | null;
+  source: 'Evidence' | 'Heuristic';
+  evidence: string[];
+  recommendations: string[];
+  signals: string[];
+  missing: string[];
+}
+
+function RepositoryDnaVisualization({ dimensions, unavailable }: { dimensions: RepositoryDnaDimension[]; unavailable: boolean }) {
+  const [activeId, setActiveId] = useState<RepositoryDnaDimensionId>(dimensions[0]?.id || 'documentation');
+  const active = dimensions.find(dimension => dimension.id === activeId) || dimensions[0];
+  const center = 160;
+  const outerRadius = 112;
+  const total = dimensions.length;
+  const currentPoints = dimensions.map((dimension, index) => {
+    const point = radarPoint(index, total, radiusForScore(dimension.score, outerRadius), center);
+    return `${point.x},${point.y}`;
+  }).join(' ');
+  const potentialPoints = dimensions.map((dimension, index) => {
+    const point = radarPoint(index, total, radiusForScore(dimension.potentialScore, outerRadius), center);
+    return `${point.x},${point.y}`;
+  }).join(' ');
+
   return (
-    <div className="relative flex min-h-[372px] items-center justify-center">
-      <div className="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/10" />
-      <div className="absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/20" />
-      <div className="absolute left-1/2 top-1/2 h-px w-[72%] -translate-x-1/2 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
-      <div className="absolute left-1/2 top-1/2 h-[72%] w-px -translate-y-1/2 bg-gradient-to-b from-transparent via-primary/25 to-transparent" />
-      <div className="relative z-10 flex h-36 w-36 flex-col items-center justify-center rounded-full border border-primary/50 bg-primary/10 text-center shadow-glow">
-        <Sparkles className={unavailable ? 'h-6 w-6 text-warning' : 'h-6 w-6 text-primary-glow animate-pulse'} />
-        <div className="mt-3 px-4 font-display text-base font-semibold leading-tight">
-          {unavailable ? 'More evidence needed' : 'Mental model built'}
+    <div className="flex h-full min-h-[472px] flex-col">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository DNA</div>
+          <h2 className="mt-1 font-display text-2xl font-semibold">AI workspace profile</h2>
         </div>
+        <Badge variant="outline" className="border-primary/40 text-primary-glow">
+          Evidence-backed
+        </Badge>
       </div>
-      {nodes.map((node, index) => {
-        const angle = (index / Math.max(nodes.length, 1)) * Math.PI * 2 - Math.PI / 2;
-        const radius = 42;
-        const x = 50 + Math.cos(angle) * radius;
-        const y = 50 + Math.sin(angle) * radius;
-        return (
-          <div
-            key={node.label}
-            className="absolute z-20 w-12 -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-primary/30 bg-background/45 p-2 text-primary-glow shadow-sm shadow-primary/10 transition-all duration-700 sm:w-36 sm:px-3 sm:py-2"
-            style={{ left: `${x}%`, top: `${y}%`, animationDelay: `${index * 0.08}s` }}
-            title={`${node.label} - ${node.source}`}
-          >
-            <div className="flex items-center justify-center gap-2 sm:justify-start">
-              <span className={`h-3 w-3 shrink-0 rounded-full ${node.strength === 'watch' ? 'bg-warning' : node.strength === 'workable' ? 'bg-primary-glow' : 'bg-success'}`} />
-              <span className="hidden text-xs font-semibold leading-tight text-foreground sm:inline">{node.label}</span>
+
+      <div className="grid flex-1 gap-5 lg:grid-rows-[auto_1fr]">
+        <div className="relative mx-auto aspect-square w-full max-w-[360px]">
+          <svg viewBox="0 0 320 320" role="img" aria-label="Repository DNA radar profile" className="h-full w-full overflow-visible">
+            <defs>
+              <radialGradient id="repository-dna-fill" cx="50%" cy="48%" r="62%">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.36" />
+                <stop offset="100%" stopColor="hsl(var(--accent))" stopOpacity="0.08" />
+              </radialGradient>
+              <linearGradient id="repository-dna-stroke" x1="32" y1="32" x2="288" y2="288">
+                <stop stopColor="hsl(var(--primary))" />
+                <stop offset="1" stopColor="hsl(var(--accent))" />
+              </linearGradient>
+            </defs>
+
+            {[0.25, 0.5, 0.75, 1].map(ring => (
+              <polygon
+                key={ring}
+                points={dimensions.map((_, index) => {
+                  const point = radarPoint(index, total, outerRadius * ring, center);
+                  return `${point.x},${point.y}`;
+                }).join(' ')}
+                fill="none"
+                stroke="hsl(var(--border))"
+                strokeOpacity={ring === 1 ? 0.38 : 0.18}
+                strokeWidth={ring === 1 ? 1.2 : 1}
+              />
+            ))}
+
+            {dimensions.map((dimension, index) => {
+              const outer = radarPoint(index, total, outerRadius, center);
+              const current = radarPoint(index, total, radiusForScore(dimension.score, outerRadius), center);
+              const potential = radarPoint(index, total, radiusForScore(dimension.potentialScore, outerRadius), center);
+              const selected = activeId === dimension.id;
+              const unavailableDimension = unavailable || dimension.score === null;
+
+              return (
+                <g key={dimension.id}>
+                  <line
+                    x1={center}
+                    y1={center}
+                    x2={outer.x}
+                    y2={outer.y}
+                    stroke="hsl(var(--primary))"
+                    strokeOpacity={selected ? 0.42 : 0.18}
+                    strokeWidth={selected ? 1.6 : 1}
+                    className="transition-all duration-500"
+                    style={{ transitionDelay: `${index * 90}ms` }}
+                  />
+                  <circle
+                    cx={potential.x}
+                    cy={potential.y}
+                    r={selected ? 4.5 : 3}
+                    fill="hsl(var(--success))"
+                    fillOpacity={unavailableDimension ? 0.16 : 0.54}
+                    className="transition-all duration-500"
+                  />
+                  <g
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${dimension.label}: ${dimension.score === null ? 'unavailable' : `${dimension.score} current score`}`}
+                    onMouseEnter={() => setActiveId(dimension.id)}
+                    onFocus={() => setActiveId(dimension.id)}
+                    onClick={() => setActiveId(dimension.id)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        setActiveId(dimension.id);
+                      }
+                    }}
+                    className="cursor-pointer outline-none"
+                  >
+                    <circle
+                      cx={current.x}
+                      cy={current.y}
+                      r={selected ? 8 : 6}
+                      fill={unavailableDimension ? 'hsl(var(--warning))' : 'hsl(var(--primary))'}
+                      fillOpacity={unavailableDimension ? 0.65 : 0.95}
+                      stroke="hsl(var(--background))"
+                      strokeWidth="3"
+                      className="transition-all duration-500 animate-scale-in"
+                      style={{ animationDelay: `${index * 120}ms` }}
+                    />
+                    <circle
+                      cx={current.x}
+                      cy={current.y}
+                      r={selected ? 15 : 11}
+                      fill="transparent"
+                      stroke={selected ? 'hsl(var(--primary))' : 'transparent'}
+                      strokeOpacity="0.38"
+                    />
+                  </g>
+                  <text
+                    x={outer.x}
+                    y={outer.y}
+                    dy={outer.y < center ? -12 : outer.y > center ? 18 : 4}
+                    textAnchor={outer.x < center - 10 ? 'end' : outer.x > center + 10 ? 'start' : 'middle'}
+                    className="fill-muted-foreground text-[10px] font-semibold"
+                  >
+                    {dimension.shortLabel}
+                  </text>
+                </g>
+              );
+            })}
+
+            <polygon points={potentialPoints} fill="none" stroke="hsl(var(--success))" strokeOpacity="0.56" strokeWidth="1.4" strokeDasharray="5 6" />
+            <polygon points={currentPoints} fill="url(#repository-dna-fill)" stroke="url(#repository-dna-stroke)" strokeWidth="2.5" className="animate-fade-in" />
+            <circle cx={center} cy={center} r="25" fill="hsl(var(--background))" fillOpacity="0.68" stroke="hsl(var(--primary))" strokeOpacity="0.24" />
+            <text x={center} y={center - 3} textAnchor="middle" className="fill-foreground font-display text-[13px] font-semibold">DNA</text>
+            <text x={center} y={center + 13} textAnchor="middle" className="fill-muted-foreground text-[8px]">Workspace</text>
+          </svg>
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-secondary/15 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-display text-lg font-semibold">{active.label}</h3>
+                <Badge variant="outline" className={active.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/70 text-muted-foreground'}>
+                  {active.source}
+                </Badge>
+              </div>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{active.description}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-semibold">{active.score === null ? 'Unavailable' : `${active.score}`}</div>
+              <div className="text-xs text-muted-foreground">Potential {active.potentialScore === null ? 'n/a' : active.potentialScore}</div>
             </div>
           </div>
-        );
-      })}
+
+          <RepositoryDnaList title="Evidence" items={active.evidence} emptyText="No strong evidence surfaced." />
+          <RepositoryDnaList title="Recommendations" items={active.recommendations} emptyText="No recommendation generated." />
+          <details className="mt-4 rounded-xl border border-border/60 bg-background/20 p-3">
+            <summary className="cursor-pointer select-none text-sm font-medium">Signals and missing pieces</summary>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <RepositoryDnaList title="Signals" items={active.signals} emptyText="No signal surfaced." compact />
+              <RepositoryDnaList title="Missing pieces" items={active.missing} emptyText="No major missing piece surfaced." compact />
+            </div>
+          </details>
+        </div>
+      </div>
     </div>
   );
+}
+
+function RepositoryDnaList({
+  title,
+  items,
+  emptyText,
+  compact = false,
+}: {
+  title: string;
+  items: string[];
+  emptyText: string;
+  compact?: boolean;
+}) {
+  const visible = compact ? items.slice(0, 4) : items.slice(0, 3);
+  return (
+    <div className={compact ? '' : 'mt-4'}>
+      <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{title}</div>
+      {visible.length ? (
+        <ul className="mt-2 space-y-2">
+          {visible.map(item => (
+            <li key={item} className="text-sm leading-relaxed text-foreground/90">
+              {item}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-muted-foreground">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
+function radarPoint(index: number, total: number, radius: number, center: number) {
+  const angle = (index / Math.max(total, 1)) * Math.PI * 2 - Math.PI / 2;
+  return {
+    x: Number((center + Math.cos(angle) * radius).toFixed(2)),
+    y: Number((center + Math.sin(angle) * radius).toFixed(2)),
+  };
+}
+
+function radiusForScore(score: number | null, radius: number) {
+  if (score === null) return radius * 0.12;
+  return radius * Math.max(0.08, Math.min(100, score) / 100);
+}
+
+function buildRepositoryDna(report: ReadinessReport): RepositoryDnaDimension[] {
+  const health = report.repositoryHealth;
+  const files = normalizedReportFiles(report);
+  const documentationFiles = firstMatchingFiles(files, [/readme/i, /(^|\/)docs\//i, /architecture/i, /changelog/i], 4);
+  const architectureFiles = firstMatchingFiles(files, [/architecture/i, /adr/i, /(^|\/)src\//i, /(^|\/)app\//i], 4);
+  const instructionFiles = uniqueStrings([...report.summary.instructionFiles, ...report.repoContextPack.existingInstructionFiles]).slice(0, 4);
+  const verificationFiles = firstMatchingFiles(files, [/test/i, /spec/i, /vitest/i, /jest/i, /\.github\/workflows/i], 4);
+  const ignoredFolders = (report.scanEvidence.ignoredFolders || []).slice(0, 4);
+  const sourceFolders = uniqueStrings([...(report.summary.keyFolders || []), ...(report.repoContextPack.keyFolders || [])]).slice(0, 4);
+  const runCommands = (report.stack.runCommands || []).map(command => command.label).slice(0, 4);
+
+  return [
+    dnaDimension({
+      report,
+      id: 'documentation',
+      label: 'Documentation',
+      shortLabel: 'Docs',
+      description: 'The visible onboarding path for humans and AI coding agents.',
+      score: averageScores(health.dimensions.repositoryIntelligence.score, health.dimensions.deliveryConfidence.score),
+      source: documentationFiles.length ? 'Evidence' : 'Heuristic',
+      evidence: compactText([
+        ...documentationFiles,
+        ...signalEvidence(health.dimensions.repositoryIntelligence.signals, ['readme', 'documentation', 'docs', 'architecture']),
+      ]),
+      recommendations: compactText([
+        ...recommendationsForDimensions(report, ['repositoryIntelligence', 'deliveryConfidence']),
+        documentationFiles.length ? 'Keep the strongest docs current and linked from the main README.' : 'Add a concise README path for setup, architecture and safe change workflow.',
+      ]),
+      signals: signalLabels(health.dimensions.repositoryIntelligence.signals, ['readme', 'documentation', 'docs', 'architecture']),
+      missing: compactText([
+        ...missingSignalLabels(health.dimensions.repositoryIntelligence.signals, ['readme', 'documentation', 'docs', 'architecture']),
+        documentationFiles.length ? '' : 'README or active docs entry point',
+      ]),
+    }),
+    dnaDimension({
+      report,
+      id: 'architecture',
+      label: 'Architecture',
+      shortLabel: 'Shape',
+      description: 'How clearly repository structure reveals where product behavior lives.',
+      score: averageScores(health.dimensions.repositoryIntelligence.score, health.dimensions.agentRouting.score),
+      source: sourceFolders.length || architectureFiles.length ? 'Evidence' : 'Heuristic',
+      evidence: compactText([
+        ...sourceFolders.map(folder => `Key folder: ${folder}`),
+        ...architectureFiles,
+        report.stack.primary !== 'Unknown' ? `Detected stack: ${report.stack.primary}` : '',
+      ]),
+      recommendations: compactText([
+        ...recommendationsForDimensions(report, ['repositoryIntelligence', 'agentRouting']),
+        sourceFolders.length ? 'Document which folders are product-critical and which are support surfaces.' : 'Add a short architecture map that names critical folders and entry points.',
+      ]),
+      signals: compactText([
+        ...signalLabels(health.dimensions.repositoryIntelligence.signals, ['entry', 'source', 'architecture', 'folder']),
+        ...signalLabels(health.dimensions.agentRouting.signals, ['folder', 'route', 'source']),
+      ]),
+      missing: compactText([
+        ...missingSignalLabels(health.dimensions.repositoryIntelligence.signals, ['entry', 'source', 'architecture', 'folder']),
+        sourceFolders.length ? '' : 'Critical source folder map',
+      ]),
+    }),
+    dnaDimension({
+      report,
+      id: 'projectMemory',
+      label: 'Project Memory',
+      shortLabel: 'Memory',
+      description: 'Persistent instructions and context anchors agents can reuse between tasks.',
+      score: health.dimensions.repositoryIntelligence.score,
+      source: instructionFiles.length ? 'Evidence' : 'Heuristic',
+      evidence: compactText([
+        ...instructionFiles,
+        ...signalEvidence(health.dimensions.repositoryIntelligence.signals, ['agent', 'instruction', 'memory', 'context']),
+      ]),
+      recommendations: compactText([
+        ...recommendationsForDimensions(report, ['repositoryIntelligence']),
+        instructionFiles.length ? 'Keep agent instructions short, current and linked to repository-specific workflows.' : 'Add AGENTS.md or equivalent project memory for agent onboarding.',
+      ]),
+      signals: signalLabels(health.dimensions.repositoryIntelligence.signals, ['agent', 'instruction', 'memory', 'context']),
+      missing: compactText([
+        ...missingSignalLabels(health.dimensions.repositoryIntelligence.signals, ['agent', 'instruction', 'memory', 'context']),
+        instructionFiles.length ? '' : 'Agent instruction file',
+      ]),
+    }),
+    dnaDimension({
+      report,
+      id: 'contextEfficiency',
+      label: 'Context Efficiency',
+      shortLabel: 'Context',
+      description: 'How much avoidable context can stay out of the first agent pass.',
+      score: health.dimensions.contextWaste.contextEfficiencyScore,
+      source: ignoredFolders.length || health.dimensions.contextWaste.contextEfficiencyScore !== null ? 'Evidence' : 'Heuristic',
+      evidence: compactText([
+        ...ignoredFolders.map(folder => `Ignored folder: ${folder}`),
+        `${report.scanSummary.generatedVendorFilesIgnored + report.scanSummary.binaryFilesIgnored} generated, vendor or binary files ignored`,
+        ...signalEvidence(health.dimensions.contextWaste.signals, ['generated', 'vendor', 'binary', 'ignore', 'context']),
+      ]),
+      recommendations: compactText([
+        ...recommendationsForDimensions(report, ['contextWaste']),
+        ignoredFolders.length ? 'Keep generated and vendor folders excluded from first-pass agent context.' : 'Mark generated, vendor and build-output folders so agents avoid noisy context.',
+      ]),
+      signals: signalLabels(health.dimensions.contextWaste.signals, ['generated', 'vendor', 'binary', 'ignore', 'context']),
+      missing: compactText([
+        ...missingSignalLabels(health.dimensions.contextWaste.signals, ['generated', 'vendor', 'binary', 'ignore', 'context']),
+        ignoredFolders.length ? '' : 'Explicit generated/vendor ignore map',
+      ]),
+    }),
+    dnaDimension({
+      report,
+      id: 'aiRouting',
+      label: 'AI Routing',
+      shortLabel: 'Routing',
+      description: 'How quickly an agent can map a task to the right files and verification path.',
+      score: health.dimensions.agentRouting.score,
+      source: sourceFolders.length || instructionFiles.length ? 'Evidence' : 'Heuristic',
+      evidence: compactText([
+        ...sourceFolders.map(folder => `Routable folder: ${folder}`),
+        ...instructionFiles.map(file => `Instruction anchor: ${file}`),
+        ...signalEvidence(health.dimensions.agentRouting.signals, ['route', 'folder', 'agent', 'entry', 'test']),
+      ]),
+      recommendations: compactText([
+        ...recommendationsForDimensions(report, ['agentRouting']),
+        'Add or maintain folder-level guidance for where agents should start common changes.',
+      ]),
+      signals: signalLabels(health.dimensions.agentRouting.signals, ['route', 'folder', 'agent', 'entry', 'test']),
+      missing: compactText([
+        ...missingSignalLabels(health.dimensions.agentRouting.signals, ['route', 'folder', 'agent', 'entry', 'test']),
+        sourceFolders.length && instructionFiles.length ? '' : 'Folder-to-task routing guidance',
+      ]),
+    }),
+    dnaDimension({
+      report,
+      id: 'verification',
+      label: 'Verification',
+      shortLabel: 'Verify',
+      description: 'The available test, build and review path after an AI-assisted change.',
+      score: health.dimensions.aiDevelopmentReadiness.score,
+      source: verificationFiles.length || runCommands.length ? 'Evidence' : 'Heuristic',
+      evidence: compactText([
+        ...verificationFiles,
+        ...runCommands.map(command => `Command: ${command}`),
+        ...signalEvidence(health.dimensions.aiDevelopmentReadiness.signals, ['test', 'build', 'lint', 'ci', 'verify']),
+      ]),
+      recommendations: compactText([
+        ...recommendationsForDimensions(report, ['aiDevelopmentReadiness']),
+        runCommands.length ? 'Keep build, lint and test commands obvious for every agent handoff.' : 'Declare build, lint and test commands where agents can find them.',
+      ]),
+      signals: signalLabels(health.dimensions.aiDevelopmentReadiness.signals, ['test', 'build', 'lint', 'ci', 'verify']),
+      missing: compactText([
+        ...missingSignalLabels(health.dimensions.aiDevelopmentReadiness.signals, ['test', 'build', 'lint', 'ci', 'verify']),
+        runCommands.length ? '' : 'Declared verification commands',
+      ]),
+    }),
+  ];
+}
+
+function dnaDimension(input: Omit<RepositoryDnaDimension, 'potentialScore'> & { report: ReadinessReport }) {
+  const relevantActions = input.report.repositoryHealth.topActions.filter(action =>
+    action.dimensions.some(dimension => recommendationDimensions(input.id).includes(dimension))
+  );
+  const potentialGain = Math.max(0, ...relevantActions.map(action => action.potentialDimensionGain));
+  const potentialScore = input.score === null ? null : Math.min(100, input.score + potentialGain);
+  const { report: _report, ...dimension } = input;
+  return {
+    ...dimension,
+    potentialScore,
+    evidence: compactText(dimension.evidence),
+    recommendations: compactText(dimension.recommendations),
+    signals: compactText(dimension.signals),
+    missing: compactText(dimension.missing),
+  };
+}
+
+function recommendationDimensions(id: RepositoryDnaDimensionId) {
+  if (id === 'contextEfficiency') return ['contextWaste'];
+  if (id === 'aiRouting') return ['agentRouting'];
+  if (id === 'verification') return ['aiDevelopmentReadiness'];
+  if (id === 'documentation') return ['repositoryIntelligence', 'deliveryConfidence'];
+  return ['repositoryIntelligence', 'agentRouting'];
+}
+
+function recommendationsForDimensions(report: ReadinessReport, dimensions: ReturnType<typeof recommendationDimensions>) {
+  return report.repositoryHealth.topActions
+    .filter(action => action.dimensions.some(dimension => dimensions.includes(dimension)))
+    .map(action => action.action);
+}
+
+function averageScores(...scores: Array<number | null>) {
+  const available = scores.filter((score): score is number => score !== null);
+  if (!available.length) return null;
+  return Math.round(available.reduce((sum, score) => sum + score, 0) / available.length);
+}
+
+function signalEvidence(signals: RepositoryHealthSignal[], terms: string[]) {
+  return signals
+    .filter(signal => signal.evidence.length && textMatchesTerms(`${signal.id} ${signal.label} ${signal.evidence.join(' ')}`, terms))
+    .flatMap(signal => signal.evidence)
+    .slice(0, 4);
+}
+
+function signalLabels(signals: RepositoryHealthSignal[], terms: string[]) {
+  return signals
+    .filter(signal => textMatchesTerms(`${signal.id} ${signal.label}`, terms))
+    .map(signal => `${signal.label}: ${signal.status}`);
+}
+
+function missingSignalLabels(signals: RepositoryHealthSignal[], terms: string[]) {
+  return signals
+    .filter(signal => (signal.status === 'fail' || signal.status === 'partial' || signal.status === 'unknown') && textMatchesTerms(`${signal.id} ${signal.label}`, terms))
+    .map(signal => signal.label);
+}
+
+function textMatchesTerms(text: string, terms: string[]) {
+  const normalized = text.toLowerCase();
+  return terms.some(term => normalized.includes(term.toLowerCase()));
+}
+
+function compactText(items: string[]) {
+  return uniqueStrings(items.map(item => item.trim()).filter(Boolean));
 }
 
 function buildWorkspaceInsights(report: ReadinessReport): WorkspaceInsight[] {

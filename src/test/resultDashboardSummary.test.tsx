@@ -78,9 +78,18 @@ describe('ResultDashboard summary copy', () => {
 
     expect(screen.getByRole('heading', { name: /This repository has a usable AI workspace forming/i })).toBeInTheDocument();
     expect(screen.getAllByText('Repository Intelligence').length).toBeGreaterThan(0);
-    expect(screen.getByText('AI Workspace')).toBeInTheDocument();
+    expect(screen.getAllByText('Repository DNA').length).toBeGreaterThan(0);
     expect(screen.getByText(/ShipSeal connected the project shape/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mental model built/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /AI workspace profile/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Repository DNA radar profile/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Documentation:/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Context Efficiency:/i }));
+    expect(screen.getByRole('heading', { name: /Context Efficiency/i })).toBeInTheDocument();
+    expect(screen.getAllByText(/Potential/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Evidence').length).toBeGreaterThan(0);
+    expect(screen.getByText('Recommendations')).toBeInTheDocument();
+    expect(screen.getByText(/Signals and missing pieces/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Mental model built/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/Architecture appears modular/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Documentation connected/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Workspace Quality').length).toBeGreaterThan(0);
