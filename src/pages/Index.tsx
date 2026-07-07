@@ -22,6 +22,7 @@ import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppReposi
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
 import { ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
+import type { WorkspaceStoryChapterId } from '@/lib/workspace';
 
 type PendingSource =
   | { type: 'zip'; file: File; projectName: string }
@@ -112,6 +113,7 @@ const Index = () => {
   const [githubInstallations, setGithubInstallations] = useState<GitHubAppInstallation[]>([]);
   const [repositoryListMessage, setRepositoryListMessage] = useState('');
   const [intelligenceReveal, setIntelligenceReveal] = useState<{ key: string; visible: boolean } | null>(null);
+  const [activeStoryChapterId, setActiveStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
   const savedReportKey = useRef<string | null>(null);
   const lastError = useRef<string | null>(null);
   const scanSectionRef = useRef<HTMLDivElement>(null);
@@ -220,6 +222,7 @@ const Index = () => {
   useEffect(() => {
     if (!activeReportKey) return;
     setIntelligenceReveal({ key: activeReportKey, visible: true });
+    setActiveStoryChapterId(null);
   }, [activeReportKey]);
 
   const completeIntelligenceReveal = useCallback(() => {
@@ -440,6 +443,8 @@ const Index = () => {
               onReset={reset}
               onClearHistory={handleClearHistory}
               onReplayReveal={replayIntelligenceReveal}
+              activeStoryChapterId={activeStoryChapterId}
+              onActiveStoryChapterChange={setActiveStoryChapterId}
               initialIntake={submittedIntake}
               intakeSkipped={submittedIntakeSkipped}
               selectedPackages={selectedPackages}

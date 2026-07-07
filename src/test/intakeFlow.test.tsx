@@ -180,6 +180,15 @@ describe('ShipSeal pre-scan intake flow', () => {
 
     expect(await screen.findByRole('heading', { name: /What ShipSeal understood/i }, { timeout: 5000 })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Replay reveal/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
+    expect(screen.getByRole('heading', { name: /Knowledge and docs/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Replay reveal/i }));
+    expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
+
+    expect(await screen.findByRole('heading', { name: /Knowledge and docs/i }, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('shows and updates Agent Operating Mode for AI Agent Development package', async () => {

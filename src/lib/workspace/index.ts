@@ -11,6 +11,13 @@ export {
   INTELLIGENCE_REVEAL_TOTAL_MS,
 } from './intelligenceReveal';
 
+export {
+  buildRepositoryKnowledgeModel,
+  buildWorkspaceStory,
+  chapterForDnaDimension,
+  chapterForMentalModelNode,
+} from './workspaceStory';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,
@@ -34,3 +41,20 @@ export type {
   IntelligenceRevealSignal,
   IntelligenceRevealSignalKind,
 } from './intelligenceReveal';
+
+export type {
+  RepositoryKnowledgeCluster,
+  RepositoryKnowledgeEdge,
+  RepositoryKnowledgeEdgeRelationship,
+  RepositoryKnowledgeModel,
+  RepositoryKnowledgeNode,
+  RepositoryKnowledgeNodeKind,
+  WorkspaceEvidenceItem,
+  WorkspaceStory,
+  WorkspaceStoryAgentStepId,
+  WorkspaceStoryChapter,
+  WorkspaceStoryChapterId,
+  WorkspaceStoryDnaDimensionId,
+  WorkspaceStoryEvidenceState,
+  WorkspaceStoryMentalNodeId,
+} from './workspaceStory';

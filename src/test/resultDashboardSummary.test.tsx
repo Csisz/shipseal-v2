@@ -122,6 +122,56 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getAllByText(topAction.title).length).toBeGreaterThan(0);
   });
 
+  it('syncs Workspace Story chapters across Mental Model, Repository DNA and simulator steps', () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: /Repository shape/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
+
+    expect(screen.getByRole('heading', { name: /Knowledge and docs/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: /^Documentation$/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Documentation connects repository identity/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Story signal').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: /AI Instructions: .* signal/i }));
+
+    expect(screen.getAllByRole('heading', { name: /Project memory/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { name: /AI Instructions/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('heading', { name: /Project Memory/i }).length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: /Context Efficiency:/i }));
+
+    expect(screen.getByRole('heading', { name: /Context and workflow/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Context Efficiency/i })).toBeInTheDocument();
+    expect(screen.getByText(/avoid generated folders/i)).toBeInTheDocument();
+  });
+
+  it('keeps the selected Workspace Story chapter through unrelated UI changes', () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /5 Verification path/i }));
+    expect(screen.getByRole('heading', { name: /Verification path/i })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Client name'), { target: { value: 'Acme' } });
+
+    expect(screen.getByRole('heading', { name: /Verification path/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: /Verification/i }).length).toBeGreaterThan(0);
+  });
+
   it('runs the Live Agent Simulator from repository evidence without model-reasoning claims', () => {
     vi.useFakeTimers();
 

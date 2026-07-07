@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type React from 'react';
 import { AlertOctagon, Check, CheckCircle2, Copy, Download, FileArchive, Layers, Lightbulb, RefreshCw, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import type { AgentOperatingModeId, AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
@@ -23,6 +23,17 @@ import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import type { GitHubConnectionState } from '@/lib/githubConnection/types';
 import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentOperatingMode, resolveAgentOperatingMode, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
 import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
+import {
+  buildWorkspaceStory,
+  chapterForDnaDimension,
+  chapterForMentalModelNode,
+  type WorkspaceStory,
+  type WorkspaceStoryAgentStepId,
+  type WorkspaceStoryChapter,
+  type WorkspaceStoryChapterId,
+  type WorkspaceStoryDnaDimensionId,
+  type WorkspaceStoryMentalNodeId,
+} from '@/lib/workspace';
 
 interface Props {
   report: ReadinessReport;
@@ -30,6 +41,8 @@ interface Props {
   onReset: () => void;
   onClearHistory: () => void;
   onReplayReveal?: () => void;
+  activeStoryChapterId?: WorkspaceStoryChapterId | null;
+  onActiveStoryChapterChange?: (chapterId: WorkspaceStoryChapterId | null) => void;
   initialIntake?: ProjectIntake;
   intakeSkipped?: boolean;
   /** Package options the user picked before the scan; defaults to the full package. */
@@ -41,7 +54,20 @@ interface Props {
 type RepositoryHealth = ReadinessReport['repositoryHealth'];
 type RepositoryHealthSignal = RepositoryHealth['dimensions']['repositoryIntelligence']['signals'][number];
 
-export function ResultDashboard({ report, history, onReset, onClearHistory, onReplayReveal, initialIntake, intakeSkipped = false, selectedPackages, agentOperatingMode, githubConnection }: Props) {
+export function ResultDashboard({
+  report,
+  history,
+  onReset,
+  onClearHistory,
+  onReplayReveal,
+  activeStoryChapterId,
+  onActiveStoryChapterChange,
+  initialIntake,
+  intakeSkipped = false,
+  selectedPackages,
+  agentOperatingMode,
+  githubConnection,
+}: Props) {
   const repositoryHealth = report.repositoryHealth;
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
   const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
@@ -54,8 +80,14 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, onRe
   const [appliedIntake, setAppliedIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [draftIntake, setDraftIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [wasIntakeSkipped, setWasIntakeSkipped] = useState(intakeSkipped);
+  const [localStoryChapterId, setLocalStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
   const readiness = evaluateReadiness(report.score, report.blockers);
   const ready = readiness.isReady;
+  const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
+  const effectiveStoryChapterId = activeStoryChapterId ?? localStoryChapterId;
+  const activeStoryChapter = workspaceStory.chapters.find(chapter => chapter.id === effectiveStoryChapterId)
+    || workspaceStory.chapters.find(chapter => chapter.id === workspaceStory.initialChapterId)
+    || null;
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
   const statusMessage = readinessStatusMessageForPackage(readiness.statusMessage, resolvedPackages);
   const limitedScanReason = report.scanEvidence.limitationReason || report.scanSummary.warnings.find(warning => /limited scan|fallback|file limit|archive|GitHub access|ZIP/i.test(warning));
@@ -82,6 +114,17 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, onRe
     setWasIntakeSkipped(intakeSkipped);
   }, [initialIntake, intakeSkipped, report.repoName, report.scannedAt]);
 
+  useEffect(() => {
+    if (!activeStoryChapter || effectiveStoryChapterId === activeStoryChapter.id) return;
+    setLocalStoryChapterId(activeStoryChapter.id);
+    onActiveStoryChapterChange?.(activeStoryChapter.id);
+  }, [activeStoryChapter, effectiveStoryChapterId, onActiveStoryChapterChange]);
+
+  const handleActiveStoryChapterChange = (chapterId: WorkspaceStoryChapterId | null) => {
+    setLocalStoryChapterId(chapterId);
+    onActiveStoryChapterChange?.(chapterId);
+  };
+
   const intakeDirty = !sameIntake(appliedIntake, draftIntake);
   const regenerateReport = () => {
     setAppliedIntake(normalizeProjectIntake(draftIntake, report.repoName));
@@ -102,10 +145,13 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, onRe
         limitationReason={limitedScanReason}
         onReset={onReset}
         onReplayReveal={onReplayReveal}
+        story={workspaceStory}
+        activeStoryChapter={activeStoryChapter}
+        onActiveStoryChapterChange={handleActiveStoryChapterChange}
       />
 
       <WorkspaceOverview report={report} />
-      <LiveAgentSimulator report={report} />
+      <LiveAgentSimulator report={report} activeChapter={activeStoryChapter} />
       <WorkspaceModulePlaceholders />
 
       <Disclosure title="Workspace evidence">
@@ -538,11 +584,17 @@ function AiWorkspaceHero({
   limitationReason,
   onReset,
   onReplayReveal,
+  story,
+  activeStoryChapter,
+  onActiveStoryChapterChange,
 }: {
   report: ReadinessReport;
   limitationReason?: string;
   onReset: () => void;
   onReplayReveal?: () => void;
+  story: WorkspaceStory;
+  activeStoryChapter: WorkspaceStoryChapter | null;
+  onActiveStoryChapterChange?: (chapterId: WorkspaceStoryChapterId | null) => void;
 }) {
   const health = report.repositoryHealth;
   const unavailable = health.overall.score === null;
@@ -550,6 +602,33 @@ function AiWorkspaceHero({
   const mentalModel = buildMentalModel(report);
   const primarySentence = workspaceUnderstandingSentence(report);
   const topAction = health.topActions[0];
+  const [exploredChapterIds, setExploredChapterIds] = useState<WorkspaceStoryChapterId[]>([]);
+  const [manualMentalNodeId, setManualMentalNodeId] = useState<MentalModelNodeId | null>(null);
+  const selectedMentalNodeId = activeStoryChapter?.mentalModelNodeId as MentalModelNodeId | undefined;
+  const activeMentalNodeId = manualMentalNodeId || selectedMentalNodeId || 'architecture';
+  const activeDnaDimensionId = activeStoryChapter?.dnaDimensionId as RepositoryDnaDimensionId | undefined;
+
+  const selectStoryChapter = (chapterId: WorkspaceStoryChapterId) => {
+    const chapter = story.chapters.find(item => item.id === chapterId);
+    if (!chapter) return;
+    setExploredChapterIds(current => current.includes(chapterId) ? current : [...current, chapterId]);
+    setManualMentalNodeId((chapter.mentalModelNodeId as MentalModelNodeId | undefined) || null);
+    onActiveStoryChapterChange?.(chapterId);
+  };
+
+  const selectMentalModelNode = (nodeId: MentalModelNodeId) => {
+    setManualMentalNodeId(nodeId);
+    const chapter = chapterForMentalModelNode(story, nodeId as WorkspaceStoryMentalNodeId);
+    if (chapter) {
+      setExploredChapterIds(current => current.includes(chapter.id) ? current : [...current, chapter.id]);
+      onActiveStoryChapterChange?.(chapter.id);
+    }
+  };
+
+  const selectDnaDimension = (dimensionId: RepositoryDnaDimensionId) => {
+    const chapter = chapterForDnaDimension(story, dimensionId as WorkspaceStoryDnaDimensionId);
+    if (chapter) selectStoryChapter(chapter.id);
+  };
 
   return (
     <section className="mb-8 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-5 shadow-glow md:p-8 lg:p-10 animate-fade-in-up" aria-labelledby="repository-intelligence-heading">
@@ -591,15 +670,36 @@ function AiWorkspaceHero({
         </div>
 
         {!unavailable && (
-          <div className="relative grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
-            <div className="min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
-              <MentalModelVisualization model={mentalModel} />
-            </div>
+          <>
+            <WorkspaceStoryNavigator
+              story={story}
+              activeChapter={activeStoryChapter}
+              exploredChapterIds={exploredChapterIds}
+              onSelectChapter={selectStoryChapter}
+            />
+            {activeStoryChapter && <WorkspaceEvidenceTrail chapter={activeStoryChapter} />}
+            <div className="relative grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
+              <div className="min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
+                <MentalModelVisualization
+                  model={mentalModel}
+                  activeId={activeMentalNodeId}
+                  storyNodeId={selectedMentalNodeId}
+                  activeChapter={activeStoryChapter}
+                  onSelectNode={selectMentalModelNode}
+                />
+              </div>
 
-            <aside className="min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
-              <RepositoryDnaVisualization dimensions={repositoryDna} unavailable={unavailable} />
-            </aside>
-          </div>
+              <aside className="min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
+                <RepositoryDnaVisualization
+                  dimensions={repositoryDna}
+                  unavailable={unavailable}
+                  activeDimensionId={activeDnaDimensionId}
+                  activeChapter={activeStoryChapter}
+                  onSelectDimension={selectDnaDimension}
+                />
+              </aside>
+            </div>
+          </>
         )}
 
         <details className="relative mt-6 rounded-2xl border border-border/60 bg-secondary/15 px-4 py-3 text-sm text-muted-foreground">
@@ -624,6 +724,136 @@ function AiWorkspaceHero({
       </div>
     </section>
   );
+}
+
+function WorkspaceStoryNavigator({
+  story,
+  activeChapter,
+  exploredChapterIds,
+  onSelectChapter,
+}: {
+  story: WorkspaceStory;
+  activeChapter: WorkspaceStoryChapter | null;
+  exploredChapterIds: WorkspaceStoryChapterId[];
+  onSelectChapter: (chapterId: WorkspaceStoryChapterId) => void;
+}) {
+  if (!story.chapters.length) return null;
+
+  return (
+    <nav className="relative mb-5" aria-label="Workspace Story">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Workspace Story</div>
+          <p className="mt-1 text-sm text-muted-foreground">Follow the evidence ShipSeal used to understand this repository.</p>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {story.chapters.map((chapter, index) => {
+          const active = chapter.id === activeChapter?.id;
+          const explored = exploredChapterIds.includes(chapter.id);
+          return (
+            <button
+              key={chapter.id}
+              type="button"
+              aria-current={active ? 'step' : undefined}
+              onClick={() => onSelectChapter(chapter.id)}
+              className={`min-w-0 rounded-full border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                active
+                  ? 'border-primary/55 bg-primary/15 text-primary-glow'
+                  : explored
+                    ? 'border-success/35 bg-success/5 text-foreground'
+                    : 'border-border/60 bg-background/20 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <span className="mr-2 text-xs text-muted-foreground">{index + 1}</span>
+              <span className="font-medium">{chapter.label}</span>
+              <span className="sr-only">{active ? ', selected chapter' : explored ? ', explored chapter' : ''}</span>
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+function WorkspaceEvidenceTrail({ chapter }: { chapter: WorkspaceStoryChapter }) {
+  const primaryEvidence = chapter.evidenceItems.slice(0, 3);
+  const secondaryEvidence = chapter.evidenceItems.slice(3);
+
+  return (
+    <section className="relative mb-5 rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6" aria-labelledby="workspace-evidence-trail-heading">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className={chapter.evidenceType === 'evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/70 text-muted-foreground'}>
+              {chapter.evidenceType === 'evidence' ? 'Evidence-backed' : 'Heuristic'}
+            </Badge>
+            <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Evidence trail</span>
+          </div>
+          <h2 id="workspace-evidence-trail-heading" className="mt-3 font-display text-2xl font-semibold">{chapter.label}</h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{chapter.summary}</p>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <EvidenceTrailBlock title="What ShipSeal found" items={primaryEvidence} />
+          <div className="space-y-4">
+            <EvidenceTrailText title="Why it is connected" text={chapter.relationship} />
+            <EvidenceTrailText title="What it means" text={chapter.repositoryMeaning} />
+            <EvidenceTrailText title="How an AI agent uses it" text={chapter.agentUse} />
+          </div>
+        </div>
+      </div>
+
+      {secondaryEvidence.length > 0 && (
+        <details className="mt-4 rounded-2xl border border-border/60 bg-secondary/15 p-4">
+          <summary className="cursor-pointer select-none text-sm font-medium">More evidence</summary>
+          <EvidenceTrailBlock title="Additional signals" items={secondaryEvidence} compact />
+        </details>
+      )}
+    </section>
+  );
+}
+
+function EvidenceTrailBlock({ title, items, compact = false }: { title: string; items: WorkspaceStoryChapter['evidenceItems']; compact?: boolean }) {
+  return (
+    <div>
+      <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{title}</div>
+      <ul className={`mt-3 ${compact ? 'grid gap-2 sm:grid-cols-2' : 'space-y-2'}`}>
+        {items.map(item => (
+          <li key={`${item.state}-${item.label}`} className="rounded-xl border border-border/50 bg-secondary/15 p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="break-all text-sm font-medium text-foreground">{item.label}</span>
+              <Badge variant="outline" className={evidenceStateClass(item.state)}>
+                {evidenceStateLabel(item.state)}
+              </Badge>
+            </div>
+            {item.detail && <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function EvidenceTrailText({ title, text }: { title: string; text: string }) {
+  return (
+    <div>
+      <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{title}</div>
+      <p className="mt-1 text-sm leading-relaxed text-foreground/90">{text}</p>
+    </div>
+  );
+}
+
+function evidenceStateLabel(state: WorkspaceStoryChapter['evidenceItems'][number]['state']) {
+  if (state === 'evidence') return 'Evidence';
+  if (state === 'missing') return 'Missing';
+  return 'Heuristic';
+}
+
+function evidenceStateClass(state: WorkspaceStoryChapter['evidenceItems'][number]['state']) {
+  if (state === 'evidence') return 'border-primary/40 text-primary-glow';
+  if (state === 'missing') return 'border-warning/50 text-warning';
+  return 'border-border/70 text-muted-foreground';
 }
 
 type MentalModelNodeId =
@@ -658,8 +888,19 @@ interface MentalModel {
   connections: MentalModelConnection[];
 }
 
-function MentalModelVisualization({ model }: { model: MentalModel }) {
-  const [activeId, setActiveId] = useState<MentalModelNodeId>('architecture');
+function MentalModelVisualization({
+  model,
+  activeId,
+  storyNodeId,
+  activeChapter,
+  onSelectNode,
+}: {
+  model: MentalModel;
+  activeId: MentalModelNodeId;
+  storyNodeId?: MentalModelNodeId;
+  activeChapter: WorkspaceStoryChapter | null;
+  onSelectNode: (nodeId: MentalModelNodeId) => void;
+}) {
   const active = model.nodes.find(node => node.id === activeId) || model.nodes[0];
   const related = model.connections.filter(connection => connection.from === active.id || connection.to === active.id);
 
@@ -668,7 +909,8 @@ function MentalModelVisualization({ model }: { model: MentalModel }) {
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Mental Model</div>
-          <h2 className="mt-1 font-display text-2xl font-semibold">How ShipSeal understands this repository</h2>
+              <h2 className="mt-1 font-display text-2xl font-semibold">How ShipSeal understands this repository</h2>
+              {activeChapter && <p className="mt-1 text-sm text-muted-foreground">Selected story: {activeChapter.label}</p>}
         </div>
         <Badge variant="outline" className="border-primary/40 text-primary-glow">
           Semantic map
@@ -710,12 +952,13 @@ function MentalModelVisualization({ model }: { model: MentalModel }) {
 
           {model.nodes.map((node, index) => {
             const activeNode = active.id === node.id;
+            const storyNode = storyNodeId === node.id;
             return (
               <button
                 key={node.id}
                 type="button"
-                onClick={() => setActiveId(node.id)}
-                onMouseEnter={() => setActiveId(node.id)}
+                onClick={() => onSelectNode(node.id)}
+                aria-pressed={activeNode}
                 className={`absolute w-[126px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border px-3 py-3 text-left shadow-sm transition-all duration-500 animate-scale-in ${
                   activeNode
                     ? 'border-primary/60 bg-primary/15 shadow-primary/20'
@@ -724,7 +967,7 @@ function MentalModelVisualization({ model }: { model: MentalModel }) {
                       : node.status === 'partial'
                         ? 'border-primary/25 bg-background/35'
                         : 'border-warning/35 bg-background/30'
-                }`}
+                } ${!activeNode && storyNodeId ? 'opacity-55' : ''} ${storyNode ? 'ring-1 ring-primary/45' : ''}`}
                 style={{ left: `${(node.x / 720) * 100}%`, top: `${(node.y / 420) * 100}%`, animationDelay: `${index * 85}ms` }}
                 aria-label={`${node.label}: ${node.status} signal`}
               >
@@ -746,6 +989,9 @@ function MentalModelVisualization({ model }: { model: MentalModel }) {
                 </Badge>
               </div>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{active.description}</p>
+              {activeChapter?.mentalModelNodeId === active.id && (
+                <p className="mt-2 text-sm leading-relaxed text-foreground/90">{activeChapter.relationship}</p>
+              )}
             </div>
           </div>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -780,8 +1026,21 @@ interface RepositoryDnaDimension {
   missing: string[];
 }
 
-function RepositoryDnaVisualization({ dimensions, unavailable }: { dimensions: RepositoryDnaDimension[]; unavailable: boolean }) {
-  const [activeId, setActiveId] = useState<RepositoryDnaDimensionId>(dimensions[0]?.id || 'documentation');
+function RepositoryDnaVisualization({
+  dimensions,
+  unavailable,
+  activeDimensionId,
+  activeChapter,
+  onSelectDimension,
+}: {
+  dimensions: RepositoryDnaDimension[];
+  unavailable: boolean;
+  activeDimensionId?: RepositoryDnaDimensionId;
+  activeChapter: WorkspaceStoryChapter | null;
+  onSelectDimension: (dimensionId: RepositoryDnaDimensionId) => void;
+}) {
+  const [localActiveId, setLocalActiveId] = useState<RepositoryDnaDimensionId>(dimensions[0]?.id || 'documentation');
+  const activeId = activeDimensionId || localActiveId;
   const active = dimensions.find(dimension => dimension.id === activeId) || dimensions[0];
   const center = 160;
   const outerRadius = 112;
@@ -801,6 +1060,7 @@ function RepositoryDnaVisualization({ dimensions, unavailable }: { dimensions: R
         <div>
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository DNA</div>
           <h2 className="mt-1 font-display text-2xl font-semibold">AI workspace profile</h2>
+          {activeChapter?.dnaDimensionId && <p className="mt-1 text-sm text-muted-foreground">Linked to {activeChapter.label}</p>}
         </div>
         <Badge variant="outline" className="border-primary/40 text-primary-glow">
           Evidence-backed
@@ -867,13 +1127,16 @@ function RepositoryDnaVisualization({ dimensions, unavailable }: { dimensions: R
                     role="button"
                     tabIndex={0}
                     aria-label={`${dimension.label}: ${dimension.score === null ? 'unavailable' : `${dimension.score} current score`}`}
-                    onMouseEnter={() => setActiveId(dimension.id)}
-                    onFocus={() => setActiveId(dimension.id)}
-                    onClick={() => setActiveId(dimension.id)}
+                    onFocus={() => setLocalActiveId(dimension.id)}
+                    onClick={() => {
+                      setLocalActiveId(dimension.id);
+                      onSelectDimension(dimension.id);
+                    }}
                     onKeyDown={event => {
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
-                        setActiveId(dimension.id);
+                        setLocalActiveId(dimension.id);
+                        onSelectDimension(dimension.id);
                       }
                     }}
                     className="cursor-pointer outline-none"
@@ -929,6 +1192,9 @@ function RepositoryDnaVisualization({ dimensions, unavailable }: { dimensions: R
                 </Badge>
               </div>
               <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{active.description}</p>
+              {activeChapter?.dnaDimensionId === active.id && (
+                <p className="mt-2 text-sm leading-relaxed text-foreground/90">{activeChapter.repositoryMeaning}</p>
+              )}
             </div>
             <div className="text-right">
               <div className="text-2xl font-semibold">{active.score === null ? 'Unavailable' : `${active.score}`}</div>
@@ -1455,6 +1721,7 @@ function WorkspaceOverview({ report }: { report: ReadinessReport }) {
 type SimulatorSignalSource = 'Evidence' | 'Heuristic';
 
 interface SimulatorStep {
+  id: WorkspaceStoryAgentStepId;
   title: string;
   detail: string;
   source: SimulatorSignalSource;
@@ -1475,11 +1742,12 @@ interface SimulatorPlan {
   heuristics: string[];
 }
 
-function LiveAgentSimulator({ report }: { report: ReadinessReport }) {
+function LiveAgentSimulator({ report, activeChapter }: { report: ReadinessReport; activeChapter?: WorkspaceStoryChapter | null }) {
   const plan = buildAgentSimulatorPlan(report);
   const [activeStep, setActiveStep] = useState(0);
   const [runId, setRunId] = useState(0);
   const complete = activeStep >= plan.steps.length - 1;
+  const highlightedStepIds = new Set(activeChapter?.agentStepIds || []);
 
   useEffect(() => {
     setActiveStep(0);
@@ -1525,16 +1793,17 @@ function LiveAgentSimulator({ report }: { report: ReadinessReport }) {
             <div className="space-y-3">
               {plan.steps.map((step, index) => {
                 const state = index < activeStep ? 'done' : index === activeStep ? 'active' : 'upcoming';
+                const storyRelated = highlightedStepIds.has(step.id);
                 return (
                   <div
-                    key={step.title}
+                    key={step.id}
                     className={`rounded-2xl border p-4 transition-all duration-500 ${
                       state === 'active'
                         ? 'border-primary/45 bg-primary/10 shadow-sm shadow-primary/10'
                         : state === 'done'
                           ? 'border-success/30 bg-success/5'
                           : 'border-border/50 bg-secondary/10 opacity-70'
-                    }`}
+                    } ${storyRelated ? 'ring-1 ring-primary/35' : ''}`}
                   >
                     <div className="flex items-start gap-3">
                       <div className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${
@@ -1552,6 +1821,11 @@ function LiveAgentSimulator({ report }: { report: ReadinessReport }) {
                           <Badge variant="outline" className={step.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/70 text-muted-foreground'}>
                             {step.source}
                           </Badge>
+                          {storyRelated && (
+                            <Badge variant="outline" className="border-primary/35 text-primary-glow">
+                              Story signal
+                            </Badge>
+                          )}
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">{step.detail}</p>
                       </div>
@@ -1651,11 +1925,13 @@ function buildAgentSimulatorPlan(report: ReadinessReport): SimulatorPlan {
 
   const steps: SimulatorStep[] = [
     {
+      id: 'repositoryDetected',
       title: 'Repository detected',
       detail: `${report.scanEvidence.repositoryFullName} from ${displayEvidenceSource(report.scanEvidence.sourceType)}.`,
       source: 'Evidence',
     },
     {
+      id: 'frameworkIdentified',
       title: 'Framework identified',
       detail: report.stack.primary !== 'Unknown'
         ? `${report.stack.primary}; ${report.stack.languages.join(', ') || 'language signals unavailable'}.`
@@ -1663,36 +1939,43 @@ function buildAgentSimulatorPlan(report: ReadinessReport): SimulatorPlan {
       source: report.stack.primary !== 'Unknown' ? 'Evidence' : 'Heuristic',
     },
     {
+      id: 'findDocumentation',
       title: 'Looking for project documentation',
       detail: docs.length ? `Starts with ${docs.join(', ')}.` : 'No README-like file was found in scanned evidence.',
       source: docs.length ? 'Evidence' : 'Heuristic',
     },
     {
+      id: 'searchArchitecture',
       title: 'Searching architecture',
       detail: architecture.length ? `Architecture signal: ${architecture.join(', ')}.` : 'No architecture file was detected; folder map and stack signals become more important.',
       source: architecture.length ? 'Evidence' : 'Heuristic',
     },
     {
+      id: 'locateAiInstructions',
       title: 'Locating AI instruction files',
       detail: instructionFiles.length ? `Instruction signal: ${instructionFiles.join(', ')}.` : 'No AGENTS, CLAUDE or tool instruction file was detected.',
       source: instructionFiles.length ? 'Evidence' : 'Heuristic',
     },
     {
+      id: 'findBuildAndTest',
       title: 'Finding build and test commands',
       detail: report.stack.runCommands.length ? report.stack.runCommands.slice(0, 3).map(command => `${command.label}: ${command.cmd}`).join('; ') : 'No declared build or test commands were detected.',
       source: report.stack.runCommands.length ? 'Evidence' : 'Heuristic',
     },
     {
+      id: 'ignoreGeneratedFolders',
       title: 'Ignoring generated folders',
       detail: ignoredFolders.length ? `Likely skipped: ${ignoredFolders.slice(0, 5).map(folder => folder.label).join(', ')}.` : 'No generated/vendor folders were reported by the scan.',
       source: ignoredFolders.length ? 'Evidence' : 'Heuristic',
     },
     {
+      id: 'identifySourceFolders',
       title: 'Identifying critical source folders',
       detail: sourceFolders.length ? `Likely starting folders: ${sourceFolders.join(', ')}.` : 'Source folders are inferred from common project layouts.',
       source: sourceFolders.length ? 'Evidence' : 'Heuristic',
     },
     {
+      id: 'workspaceComplete',
       title: 'Workspace understanding complete',
       detail: 'The plan is ready for a first-pass coding-agent handoff.',
       source: 'Heuristic',

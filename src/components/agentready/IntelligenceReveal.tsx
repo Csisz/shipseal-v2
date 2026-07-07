@@ -97,6 +97,11 @@ export function IntelligenceReveal({ report, onComplete }: Props) {
           <p className="mt-3 text-sm text-muted-foreground md:text-base">
             {meaning ? 'Your AI Workspace is ready.' : `${model.sourceLabel} - ${model.stackLabel}`}
           </p>
+          {meaning && (
+            <p className="mt-3 text-xs font-mono uppercase tracking-[0.22em] text-primary-glow">
+              Explore the evidence
+            </p>
+          )}
         </div>
 
         <div className="relative mx-auto min-h-[520px] max-w-5xl overflow-hidden rounded-[2rem] border border-primary/20 bg-background/15 p-4 shadow-glow md:p-8">
