@@ -5,33 +5,33 @@ Last updated: 2026-07-02
 ## Current Source-of-truth Documents
 
 - `README.md` - local setup, demo flow, GitHub import, exports, and current positioning overview.
-- `docs/THE_AI_WORKSPACE_BOOK_v0.75.md` - current Product Bible for the AI Workspace Optimizer engine, UX direction, information architecture, and implementation priorities.
-- `docs/SHIPSEAL_BOOK.md` - concise product source-of-truth draft naming ShipSeal as an AI Workspace Optimizer.
-- `docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md` - long-term product roadmap and phase sequencing.
-- `docs/SHIPSEAL_VISION.md` - current vision for AI repository optimization and agent efficiency.
-- `docs/POSITIONING.md` - approved product category, positioning, package language, and anti-positioning.
-- `docs/MESSAGING.md` - landing-page messaging, approved phrases, and phrases to avoid.
-- `docs/SELLABLE_PRODUCT_BACKLOG.md` - sellable MVP backlog and prioritized product work.
+- `docs/archive/THE_AI_WORKSPACE_BOOK_v0.75.md` - current Product Bible for the AI Workspace Optimizer engine, UX direction, information architecture, and implementation priorities.
+- `docs/vision/SHIPSEAL_BOOK.md` - concise product source-of-truth draft naming ShipSeal as an AI Workspace Optimizer.
+- `docs/product/SHIPSEAL_2026_PRODUCT_ROADMAP.md` - long-term product roadmap and phase sequencing.
+- `docs/vision/SHIPSEAL_VISION.md` - current vision for AI repository optimization and agent efficiency.
+- `docs/vision/POSITIONING.md` - approved product category, positioning, package language, and anti-positioning.
+- `docs/vision/MESSAGING.md` - landing-page messaging, approved phrases, and phrases to avoid.
+- `docs/product/SELLABLE_PRODUCT_BACKLOG.md` - sellable MVP backlog and prioritized product work.
 - `docs/ARCHITECTURE.md` - technical architecture and scan/export boundaries.
-- `docs/PRODUCT_POSITION_AUDIT.md` - Sprint Omega.3 audit of readiness/audit/report/Delivery Pack language that should become secondary.
-- `docs/WORKSPACE_TRANSFORMATION_PLAN.md` - migration plan from Repository Health as the current bridge score to future AI Workspace Quality.
-- `docs/DASHBOARD_REDESIGN_PLAN.md` - planned dashboard classification, future navigation, and non-goals for simulator/heatmap/timeline work.
-- `docs/CRITICAL_FILES_POLICY.md` - files that require careful review before AI-assisted changes.
-- `docs/RELEASE_CHECKLIST.md` - release readiness checks.
-- `docs/READINESS_FIX_PACK.md` - generated repository improvement pack workflow.
-- `docs/SUGGESTED_READINESS_FIX_PACK.md` - current suggested fix pack explanation.
-- `docs/CREATE_READINESS_PR_PLAN.md` - Create Readiness PR behavior and guardrails.
-- `docs/GITHUB_APP_CONNECT_PLAN.md` - GitHub App connection plan and permissions.
-- `docs/GITHUB_IMPORT_PROXY_PLAN.md` - public GitHub archive import proxy plan.
-- `docs/HOSTED_DEMO_READINESS.md` - hosted demo setup and validation.
-- `docs/HOSTED_SMOKE_TEST.md` - hosted smoke test checklist.
-- `docs/PUBLIC_GITHUB_IMPORT_VALIDATION.md` - public GitHub import validation.
-- `docs/SHIPSEAL_DEMO_VALIDATION.md` - manual demo validation checklist.
-- `docs/SAMPLE_DELIVERY_PACK_REVIEW.md` - sample output review checklist.
-- `docs/SAMPLE_REPOS.md` - sample repository notes.
-- `docs/DEMO_SCRIPT.md` - demo walkthrough.
+- `docs/implementation/PRODUCT_POSITION_AUDIT.md` - Sprint Omega.3 audit of readiness/audit/report/Delivery Pack language that should become secondary.
+- `docs/implementation/WORKSPACE_TRANSFORMATION_PLAN.md` - migration plan from Repository Health as the current bridge score to future AI Workspace Quality.
+- `docs/implementation/DASHBOARD_REDESIGN_PLAN.md` - planned dashboard classification, future navigation, and non-goals for simulator/heatmap/timeline work.
+- `docs/security/CRITICAL_FILES_POLICY.md` - files that require careful review before AI-assisted changes.
+- `docs/release/RELEASE_CHECKLIST.md` - release readiness checks.
+- `docs/implementation/READINESS_FIX_PACK.md` - generated repository improvement pack workflow.
+- `docs/implementation/SUGGESTED_READINESS_FIX_PACK.md` - current suggested fix pack explanation.
+- `docs/implementation/CREATE_READINESS_PR_PLAN.md` - Create Readiness PR behavior and guardrails.
+- `docs/github/GITHUB_APP_CONNECT_PLAN.md` - GitHub App connection plan and permissions.
+- `docs/implementation/GITHUB_IMPORT_PROXY_PLAN.md` - public GitHub archive import proxy plan.
+- `docs/demo/HOSTED_DEMO_READINESS.md` - hosted demo setup and validation.
+- `docs/demo/HOSTED_SMOKE_TEST.md` - hosted smoke test checklist.
+- `docs/implementation/PUBLIC_GITHUB_IMPORT_VALIDATION.md` - public GitHub import validation.
+- `docs/demo/SHIPSEAL_DEMO_VALIDATION.md` - manual demo validation checklist.
+- `docs/demo/SAMPLE_DELIVERY_PACK_REVIEW.md` - sample output review checklist.
+- `docs/demo/SAMPLE_REPOS.md` - sample repository notes.
+- `docs/demo/DEMO_SCRIPT.md` - demo walkthrough.
 - `docs/DEPLOYMENT.md` - deployment notes.
-- `docs/PRODUCTION_ROADMAP.md` - production hardening roadmap.
+- `docs/product/PRODUCTION_ROADMAP.md` - production hardening roadmap.
 - `docs/OWNERSHIP.md` - ownership notes.
 
 ## Outdated Documents

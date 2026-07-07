@@ -17,8 +17,8 @@ describe('ShipSeal dogfooding governance files', () => {
       'SECURITY.md',
       'CODEOWNERS',
       'docs/OWNERSHIP.md',
-      'docs/CRITICAL_FILES_POLICY.md',
-      'docs/RELEASE_CHECKLIST.md',
+      'docs/security/CRITICAL_FILES_POLICY.md',
+      'docs/release/RELEASE_CHECKLIST.md',
       '.github/workflows/ci.yml',
     ]) {
       expect(existsSync(resolve(root, path)), path).toBe(true);
@@ -28,7 +28,7 @@ describe('ShipSeal dogfooding governance files', () => {
   it('documents required validation commands and key ShipSeal safety boundaries', () => {
     const agents = read('AGENTS.md');
     const contributing = read('CONTRIBUTING.md');
-    const criticalPolicy = read('docs/CRITICAL_FILES_POLICY.md');
+    const criticalPolicy = read('docs/security/CRITICAL_FILES_POLICY.md');
     const ci = read('.github/workflows/ci.yml');
 
     expect(agents).toContain('npm run test');

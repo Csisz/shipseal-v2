@@ -1060,9 +1060,9 @@ describe('GitHub App Connect plan', () => {
   });
 
   it('documents the GitHub App architecture and README roadmap', () => {
-    expect(existsSync('docs/GITHUB_APP_CONNECT_PLAN.md')).toBe(true);
+    expect(existsSync('docs/github/GITHUB_APP_CONNECT_PLAN.md')).toBe(true);
 
-    const plan = readFileSync('docs/GITHUB_APP_CONNECT_PLAN.md', 'utf8');
+    const plan = readFileSync('docs/github/GITHUB_APP_CONNECT_PLAN.md', 'utf8');
     const readme = readFileSync('README.md', 'utf8');
 
     expect(plan).toContain('Metadata: read');

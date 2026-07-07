@@ -33,7 +33,7 @@ export function PackageCards(props: Props) {
   if (props.variant === 'select') {
     return (
       <div className="space-y-4">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
           {primary.map(pack => (
             <SelectCard key={pack.id} pack={pack} selected={props.selected.includes(pack.id)} onToggle={props.onToggle} />
           ))}
@@ -45,7 +45,7 @@ export function PackageCards(props: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="grid md:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {primary.map((pack, index) => (
           <PathCard key={pack.id} pack={pack} index={index} onPick={props.onPick} />
         ))}
@@ -110,7 +110,7 @@ function PathCard({ pack, index, onPick, compact = false }: { pack: ShipSealPack
       type="button"
       onClick={() => onPick(pack.id)}
       className={cn(
-        'ss-tick group relative flex h-full flex-col text-left transition-all',
+        'ss-tick group relative flex h-full min-w-0 flex-col text-left transition-all',
         compact ? 'rounded-2xl p-4' : 'rounded-3xl p-6',
         'glass hover:-translate-y-1 hover:border-primary/50 hover:shadow-glow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
       )}
@@ -119,16 +119,16 @@ function PathCard({ pack, index, onPick, compact = false }: { pack: ShipSealPack
       <span className={cn('flex items-center justify-center border border-border/70 bg-secondary/70', compact ? 'mb-3 h-9 w-9 rounded-xl' : 'mb-5 h-11 w-11 rounded-2xl')}>
         <Icon className="h-5 w-5 text-accent" />
       </span>
-      <div className="font-display text-lg font-semibold leading-snug">{display.title}</div>
-      <p className="mt-2 text-sm text-muted-foreground flex-1">{display.sentence}</p>
+      <div className="font-display text-lg font-semibold leading-snug break-words">{display.title}</div>
+      <p className="mt-2 text-sm text-muted-foreground flex-1 break-words">{display.sentence}</p>
       {pack.id === FULL_PACKAGE_ID && (
-        <span className="mt-3 inline-flex w-fit items-center gap-1 rounded-full border border-primary/50 bg-primary/10 px-2.5 py-1 text-[11px] text-primary-glow">
+        <span className="mt-3 inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border border-primary/50 bg-primary/10 px-2.5 py-1 text-[11px] leading-tight text-primary-glow">
           <Sparkles className="h-3 w-3" /> Recommended
         </span>
       )}
       <div className={cn('mt-5 hidden flex-wrap gap-1.5 md:flex', compact && 'mt-3')}>
         {pack.chips.map(chip => (
-          <span key={chip} className="rounded-full border border-border/60 bg-secondary/50 px-2.5 py-1 text-[11px] text-foreground/80">
+          <span key={chip} className="max-w-full break-words rounded-full border border-border/60 bg-secondary/50 px-2.5 py-1 text-[11px] leading-tight text-foreground/80">
             {chip}
           </span>
         ))}
@@ -151,7 +151,7 @@ function SelectCard({ pack, selected, onToggle }: { pack: ShipSealPackage; selec
       aria-checked={selected}
       onClick={() => onToggle(pack.id)}
       className={cn(
-        'flex min-h-32 items-start gap-3 rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'flex min-h-32 min-w-0 items-start gap-3 rounded-2xl border p-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         selected
           ? 'border-primary/60 bg-primary/10'
           : 'border-border/60 bg-secondary/25 hover:border-border hover:bg-secondary/45',
@@ -167,14 +167,14 @@ function SelectCard({ pack, selected, onToggle }: { pack: ShipSealPackage; selec
       >
         {selected && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
       </span>
-      <span className="min-w-0">
-        <span className="flex items-center gap-2">
+      <span className="min-w-0 flex-1">
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
           <Icon className="h-3.5 w-3.5 text-accent shrink-0" />
-          <span className="text-sm font-medium leading-snug">{display.title}</span>
+          <span className="min-w-0 text-sm font-medium leading-snug break-words">{display.title}</span>
         </span>
-        <span className="mt-1.5 block text-xs leading-relaxed text-muted-foreground">{display.sentence}</span>
+        <span className="mt-1.5 block text-xs leading-relaxed text-muted-foreground break-words">{display.sentence}</span>
         {isFull && (
-          <span className="mt-2 inline-flex rounded-full border border-primary/45 bg-primary/10 px-2 py-0.5 text-[10px] text-primary-glow">
+          <span className="mt-2 inline-flex max-w-full flex-wrap rounded-full border border-primary/45 bg-primary/10 px-2 py-0.5 text-[10px] leading-tight text-primary-glow">
             Recommended
           </span>
         )}

@@ -210,7 +210,7 @@ Later:
 - selected-repository access by default,
 - audit log for connect, scan, branch, file write, and PR events.
 
-See [GitHub App Connect Plan](docs/GITHUB_APP_CONNECT_PLAN.md).
+See [GitHub App Connect Plan](docs/github/GITHUB_APP_CONNECT_PLAN.md).
 
 ### Create a GitHub App for local/demo testing
 
@@ -300,24 +300,24 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 
 ## Docs
 
-- [Product Vision](docs/SHIPSEAL_VISION.md)
-- [AI Workspace Product Bible](docs/THE_AI_WORKSPACE_BOOK_v0.75.md)
-- [Positioning](docs/POSITIONING.md)
-- [Messaging](docs/MESSAGING.md)
+- [Product Vision](docs/vision/SHIPSEAL_VISION.md)
+- [AI Workspace Product Bible](docs/archive/THE_AI_WORKSPACE_BOOK_v0.75.md)
+- [Positioning](docs/vision/POSITIONING.md)
+- [Messaging](docs/vision/MESSAGING.md)
 - [Documentation Inventory](docs/DOCUMENTATION_INVENTORY.md)
-- [Product Position Audit](docs/PRODUCT_POSITION_AUDIT.md)
-- [Workspace Transformation Plan](docs/WORKSPACE_TRANSFORMATION_PLAN.md)
-- [Dashboard Redesign Plan](docs/DASHBOARD_REDESIGN_PLAN.md)
+- [Product Position Audit](docs/implementation/PRODUCT_POSITION_AUDIT.md)
+- [Workspace Transformation Plan](docs/implementation/WORKSPACE_TRANSFORMATION_PLAN.md)
+- [Dashboard Redesign Plan](docs/implementation/DASHBOARD_REDESIGN_PLAN.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Production Roadmap](docs/PRODUCTION_ROADMAP.md)
+- [Production Roadmap](docs/product/PRODUCTION_ROADMAP.md)
 - [Deployment](docs/DEPLOYMENT.md)
-- [Release Checklist](docs/RELEASE_CHECKLIST.md)
-- [Demo Script](docs/DEMO_SCRIPT.md)
-- [Demo Validation](docs/SHIPSEAL_DEMO_VALIDATION.md)
-- [Hosted Demo Readiness](docs/HOSTED_DEMO_READINESS.md)
-- [Public GitHub Import Validation](docs/PUBLIC_GITHUB_IMPORT_VALIDATION.md)
-- [Sample Delivery Pack Review](docs/SAMPLE_DELIVERY_PACK_REVIEW.md)
-- [Sample Repos](docs/SAMPLE_REPOS.md)
+- [Release Checklist](docs/release/RELEASE_CHECKLIST.md)
+- [Demo Script](docs/demo/DEMO_SCRIPT.md)
+- [Demo Validation](docs/demo/SHIPSEAL_DEMO_VALIDATION.md)
+- [Hosted Demo Readiness](docs/demo/HOSTED_DEMO_READINESS.md)
+- [Public GitHub Import Validation](docs/implementation/PUBLIC_GITHUB_IMPORT_VALIDATION.md)
+- [Sample Delivery Pack Review](docs/demo/SAMPLE_DELIVERY_PACK_REVIEW.md)
+- [Sample Repos](docs/demo/SAMPLE_REPOS.md)
 
 ## Current Limitations
 

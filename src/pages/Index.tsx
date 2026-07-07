@@ -121,6 +121,12 @@ const Index = () => {
   );
 
   useEffect(() => {
+    if (!isScanning) return;
+    if (window.navigator.userAgent.toLowerCase().includes('jsdom')) return;
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [isScanning]);
+
+  useEffect(() => {
     setHistory(getScanHistory());
   }, []);
 
@@ -430,7 +436,7 @@ const Index = () => {
           </Suspense>
         </main>
       ) : isScanning ? (
-        <main className="min-h-screen pt-28 pb-16">
+        <main className="min-h-screen pt-16 pb-6 md:pt-20 md:pb-8">
           <div className="container">
             <ScanProgress
               steps={scan.steps}

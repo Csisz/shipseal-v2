@@ -31,8 +31,8 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
       <section className="relative pt-28 pb-16 md:pt-40 md:pb-24 overflow-hidden">
         <div className="absolute inset-0 bg-grid pointer-events-none" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[520px] bg-primary/20 rounded-full blur-[150px] pointer-events-none" />
-        <div className="container relative max-w-3xl mx-auto text-center">
-          <div className="animate-fade-in-up">
+        <div className="container relative mx-auto text-center">
+          <div className="mx-auto max-w-3xl animate-fade-in-up">
             <h1 className="font-display text-4xl md:text-6xl font-bold leading-[1.05] tracking-tight text-gradient">
               Stop wasting AI context.
             </h1>
@@ -55,7 +55,7 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
           </div>
 
           {/* The scan input lives directly in the hero. */}
-          <div className="mt-10 text-left animate-fade-in-up" style={{ animationDelay: '0.12s', animationFillMode: 'backwards' } as CSSProperties}>
+          <div className="mx-auto mt-10 max-w-5xl text-left animate-fade-in-up" style={{ animationDelay: '0.12s', animationFillMode: 'backwards' } as CSSProperties}>
             {scanSlot}
           </div>
 
