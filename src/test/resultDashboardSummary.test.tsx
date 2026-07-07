@@ -63,7 +63,7 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(/Available ShipSeal improvements/i)).toBeInTheDocument();
   });
 
-  it('makes Workspace Quality the primary dashboard summary and keeps Repository Health secondary', () => {
+  it('makes visual understanding the primary dashboard summary and keeps Repository Health secondary', () => {
     const report = buildSampleReport();
     const topAction = report.repositoryHealth.topActions[0];
 
@@ -76,22 +76,29 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: /This repository has a usable AI workspace forming/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /What ShipSeal understood/i })).toBeInTheDocument();
     expect(screen.getAllByText('Repository Intelligence').length).toBeGreaterThan(0);
+    expect(screen.getByText('Visual understanding')).toBeInTheDocument();
+    expect(screen.getByText(/This repository has a usable AI workspace forming/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /How ShipSeal understands this repository/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Mental Model semantic repository graph/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Architecture: .* signal/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /AI Instructions: .* signal/i }));
+    expect(screen.getByRole('heading', { name: /AI Instructions/i })).toBeInTheDocument();
+    expect(screen.getAllByText('Connections').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Repository DNA').length).toBeGreaterThan(0);
-    expect(screen.getByText(/ShipSeal connected the project shape/i)).toBeInTheDocument();
+    expect(screen.getByText(/ShipSeal connected documentation, architecture, memory, verification and context/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /AI workspace profile/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Repository DNA radar profile/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Documentation:/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Documentation: .*current score/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Context Efficiency:/i }));
     expect(screen.getByRole('heading', { name: /Context Efficiency/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Potential/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Evidence').length).toBeGreaterThan(0);
-    expect(screen.getByText('Recommendations')).toBeInTheDocument();
+    expect(screen.getAllByText('Recommendations').length).toBeGreaterThan(0);
     expect(screen.getByText(/Signals and missing pieces/i)).toBeInTheDocument();
     expect(screen.queryByText(/Mental model built/i)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Architecture appears modular/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Documentation connected/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Workspace metrics and next action/i)).toBeInTheDocument();
     expect(screen.getAllByText('Workspace Quality').length).toBeGreaterThan(0);
     expect(screen.getAllByText(`${report.repositoryHealth.overall.score} / 100`).length).toBeGreaterThan(0);
     expect(screen.getByText('Workspace Overview')).toBeInTheDocument();

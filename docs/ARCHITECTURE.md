@@ -75,6 +75,36 @@ The simulator does not expose or claim to expose Claude, Codex, GPT, or other mo
 
 The MVP intentionally does not change scoring weights, Repository Health calculation, score.json, Delivery Pack exports, manifest paths, or GitHub PR behavior.
 
+## Repository DNA and Mental Model
+
+Sprint Omega.6 makes visual understanding the primary post-scan experience. The first result screen now answers: what did ShipSeal understand?
+
+The top canvas contains two UI-only visual models:
+
+- Repository DNA: an interactive radar profile for Documentation, Architecture, Project Memory, Context Efficiency, AI Routing, and Verification.
+- Mental Model: a semantic graph showing how documentation, architecture, source, AI instructions, tests, build/CI, context, and recommendations relate.
+
+Both models are derived from existing `ReadinessReport` evidence. They do not change scoring weights, Repository Health calculation, Delivery Pack exports, `score.json`, manifest schema, GitHub import, GitHub PR behavior, or ZIP upload behavior.
+
+Repository DNA evidence mapping:
+
+- Documentation: README/docs/architecture files, Repository Intelligence signals, and Delivery Confidence recommendations.
+- Architecture: detected stack, key folders, architecture files, Repository Intelligence, and Agent Routing.
+- Project Memory: AGENTS/tool instruction files and repository-context instruction anchors.
+- Context Efficiency: ignored generated/vendor/binary counts, ignored folders, and Context Waste signals.
+- AI Routing: key folders, instruction anchors, and Agent Routing signals.
+- Verification: test/spec files, test frameworks, run commands, CI files, and AI Development Readiness signals.
+
+Each DNA dimension displays current score, short explanation, evidence, missing signals, recommendation, and potential score. Potential score is a visual projection from existing `repositoryHealth.topActions.potentialDimensionGain`; it is not a recalculation.
+
+Mental Model evidence mapping:
+
+- Nodes represent semantic repository concepts, not file lists.
+- Node strength is inferred from real evidence such as docs, source folders, instruction files, tests, CI, commands, ignored context, and top recommendations.
+- Connections represent relationships ShipSeal can explain from evidence, such as docs explaining architecture, architecture resolving to source, source connecting to tests, tests connecting to build/CI, and context filters protecting source exploration.
+
+Metrics remain available, but the top screen treats them as secondary context behind progressive disclosure.
+
 ## Public GitHub Import Flow
 
 Sprint 7 adds a client-side public GitHub import path:

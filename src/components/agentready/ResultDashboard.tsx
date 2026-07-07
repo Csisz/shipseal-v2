@@ -542,25 +542,25 @@ function AiWorkspaceHero({
 }) {
   const health = report.repositoryHealth;
   const unavailable = health.overall.score === null;
-  const insights = buildWorkspaceInsights(report);
   const repositoryDna = buildRepositoryDna(report);
+  const mentalModel = buildMentalModel(report);
   const primarySentence = workspaceUnderstandingSentence(report);
   const topAction = health.topActions[0];
 
   return (
-    <section className="mb-8 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-6 shadow-glow md:p-10 animate-fade-in-up" aria-labelledby="repository-intelligence-heading">
+    <section className="mb-8 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-5 shadow-glow md:p-8 lg:p-10 animate-fade-in-up" aria-labelledby="repository-intelligence-heading">
       <div className="relative">
-        <div className="absolute inset-0 -m-10 bg-[radial-gradient(circle_at_28%_18%,hsl(var(--primary)/0.22),transparent_35%),radial-gradient(circle_at_74%_68%,hsl(var(--accent)/0.13),transparent_34%)] pointer-events-none" />
-        <div className="relative grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(320px,420px)] lg:items-center">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3 mb-3">
+        <div className="absolute inset-0 -m-10 bg-[radial-gradient(circle_at_24%_18%,hsl(var(--primary)/0.22),transparent_34%),radial-gradient(circle_at_78%_26%,hsl(var(--accent)/0.13),transparent_32%),linear-gradient(180deg,hsl(var(--background)/0),hsl(var(--background)/0.2))] pointer-events-none" />
+        <div className="relative mb-7 flex flex-wrap items-start justify-between gap-4">
+          <div className="max-w-4xl">
+            <div className="mb-3 flex flex-wrap items-center gap-3">
               <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Intelligence</span>
               <Badge variant="outline" className="border-primary/45 text-primary-glow">
-                Repository DNA
+                Visual understanding
               </Badge>
             </div>
             <h1 id="repository-intelligence-heading" className="font-display text-3xl font-semibold leading-tight md:text-5xl">
-              {unavailable ? 'I need more evidence to understand this repository.' : primarySentence}
+              {unavailable ? 'I need more evidence to understand this repository.' : 'What ShipSeal understood'}
             </h1>
             {unavailable ? (
               <div className="mt-5 rounded-2xl border border-warning/35 bg-warning/10 p-4 text-sm leading-relaxed text-warning">
@@ -569,76 +569,181 @@ function AiWorkspaceHero({
                 <p className="mt-2 text-warning/90">Reconnect GitHub, upload the complete ZIP, or retry the full scan.</p>
               </div>
             ) : (
-              <>
-                <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted-foreground md:text-lg">
-                  ShipSeal connected the project shape, memory anchors, verification paths and agent routes into a workspace an AI coding agent can use.
-                </p>
-                <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                  {insights.slice(0, 6).map((insight, index) => (
-                    <UnderstandingInsight key={insight.label} insight={insight} index={index} />
-                  ))}
-                </div>
-                {topAction && (
-                  <div className="mt-7 rounded-2xl border border-border/60 bg-background/25 p-4">
-                    <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">The first improvement I would make</div>
-                    <div className="mt-2 text-base font-semibold text-foreground">{topAction.title}</div>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{topAction.action}</p>
-                  </div>
-                )}
-              </>
+              <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted-foreground md:text-lg">
+                {primarySentence} ShipSeal connected documentation, architecture, memory, verification and context into a visual model of how this workspace can be understood.
+              </p>
             )}
           </div>
-
-          <aside className="relative min-h-[520px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
-            <RepositoryDnaVisualization dimensions={repositoryDna} unavailable={unavailable} />
-          </aside>
-        </div>
-
-        <div className="relative mt-8 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-secondary/15 px-4 py-3 text-sm text-muted-foreground">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className={repositoryHealthStatusClass(health.overall.status)}>
-              {health.overall.status}
-            </Badge>
-            <span>{health.overall.confidence} confidence</span>
-            {health.overall.score !== null && <span>Workspace Quality {health.overall.score} / 100</span>}
-          </div>
-          <Button variant="outline" size="sm" onClick={onReset} className="border-border/60">
+          <Button variant="outline" size="sm" onClick={onReset} className="border-border/60 bg-background/20">
             <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
           </Button>
         </div>
+
+        {!unavailable && (
+          <div className="relative grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
+            <div className="min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
+              <MentalModelVisualization model={mentalModel} />
+            </div>
+
+            <aside className="min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
+              <RepositoryDnaVisualization dimensions={repositoryDna} unavailable={unavailable} />
+            </aside>
+          </div>
+        )}
+
+        <details className="relative mt-6 rounded-2xl border border-border/60 bg-secondary/15 px-4 py-3 text-sm text-muted-foreground">
+          <summary className="cursor-pointer select-none font-medium text-foreground">Workspace metrics and next action</summary>
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className={repositoryHealthStatusClass(health.overall.status)}>
+                {health.overall.status}
+              </Badge>
+              <span>{health.overall.confidence} confidence</span>
+              {health.overall.score !== null && <span>Workspace Quality {health.overall.score} / 100</span>}
+            </div>
+            {topAction && (
+              <div>
+                <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">First improvement</div>
+                <div className="mt-1 font-semibold text-foreground">{topAction.title}</div>
+                <p className="mt-1 leading-relaxed">{topAction.action}</p>
+              </div>
+            )}
+          </div>
+        </details>
       </div>
     </section>
   );
 }
 
-interface WorkspaceInsight {
+type MentalModelNodeId =
+  | 'documentation'
+  | 'architecture'
+  | 'source'
+  | 'aiInstructions'
+  | 'tests'
+  | 'buildCi'
+  | 'context'
+  | 'recommendations';
+
+interface MentalModelNode {
+  id: MentalModelNodeId;
   label: string;
-  detail: string;
-  source: 'Evidence' | 'Heuristic';
-  strength: 'strong' | 'workable' | 'watch';
+  description: string;
+  evidence: string[];
+  status: 'strong' | 'partial' | 'missing';
+  x: number;
+  y: number;
 }
 
-function UnderstandingInsight({ insight, index }: { insight: WorkspaceInsight; index: number }) {
+interface MentalModelConnection {
+  from: MentalModelNodeId;
+  to: MentalModelNodeId;
+  label: string;
+  evidence: string[];
+}
+
+interface MentalModel {
+  nodes: MentalModelNode[];
+  connections: MentalModelConnection[];
+}
+
+function MentalModelVisualization({ model }: { model: MentalModel }) {
+  const [activeId, setActiveId] = useState<MentalModelNodeId>('architecture');
+  const active = model.nodes.find(node => node.id === activeId) || model.nodes[0];
+  const related = model.connections.filter(connection => connection.from === active.id || connection.to === active.id);
+
   return (
-    <article
-      className="rounded-2xl border border-border/60 bg-secondary/15 p-4 animate-fade-in-up"
-      style={{ animationDelay: `${index * 0.06}s` }}
-    >
-      <div className="flex items-start gap-3">
-        <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border ${insightStrengthClass(insight.strength)}`}>
-          <CheckCircle2 className="h-4 w-4" />
-        </span>
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">{insight.label}</h3>
-            <Badge variant="outline" className={insight.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/70 text-muted-foreground'}>
-              {insight.source}
-            </Badge>
+    <div className="flex h-full min-h-[512px] flex-col">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Mental Model</div>
+          <h2 className="mt-1 font-display text-2xl font-semibold">How ShipSeal understands this repository</h2>
+        </div>
+        <Badge variant="outline" className="border-primary/40 text-primary-glow">
+          Semantic map
+        </Badge>
+      </div>
+
+      <div className="grid flex-1 gap-5 lg:grid-rows-[minmax(300px,1fr)_auto]">
+        <div className="relative min-h-[320px] overflow-hidden rounded-3xl border border-border/40 bg-[radial-gradient(circle_at_50%_48%,hsl(var(--primary)/0.13),transparent_34%)]">
+          <svg viewBox="0 0 720 420" role="img" aria-label="Mental Model semantic repository graph" className="absolute inset-0 h-full w-full">
+            <defs>
+              <linearGradient id="mental-model-link" x1="0" y1="0" x2="1" y2="1">
+                <stop stopColor="hsl(var(--primary))" stopOpacity="0.45" />
+                <stop offset="1" stopColor="hsl(var(--accent))" stopOpacity="0.22" />
+              </linearGradient>
+            </defs>
+            {model.connections.map((connection, index) => {
+              const from = model.nodes.find(node => node.id === connection.from);
+              const to = model.nodes.find(node => node.id === connection.to);
+              if (!from || !to) return null;
+              const activeConnection = connection.from === active.id || connection.to === active.id;
+              return (
+                <g key={`${connection.from}-${connection.to}`}>
+                  <line
+                    x1={from.x}
+                    y1={from.y}
+                    x2={to.x}
+                    y2={to.y}
+                    stroke="url(#mental-model-link)"
+                    strokeWidth={activeConnection ? 2.6 : 1.3}
+                    strokeOpacity={activeConnection ? 0.85 : 0.32}
+                    strokeDasharray={connection.evidence.length ? '0' : '5 7'}
+                    className="transition-all duration-700"
+                    style={{ transitionDelay: `${index * 70}ms` }}
+                  />
+                </g>
+              );
+            })}
+          </svg>
+
+          {model.nodes.map((node, index) => {
+            const activeNode = active.id === node.id;
+            return (
+              <button
+                key={node.id}
+                type="button"
+                onClick={() => setActiveId(node.id)}
+                onMouseEnter={() => setActiveId(node.id)}
+                className={`absolute w-[126px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border px-3 py-3 text-left shadow-sm transition-all duration-500 animate-scale-in ${
+                  activeNode
+                    ? 'border-primary/60 bg-primary/15 shadow-primary/20'
+                    : node.status === 'strong'
+                      ? 'border-success/35 bg-background/45'
+                      : node.status === 'partial'
+                        ? 'border-primary/25 bg-background/35'
+                        : 'border-warning/35 bg-background/30'
+                }`}
+                style={{ left: `${(node.x / 720) * 100}%`, top: `${(node.y / 420) * 100}%`, animationDelay: `${index * 85}ms` }}
+                aria-label={`${node.label}: ${node.status} signal`}
+              >
+                <span className={`mb-2 block h-2 w-2 rounded-full ${node.status === 'strong' ? 'bg-success' : node.status === 'partial' ? 'bg-primary-glow' : 'bg-warning'}`} />
+                <span className="block text-sm font-semibold leading-tight text-foreground">{node.label}</span>
+                <span className="mt-1 block truncate text-[11px] text-muted-foreground">{node.evidence[0] || 'Needs evidence'}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="rounded-2xl border border-border/60 bg-secondary/15 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-display text-lg font-semibold">{active.label}</h3>
+                <Badge variant="outline" className={mentalModelStatusClass(active.status)}>
+                  {mentalModelStatusLabel(active.status)}
+                </Badge>
+              </div>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{active.description}</p>
+            </div>
           </div>
-          <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{insight.detail}</p>
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <RepositoryDnaList title="Evidence" items={active.evidence} emptyText="No strong evidence surfaced." compact />
+            <RepositoryDnaList title="Connections" items={related.map(connection => connection.label)} emptyText="No strong relationship surfaced." compact />
+          </div>
         </div>
       </div>
-    </article>
+    </div>
   );
 }
 
@@ -1097,65 +1202,168 @@ function compactText(items: string[]) {
   return uniqueStrings(items.map(item => item.trim()).filter(Boolean));
 }
 
-function buildWorkspaceInsights(report: ReadinessReport): WorkspaceInsight[] {
-  const keyFiles = report.scanEvidence.keyFilesFound;
-  const hasDocs = keyFiles.readme || normalizedReportFiles(report).some(file => /(^|\/)docs\//i.test(file));
-  const hasAgentInstructions = keyFiles.agentInstructions || keyFiles.claudeInstructions || report.summary.instructionFiles.length > 0;
-  const hasTests = keyFiles.tests || report.stack.testFrameworks.length > 0;
-  const hasPipeline = keyFiles.ciConfig || report.stack.runCommands.some(command => /build|test|lint|type/i.test(command.label));
-  const sourceFolders = report.summary.keyFolders.slice(0, 3);
+function buildMentalModel(report: ReadinessReport): MentalModel {
+  const files = normalizedReportFiles(report);
+  const health = report.repositoryHealth;
+  const documentationFiles = firstMatchingFiles(files, [/readme/i, /(^|\/)docs\//i, /architecture/i], 3);
+  const sourceFolders = uniqueStrings([...(report.summary.keyFolders || []), ...(report.repoContextPack.keyFolders || [])]).slice(0, 4);
+  const sourceFiles = firstMatchingFiles(files, [/^src\//i, /^app\//i, /^components\//i, /^lib\//i], 3);
+  const instructionFiles = uniqueStrings([...report.summary.instructionFiles, ...report.repoContextPack.existingInstructionFiles]).slice(0, 3);
+  const testFiles = firstMatchingFiles(files, [/test/i, /spec/i, /__tests__/i], 3);
+  const ciFiles = firstMatchingFiles(files, [/\.github\/workflows/i, /gitlab-ci/i, /circleci/i], 2);
+  const runCommands = (report.stack.runCommands || []).map(command => command.label).slice(0, 3);
   const ignoredCount = report.scanSummary.generatedVendorFilesIgnored + report.scanSummary.binaryFilesIgnored;
-  const routingScore = report.repositoryHealth.dimensions.agentRouting.score;
-  const contextEfficiency = report.repositoryHealth.dimensions.contextWaste.contextEfficiencyScore;
+  const ignoredFolders = (report.scanEvidence.ignoredFolders || []).slice(0, 3);
+  const topAction = health.topActions[0];
 
-  return [
+  const nodes: MentalModelNode[] = [
     {
-      label: sourceFolders.length >= 2 ? 'Architecture appears modular' : 'Architecture shape detected',
-      detail: sourceFolders.length
-        ? `Work appears organized around ${sourceFolders.join(', ')}.`
-        : `${report.stack.primary} gives ShipSeal the first project-shape signal.`,
-      source: sourceFolders.length || report.stack.primary !== 'Unknown' ? 'Evidence' : 'Heuristic',
-      strength: sourceFolders.length >= 2 ? 'strong' : 'workable',
+      id: 'documentation',
+      label: 'Documentation',
+      description: 'The onboarding surface ShipSeal found for humans and agents.',
+      evidence: compactText(documentationFiles.length ? documentationFiles : signalEvidence(health.dimensions.repositoryIntelligence.signals, ['readme', 'documentation', 'docs'])),
+      status: documentationFiles.length ? 'strong' : health.dimensions.repositoryIntelligence.score !== null ? 'partial' : 'missing',
+      x: 160,
+      y: 105,
     },
     {
-      label: hasDocs ? 'Documentation connected' : 'Documentation path is thin',
-      detail: hasDocs ? 'Project documentation is available as a starting point for agent onboarding.' : 'No strong README/docs signal was found, so agents may need source-first discovery.',
-      source: hasDocs ? 'Evidence' : 'Heuristic',
-      strength: hasDocs ? 'strong' : 'watch',
+      id: 'architecture',
+      label: 'Architecture',
+      description: 'The project shape inferred from stack, folders and architecture signals.',
+      evidence: compactText([
+        report.stack.primary !== 'Unknown' ? `Stack: ${report.stack.primary}` : '',
+        ...sourceFolders.map(folder => `Folder: ${folder}`),
+        ...signalEvidence(health.dimensions.repositoryIntelligence.signals, ['architecture', 'entry', 'source']),
+      ]),
+      status: scoreToMentalModelStatus(averageScores(health.dimensions.repositoryIntelligence.score, health.dimensions.agentRouting.score)),
+      x: 360,
+      y: 72,
     },
     {
-      label: hasAgentInstructions ? 'Agent instructions detected' : 'Agent onboarding needs a home',
-      detail: hasAgentInstructions ? `Instruction anchors: ${report.summary.instructionFiles.join(', ') || 'agent instruction files found'}.` : 'No AGENTS or tool-specific instruction file was detected.',
-      source: hasAgentInstructions ? 'Evidence' : 'Heuristic',
-      strength: hasAgentInstructions ? 'strong' : 'watch',
+      id: 'source',
+      label: 'Source',
+      description: 'Where ShipSeal believes product behavior is likely to live.',
+      evidence: compactText([...sourceFolders.map(folder => `Key folder: ${folder}`), ...sourceFiles]),
+      status: sourceFolders.length || sourceFiles.length ? 'strong' : 'missing',
+      x: 548,
+      y: 156,
     },
     {
-      label: hasTests ? 'Verification route detected' : 'Verification route is unclear',
-      detail: hasTests ? `${report.stack.testFrameworks.join(', ') || 'Test files'} can help agents check changes safely.` : 'No strong test signal was found in the scan evidence.',
-      source: hasTests ? 'Evidence' : 'Heuristic',
-      strength: hasTests ? 'strong' : 'watch',
+      id: 'aiInstructions',
+      label: 'AI Instructions',
+      description: 'Reusable project memory for coding agents.',
+      evidence: compactText(instructionFiles.length ? instructionFiles : signalEvidence(health.dimensions.repositoryIntelligence.signals, ['agent', 'instruction'])),
+      status: instructionFiles.length ? 'strong' : 'missing',
+      x: 166,
+      y: 305,
     },
     {
-      label: hasPipeline ? 'Build pipeline reproducible' : 'Build path needs clarification',
-      detail: hasPipeline ? `Detected commands: ${report.stack.runCommands.slice(0, 3).map(command => command.label).join(', ') || 'CI workflow'}.` : 'No declared build, test, lint or CI signal was detected.',
-      source: hasPipeline ? 'Evidence' : 'Heuristic',
-      strength: hasPipeline ? 'strong' : 'watch',
+      id: 'tests',
+      label: 'Tests',
+      description: 'Verification evidence an agent can use after changing code.',
+      evidence: compactText([...testFiles, ...report.stack.testFrameworks.map(framework => `Framework: ${framework}`)]),
+      status: testFiles.length || report.stack.testFrameworks.length ? 'strong' : health.dimensions.aiDevelopmentReadiness.score !== null ? 'partial' : 'missing',
+      x: 360,
+      y: 348,
     },
     {
-      label: ignoredCount > 0 ? 'Context can be compressed' : 'Context compression estimated',
-      detail: ignoredCount > 0
-        ? `${ignoredCount.toLocaleString()} generated, vendor or binary files can stay outside first-pass agent context.`
-        : contextEfficiency !== null ? `Context efficiency is estimated at ${contextEfficiency}/100 from repository health signals.` : 'ShipSeal needs more scan evidence to estimate avoidable context.',
-      source: ignoredCount > 0 || contextEfficiency !== null ? 'Evidence' : 'Heuristic',
-      strength: contextEfficiency !== null && contextEfficiency >= 75 ? 'strong' : ignoredCount > 0 ? 'workable' : 'watch',
+      id: 'buildCi',
+      label: 'Build / CI',
+      description: 'Declared commands and automation for repeatable verification.',
+      evidence: compactText([...ciFiles, ...runCommands.map(command => `Command: ${command}`)]),
+      status: ciFiles.length || runCommands.length ? 'strong' : 'missing',
+      x: 560,
+      y: 300,
     },
     {
-      label: routingScore !== null && routingScore >= 70 ? 'Agent routing possible' : 'Agent routing needs focus',
-      detail: routingScore !== null ? `Routing signal is ${dimensionQualityLabel(routingScore).toLowerCase()} from repository health evidence.` : 'Routing quality could not be calculated from this scan.',
-      source: routingScore !== null ? 'Evidence' : 'Heuristic',
-      strength: routingScore !== null && routingScore >= 85 ? 'strong' : routingScore !== null && routingScore >= 70 ? 'workable' : 'watch',
+      id: 'context',
+      label: 'Context',
+      description: 'Signals that help agents avoid generated, vendor or noisy files.',
+      evidence: compactText([
+        ignoredCount ? `${ignoredCount} generated, vendor or binary files ignored` : '',
+        ...ignoredFolders.map(folder => `Ignored: ${folder}`),
+      ]),
+      status: ignoredCount || ignoredFolders.length || health.dimensions.contextWaste.contextEfficiencyScore !== null ? 'strong' : 'partial',
+      x: 360,
+      y: 210,
+    },
+    {
+      id: 'recommendations',
+      label: 'Recommendations',
+      description: 'The most useful improvement ShipSeal can see from the current evidence.',
+      evidence: compactText(topAction ? [topAction.title, ...topAction.evidence.slice(0, 2)] : []),
+      status: topAction ? 'strong' : 'partial',
+      x: 76,
+      y: 205,
     },
   ];
+
+  const evidenceFor = (id: MentalModelNodeId) => nodes.find(node => node.id === id)?.evidence || [];
+  const connections: MentalModelConnection[] = [
+    {
+      from: 'documentation',
+      to: 'architecture',
+      label: documentationFiles.length ? 'Docs explain the project shape.' : 'Docs should become the entry point to architecture.',
+      evidence: evidenceFor('documentation'),
+    },
+    {
+      from: 'architecture',
+      to: 'source',
+      label: sourceFolders.length ? 'Architecture resolves into source folders.' : 'Source routing needs clearer folder evidence.',
+      evidence: evidenceFor('source'),
+    },
+    {
+      from: 'aiInstructions',
+      to: 'source',
+      label: instructionFiles.length ? 'Agent memory points toward implementation work.' : 'Agent memory is missing from source discovery.',
+      evidence: evidenceFor('aiInstructions'),
+    },
+    {
+      from: 'source',
+      to: 'tests',
+      label: testFiles.length || report.stack.testFrameworks.length ? 'Source changes have a verification path.' : 'Source-to-test relationship is unclear.',
+      evidence: evidenceFor('tests'),
+    },
+    {
+      from: 'tests',
+      to: 'buildCi',
+      label: runCommands.length || ciFiles.length ? 'Verification can be run through declared commands.' : 'Build and CI evidence is thin.',
+      evidence: evidenceFor('buildCi'),
+    },
+    {
+      from: 'context',
+      to: 'source',
+      label: ignoredCount || ignoredFolders.length ? 'Context filters protect source exploration from noise.' : 'Context filtering is mostly inferred.',
+      evidence: evidenceFor('context'),
+    },
+    {
+      from: 'recommendations',
+      to: topAction?.dimensions.includes('agentRouting') ? 'source' : topAction?.dimensions.includes('aiDevelopmentReadiness') ? 'tests' : 'documentation',
+      label: topAction ? `Next improvement: ${topAction.title}` : 'No primary recommendation generated.',
+      evidence: evidenceFor('recommendations'),
+    },
+  ];
+
+  return { nodes, connections };
+}
+
+function scoreToMentalModelStatus(score: number | null): MentalModelNode['status'] {
+  if (score === null) return 'missing';
+  if (score >= 70) return 'strong';
+  if (score >= 45) return 'partial';
+  return 'missing';
+}
+
+function mentalModelStatusLabel(status: MentalModelNode['status']) {
+  if (status === 'strong') return 'Understood';
+  if (status === 'partial') return 'Partly understood';
+  return 'Needs evidence';
+}
+
+function mentalModelStatusClass(status: MentalModelNode['status']) {
+  if (status === 'strong') return 'border-success/40 text-success';
+  if (status === 'partial') return 'border-primary/40 text-primary-glow';
+  return 'border-warning/50 text-warning';
 }
 
 function workspaceUnderstandingSentence(report: ReadinessReport) {
@@ -1166,12 +1374,6 @@ function workspaceUnderstandingSentence(report: ReadinessReport) {
   if (status === 'High agent friction') return 'This repository can be understood, but agents will hit friction.';
   if (status === 'Blocked') return 'ShipSeal found a blocker before this can become a reliable AI workspace.';
   return 'ShipSeal built the first map of this repository.';
-}
-
-function insightStrengthClass(strength: WorkspaceInsight['strength']) {
-  if (strength === 'strong') return 'border-success/40 bg-success/10 text-success';
-  if (strength === 'workable') return 'border-primary/45 bg-primary/10 text-primary-glow';
-  return 'border-warning/50 bg-warning/10 text-warning';
 }
 
 function WorkspaceOverview({ report }: { report: ReadinessReport }) {

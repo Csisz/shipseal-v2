@@ -9,6 +9,8 @@ Turn software into knowledge.
 - Interactive profile
 - Evidence mapping
 - Animation
+- Mental Model foundation added to the post-scan visual understanding canvas
+- Metrics remain secondary to visual understanding
 
 Ω.7 Repository Intelligence
 - Better semantic extraction
