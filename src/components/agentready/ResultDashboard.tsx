@@ -29,6 +29,7 @@ interface Props {
   history: ScanHistoryItem[];
   onReset: () => void;
   onClearHistory: () => void;
+  onReplayReveal?: () => void;
   initialIntake?: ProjectIntake;
   intakeSkipped?: boolean;
   /** Package options the user picked before the scan; defaults to the full package. */
@@ -40,7 +41,7 @@ interface Props {
 type RepositoryHealth = ReadinessReport['repositoryHealth'];
 type RepositoryHealthSignal = RepositoryHealth['dimensions']['repositoryIntelligence']['signals'][number];
 
-export function ResultDashboard({ report, history, onReset, onClearHistory, initialIntake, intakeSkipped = false, selectedPackages, agentOperatingMode, githubConnection }: Props) {
+export function ResultDashboard({ report, history, onReset, onClearHistory, onReplayReveal, initialIntake, intakeSkipped = false, selectedPackages, agentOperatingMode, githubConnection }: Props) {
   const repositoryHealth = report.repositoryHealth;
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
   const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
@@ -100,6 +101,7 @@ export function ResultDashboard({ report, history, onReset, onClearHistory, init
         report={report}
         limitationReason={limitedScanReason}
         onReset={onReset}
+        onReplayReveal={onReplayReveal}
       />
 
       <WorkspaceOverview report={report} />
@@ -535,10 +537,12 @@ function AiWorkspaceHero({
   report,
   limitationReason,
   onReset,
+  onReplayReveal,
 }: {
   report: ReadinessReport;
   limitationReason?: string;
   onReset: () => void;
+  onReplayReveal?: () => void;
 }) {
   const health = report.repositoryHealth;
   const unavailable = health.overall.score === null;
@@ -574,9 +578,16 @@ function AiWorkspaceHero({
               </p>
             )}
           </div>
-          <Button variant="outline" size="sm" onClick={onReset} className="border-border/60 bg-background/20">
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {onReplayReveal && (
+              <Button variant="outline" size="sm" onClick={onReplayReveal} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Replay reveal
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={onReset} className="border-border/60 bg-background/20">
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
+            </Button>
+          </div>
         </div>
 
         {!unavailable && (

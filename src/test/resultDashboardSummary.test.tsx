@@ -46,15 +46,19 @@ describe('ResultDashboard summary copy', () => {
   it('uses compact Delivery Pack summary text that does not truncate the old wording', () => {
     const report = buildSampleReport();
     const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
+    const onReplayReveal = vi.fn();
     render(
       <ResultDashboard
         report={report}
         history={[]}
         onReset={vi.fn()}
         onClearHistory={vi.fn()}
+        onReplayReveal={onReplayReveal}
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /Replay reveal/i }));
+    expect(onReplayReveal).toHaveBeenCalledTimes(1);
     expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
     expect(screen.getByText(`${resolveDeliveryPackFocus(['full-package'], { folderAgentPaths }).generatedPaths.length} outputs`)).toBeInTheDocument();
     expect(screen.queryByText('Full Delivery Pack: 36 required outputs')).not.toBeInTheDocument();

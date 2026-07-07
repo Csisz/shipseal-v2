@@ -12,8 +12,9 @@ const scanMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/components/agentready/Landing', () => ({
-  Landing: ({ onScrollScan, scanSlot }: { onScrollScan: () => void; scanSlot?: React.ReactNode }) => (
+  Landing: ({ onSampleReport, onScrollScan, scanSlot }: { onSampleReport: () => void; onScrollScan: () => void; scanSlot?: React.ReactNode }) => (
     <div>
+      <button type="button" onClick={onSampleReport}>Try sample project</button>
       <button type="button" onClick={onScrollScan}>Go to scan</button>
       {scanSlot}
     </div>
@@ -160,6 +161,25 @@ describe('ShipSeal pre-scan intake flow', () => {
 
     expect(screen.getByText(/The workspace is forming/i)).toBeInTheDocument();
     expect(screen.getByText(/Living Repository/i)).toBeInTheDocument();
+  });
+
+  it('shows Intelligence Reveal for the sample project and enters the workspace without scanning', async () => {
+    render(
+      <MemoryRouter>
+        <Index />
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Try sample project/i }));
+
+    expect(screen.getByRole('heading', { name: /Understanding repository structure/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
+    expect(scanMocks.startScan).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
+
+    expect(await screen.findByRole('heading', { name: /What ShipSeal understood/i }, { timeout: 5000 })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Replay reveal/i })).toBeInTheDocument();
   });
 
   it('shows and updates Agent Operating Mode for AI Agent Development package', async () => {

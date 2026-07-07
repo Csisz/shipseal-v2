@@ -5,6 +5,12 @@ export {
   FUTURE_AI_WORKSPACE_NAVIGATION,
 } from './terminology';
 
+export {
+  buildIntelligenceRevealModel,
+  INTELLIGENCE_REVEAL_REDUCED_MOTION_MS,
+  INTELLIGENCE_REVEAL_TOTAL_MS,
+} from './intelligenceReveal';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,
@@ -22,3 +28,9 @@ export type {
   WorkspaceMetrics,
   WorkspaceMetricStatus,
 } from './types';
+
+export type {
+  IntelligenceRevealModel,
+  IntelligenceRevealSignal,
+  IntelligenceRevealSignalKind,
+} from './intelligenceReveal';

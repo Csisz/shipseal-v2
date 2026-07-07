@@ -3,6 +3,7 @@ import { Nav } from '@/components/agentready/Nav';
 import { Landing } from '@/components/agentready/Landing';
 import { UploadDropzone } from '@/components/agentready/UploadDropzone';
 import { ScanProgress } from '@/components/agentready/ScanProgress';
+import { IntelligenceReveal } from '@/components/agentready/IntelligenceReveal';
 import { ProjectIntakeForm } from '@/components/agentready/ProjectIntakeForm';
 import { buildSampleReport } from '@/lib/readiness';
 import { clearScanHistory, getScanHistory, saveScanHistory } from '@/lib/scanHistory';
@@ -19,7 +20,7 @@ import { AGENT_OPERATING_MODES, DEFAULT_AGENT_OPERATING_MODE, selectionUsesAgent
 import { getGitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
-import { CheckCircle2, ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
+import { ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 
 type PendingSource =
@@ -29,6 +30,11 @@ type PendingSource =
 
 const ResultDashboard = lazy(() => import('@/components/agentready/ResultDashboard').then(module => ({ default: module.ResultDashboard })));
 const GITHUB_INSTALLATION_STORAGE_KEY = 'shipseal.githubInstallationId';
+
+function scrollWindowToTop(behavior: ScrollBehavior) {
+  if (window.navigator.userAgent.toLowerCase().includes('jsdom')) return;
+  window.scrollTo({ top: 0, behavior });
+}
 
 function repositoryListFriendlyMessage(code?: string, fallback?: string) {
   switch (code) {
@@ -113,17 +119,17 @@ const Index = () => {
   const activeReport = sampleReport || scan.report;
   const activeGithubConnection = pendingSource?.type === 'github-app' ? pendingSource.connection : undefined;
   const isScanning = scan.status === 'scanning';
+  const activeReportKey = activeReport ? `${activeReport.repoName}-${activeReport.scannedAt}` : null;
   const showIntelligenceReveal = Boolean(
     activeReport &&
-    scan.report &&
-    intelligenceReveal?.key === `${scan.report.repoName}-${scan.report.scannedAt}` &&
+    activeReportKey &&
+    intelligenceReveal?.key === activeReportKey &&
     intelligenceReveal.visible
   );
 
   useEffect(() => {
     if (!isScanning) return;
-    if (window.navigator.userAgent.toLowerCase().includes('jsdom')) return;
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    scrollWindowToTop('auto');
   }, [isScanning]);
 
   useEffect(() => {
@@ -208,18 +214,24 @@ const Index = () => {
     if (savedReportKey.current === key) return;
     savedReportKey.current = key;
     setHistory(saveScanHistory(scan.report));
-    queueMicrotask(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    queueMicrotask(() => scrollWindowToTop('smooth'));
   }, [scan.report]);
 
   useEffect(() => {
-    if (!scan.report) return;
-    const key = `${scan.report.repoName}-${scan.report.scannedAt}`;
-    setIntelligenceReveal({ key, visible: true });
-    const timer = window.setTimeout(() => {
-      setIntelligenceReveal(current => current?.key === key ? { ...current, visible: false } : current);
-    }, 1250);
-    return () => window.clearTimeout(timer);
-  }, [scan.report]);
+    if (!activeReportKey) return;
+    setIntelligenceReveal({ key: activeReportKey, visible: true });
+  }, [activeReportKey]);
+
+  const completeIntelligenceReveal = useCallback(() => {
+    setIntelligenceReveal(current => current ? { ...current, visible: false } : current);
+    scrollWindowToTop('auto');
+  }, []);
+
+  const replayIntelligenceReveal = useCallback(() => {
+    if (!activeReportKey) return;
+    setIntelligenceReveal({ key: activeReportKey, visible: true });
+    scrollWindowToTop('auto');
+  }, [activeReportKey]);
 
   useEffect(() => {
     if (!scan.error || lastError.current === scan.error) return;
@@ -274,7 +286,7 @@ const Index = () => {
     setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
-    window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 0);
+    window.setTimeout(() => scrollWindowToTop('smooth'), 0);
   }, [scan]);
 
   const handleFile = useCallback((file: File) => {
@@ -392,7 +404,7 @@ const Index = () => {
     const report = buildSampleReport();
     setSampleReport(report);
     setHistory(saveScanHistory(report));
-    queueMicrotask(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    queueMicrotask(() => scrollWindowToTop('smooth'));
   }, [scan]);
 
   const reset = useCallback(() => {
@@ -405,7 +417,7 @@ const Index = () => {
     setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
-    queueMicrotask(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    queueMicrotask(() => scrollWindowToTop('smooth'));
   }, [scan]);
 
   const handleClearHistory = useCallback(() => {
@@ -417,8 +429,8 @@ const Index = () => {
     <div className="min-h-screen bg-background text-foreground">
       {!showIntelligenceReveal && <Nav onNavigateAnchor={handleNavAnchor} onHome={handleHome} />}
 
-      {showIntelligenceReveal && scan.report ? (
-        <IntelligenceReveal repoName={scan.report.repoName} />
+      {showIntelligenceReveal && activeReport ? (
+        <IntelligenceReveal key={activeReportKey || activeReport.scannedAt} report={activeReport} onComplete={completeIntelligenceReveal} />
       ) : activeReport ? (
         <main className="pt-20">
           <Suspense fallback={<div className="container py-24 text-sm text-muted-foreground">Loading report...</div>}>
@@ -427,6 +439,7 @@ const Index = () => {
               history={history}
               onReset={reset}
               onClearHistory={handleClearHistory}
+              onReplayReveal={replayIntelligenceReveal}
               initialIntake={submittedIntake}
               intakeSkipped={submittedIntakeSkipped}
               selectedPackages={selectedPackages}
@@ -806,29 +819,6 @@ function OutputPreview({ selectedPackages }: { selectedPackages: string[] }) {
         </div>
       </details>
     </div>
-  );
-}
-
-function IntelligenceReveal({ repoName }: { repoName: string }) {
-  return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[hsl(225_28%_5%)] px-6 pt-20 text-center animate-fade-in">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.24),transparent_34%),radial-gradient(circle_at_50%_82%,hsl(var(--accent)/0.14),transparent_38%)]" />
-      <div className="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/15 animate-pulse" />
-      <div className="absolute left-1/2 top-1/2 h-44 w-44 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/25" />
-      <section className="relative max-w-3xl">
-        <div className="mx-auto mb-7 flex h-14 w-14 items-center justify-center rounded-2xl border border-success/40 bg-success/10 shadow-[0_0_60px_hsl(var(--success)/0.18)]">
-          <CheckCircle2 className="h-7 w-7 text-success" />
-        </div>
-        <div className="text-xs font-mono uppercase tracking-[0.28em] text-primary-glow">Repository Intelligence</div>
-        <h1 className="mt-5 font-display text-4xl font-semibold leading-tight text-foreground md:text-6xl">
-          Repository understood.
-        </h1>
-        <p className="mt-5 text-lg text-muted-foreground md:text-xl">
-          Your AI Workspace is ready.
-        </p>
-        <p className="mt-7 truncate text-sm text-muted-foreground/70">{repoName}</p>
-      </section>
-    </main>
   );
 }
 
