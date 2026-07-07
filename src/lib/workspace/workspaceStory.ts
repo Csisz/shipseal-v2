@@ -7,6 +7,9 @@ export type RepositoryKnowledgeNodeKind = 'repository' | 'file' | 'folder' | 'co
 export type RepositoryKnowledgeEdgeRelationship =
   | 'references'
   | 'contains'
+  | 'documents'
+  | 'tests'
+  | 'configures'
   | 'routes-agent-to'
   | 'supports-workflow'
   | 'related-concept'
@@ -80,6 +83,7 @@ export interface RepositoryKnowledgeNode {
   id: string;
   kind: RepositoryKnowledgeNodeKind;
   label: string;
+  path?: string;
   clusterId?: string;
   evidenceType: WorkspaceStoryEvidenceState;
   evidenceItems: WorkspaceEvidenceItem[];
@@ -100,6 +104,7 @@ export interface RepositoryKnowledgeCluster {
   label: string;
   category: string;
   nodeIds: string[];
+  summary: string;
 }
 
 export interface RepositoryKnowledgeModel {
@@ -107,6 +112,28 @@ export interface RepositoryKnowledgeModel {
   nodes: RepositoryKnowledgeNode[];
   edges: RepositoryKnowledgeEdge[];
   clusters: RepositoryKnowledgeCluster[];
+}
+
+export interface RepositoryAtlasNode extends RepositoryKnowledgeNode {
+  x: number;
+  y: number;
+  radius: number;
+  labelPriority: 'primary' | 'secondary' | 'detail';
+}
+
+export interface RepositoryAtlasCluster extends RepositoryKnowledgeCluster {
+  x: number;
+  y: number;
+  radius: number;
+  angle: number;
+}
+
+export interface RepositoryAtlasModel {
+  rootNodeId: string;
+  nodes: RepositoryAtlasNode[];
+  edges: RepositoryKnowledgeEdge[];
+  clusters: RepositoryAtlasCluster[];
+  statusNote: string;
 }
 
 interface StoryCandidate {
@@ -154,6 +181,12 @@ const STORY_CANDIDATES: StoryCandidate[] = [
     relationship: 'Documentation connects repository identity to human and agent onboarding.',
     repositoryMeaning: 'Strong docs reduce the amount of guessing needed before making a change.',
     agentUse: 'An agent would inspect these docs first to understand purpose, setup and safe boundaries.',
+    extraEvidence: report => firstMatchingReportFiles(report, [
+      /(^|\/)readme\.md$/i,
+      /(^|\/)docs\/readme\.md$/i,
+      /(^|\/)documentation\.md$/i,
+      /(^|\/)docs\/.*\.md$/i,
+    ], 4).map(path => evidenceItem(path, 'Documentation file', 'evidence')),
   },
   {
     id: 'architecture',
@@ -167,6 +200,15 @@ const STORY_CANDIDATES: StoryCandidate[] = [
     relationship: 'Architecture connects framework, source folders and routing into one repository map.',
     repositoryMeaning: 'This helps separate product-critical areas from support surfaces.',
     agentUse: 'An agent can route tasks toward the right folders before opening implementation files.',
+    extraEvidence: report => [
+      ...firstMatchingReportFiles(report, [
+        /(^|\/)architecture(\.md)?$/i,
+        /(^|\/)docs\/architecture(\.md)?$/i,
+        /(^|\/).*architecture.*\.md$/i,
+        /(^|\/)system[-_ ]?design\.md$/i,
+      ], 3).map(path => evidenceItem(path, 'Architecture file', 'evidence')),
+      ...report.summary.keyFolders.slice(0, 3).map(folder => evidenceItem(`${folder}/`, 'Source or architecture folder', 'evidence')),
+    ],
   },
   {
     id: 'projectMemory',
@@ -180,6 +222,16 @@ const STORY_CANDIDATES: StoryCandidate[] = [
     relationship: 'Project memory connects repository-specific rules to source work.',
     repositoryMeaning: 'Persistent instructions help the workspace remember how this repository wants to be changed.',
     agentUse: 'An agent would use these files to follow local conventions and avoid repeating discovery work.',
+    extraEvidence: report => uniqueStrings([
+      ...report.summary.instructionFiles,
+      ...report.repoContextPack.existingInstructionFiles,
+      ...firstMatchingReportFiles(report, [
+        /(^|\/)agents\.md$/i,
+        /(^|\/)claude\.md$/i,
+        /(^|\/)\.cursorrules$/i,
+        /(^|\/)\.cursor\/rules/i,
+      ], 4),
+    ]).slice(0, 4).map(path => evidenceItem(path, 'AI instruction file', 'evidence')),
   },
   {
     id: 'verification',
@@ -194,6 +246,12 @@ const STORY_CANDIDATES: StoryCandidate[] = [
     repositoryMeaning: 'The workspace can show how an AI-assisted change should be checked.',
     agentUse: 'An agent can choose the likely validation command instead of guessing after edits.',
     extraEvidence: report => [
+      ...firstMatchingReportFiles(report, [
+        /(^|\/)(test|tests|__tests__)\//i,
+        /(^|\/).*\.test\.[jt]sx?$/i,
+        /(^|\/).*\.spec\.[jt]sx?$/i,
+        /(^|\/)\.github\/workflows\/.*\.ya?ml$/i,
+      ], 4).map(path => evidenceItem(path, 'Verification file', 'evidence')),
       ...report.stack.runCommands
         .filter(command => /test|lint|build|typecheck/i.test(`${command.label} ${command.cmd}`))
         .slice(0, 3)
@@ -277,6 +335,8 @@ export function buildRepositoryKnowledgeModel(report: ReadinessReport): Reposito
       repoName: report.repoName,
       sourceType: report.scanEvidence.sourceType,
       scannedAt: report.scannedAt,
+      repositoryRole: 'Central repository identity',
+      agentRelevance: 'The first anchor for all repository exploration.',
     },
   }];
   const edges: RepositoryKnowledgeEdge[] = [];
@@ -285,6 +345,7 @@ export function buildRepositoryKnowledgeModel(report: ReadinessReport): Reposito
     label: 'Repository',
     category: 'identity',
     nodeIds: [rootNodeId],
+    summary: 'Repository identity and scan boundary.',
   }];
 
   for (const candidate of STORY_CANDIDATES) {
@@ -310,8 +371,11 @@ export function buildRepositoryKnowledgeModel(report: ReadinessReport): Reposito
       evidenceItems,
       metadata: {
         chapterId: candidate.id,
+        storyChapterId: candidate.id,
         shortLabel: candidate.shortLabel,
         summary: candidate.summary,
+        repositoryRole: candidate.repositoryMeaning,
+        agentRelevance: candidate.agentUse,
         mentalModelNodeId: candidate.mentalModelNodeId,
         dnaDimensionId: candidate.dnaDimensionId,
         agentStepIds: candidate.agentStepIds,
@@ -333,16 +397,25 @@ export function buildRepositoryKnowledgeModel(report: ReadinessReport): Reposito
     for (const item of evidenceItems) {
       const evidenceNodeId = evidenceNodeIdFor(candidate.id, item);
       if (!nodes.some(node => node.id === evidenceNodeId)) {
+        const path = pathForEvidence(item);
         nodes.push({
           id: evidenceNodeId,
           kind: knowledgeNodeKindForEvidence(item),
           label: item.label,
+          path,
           clusterId,
           evidenceType: item.state,
           evidenceItems: [item],
           metadata: {
             chapterId: candidate.id,
+            storyChapterId: candidate.id,
             detail: item.detail,
+            repositoryRole: item.detail || candidate.summary,
+            agentRelevance: candidate.agentUse,
+            mentalModelNodeId: candidate.mentalModelNodeId,
+            dnaDimensionId: candidate.dnaDimensionId,
+            agentStepIds: candidate.agentStepIds,
+            fileType: path ? fileTypeForPath(path) : undefined,
           },
         });
       }
@@ -362,6 +435,7 @@ export function buildRepositoryKnowledgeModel(report: ReadinessReport): Reposito
       label: candidate.label,
       category: candidate.shortLabel,
       nodeIds: uniqueStrings(clusterNodeIds),
+      summary: candidate.summary,
     });
 
     if (clusters.length >= 7) break;
@@ -372,6 +446,75 @@ export function buildRepositoryKnowledgeModel(report: ReadinessReport): Reposito
     nodes,
     edges,
     clusters,
+  };
+}
+
+export function buildRepositoryAtlasModel(report: ReadinessReport): RepositoryAtlasModel {
+  const knowledge = buildRepositoryKnowledgeModel(report);
+  const nonRootClusters = knowledge.clusters.filter(cluster => cluster.id !== 'cluster:repository');
+  const clusterCount = Math.max(1, nonRootClusters.length);
+  const orbitRadius = clusterCount <= 4 ? 260 : 310;
+  const clusterLayouts = new Map<string, RepositoryAtlasCluster>();
+
+  for (const cluster of knowledge.clusters) {
+    if (cluster.id === 'cluster:repository') {
+      clusterLayouts.set(cluster.id, {
+        ...cluster,
+        x: 0,
+        y: 0,
+        radius: 88,
+        angle: -Math.PI / 2,
+      });
+      continue;
+    }
+
+    const index = nonRootClusters.findIndex(item => item.id === cluster.id);
+    const angle = -Math.PI / 2 + (index / clusterCount) * Math.PI * 2;
+    clusterLayouts.set(cluster.id, {
+      ...cluster,
+      x: Math.cos(angle) * orbitRadius,
+      y: Math.sin(angle) * orbitRadius,
+      radius: Math.min(150, 86 + cluster.nodeIds.length * 9),
+      angle,
+    });
+  }
+
+  const atlasNodes: RepositoryAtlasNode[] = knowledge.nodes.map(node => {
+    if (node.id === knowledge.rootNodeId) {
+      return {
+        ...node,
+        x: 0,
+        y: 0,
+        radius: 42,
+        labelPriority: 'primary',
+      };
+    }
+
+    const cluster = node.clusterId ? clusterLayouts.get(node.clusterId) : undefined;
+    const clusterNodeIds = cluster?.nodeIds || [];
+    const indexInCluster = Math.max(0, clusterNodeIds.indexOf(node.id));
+    const siblingCount = Math.max(1, clusterNodeIds.length - 1);
+    const conceptNode = node.kind === 'concept';
+    const localAngle = cluster
+      ? cluster.angle + Math.PI + ((indexInCluster - 1) / siblingCount) * Math.PI * 1.35
+      : indexInCluster;
+    const localRadius = conceptNode ? 0 : (node.evidenceType === 'evidence' ? 58 : 78) + (indexInCluster % 3) * 13;
+
+    return {
+      ...node,
+      x: (cluster?.x || 0) + Math.cos(localAngle) * localRadius,
+      y: (cluster?.y || 0) + Math.sin(localAngle) * localRadius,
+      radius: radiusForKnowledgeNode(node),
+      labelPriority: conceptNode ? 'primary' : node.evidenceType === 'evidence' ? 'secondary' : 'detail',
+    };
+  });
+
+  return {
+    rootNodeId: knowledge.rootNodeId,
+    nodes: atlasNodes,
+    edges: knowledge.edges,
+    clusters: [...clusterLayouts.values()],
+    statusNote: `Showing ${atlasNodes.length} high-signal entities from ${(report.scanEvidence.analyzedFileCount || report.scanSummary.filesAnalyzed || report.fileCount).toLocaleString()} analyzed files`,
   };
 }
 
@@ -424,7 +567,7 @@ function knowledgeNodeKindForEvidence(item: WorkspaceEvidenceItem): RepositoryKn
   if (detail.includes('detected command') || /^command:/.test(label) || /^[^:]+:\s*(npm|bun|pnpm|yarn|vite|tsc|vitest|jest|playwright)/i.test(item.label)) {
     return 'workflow';
   }
-  if (detail.includes('ignored generated folder') || detail.includes('key folder') || /\/$/.test(item.label)) {
+  if (detail.includes('ignored generated folder') || detail.includes('key folder') || detail.includes('source or architecture folder') || /^folder:\s*/i.test(item.label) || /\/$/.test(item.label)) {
     return 'folder';
   }
   if (/\.[a-z0-9]+($|\s)/i.test(item.label) || item.label.includes('/')) {
@@ -453,4 +596,46 @@ function stableId(value: string) {
 
 function uniqueStrings(values: string[]) {
   return [...new Set(values.filter(Boolean))];
+}
+
+function normalizedReportFiles(report: ReadinessReport) {
+  return uniqueStrings([
+    ...report.sampleFiles.map(file => file.path),
+    ...report.repoContextPack.sampleFiles,
+    ...report.summary.instructionFiles,
+    ...report.repoContextPack.existingInstructionFiles,
+  ].map(path => path.replace(/\\/g, '/').replace(/^\/+/, '')));
+}
+
+function firstMatchingReportFiles(report: ReadinessReport, patterns: RegExp[], limit: number) {
+  return normalizedReportFiles(report)
+    .filter(path => patterns.some(pattern => pattern.test(path)))
+    .slice(0, limit);
+}
+
+function pathForEvidence(item: WorkspaceEvidenceItem) {
+  const label = item.label
+    .replace(/^Folder:\s*/i, '')
+    .replace(/^File:\s*/i, '')
+    .replace(/\s+found$/i, '')
+    .trim();
+
+  if (/^\d+(\.\d+)?\s+files?\s+/i.test(label)) return undefined;
+  if (/^[^:]+:\s*(npm|bun|pnpm|yarn|vite|tsc|vitest|jest|playwright|cargo|go|mvn|gradle)/i.test(label)) return undefined;
+  if (!/[/.]/.test(label)) return undefined;
+  return label.replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
+function fileTypeForPath(path: string) {
+  const match = path.match(/\.([a-z0-9]+)$/i);
+  return match ? match[1].toLowerCase() : path.endsWith('/') ? 'folder' : undefined;
+}
+
+function radiusForKnowledgeNode(node: RepositoryKnowledgeNode) {
+  if (node.kind === 'repository') return 42;
+  if (node.kind === 'concept') return 27;
+  if (node.kind === 'folder') return 21;
+  if (node.kind === 'memory' || node.kind === 'workflow') return 20;
+  if (node.kind === 'recommendation') return 18;
+  return node.evidenceType === 'evidence' ? 19 : 17;
 }

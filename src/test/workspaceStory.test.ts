@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildReport, buildSampleReport } from '@/lib/readiness';
-import { buildRepositoryKnowledgeModel, buildWorkspaceStory } from '@/lib/workspace/workspaceStory';
+import { buildRepositoryAtlasModel, buildRepositoryKnowledgeModel, buildWorkspaceStory } from '@/lib/workspace/workspaceStory';
 
 describe('Workspace Story model', () => {
   it('derives deterministic chapters from existing report and reveal evidence', () => {
@@ -175,5 +175,92 @@ describe('Workspace Story model', () => {
 
     expect(first.rootNodeId).not.toBe(second.rootNodeId);
     expect(second.nodes.find(node => node.id === second.rootNodeId)?.label).toBe('another-repo');
+  });
+
+  it('builds Repository Atlas nodes from actual report data without unsupported file fabrication', () => {
+    const report = buildReport({
+      repoName: 'atlas-repo',
+      files: [
+        { path: 'README.md', size: 100 },
+        { path: 'AGENTS.md', size: 90 },
+        { path: 'package.json', size: 120 },
+        { path: 'src/main.ts', size: 80 },
+        { path: 'src/main.test.ts', size: 80 },
+      ],
+      textContents: {
+        'README.md': '# Atlas repo',
+        'AGENTS.md': '# Instructions',
+        'package.json': JSON.stringify({ scripts: { test: 'vitest', build: 'vite build' } }),
+      },
+    });
+    const atlas = buildRepositoryAtlasModel(report);
+    const labels = atlas.nodes.map(node => node.label);
+
+    expect(labels).toContain('README.md');
+    expect(labels).toContain('AGENTS.md');
+    expect(labels.join('\n')).not.toContain('docker-compose.yml');
+    expect(labels.join('\n')).not.toContain('kubernetes.yaml');
+    expect(atlas.statusNote).toMatch(/high-signal entities from/i);
+  });
+
+  it('keeps Repository Atlas layout deterministic', () => {
+    const first = buildRepositoryAtlasModel(buildSampleReport());
+    const second = buildRepositoryAtlasModel(buildSampleReport());
+
+    expect(first.nodes.map(node => [node.id, node.x, node.y, node.radius])).toEqual(
+      second.nodes.map(node => [node.id, node.x, node.y, node.radius])
+    );
+    expect(first.clusters.map(cluster => [cluster.id, cluster.x, cluster.y, cluster.radius])).toEqual(
+      second.clusters.map(cluster => [cluster.id, cluster.x, cluster.y, cluster.radius])
+    );
+  });
+
+  it('groups Atlas entities into meaningful non-empty clusters', () => {
+    const atlas = buildRepositoryAtlasModel(buildSampleReport());
+    const documentation = atlas.clusters.find(cluster => cluster.id === 'cluster:documentation');
+    const memory = atlas.clusters.find(cluster => cluster.id === 'cluster:projectMemory');
+
+    expect(atlas.clusters.length).toBeGreaterThanOrEqual(5);
+    expect(atlas.clusters.every(cluster => cluster.nodeIds.length > 0)).toBe(true);
+    expect(documentation?.summary).toMatch(/Documentation/i);
+    expect(memory?.nodeIds.some(id => atlas.nodes.find(node => node.id === id)?.label === 'AGENTS.md')).toBe(true);
+  });
+
+  it('distinguishes evidence, heuristic and missing states in the Atlas', () => {
+    const atlas = buildRepositoryAtlasModel(buildReport({
+      repoName: 'thin-atlas',
+      files: [
+        { path: 'package.json', size: 120 },
+        { path: 'src/main.ts', size: 80 },
+      ],
+      textContents: {
+        'package.json': JSON.stringify({ scripts: { build: 'vite build' } }),
+      },
+    }));
+
+    expect(atlas.nodes.some(node => node.evidenceType === 'evidence')).toBe(true);
+    expect(atlas.nodes.some(node => node.evidenceType === 'heuristic' || node.evidenceType === 'missing')).toBe(true);
+    expect(atlas.edges.map(edge => edge.relationship)).not.toEqual(expect.arrayContaining([
+      'imports',
+      'calls',
+      'semantic-similarity',
+    ]));
+  });
+
+  it('creates independent Atlas roots for new report data', () => {
+    const first = buildRepositoryAtlasModel(buildSampleReport());
+    const second = buildRepositoryAtlasModel(buildReport({
+      repoName: 'second-atlas',
+      files: [
+        { path: 'README.md', size: 100 },
+        { path: 'src/index.ts', size: 90 },
+      ],
+      textContents: {
+        'README.md': '# Second atlas',
+      },
+    }));
+
+    expect(first.rootNodeId).not.toBe(second.rootNodeId);
+    expect(second.nodes.find(node => node.id === second.rootNodeId)?.label).toBe('second-atlas');
   });
 });

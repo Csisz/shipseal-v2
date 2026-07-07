@@ -150,7 +150,102 @@ describe('ResultDashboard summary copy', () => {
 
     expect(screen.getByRole('heading', { name: /Context and workflow/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Context Efficiency/i })).toBeInTheDocument();
-    expect(screen.getByText(/avoid generated folders/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/avoid generated folders/i).length).toBeGreaterThan(0);
+  });
+
+  it('renders an interactive Repository Atlas and updates the inspector from real nodes', () => {
+    const { container } = render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: /Explore the repository knowledge map/i })).toBeInTheDocument();
+    expect(screen.getByText(/Showing .* high-signal entities from .* analyzed files/i)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Repository Atlas knowledge graph/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('atlas-node-file:documentation:readme.md'));
+
+    expect(screen.getByRole('heading', { name: 'Selected entity' })).toBeInTheDocument();
+    expect(screen.getAllByText('README.md').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('File').length).toBeGreaterThan(0);
+    expect(container.querySelectorAll('[data-testid^="atlas-edge-"]').length).toBeGreaterThan(0);
+  });
+
+  it('syncs Repository Atlas selection with Workspace Story chapters', () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
+    expect(screen.getByTestId('atlas-node-concept:documentation')).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByTestId('atlas-node-memory:projectMemory:agents.md'));
+    expect(screen.getAllByRole('heading', { name: /Project memory/i }).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('atlas-node-memory:projectMemory:agents.md')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('supports Repository Atlas search, filters and reset without a new scan', () => {
+    const onReset = vi.fn();
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={onReset}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText(/Search repository atlas/i), { target: { value: 'README' } });
+    fireEvent.click(screen.getAllByRole('button', { name: 'README.md' })[0]);
+    expect(screen.getAllByText('README.md').length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Files' }));
+    expect(screen.queryByTestId('atlas-node-file:documentation:readme.md')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Reset view/i }));
+    expect(screen.getByLabelText(/Search repository atlas/i)).toHaveValue('');
+    expect(screen.getByTestId('atlas-node-file:documentation:readme.md')).toBeInTheDocument();
+    expect(onReset).not.toHaveBeenCalled();
+  });
+
+  it('shows the final Repository Atlas layout immediately with reduced motion', () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation(query => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    try {
+      render(
+        <ResultDashboard
+          report={buildSampleReport()}
+          history={[]}
+          onReset={vi.fn()}
+          onClearHistory={vi.fn()}
+        />
+      );
+
+      const atlas = screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
+      expect(atlas).toHaveAttribute('data-motion', 'reduced');
+      expect(atlas).toHaveAttribute('data-ready', 'true');
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   it('keeps the selected Workspace Story chapter through unrelated UI changes', () => {

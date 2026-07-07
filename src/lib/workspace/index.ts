@@ -12,6 +12,7 @@ export {
 } from './intelligenceReveal';
 
 export {
+  buildRepositoryAtlasModel,
   buildRepositoryKnowledgeModel,
   buildWorkspaceStory,
   chapterForDnaDimension,
@@ -43,6 +44,9 @@ export type {
 } from './intelligenceReveal';
 
 export type {
+  RepositoryAtlasCluster,
+  RepositoryAtlasModel,
+  RepositoryAtlasNode,
   RepositoryKnowledgeCluster,
   RepositoryKnowledgeEdge,
   RepositoryKnowledgeEdgeRelationship,
