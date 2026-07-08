@@ -26,6 +26,7 @@ import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentO
 import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
 import {
   buildRepositoryAtlasModel,
+  buildRepositoryTransformationProposalModel,
   buildRepositoryUniverseModel,
   buildWorkspaceStory,
   chapterForDnaDimension,
@@ -33,8 +34,14 @@ import {
   repositoryUniverseEdgeVisible,
   repositoryUniverseFilterCounts,
   repositoryUniverseVisibleNodeIds,
+  repositoryTransformationDomainCounts,
+  transformationDomainLabel,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
+  type RepositoryTransformationDomain,
+  type RepositoryTransformationDomainFilter,
+  type RepositoryTransformationMode,
+  type RepositoryTransformationProposal,
   type RepositoryUniverseFilterKey,
   type RepositoryUniverseModel,
   type RepositoryUniverseNode,
@@ -814,6 +821,7 @@ function RepositoryAtlasVisualization({
 }) {
   const atlas = useMemo(() => buildRepositoryAtlasModel(report), [report]);
   const universe = useMemo(() => buildRepositoryUniverseModel(report), [report]);
+  const transformation = useMemo(() => buildRepositoryTransformationProposalModel(report, universe, atlas), [report, universe, atlas]);
   const initialUniverseCamera = useMemo(() => initialUniverseCameraState(universe), [universe]);
   const prefersReducedMotion = usePrefersReducedMotion();
   const atlasRootRef = useRef<HTMLElement | null>(null);
@@ -835,6 +843,10 @@ function RepositoryAtlasVisualization({
   });
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.82 });
   const [viewMode, setViewMode] = useState<'universe3d' | 'atlas2d'>('universe3d');
+  const [transformationMode, setTransformationMode] = useState<RepositoryTransformationMode>('current');
+  const [transformationDomain, setTransformationDomain] = useState<RepositoryTransformationDomainFilter>('all');
+  const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
+  const [excludedProposalIds, setExcludedProposalIds] = useState<Set<string>>(() => new Set());
   const [selectedUniverseNodeId, setSelectedUniverseNodeId] = useState(universe.rootNodeId);
   const [universeCamera, setUniverseCamera] = useState<UniverseCameraState>(initialUniverseCamera);
   const [universeRotationPaused, setUniverseRotationPaused] = useState(prefersReducedMotion);
@@ -851,6 +863,10 @@ function RepositoryAtlasVisualization({
   const activeCluster = focusedClusterId ? atlas.clusters.find(cluster => cluster.id === focusedClusterId) : null;
   const activeUniverseCluster = focusedClusterId ? universe.clusters.find(cluster => cluster.id === focusedClusterId) : null;
   const activeChapterNodeId = activeChapter?.knowledgeNodeId;
+  const selectedProposal = selectedProposalId ? transformation.proposals.find(proposal => proposal.id === selectedProposalId) || null : null;
+  const domainCounts = useMemo(() => repositoryTransformationDomainCounts(transformation.proposals), [transformation.proposals]);
+  const visibleTransformationProposals = useMemo(() => transformation.proposals.filter(proposal => transformationDomain === 'all' || proposal.domain === transformationDomain), [transformation.proposals, transformationDomain]);
+  const includedProposalCount = transformation.proposals.filter(proposal => !excludedProposalIds.has(proposal.id)).length;
   const relatedNodeIds = useMemo(() => relatedAtlasNodeIds(atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId), [atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId]);
   const searchMatches = useMemo(() => matchingAtlasNodeIds(atlas, query), [atlas, query]);
   const universeSearchMatches = useMemo(() => matchingUniverseNodeIds(universe, query), [universe, query]);
@@ -870,6 +886,17 @@ function RepositoryAtlasVisualization({
   const visibleUniverseNodeIdList = useMemo(() => [...visibleUniverseNodeIds], [visibleUniverseNodeIds]);
   const visibleUniverseEdgeIdList = useMemo(() => [...visibleUniverseEdgeIds], [visibleUniverseEdgeIds]);
   const selectedUniverseNodeVisible = selectedUniverseNode ? visibleUniverseNodeIds.has(selectedUniverseNode.id) : false;
+  const proposalAffectedAtlasNodeIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (transformationMode !== 'with-shipseal') return ids;
+    for (const proposal of visibleTransformationProposals) {
+      for (const universeNodeId of proposal.graphChanges.affectedExistingNodeIds) {
+        const atlasNode = atlasNodeForUniverseNodeId(universeNodeId, universe, atlas);
+        if (atlasNode) ids.add(atlasNode.id);
+      }
+    }
+    return ids;
+  }, [atlas, transformationMode, universe, visibleTransformationProposals]);
   const searchResults = query.trim()
     ? (viewMode === 'universe3d'
       ? universe.nodes.filter(node => universeSearchMatches.has(node.id) && visibleUniverseNodeIds.has(node.id)).slice(0, 8)
@@ -902,6 +929,10 @@ function RepositoryAtlasVisualization({
   useEffect(() => {
     setUniverseCamera(initialUniverseCamera);
     setUniverseSceneSettled(prefersReducedMotion);
+    setTransformationMode('current');
+    setTransformationDomain('all');
+    setSelectedProposalId(null);
+    setExcludedProposalIds(new Set());
   }, [report.repoName, report.scannedAt, initialUniverseCamera, prefersReducedMotion]);
 
   useEffect(() => {
@@ -1042,6 +1073,26 @@ function RepositoryAtlasVisualization({
     setViewMode('universe3d');
   };
 
+  const changeTransformationMode = (mode: RepositoryTransformationMode) => {
+    setTransformationMode(mode);
+    if (mode === 'current') setSelectedProposalId(null);
+  };
+
+  const selectProposal = (proposal: RepositoryTransformationProposal) => {
+    setTransformationMode('with-shipseal');
+    setSelectedProposalId(proposal.id);
+    setFocusedClusterId(proposal.graphChanges.proposedNodes[0]?.clusterId || focusedClusterId);
+  };
+
+  const toggleProposalIncluded = (proposalId: string) => {
+    setExcludedProposalIds(current => {
+      const next = new Set(current);
+      if (next.has(proposalId)) next.delete(proposalId);
+      else next.add(proposalId);
+      return next;
+    });
+  };
+
   const resetAtlas = () => {
     setSelectedNodeId(initialNodeId);
     setSelectedUniverseNodeId(universe.rootNodeId);
@@ -1051,6 +1102,9 @@ function RepositoryAtlasVisualization({
     setView({ x: 0, y: 0, scale: 0.82 });
     setUniverseCamera(initialUniverseCamera);
     setUniverseRetryKey(current => current + 1);
+    setTransformationMode('current');
+    setTransformationDomain('all');
+    setSelectedProposalId(null);
   };
 
   const toggleFilter = (key: RepositoryUniverseFilterKey) => {
@@ -1196,6 +1250,61 @@ function RepositoryAtlasVisualization({
     </div>
   );
 
+  const transformationControls = (
+    <div className="flex flex-col gap-2 rounded-2xl border border-primary/15 bg-background/20 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex rounded-full border border-border/60 bg-background/25 p-1" aria-label="Repository transformation preview mode">
+          <button
+            type="button"
+            aria-pressed={transformationMode === 'current'}
+            onClick={() => changeTransformationMode('current')}
+            className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${transformationMode === 'current' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            Current
+          </button>
+          <button
+            type="button"
+            aria-pressed={transformationMode === 'with-shipseal'}
+            disabled={transformation.proposals.length === 0}
+            onClick={() => changeTransformationMode('with-shipseal')}
+            className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 ${transformationMode === 'with-shipseal' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            With ShipSeal
+          </button>
+        </div>
+        <div className="text-xs text-muted-foreground" aria-live="polite">
+          {transformationMode === 'current'
+            ? `${transformation.summary.currentFiles.toLocaleString()} current files - ${transformation.summary.currentClusters.toLocaleString()} knowledge clusters`
+            : `${transformation.summary.proposedArtifacts.toLocaleString()} proposed artifacts - ${transformation.summary.proposedRelationships.toLocaleString()} proposed relationships`}
+        </div>
+        {transformation.proposals.length > 0 && (
+          <div className="ml-auto rounded-full border border-border/45 bg-background/20 px-3 py-1.5 text-xs text-muted-foreground">
+            {includedProposalCount.toLocaleString()} proposed improvements selected
+          </div>
+        )}
+      </div>
+      {transformation.proposals.length > 0 ? (
+        <div className="flex flex-wrap gap-2" aria-label="Transformation domains">
+          <TransformationDomainButton label="All improvements" count={transformation.proposals.length} active={transformationDomain === 'all'} onClick={() => setTransformationDomain('all')} />
+          {(['project-memory', 'agent-routing', 'verification-path'] as RepositoryTransformationDomain[]).filter(domain => domainCounts[domain] > 0).map(domain => (
+            <TransformationDomainButton
+              key={domain}
+              label={transformationDomainLabel(domain)}
+              count={domainCounts[domain]}
+              active={transformationDomain === domain}
+              onClick={() => setTransformationDomain(domain)}
+            />
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">ShipSeal did not find a supported transformation to preview from this scan.</p>
+      )}
+      {transformation.summary.limitedScan && (
+        <p className="text-xs text-warning">Limited scan: preview confidence is cautious and based on the available scan boundary.</p>
+      )}
+    </div>
+  );
+
   const clusterLegend = viewMode === 'universe3d' && (
     <details className="group rounded-2xl border border-border/45 bg-background/20 px-3 py-2 text-xs text-muted-foreground">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -1330,7 +1439,8 @@ function RepositoryAtlasVisualization({
 
         {visibleNodes.map((node, index) => {
           const selected = selectedNode?.id === node.id;
-          const related = relatedNodeIds.has(node.id);
+          const transformationAffected = proposalAffectedAtlasNodeIds.has(node.id);
+          const related = relatedNodeIds.has(node.id) || transformationAffected;
           const matched = searchMatches.has(node.id);
           const dimmed = Boolean((selectedNode || activeChapter || focusedClusterId || query.trim()) && !selected && !related && !matched && node.id !== atlas.rootNodeId);
           const labelVisible = node.labelPriority !== 'detail' || selected || related || matched || view.scale > 1.05;
@@ -1358,7 +1468,7 @@ function RepositoryAtlasVisualization({
                     : node.evidenceType === 'missing'
                       ? 'z-10 border-warning/45 bg-background/45 text-warning'
                       : 'z-10 border-border/60 bg-background/45 text-muted-foreground'
-              } ${matched ? 'ring-2 ring-accent/55' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
+              } ${matched ? 'ring-2 ring-accent/55' : ''} ${transformationAffected ? 'ring-2 ring-primary/30' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
               style={{
                 left: node.x + 460,
                 top: node.y + 320,
@@ -1376,6 +1486,61 @@ function RepositoryAtlasVisualization({
             </button>
           );
         })}
+
+        {transformationMode === 'with-shipseal' && visibleTransformationProposals.flatMap(proposal => (
+          proposal.graphChanges.proposedEdges.map(edge => {
+            const proposed = proposal.graphChanges.proposedNodes.find(node => node.id === edge.source);
+            const target = atlasNodeForUniverseNodeId(edge.target, universe, atlas);
+            if (!proposed || !target) return null;
+            return (
+              <svg key={edge.id} className="pointer-events-none absolute inset-0 overflow-visible" aria-hidden="true">
+                <line
+                  x1={proposed.x + 460}
+                  y1={proposed.y + 320}
+                  x2={target.x + 460}
+                  y2={target.y + 320}
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={selectedProposalId === proposal.id ? 2 : 1.2}
+                  strokeOpacity={excludedProposalIds.has(proposal.id) ? 0.16 : selectedProposalId === proposal.id ? 0.58 : 0.3}
+                  strokeDasharray="7 8"
+                  className="transition-all duration-500"
+                />
+              </svg>
+            );
+          })
+        ))}
+
+        {transformationMode === 'with-shipseal' && visibleTransformationProposals.flatMap(proposal => (
+          proposal.graphChanges.proposedNodes.map(node => {
+            const selected = selectedProposalId === proposal.id;
+            const excluded = excludedProposalIds.has(proposal.id);
+            return (
+              <button
+                key={node.id}
+                type="button"
+                aria-pressed={selected}
+                aria-label={`${node.label}. Proposed With ShipSeal entity.`}
+                onClick={() => selectProposal(proposal)}
+                className={`absolute z-40 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-dashed text-center transition-all duration-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  selected
+                    ? 'border-primary/80 bg-primary/20 text-primary-glow shadow-glow'
+                    : 'border-primary/45 bg-background/55 text-primary-glow/85 hover:border-primary/70'
+                } ${excluded ? 'opacity-35' : 'opacity-100'}`}
+                style={{
+                  left: node.x + 460,
+                  top: node.y + 320,
+                  width: selected ? 72 : 58,
+                  height: selected ? 72 : 58,
+                }}
+              >
+                <span className="h-3 w-3 rounded-full border border-primary/60 bg-primary/15" />
+                <span className="pointer-events-none absolute left-1/2 top-[calc(100%+7px)] max-w-[170px] -translate-x-1/2 rounded-full border border-primary/35 bg-background/80 px-2 py-1 text-[10px] font-medium leading-tight text-primary-glow shadow-sm">
+                  Proposed
+                </span>
+              </button>
+            );
+          })
+        ))}
       </div>
 
       {tooltip && (
@@ -1419,10 +1584,19 @@ function RepositoryAtlasVisualization({
             reducedMotion={prefersReducedMotion}
             animateIn={!universeSceneSettled}
             fullscreen={fullscreen}
+            transformation={transformation}
+            transformationMode={transformationMode}
+            transformationDomain={transformationDomain}
+            selectedProposalId={selectedProposalId}
+            excludedProposalIds={[...excludedProposalIds]}
             onCameraStateChange={setUniverseCamera}
             onSelectNode={nodeId => {
               const node = universe.nodes.find(item => item.id === nodeId);
               if (node) selectUniverseNode(node);
+            }}
+            onSelectProposal={proposalId => {
+              const proposal = transformation.proposals.find(item => item.id === proposalId);
+              if (proposal) selectProposal(proposal);
             }}
             onSceneSettled={() => setUniverseSceneSettled(true)}
           />
@@ -1432,7 +1606,18 @@ function RepositoryAtlasVisualization({
   );
 
   const inspector = (
-    viewMode === 'universe3d'
+    selectedProposal && transformationMode === 'with-shipseal'
+      ? (
+        <TransformationInspector
+          proposal={selectedProposal}
+          included={!excludedProposalIds.has(selectedProposal.id)}
+          collapsed={fullscreen && inspectorCollapsed}
+          onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
+          onToggleIncluded={() => toggleProposalIncluded(selectedProposal.id)}
+          onClear={() => setSelectedProposalId(null)}
+        />
+      )
+      : viewMode === 'universe3d'
       ? (
         <UniverseInspector
           universe={universe}
@@ -1489,6 +1674,7 @@ function RepositoryAtlasVisualization({
             {atlasNavigationActive ? `${viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to release` : 'Click to explore - Scroll to zoom - Drag to move'}
           </div>
 
+          <div className="mb-4">{transformationControls}</div>
           <div className="mb-4">{atlasFilters}</div>
           {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
@@ -1528,6 +1714,7 @@ function RepositoryAtlasVisualization({
             </div>
             {atlasToolbar}
           </div>
+          <div className="mb-4">{transformationControls}</div>
           <div className="mb-4">{atlasFilters}</div>
           {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
@@ -1578,6 +1765,136 @@ function AtlasFilterButton({
       <span className="ml-1.5 text-[10px] opacity-70" aria-hidden="true">{count.toLocaleString()}</span>
       <span id={descriptionId} className="sr-only">{count.toLocaleString()} matching entities. {state}</span>
     </button>
+  );
+}
+
+function TransformationDomainButton({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      aria-label={`${label}, ${count.toLocaleString()} proposals`}
+      onClick={onClick}
+      className={`rounded-full border px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+        active ? 'border-primary/40 bg-primary/10 text-primary-glow' : 'border-border/55 bg-background/20 text-muted-foreground hover:text-foreground'
+      }`}
+    >
+      {label}
+      <span className="ml-1.5 text-[10px] opacity-70">{count.toLocaleString()}</span>
+    </button>
+  );
+}
+
+function TransformationInspector({
+  proposal,
+  included,
+  collapsed = false,
+  onToggleCollapsed,
+  onToggleIncluded,
+  onClear,
+}: {
+  proposal: RepositoryTransformationProposal;
+  included: boolean;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  onToggleIncluded: () => void;
+  onClear: () => void;
+}) {
+  if (collapsed) {
+    return (
+      <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="transformation-inspector-collapsed">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">With ShipSeal</div>
+            <h3 id="transformation-inspector-collapsed" className="mt-1 truncate font-display text-base font-semibold">{proposal.title}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">Proposed - not yet applied</p>
+          </div>
+          {onToggleCollapsed && (
+            <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} aria-label="Expand inspector">
+              <PanelRightOpen className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="transformation-inspector-heading">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className="border-primary/45 text-primary-glow">Proposed</Badge>
+        <Badge variant="outline" className="border-border/60 text-muted-foreground">{transformationDomainLabel(proposal.domain)}</Badge>
+        <Badge variant="outline" className={proposal.confidence === 'low' ? 'border-warning/45 text-warning' : 'border-primary/30 text-muted-foreground'}>
+          {proposal.confidence} confidence
+        </Badge>
+        {onToggleCollapsed && (
+          <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} className="ml-auto" aria-label="Collapse inspector">
+            <PanelRightClose className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+
+      <h3 id="transformation-inspector-heading" className="mt-3 font-display text-xl font-semibold">{proposal.title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{proposal.summary}</p>
+      <p className="mt-3 rounded-2xl border border-primary/25 bg-primary/10 px-3 py-2 text-xs text-primary-glow">
+        Status: Proposed - not yet applied. Generated after approval.
+      </p>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onToggleIncluded} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+          {included ? 'Remove from plan' : 'Add to optimization plan'}
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onClear}>
+          Return to repository entity
+        </Button>
+      </div>
+
+      <div className="mt-5 space-y-4 text-sm">
+        <section>
+          <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Why ShipSeal recommends this</h4>
+          <ul className="mt-2 space-y-2">
+            {proposal.sourceEvidence.map(item => (
+              <li key={`${item.label}:${item.detail}`} className="rounded-2xl border border-border/45 bg-background/25 px-3 py-2">
+                <div className="font-medium text-foreground">{item.label}</div>
+                {item.detail && <div className="mt-1 text-xs text-muted-foreground">{item.detail}</div>}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section>
+          <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">What ShipSeal would create or update</h4>
+          <div className="mt-2 space-y-2">
+            {proposal.artifactActions.map(action => (
+              <details key={action.path} className="rounded-2xl border border-border/45 bg-background/25 px-3 py-2">
+                <summary className="cursor-pointer list-none font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  {action.action} - {action.path}
+                </summary>
+                <p className="mt-2 text-xs text-muted-foreground">{action.description}</p>
+                {action.preview && (
+                  <div className="mt-3 rounded-xl border border-border/40 bg-background/35 p-3">
+                    <div className="text-xs font-medium text-foreground">Preview from existing generator</div>
+                    <div className="mt-2 text-xs text-muted-foreground">{action.preview.outline.slice(0, 4).join(' / ')}</div>
+                    <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap rounded-lg bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">{action.preview.excerpt}</pre>
+                  </div>
+                )}
+              </details>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Where it connects</h4>
+          <p className="mt-2 text-muted-foreground">{proposal.graphChanges.affectedExistingNodeIds.length.toLocaleString()} current repository entities are connected by proposed relationships.</p>
+        </section>
+
+        <section>
+          <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">How an AI agent would use it</h4>
+          <p className="mt-2 text-muted-foreground">{proposal.expectedEffect.agentBehavior}</p>
+          <p className="mt-2 text-muted-foreground">{proposal.expectedEffect.repositoryMeaning}</p>
+        </section>
+      </div>
+    </aside>
   );
 }
 
@@ -2167,6 +2484,20 @@ function matchingUniverseNodeIds(universe: RepositoryUniverseModel, query: strin
       cluster?.category,
     ].some(value => String(value || '').toLowerCase().includes(normalized));
   }).map(node => node.id));
+}
+
+function atlasNodeForUniverseNodeId(universeNodeId: string, universe: RepositoryUniverseModel, atlas: RepositoryAtlasModel) {
+  const universeNode = universe.nodes.find(node => node.id === universeNodeId);
+  if (!universeNode) return null;
+  if (universeNode.metadata.atlasNodeId) {
+    const byAtlasId = atlas.nodes.find(node => node.id === universeNode.metadata.atlasNodeId);
+    if (byAtlasId) return byAtlasId;
+  }
+  if (universeNode.path) {
+    const byPath = atlas.nodes.find(node => node.path === universeNode.path);
+    if (byPath) return byPath;
+  }
+  return atlas.nodes.find(node => node.id === universeNodeId) || null;
 }
 
 function nodeVisibleInAtlas(node: RepositoryAtlasNode, filters: AtlasFilters) {

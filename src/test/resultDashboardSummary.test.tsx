@@ -350,6 +350,34 @@ describe('ResultDashboard summary copy', () => {
     expect(universeMockState.models.at(-1)).toBe(initialModel);
   });
 
+  it('previews With ShipSeal proposals and preserves review state without changing the current graph', async () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        onReplayReveal={vi.fn()}
+      />
+    );
+
+    const universe = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+    const currentNodeCount = universe.getAttribute('data-node-count');
+    fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
+    expect(screen.getByText(/proposed artifacts/i)).toBeInTheDocument();
+    expect(screen.getByText(/proposed improvements selected/i)).toBeInTheDocument();
+
+    switchToAtlas2D();
+    const proposedButtons = await screen.findAllByRole('button', { name: /Proposed With ShipSeal entity/i });
+    fireEvent.click(proposedButtons[0]);
+    expect(screen.getByText(/Proposed - not yet applied/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Remove from plan/i }));
+    expect(screen.getByRole('button', { name: /Add to optimization plan/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Universe 3D/i }));
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-node-count')).toBe(currentNodeCount);
+    expect(screen.getByText(/proposed improvements selected/i)).toBeInTheDocument();
+  });
+
   it('preserves Repository Universe selection and camera state in fullscreen', async () => {
     const requestFullscreen = vi.fn().mockResolvedValue(undefined);
     const exitFullscreen = vi.fn().mockResolvedValue(undefined);

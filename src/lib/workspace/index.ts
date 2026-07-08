@@ -29,6 +29,12 @@ export {
   chapterForMentalModelNode,
 } from './workspaceStory';
 
+export {
+  buildRepositoryTransformationProposalModel,
+  repositoryTransformationDomainCounts,
+  transformationDomainLabel,
+} from './repositoryTransformation';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,
@@ -69,6 +75,18 @@ export type {
   RepositoryUniverseRelationship,
   RepositoryUniverseSummary,
 } from './repositoryUniverse';
+
+export type {
+  RepositoryTransformationArtifactAction,
+  RepositoryTransformationConfidence,
+  RepositoryTransformationDomain,
+  RepositoryTransformationDomainFilter,
+  RepositoryTransformationMode,
+  RepositoryTransformationProposal,
+  RepositoryTransformationProposalModel,
+  RepositoryTransformationProposedEdge,
+  RepositoryTransformationProposedNode,
+} from './repositoryTransformation';
 
 export type {
   RepositoryAtlasCluster,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import type { RepositoryUniverseCluster, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
+import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposalModel, RepositoryUniverseCluster, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
 import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, softenClusterColor, blendHex } from '@/lib/workspace/repositoryUniverseVisual';
 
 export interface UniverseCameraState {
@@ -22,8 +22,14 @@ interface RepositoryUniverse3DProps {
   reducedMotion: boolean;
   animateIn?: boolean;
   fullscreen?: boolean;
+  transformationMode?: RepositoryTransformationMode;
+  transformationDomain?: RepositoryTransformationDomainFilter;
+  selectedProposalId?: string | null;
+  excludedProposalIds?: string[];
+  transformation?: RepositoryTransformationProposalModel;
   onCameraStateChange: (state: UniverseCameraState) => void;
   onSelectNode: (nodeId: string) => void;
+  onSelectProposal?: (proposalId: string) => void;
   onFocusNodeSettled?: (nodeId: string) => void;
   onSceneSettled?: () => void;
 }
@@ -51,6 +57,23 @@ interface ClusterRenderItem {
   ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
 }
 
+interface ProposalRenderItem {
+  proposalId: string;
+  domain: string;
+  mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
+  halo: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  label: THREE.Sprite;
+  labelMaterial: THREE.SpriteMaterial;
+  labelTexture: THREE.CanvasTexture;
+  position: THREE.Vector3;
+}
+
+interface ProposalEdgeRenderItem {
+  proposalId: string;
+  domain: string;
+  line: THREE.Line<THREE.BufferGeometry, THREE.LineDashedMaterial>;
+}
+
 const INITIAL_APPEARANCE_MS = 1400;
 const IDLE_ROTATION_DELAY_MS = 3600;
 const LABEL_FAR_RADIUS = 720;
@@ -70,8 +93,14 @@ export default function RepositoryUniverse3D({
   reducedMotion,
   animateIn = true,
   fullscreen = false,
+  transformationMode = 'current',
+  transformationDomain = 'all',
+  selectedProposalId,
+  excludedProposalIds = [],
+  transformation,
   onCameraStateChange,
   onSelectNode,
+  onSelectProposal,
   onFocusNodeSettled,
   onSceneSettled,
 }: RepositoryUniverse3DProps) {
@@ -87,8 +116,13 @@ export default function RepositoryUniverse3D({
   const rotationPausedRef = useRef(rotationPaused);
   const reducedMotionRef = useRef(reducedMotion);
   const animateInRef = useRef(animateIn);
+  const transformationModeRef = useRef(transformationMode);
+  const transformationDomainRef = useRef(transformationDomain);
+  const selectedProposalIdRef = useRef(selectedProposalId);
+  const excludedProposalSetRef = useRef(new Set(excludedProposalIds));
   const onCameraStateChangeRef = useRef(onCameraStateChange);
   const onSelectNodeRef = useRef(onSelectNode);
+  const onSelectProposalRef = useRef(onSelectProposal);
   const onFocusNodeSettledRef = useRef(onFocusNodeSettled);
   const onSceneSettledRef = useRef(onSceneSettled);
   const [webglUnavailable, setWebglUnavailable] = useState(false);
@@ -136,12 +170,32 @@ export default function RepositoryUniverse3D({
   }, [animateIn]);
 
   useEffect(() => {
+    transformationModeRef.current = transformationMode;
+  }, [transformationMode]);
+
+  useEffect(() => {
+    transformationDomainRef.current = transformationDomain;
+  }, [transformationDomain]);
+
+  useEffect(() => {
+    selectedProposalIdRef.current = selectedProposalId;
+  }, [selectedProposalId]);
+
+  useEffect(() => {
+    excludedProposalSetRef.current = new Set(excludedProposalIds);
+  }, [excludedProposalIds]);
+
+  useEffect(() => {
     onCameraStateChangeRef.current = onCameraStateChange;
   }, [onCameraStateChange]);
 
   useEffect(() => {
     onSelectNodeRef.current = onSelectNode;
   }, [onSelectNode]);
+
+  useEffect(() => {
+    onSelectProposalRef.current = onSelectProposal;
+  }, [onSelectProposal]);
 
   useEffect(() => {
     onFocusNodeSettledRef.current = onFocusNodeSettled;
@@ -179,6 +233,8 @@ export default function RepositoryUniverse3D({
     const nodeItems = new Map<string, NodeRenderItem>();
     const edgeItems = new Map<string, EdgeRenderItem>();
     const clusterItems = new Map<string, ClusterRenderItem>();
+    const proposalItems = new Map<string, ProposalRenderItem>();
+    const proposalEdgeItems = new Map<string, ProposalEdgeRenderItem>();
     const sphereGeometryCache = new Map<number, THREE.SphereGeometry>();
     let frameId = 0;
     let disposed = false;
@@ -252,6 +308,65 @@ export default function RepositoryUniverse3D({
       const line = new THREE.Line(geometry, material);
       edgeItems.set(edge.id, { edge, line });
       scene.add(line);
+    }
+
+    for (const proposal of transformation?.proposals || []) {
+      for (const proposedNode of proposal.graphChanges.proposedNodes) {
+        const position = visualPositionFor(proposedNode.position);
+        const baseColor = repositoryUniverseClusterToken(proposedNode.clusterId).hex;
+        const material = new THREE.MeshStandardMaterial({
+          color: brightenClusterColor(baseColor, 0.2),
+          emissive: baseColor,
+          emissiveIntensity: 0.38,
+          metalness: 0.08,
+          roughness: 0.52,
+          transparent: true,
+          opacity: 0,
+          wireframe: true,
+        });
+        const mesh = new THREE.Mesh(sphereFor(5.3), material);
+        mesh.position.copy(position);
+        mesh.userData.proposalId = proposal.id;
+        scene.add(mesh);
+
+        const haloMaterial = new THREE.MeshBasicMaterial({
+          color: baseColor,
+          transparent: true,
+          opacity: 0,
+          depthWrite: false,
+          blending: THREE.AdditiveBlending,
+        });
+        const halo = new THREE.Mesh(sphereFor(13.4), haloMaterial);
+        halo.position.copy(position);
+        scene.add(halo);
+
+        const { sprite: label, material: labelMaterial, texture } = labelSprite('Proposed', '#e0faff');
+        label.position.set(position.x, position.y + 12, position.z);
+        label.scale.set(44, 13, 1);
+        scene.add(label);
+
+        proposalItems.set(proposal.id, { proposalId: proposal.id, domain: proposal.domain, mesh, halo, label, labelMaterial, labelTexture: texture, position });
+      }
+
+      for (const edge of proposal.graphChanges.proposedEdges) {
+        const source = proposal.graphChanges.proposedNodes.find(node => node.id === edge.source);
+        const target = visualPositionByNodeId.get(edge.target);
+        if (!source || !target) continue;
+        const sourcePosition = visualPositionFor(source.position);
+        const material = new THREE.LineDashedMaterial({
+          color: 0x9bdcf3,
+          transparent: true,
+          opacity: 0,
+          dashSize: 9,
+          gapSize: 7,
+          depthWrite: false,
+        });
+        const geometry = new THREE.BufferGeometry().setFromPoints([sourcePosition, target]);
+        const line = new THREE.Line(geometry, material);
+        line.computeLineDistances();
+        scene.add(line);
+        proposalEdgeItems.set(edge.id, { proposalId: proposal.id, domain: proposal.domain, line });
+      }
     }
 
     for (const node of model.nodes) {
@@ -347,13 +462,18 @@ export default function RepositoryUniverse3D({
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     };
 
-    const intersectNode = () => {
+    const intersectEntity = () => {
       raycaster.setFromCamera(pointer, camera);
-      const meshes = [...nodeItems.values()]
-        .filter(item => item.mesh.visible)
-        .map(item => item.mesh);
+      const meshes = [
+        ...[...nodeItems.values()].filter(item => item.mesh.visible).map(item => item.mesh),
+        ...[...proposalItems.values()].filter(item => item.mesh.visible).map(item => item.mesh),
+      ];
       const intersect = raycaster.intersectObjects(meshes, false)[0];
-      return intersect?.object.userData.nodeId as string | undefined;
+      if (!intersect) return {};
+      return {
+        nodeId: intersect.object.userData.nodeId as string | undefined,
+        proposalId: intersect.object.userData.proposalId as string | undefined,
+      };
     };
 
     const handleDragPointerMove = (event: PointerEvent) => {
@@ -392,7 +512,7 @@ export default function RepositoryUniverse3D({
     const handleCanvasPointerMove = (event: PointerEvent) => {
       if (pointerMode) return;
       setPointer(event);
-      hoveredNodeId = intersectNode() || null;
+      hoveredNodeId = intersectEntity().nodeId || null;
     };
 
     const cleanupDocumentDrag = () => {
@@ -422,8 +542,9 @@ export default function RepositoryUniverse3D({
       cleanupDocumentDrag();
       if (mode === 'orbit' && !pointerMoved) {
         setPointer(event);
-        const nodeId = intersectNode();
+        const { nodeId, proposalId } = intersectEntity();
         if (nodeId) onSelectNodeRef.current(nodeId);
+        if (proposalId) onSelectProposalRef.current?.(proposalId);
       }
       event.preventDefault();
     }
@@ -439,7 +560,11 @@ export default function RepositoryUniverse3D({
 
     const handleDoubleClick = (event: MouseEvent) => {
       setPointer(event);
-      const nodeId = intersectNode();
+      const { nodeId, proposalId } = intersectEntity();
+      if (proposalId) {
+        onSelectProposalRef.current?.(proposalId);
+        return;
+      }
       const node = model.nodes.find(item => item.id === nodeId);
       if (!node) return;
       const target = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
@@ -458,6 +583,10 @@ export default function RepositoryUniverse3D({
       const searchMatches = searchMatchSetRef.current;
       const visibleNodes = visibleNodeSetRef.current;
       const visibleEdges = visibleEdgeSetRef.current;
+      const mode = transformationModeRef.current;
+      const domain = transformationDomainRef.current;
+      const selectedProposal = selectedProposalIdRef.current;
+      const excludedProposals = excludedProposalSetRef.current;
       const selectedRelated = new Set<string>();
 
       if (selectedId) {
@@ -509,6 +638,15 @@ export default function RepositoryUniverse3D({
         line.material.color.setHex(colorForEdge(edge, directlySelected, focused));
       }
 
+      for (const item of proposalEdgeItems.values()) {
+        const visible = mode === 'with-shipseal' && (domain === 'all' || item.domain === domain);
+        const selected = selectedProposal === item.proposalId;
+        const excluded = excludedProposals.has(item.proposalId);
+        item.line.visible = visible;
+        item.line.material.opacity = !visible ? 0 : excluded ? 0.09 : selected ? 0.56 : 0.26;
+        item.line.material.color.setHex(selected ? 0xe0faff : 0x9bdcf3);
+      }
+
       const radius = cameraStateRef.current.radius;
       for (const item of nodeItems.values()) {
         const { node, mesh, halo, label, labelMaterial, baseRadius } = item;
@@ -552,6 +690,22 @@ export default function RepositoryUniverse3D({
         const labelScale = labelScaleForNode(node, radius, selected || hovered || matched);
         label.scale.set(labelScale.width, labelScale.height, 1);
         label.lookAt(camera.position);
+      }
+
+      for (const item of proposalItems.values()) {
+        const visible = mode === 'with-shipseal' && (domain === 'all' || item.domain === domain);
+        const selected = selectedProposal === item.proposalId;
+        const excluded = excludedProposals.has(item.proposalId);
+        const opacity = !visible ? 0 : excluded ? 0.24 : selected ? 0.92 : 0.66;
+        item.mesh.visible = opacity > 0.02;
+        item.mesh.material.opacity = opacity;
+        item.mesh.scale.setScalar(selected ? 1.34 : 1);
+        item.halo.visible = visible && !excluded;
+        item.halo.material.opacity = selected ? 0.26 : 0.12;
+        item.label.visible = visible;
+        item.labelMaterial.opacity = visible ? excluded ? 0.34 : selected ? 0.94 : 0.7 : 0;
+        item.label.position.set(item.position.x, item.position.y + (selected ? 16 : 12), item.position.z);
+        item.label.lookAt(camera.position);
       }
     };
 
@@ -615,10 +769,11 @@ export default function RepositoryUniverse3D({
         }
       });
       nodeItems.forEach(item => item.labelTexture.dispose());
+      proposalItems.forEach(item => item.labelTexture.dispose());
       sphereGeometryCache.forEach(geometry => geometry.dispose());
       renderer.dispose();
     };
-  }, [model]);
+  }, [model, transformation]);
 
   return (
     <div ref={hostRef} className="relative h-full min-h-[440px] overflow-hidden rounded-[1.4rem] border border-primary/15 bg-[#050914]" data-testid="repository-universe-host">
