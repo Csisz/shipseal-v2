@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import type { RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
+import type { RepositoryUniverseCluster, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
 
 export interface UniverseCameraState {
   theta: number;
@@ -37,6 +37,7 @@ interface NodeRenderItem {
   labelMaterial: THREE.SpriteMaterial;
   labelTexture: THREE.CanvasTexture;
   baseRadius: number;
+  position: THREE.Vector3;
 }
 
 interface EdgeRenderItem {
@@ -44,10 +45,17 @@ interface EdgeRenderItem {
   line: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>;
 }
 
+interface ClusterRenderItem {
+  cluster: RepositoryUniverseCluster;
+  ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+}
+
 const INITIAL_APPEARANCE_MS = 1400;
 const IDLE_ROTATION_DELAY_MS = 3600;
 const LABEL_FAR_RADIUS = 720;
 const LABEL_MEDIUM_RADIUS = 420;
+const LAYOUT_SPREAD_XZ = 1.08;
+const LAYOUT_SPREAD_Y = 0.86;
 
 export default function RepositoryUniverse3D({
   model,
@@ -169,6 +177,7 @@ export default function RepositoryUniverse3D({
     const pointer = new THREE.Vector2();
     const nodeItems = new Map<string, NodeRenderItem>();
     const edgeItems = new Map<string, EdgeRenderItem>();
+    const clusterItems = new Map<string, ClusterRenderItem>();
     const sphereGeometryCache = new Map<number, THREE.SphereGeometry>();
     let frameId = 0;
     let disposed = false;
@@ -203,20 +212,42 @@ export default function RepositoryUniverse3D({
       return geometry;
     };
 
+    const visualPositionByNodeId = new Map<string, THREE.Vector3>();
+    for (const node of model.nodes) {
+      visualPositionByNodeId.set(node.id, visualPositionFor(node.position, node.id === model.rootNodeId));
+    }
+
+    for (const cluster of model.clusters) {
+      if (cluster.id === 'cluster:repository') continue;
+      const ringRadius = Math.max(58, Math.min(245, cluster.radius * 1.18));
+      const geometry = new THREE.RingGeometry(ringRadius * 0.72, ringRadius, 96);
+      const material = new THREE.MeshBasicMaterial({
+        color: colorForCluster(cluster),
+        transparent: true,
+        opacity: 0.04,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+      });
+      const ring = new THREE.Mesh(geometry, material);
+      const position = visualPositionFor(cluster.position);
+      ring.position.set(position.x, position.y - 10, position.z);
+      ring.rotation.x = Math.PI / 2;
+      scene.add(ring);
+      clusterItems.set(cluster.id, { cluster, ring });
+    }
+
     for (const edge of model.edges) {
-      const source = model.nodes.find(node => node.id === edge.source);
-      const target = model.nodes.find(node => node.id === edge.target);
+      const source = visualPositionByNodeId.get(edge.source);
+      const target = visualPositionByNodeId.get(edge.target);
       if (!source || !target) continue;
       const material = new THREE.LineBasicMaterial({
-        color: edge.evidenceType === 'evidence' ? 0x5eead4 : 0x94a3b8,
+        color: colorForEdge(edge),
         transparent: true,
-        opacity: 0.08,
+        opacity: 0.1,
         depthWrite: false,
       });
-      const geometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(source.position.x, source.position.y, source.position.z),
-        new THREE.Vector3(target.position.x, target.position.y, target.position.z),
-      ]);
+      const geometry = new THREE.BufferGeometry().setFromPoints([source, target]);
       const line = new THREE.Line(geometry, material);
       edgeItems.set(edge.id, { edge, line });
       scene.add(line);
@@ -225,17 +256,18 @@ export default function RepositoryUniverse3D({
     for (const node of model.nodes) {
       const displayLabel = repositoryUniverseNodeDisplayLabel(node);
       const baseRadius = nodeRadius(node);
+      const position = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
       const material = new THREE.MeshStandardMaterial({
         color: colorForNode(node),
         emissive: emissiveForNode(node),
-        emissiveIntensity: node.importance === 'primary' ? 0.34 : 0.1,
-        metalness: 0.16,
-        roughness: 0.42,
+        emissiveIntensity: node.importance === 'primary' ? 0.38 : 0.11,
+        metalness: 0.18,
+        roughness: 0.38,
         transparent: true,
         opacity: 0.9,
       });
       const mesh = new THREE.Mesh(sphereFor(baseRadius), material);
-      mesh.position.set(node.position.x, node.position.y, node.position.z);
+      mesh.position.copy(position);
       mesh.userData.nodeId = node.id;
       scene.add(mesh);
 
@@ -251,11 +283,11 @@ export default function RepositoryUniverse3D({
       scene.add(halo);
 
       const { sprite: label, material: labelMaterial, texture } = labelSprite(shortLabel(displayLabel), labelColorForNode(node));
-      label.position.set(node.position.x, node.position.y + baseRadius + 5, node.position.z);
+      label.position.set(position.x, position.y + baseRadius + 5, position.z);
       label.scale.set(node.kind === 'repository' ? 70 : 42, node.kind === 'repository' ? 20 : 14, 1);
       scene.add(label);
 
-      nodeItems.set(node.id, { node, mesh, halo, label, labelMaterial, labelTexture: texture, baseRadius });
+      nodeItems.set(node.id, { node, mesh, halo, label, labelMaterial, labelTexture: texture, baseRadius, position });
     }
 
     const resize = () => {
@@ -408,10 +440,11 @@ export default function RepositoryUniverse3D({
       const nodeId = intersectNode();
       const node = model.nodes.find(item => item.id === nodeId);
       if (!node) return;
+      const target = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
       publishCamera({
         ...cameraStateRef.current,
         radius: node.kind === 'file' ? 165 : 230,
-        target: node.position,
+        target,
       }, true);
       onSelectNodeRef.current(node.id);
       onFocusNodeSettledRef.current?.(node.id);
@@ -435,6 +468,27 @@ export default function RepositoryUniverse3D({
         }
       }
 
+      const selectedClusterId = selectedId ? nodeItems.get(selectedId)?.node.clusterId : null;
+      const selectedRelatedClusterIds = new Set<string>();
+      for (const nodeId of selectedRelated) {
+        const clusterId = nodeItems.get(nodeId)?.node.clusterId;
+        if (clusterId) selectedRelatedClusterIds.add(clusterId);
+      }
+
+      for (const item of clusterItems.values()) {
+        const active = Boolean(focusedCluster && item.cluster.id === focusedCluster) || item.cluster.id === selectedClusterId;
+        const related = selectedRelatedClusterIds.has(item.cluster.id);
+        item.ring.visible = true;
+        item.ring.material.opacity = active
+          ? 0.16
+          : related
+            ? 0.085
+            : focusedCluster || selectedId
+              ? 0.028
+              : 0.055;
+        item.ring.material.color.setHex(colorForCluster(item.cluster, active, related));
+      }
+
       for (const item of edgeItems.values()) {
         const { edge, line } = item;
         const directlySelected = Boolean(selectedId && (edge.source === selectedId || edge.target === selectedId));
@@ -444,13 +498,13 @@ export default function RepositoryUniverse3D({
         line.material.opacity = !visible
           ? 0
           : directlySelected
-            ? 0.58
+            ? 0.74
             : focused
-              ? 0.25
+              ? 0.34
               : edge.relationship === 'contains'
-                ? 0.035
-                : 0.09;
-        line.material.color.setHex(directlySelected ? 0xf8fafc : edge.evidenceType === 'evidence' ? 0x5eead4 : 0x94a3b8);
+                ? selectedId || focusedCluster ? 0.045 : 0.06
+                : selectedId || focusedCluster ? 0.11 : 0.14;
+        line.material.color.setHex(colorForEdge(edge, directlySelected, focused));
       }
 
       const radius = cameraStateRef.current.radius;
@@ -464,19 +518,20 @@ export default function RepositoryUniverse3D({
         const focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
         const quiet = Boolean(selectedId && !selected && !connected && !matched && node.id !== model.rootNodeId);
         const suppressed = Boolean(focusedCluster && !focused && !selected && !matched);
-        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.96 : quiet || suppressed ? 0.18 : node.importance === 'background' ? 0.54 : 0.82;
-        const scale = selected ? 1.9 : hovered ? 1.55 : matched ? 1.45 : connected ? 1.18 : 1;
+        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.98 : connected ? 0.92 : quiet || suppressed ? 0.3 : node.importance === 'background' ? 0.58 : 0.86;
+        const scale = selected ? 2.05 : hovered ? 1.58 : matched ? 1.48 : connected ? 1.32 : node.importance === 'primary' ? 1.05 : 1;
 
         mesh.visible = opacity > 0.02;
         mesh.material.opacity = opacity;
-        mesh.material.color.setHex(colorForNode(node, selected, matched, hovered));
+        mesh.material.color.setHex(colorForNode(node, selected, matched, hovered, connected));
         mesh.material.emissive.setHex(emissiveForNode(node, selected, matched, hovered));
-        mesh.material.emissiveIntensity = selected ? 1.1 : hovered || matched ? 0.72 : connected ? 0.36 : node.importance === 'primary' ? 0.28 : 0.08;
+        mesh.material.emissiveIntensity = selected ? 1.25 : hovered || matched ? 0.78 : connected ? 0.54 : node.importance === 'primary' ? 0.32 : 0.09;
         mesh.scale.setScalar(scale);
 
-        halo.visible = visible && (selected || hovered || matched);
-        halo.material.opacity = selected ? 0.34 : hovered ? 0.22 : matched ? 0.18 : 0;
-        halo.scale.setScalar(selected ? 1.25 : 1);
+        halo.visible = visible && (selected || hovered || matched || connected);
+        halo.material.opacity = selected ? 0.42 : hovered ? 0.24 : matched ? 0.2 : connected ? 0.105 : 0;
+        halo.material.color.setHex(selected ? 0xe0faff : connected ? 0x7dd3fc : 0x67e8f9);
+        halo.scale.setScalar(selected ? 1.34 : connected ? 1.14 : 1);
 
         const labelVisible = visible && shouldRenderLabel(node, {
           selected,
@@ -485,11 +540,12 @@ export default function RepositoryUniverse3D({
           connected,
           focused,
           focusedClusterId: focusedCluster,
+          hasSelection: Boolean(selectedId),
           cameraRadius: radius,
         });
         label.visible = labelVisible;
         labelMaterial.opacity = labelVisible ? labelOpacity(node, radius, selected, hovered, matched, connected) : 0;
-        label.position.set(node.position.x, node.position.y + baseRadius * scale + 5, node.position.z);
+        label.position.set(item.position.x, item.position.y + baseRadius * scale + 5, item.position.z);
         const labelScale = labelScaleForNode(node, radius, selected || hovered || matched);
         label.scale.set(labelScale.width, labelScale.height, 1);
         label.lookAt(camera.position);
@@ -511,7 +567,7 @@ export default function RepositoryUniverse3D({
       }
       const appearance = reducedMotionRef.current || !animateInRef.current ? 1 : easeOutCubic(Math.min(1, elapsed / INITIAL_APPEARANCE_MS));
       for (const item of nodeItems.values()) {
-        const base = item.node.position;
+        const base = item.position;
         const startScale = 0.42;
         item.mesh.position.set(
           base.x * startScale + base.x * (1 - startScale) * appearance,
@@ -599,26 +655,36 @@ export default function RepositoryUniverse3D({
 }
 
 function nodeRadius(node: RepositoryUniverseNode) {
-  if (node.kind === 'repository') return 7.2;
-  if (node.kind === 'folder') return node.importance === 'supporting' ? 4.4 : 3.6;
-  if (node.importance === 'primary') return 4.5;
-  if (node.importance === 'supporting') return 3.2;
-  return 2.05;
+  if (node.kind === 'repository') return 7.8;
+  if (node.kind === 'folder') return node.importance === 'supporting' ? 4.7 : 3.85;
+  if (node.kind === 'concept' || node.kind === 'recommendation') return node.importance === 'primary' ? 4.75 : 3.45;
+  if (node.importance === 'primary') return 4.7;
+  if (node.importance === 'supporting') return 3.15;
+  return 2.15;
 }
 
-function colorForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, hovered?: boolean) {
+function colorForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, hovered?: boolean, connected?: boolean) {
   if (selected) return 0xf8fafc;
   if (hovered) return 0xbfdbfe;
   if (matched) return 0xfacc15;
+  if (connected) return blendHex(repositoryUniverseNodeBaseColor(node), 0xe0f2fe, 0.22);
+  return repositoryUniverseNodeBaseColor(node);
+}
+
+export function repositoryUniverseNodeBaseColor(node: Pick<RepositoryUniverseNode, 'kind' | 'evidenceType' | 'importance' | 'metadata'>) {
   if (node.kind === 'repository') return 0x67e8f9;
-  if (node.kind === 'folder') return 0x60a5fa;
-  if (node.evidenceType === 'heuristic') return 0x94a3b8;
+  if (node.evidenceType === 'missing') return 0xf97316;
+  if (node.evidenceType === 'heuristic') return node.importance === 'background' ? 0x64748b : 0x94a3b8;
+  if (node.kind === 'folder') return 0x38bdf8;
+  if (node.kind === 'concept') return 0xc4b5fd;
+  if (node.kind === 'recommendation') return 0xfbbf24;
   if (node.metadata.category === 'documentation') return 0xa78bfa;
-  if (node.metadata.category === 'agent-instruction') return 0x5eead4;
+  if (node.metadata.category === 'agent-instruction') return 0x2dd4bf;
   if (node.metadata.category === 'test') return 0x86efac;
-  if (node.metadata.category === 'workflow') return 0x38bdf8;
-  if (node.metadata.category === 'configuration') return 0xc4b5fd;
+  if (node.metadata.category === 'workflow') return 0x60a5fa;
+  if (node.metadata.category === 'configuration') return 0x818cf8;
   if (node.metadata.category === 'asset') return 0xf0abfc;
+  if (node.metadata.category === 'generated') return 0x475569;
   return node.importance === 'background' ? 0x64748b : 0x93c5fd;
 }
 
@@ -630,6 +696,26 @@ function emissiveForNode(node: RepositoryUniverseNode, selected?: boolean, match
   return 0x0f172a;
 }
 
+function colorForEdge(edge: RepositoryUniverseEdge, selected?: boolean, focused?: boolean) {
+  if (selected) return 0xe0faff;
+  if (focused) return 0x7dd3fc;
+  if (edge.evidenceType === 'heuristic') return 0x94a3b8;
+  if (edge.relationship === 'contains') return 0x38bdf8;
+  return 0x5eead4;
+}
+
+function colorForCluster(cluster: RepositoryUniverseCluster, active?: boolean, related?: boolean) {
+  if (active) return 0xa5f3fc;
+  if (related) return 0x7dd3fc;
+  if (cluster.category === 'documentation') return 0xa78bfa;
+  if (cluster.id.includes('project-memory')) return 0x2dd4bf;
+  if (cluster.id.includes('verification')) return 0x86efac;
+  if (cluster.id.includes('workflow')) return 0x60a5fa;
+  if (cluster.id.includes('configuration')) return 0x818cf8;
+  if (cluster.id.includes('assets')) return 0xf0abfc;
+  return 0x38bdf8;
+}
+
 function shouldRenderLabel(node: RepositoryUniverseNode, state: {
   selected?: boolean;
   hovered?: boolean;
@@ -637,10 +723,13 @@ function shouldRenderLabel(node: RepositoryUniverseNode, state: {
   connected?: boolean;
   focused?: boolean;
   focusedClusterId?: string | null;
+  hasSelection?: boolean;
   cameraRadius: number;
 }) {
   if (state.selected || state.hovered || state.matched) return true;
   if (node.kind === 'repository') return true;
+  if (state.connected && (state.cameraRadius < 980 || node.importance !== 'background')) return true;
+  if (state.hasSelection && !state.connected && node.importance === 'background') return false;
   if (state.cameraRadius > LABEL_FAR_RADIUS) return node.kind === 'folder' && node.importance === 'supporting';
   if (state.cameraRadius > LABEL_MEDIUM_RADIUS) {
     return node.kind === 'folder' || node.importance === 'primary' || Boolean(state.connected && node.importance !== 'background');
@@ -664,8 +753,13 @@ function labelScaleForNode(node: RepositoryUniverseNode, cameraRadius: number, p
 }
 
 function labelColorForNode(node: RepositoryUniverseNode) {
-  if (node.kind === 'folder') return '#bae6fd';
+  if (node.kind === 'repository') return '#ecfeff';
+  if (node.evidenceType === 'missing') return '#fed7aa';
   if (node.evidenceType === 'heuristic') return '#cbd5e1';
+  if (node.kind === 'folder') return '#bae6fd';
+  if (node.metadata.category === 'documentation') return '#ddd6fe';
+  if (node.metadata.category === 'agent-instruction') return '#ccfbf1';
+  if (node.metadata.category === 'test') return '#dcfce7';
   return '#e5f7ff';
 }
 
@@ -703,6 +797,25 @@ function labelSprite(label: string, color: string) {
 function shortLabel(label: string) {
   if (label.length <= 22) return label;
   return `${label.slice(0, 19)}...`;
+}
+
+function visualPositionFor(position: RepositoryUniversePosition, isRoot = false) {
+  if (isRoot) return new THREE.Vector3(position.x, position.y, position.z);
+  return new THREE.Vector3(position.x * LAYOUT_SPREAD_XZ, position.y * LAYOUT_SPREAD_Y, position.z * LAYOUT_SPREAD_XZ);
+}
+
+function blendHex(first: number, second: number, amount: number) {
+  const clamped = Math.max(0, Math.min(1, amount));
+  const firstRed = (first >> 16) & 255;
+  const firstGreen = (first >> 8) & 255;
+  const firstBlue = first & 255;
+  const secondRed = (second >> 16) & 255;
+  const secondGreen = (second >> 8) & 255;
+  const secondBlue = second & 255;
+  const red = Math.round(firstRed + (secondRed - firstRed) * clamped);
+  const green = Math.round(firstGreen + (secondGreen - firstGreen) * clamped);
+  const blue = Math.round(firstBlue + (secondBlue - firstBlue) * clamped);
+  return (red << 16) | (green << 8) | blue;
 }
 
 function clampCameraState(state: UniverseCameraState): UniverseCameraState {
