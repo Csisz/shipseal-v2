@@ -31,9 +31,11 @@ import {
   chapterForDnaDimension,
   chapterForMentalModelNode,
   repositoryUniverseEdgeVisible,
+  repositoryUniverseFilterCounts,
   repositoryUniverseVisibleNodeIds,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
+  type RepositoryUniverseFilterKey,
   type RepositoryUniverseModel,
   type RepositoryUniverseNode,
   type RepositoryKnowledgeCluster,
@@ -45,6 +47,7 @@ import {
   type WorkspaceStoryDnaDimensionId,
   type WorkspaceStoryMentalNodeId,
 } from '@/lib/workspace';
+import { repositoryUniverseClusterLegend } from '@/lib/workspace/repositoryUniverseVisual';
 import type { UniverseCameraState } from './RepositoryUniverse3D';
 
 const RepositoryUniverse3D = lazy(() => import('./RepositoryUniverse3D'));
@@ -851,6 +854,8 @@ function RepositoryAtlasVisualization({
   const relatedNodeIds = useMemo(() => relatedAtlasNodeIds(atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId), [atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId]);
   const searchMatches = useMemo(() => matchingAtlasNodeIds(atlas, query), [atlas, query]);
   const universeSearchMatches = useMemo(() => matchingUniverseNodeIds(universe, query), [universe, query]);
+  const universeFilterCounts = useMemo(() => repositoryUniverseFilterCounts(universe), [universe]);
+  const universeClusterLegend = useMemo(() => repositoryUniverseClusterLegend(universe.clusters), [universe.clusters]);
   const visibleNodes = useMemo(() => atlas.nodes.filter(node => nodeVisibleInAtlas(node, filters)), [atlas.nodes, filters]);
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(node => node.id)), [visibleNodes]);
   const visibleEdges = useMemo(
@@ -1048,6 +1053,11 @@ function RepositoryAtlasVisualization({
     setUniverseRetryKey(current => current + 1);
   };
 
+  const toggleFilter = (key: RepositoryUniverseFilterKey) => {
+    if (universeFilterCounts[key] === 0) return;
+    setFilters(current => ({ ...current, [key]: !current[key] }));
+  };
+
   const setScale = (next: number) => {
     setView(current => ({ ...current, scale: clamp(next, 0.55, 1.55) }));
   };
@@ -1177,13 +1187,40 @@ function RepositoryAtlasVisualization({
 
   const atlasFilters = (
     <div className="flex flex-wrap gap-2" aria-label="Repository Atlas filters">
-      <AtlasFilterButton label="Files" active={filters.files} onClick={() => setFilters(current => ({ ...current, files: !current.files }))} />
-      <AtlasFilterButton label="Folders" active={filters.folders} onClick={() => setFilters(current => ({ ...current, folders: !current.folders }))} />
-      <AtlasFilterButton label="Concepts" active={filters.concepts} onClick={() => setFilters(current => ({ ...current, concepts: !current.concepts }))} />
-      <AtlasFilterButton label="Evidence-backed" active={filters.evidence} onClick={() => setFilters(current => ({ ...current, evidence: !current.evidence }))} />
-      <AtlasFilterButton label="Heuristic" active={filters.heuristic} onClick={() => setFilters(current => ({ ...current, heuristic: !current.heuristic }))} />
-      <AtlasFilterButton label="Missing/recommended" active={filters.missing} onClick={() => setFilters(current => ({ ...current, missing: !current.missing }))} />
+      <AtlasFilterButton label="Files" count={universeFilterCounts.files} active={filters.files} zeroDescription="No file entities were produced by this scan." onClick={() => toggleFilter('files')} />
+      <AtlasFilterButton label="Folders" count={universeFilterCounts.folders} active={filters.folders} zeroDescription="No folder entities were produced by this scan." onClick={() => toggleFilter('folders')} />
+      <AtlasFilterButton label="Concepts" count={universeFilterCounts.concepts} active={filters.concepts} zeroDescription="No concept entities were produced by this scan." onClick={() => toggleFilter('concepts')} />
+      <AtlasFilterButton label="Evidence" count={universeFilterCounts.evidence} active={filters.evidence} zeroDescription="No evidence-backed entities were produced by this scan." onClick={() => toggleFilter('evidence')} />
+      <AtlasFilterButton label="Heuristic" count={universeFilterCounts.heuristic} active={filters.heuristic} zeroDescription="No heuristic entities were produced by this scan." onClick={() => toggleFilter('heuristic')} />
+      <AtlasFilterButton label="Proposed" count={universeFilterCounts.missing} active={filters.missing} zeroDescription="No proposed or missing entities were produced by this scan." onClick={() => toggleFilter('missing')} />
     </div>
+  );
+
+  const clusterLegend = viewMode === 'universe3d' && (
+    <details className="group rounded-2xl border border-border/45 bg-background/20 px-3 py-2 text-xs text-muted-foreground">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <span className="font-medium text-foreground">Cluster colors</span>
+        <span>{universeClusterLegend.length.toLocaleString()} clusters</span>
+      </summary>
+      <div className="mt-3 flex flex-wrap gap-2" aria-label="Repository Universe cluster colors">
+        {universeClusterLegend.map(item => (
+          <button
+            key={item.id}
+            type="button"
+            aria-pressed={focusedClusterId === item.id}
+            aria-label={`${item.label} cluster, ${item.nodeCount} entities, ${item.token.label} color`}
+            onClick={() => setFocusedClusterId(current => current === item.id ? null : item.id)}
+            className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              focusedClusterId === item.id ? 'border-primary/45 bg-primary/10 text-primary-glow' : 'border-border/45 bg-background/20 hover:border-primary/35 hover:text-foreground'
+            }`}
+          >
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.token.css }} aria-hidden="true" />
+            <span>{item.label}</span>
+            <span className="text-muted-foreground">{item.nodeCount}</span>
+          </button>
+        ))}
+      </div>
+    </details>
   );
 
   const searchResultList = searchResults.length > 0 && (
@@ -1453,6 +1490,7 @@ function RepositoryAtlasVisualization({
           </div>
 
           <div className="mb-4">{atlasFilters}</div>
+          {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
         </>
       )}
@@ -1491,6 +1529,7 @@ function RepositoryAtlasVisualization({
             {atlasToolbar}
           </div>
           <div className="mb-4">{atlasFilters}</div>
+          {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
           <div className={`grid min-h-0 flex-1 gap-4 ${inspectorCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_220px]' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}`}>
             {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
@@ -1502,17 +1541,42 @@ function RepositoryAtlasVisualization({
   );
 }
 
-function AtlasFilterButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+function AtlasFilterButton({
+  label,
+  count,
+  active,
+  zeroDescription,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  zeroDescription: string;
+  onClick: () => void;
+}) {
+  const unavailable = count === 0;
+  const state = unavailable ? zeroDescription : active ? 'Matching entities are visible.' : 'Matching entities are hidden.';
+  const descriptionId = `repository-filter-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
   return (
     <button
       type="button"
       aria-pressed={active}
+      aria-disabled={unavailable}
+      aria-label={label}
+      aria-describedby={descriptionId}
+      title={state}
       onClick={onClick}
       className={`rounded-full border px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-        active ? 'border-primary/40 bg-primary/10 text-primary-glow' : 'border-border/55 bg-background/20 text-muted-foreground'
+        unavailable
+          ? 'border-border/35 bg-background/10 text-muted-foreground/45'
+          : active
+            ? 'border-primary/40 bg-primary/10 text-primary-glow'
+            : 'border-border/55 bg-background/20 text-muted-foreground'
       }`}
     >
-      {label}
+      <span>{label}</span>
+      <span className="ml-1.5 text-[10px] opacity-70" aria-hidden="true">{count.toLocaleString()}</span>
+      <span id={descriptionId} className="sr-only">{count.toLocaleString()} matching entities. {state}</span>
     </button>
   );
 }
@@ -1639,6 +1703,11 @@ function UniverseInspector({
       {nodeHiddenByFilters && (
         <p className="mt-3 rounded-2xl border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-warning">
           This entity is selected but hidden by the current filters. Re-enable its type or evidence state to show it in the Universe.
+        </p>
+      )}
+      {node && (node.evidenceType === 'missing' || node.kind === 'recommendation') && (
+        <p className="mt-3 rounded-2xl border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-warning">
+          Proposed entity. This does not currently exist as a repository file in the scan.
         </p>
       )}
 

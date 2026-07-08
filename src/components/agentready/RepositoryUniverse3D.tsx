@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { RepositoryUniverseCluster, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
+import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, softenClusterColor, blendHex } from '@/lib/workspace/repositoryUniverseVisual';
 
 export interface UniverseCameraState {
   theta: number;
@@ -219,12 +220,12 @@ export default function RepositoryUniverse3D({
 
     for (const cluster of model.clusters) {
       if (cluster.id === 'cluster:repository') continue;
-      const ringRadius = Math.max(58, Math.min(245, cluster.radius * 1.18));
-      const geometry = new THREE.RingGeometry(ringRadius * 0.72, ringRadius, 96);
+      const ringRadius = Math.max(48, Math.min(190, cluster.radius * 0.94));
+      const geometry = new THREE.RingGeometry(ringRadius * 0.82, ringRadius, 96);
       const material = new THREE.MeshBasicMaterial({
         color: colorForCluster(cluster),
         transparent: true,
-        opacity: 0.04,
+        opacity: 0.018,
         depthWrite: false,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
@@ -265,6 +266,7 @@ export default function RepositoryUniverse3D({
         roughness: 0.38,
         transparent: true,
         opacity: 0.9,
+        wireframe: node.evidenceType === 'missing' || node.kind === 'recommendation',
       });
       const mesh = new THREE.Mesh(sphereFor(baseRadius), material);
       mesh.position.copy(position);
@@ -480,12 +482,12 @@ export default function RepositoryUniverse3D({
         const related = selectedRelatedClusterIds.has(item.cluster.id);
         item.ring.visible = true;
         item.ring.material.opacity = active
-          ? 0.16
+          ? 0.09
           : related
-            ? 0.085
+            ? 0.045
             : focusedCluster || selectedId
-              ? 0.028
-              : 0.055;
+              ? 0.012
+              : 0.022;
         item.ring.material.color.setHex(colorForCluster(item.cluster, active, related));
       }
 
@@ -498,12 +500,12 @@ export default function RepositoryUniverse3D({
         line.material.opacity = !visible
           ? 0
           : directlySelected
-            ? 0.74
+            ? edge.evidenceType === 'heuristic' ? 0.38 : 0.56
             : focused
-              ? 0.34
+              ? 0.25
               : edge.relationship === 'contains'
-                ? selectedId || focusedCluster ? 0.045 : 0.06
-                : selectedId || focusedCluster ? 0.11 : 0.14;
+                ? selectedId || focusedCluster ? 0.035 : 0.05
+                : selectedId || focusedCluster ? 0.08 : 0.12;
         line.material.color.setHex(colorForEdge(edge, directlySelected, focused));
       }
 
@@ -526,11 +528,12 @@ export default function RepositoryUniverse3D({
         mesh.material.color.setHex(colorForNode(node, selected, matched, hovered, connected));
         mesh.material.emissive.setHex(emissiveForNode(node, selected, matched, hovered));
         mesh.material.emissiveIntensity = selected ? 1.25 : hovered || matched ? 0.78 : connected ? 0.54 : node.importance === 'primary' ? 0.32 : 0.09;
+        mesh.material.wireframe = node.evidenceType === 'missing' || node.kind === 'recommendation';
         mesh.scale.setScalar(scale);
 
         halo.visible = visible && (selected || hovered || matched || connected);
         halo.material.opacity = selected ? 0.42 : hovered ? 0.24 : matched ? 0.2 : connected ? 0.105 : 0;
-        halo.material.color.setHex(selected ? 0xe0faff : connected ? 0x7dd3fc : 0x67e8f9);
+        halo.material.color.setHex(selected ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.36) : connected ? repositoryUniverseNodeBaseColor(node) : 0x67e8f9);
         halo.scale.setScalar(selected ? 1.34 : connected ? 1.14 : 1);
 
         const labelVisible = visible && shouldRenderLabel(node, {
@@ -664,28 +667,18 @@ function nodeRadius(node: RepositoryUniverseNode) {
 }
 
 function colorForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, hovered?: boolean, connected?: boolean) {
-  if (selected) return 0xf8fafc;
-  if (hovered) return 0xbfdbfe;
-  if (matched) return 0xfacc15;
-  if (connected) return blendHex(repositoryUniverseNodeBaseColor(node), 0xe0f2fe, 0.22);
+  if (selected) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.44);
+  if (hovered) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.34);
+  if (matched) return blendHex(repositoryUniverseNodeBaseColor(node), 0xfacc15, 0.22);
+  if (connected) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.2);
   return repositoryUniverseNodeBaseColor(node);
 }
 
-export function repositoryUniverseNodeBaseColor(node: Pick<RepositoryUniverseNode, 'kind' | 'evidenceType' | 'importance' | 'metadata'>) {
-  if (node.kind === 'repository') return 0x67e8f9;
-  if (node.evidenceType === 'missing') return 0xf97316;
-  if (node.evidenceType === 'heuristic') return node.importance === 'background' ? 0x64748b : 0x94a3b8;
-  if (node.kind === 'folder') return 0x38bdf8;
-  if (node.kind === 'concept') return 0xc4b5fd;
-  if (node.kind === 'recommendation') return 0xfbbf24;
-  if (node.metadata.category === 'documentation') return 0xa78bfa;
-  if (node.metadata.category === 'agent-instruction') return 0x2dd4bf;
-  if (node.metadata.category === 'test') return 0x86efac;
-  if (node.metadata.category === 'workflow') return 0x60a5fa;
-  if (node.metadata.category === 'configuration') return 0x818cf8;
-  if (node.metadata.category === 'asset') return 0xf0abfc;
-  if (node.metadata.category === 'generated') return 0x475569;
-  return node.importance === 'background' ? 0x64748b : 0x93c5fd;
+export function repositoryUniverseNodeBaseColor(node: Pick<RepositoryUniverseNode, 'clusterId' | 'evidenceType' | 'importance'>) {
+  const base = repositoryUniverseNodeClusterToken(node).hex;
+  if (node.evidenceType === 'heuristic') return softenClusterColor(base, node.importance === 'background' ? 0.46 : 0.28);
+  if (node.evidenceType === 'missing') return brightenClusterColor(base, 0.18);
+  return node.importance === 'background' ? softenClusterColor(base, 0.24) : base;
 }
 
 function emissiveForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, hovered?: boolean) {
@@ -697,7 +690,7 @@ function emissiveForNode(node: RepositoryUniverseNode, selected?: boolean, match
 }
 
 function colorForEdge(edge: RepositoryUniverseEdge, selected?: boolean, focused?: boolean) {
-  if (selected) return 0xe0faff;
+  if (selected) return edge.evidenceType === 'heuristic' ? 0x94a3b8 : 0x9bdcf3;
   if (focused) return 0x7dd3fc;
   if (edge.evidenceType === 'heuristic') return 0x94a3b8;
   if (edge.relationship === 'contains') return 0x38bdf8;
@@ -705,15 +698,10 @@ function colorForEdge(edge: RepositoryUniverseEdge, selected?: boolean, focused?
 }
 
 function colorForCluster(cluster: RepositoryUniverseCluster, active?: boolean, related?: boolean) {
-  if (active) return 0xa5f3fc;
-  if (related) return 0x7dd3fc;
-  if (cluster.category === 'documentation') return 0xa78bfa;
-  if (cluster.id.includes('project-memory')) return 0x2dd4bf;
-  if (cluster.id.includes('verification')) return 0x86efac;
-  if (cluster.id.includes('workflow')) return 0x60a5fa;
-  if (cluster.id.includes('configuration')) return 0x818cf8;
-  if (cluster.id.includes('assets')) return 0xf0abfc;
-  return 0x38bdf8;
+  const base = repositoryUniverseClusterToken(cluster.id).hex;
+  if (active) return brightenClusterColor(base, 0.26);
+  if (related) return brightenClusterColor(base, 0.14);
+  return base;
 }
 
 function shouldRenderLabel(node: RepositoryUniverseNode, state: {
@@ -756,10 +744,6 @@ function labelColorForNode(node: RepositoryUniverseNode) {
   if (node.kind === 'repository') return '#ecfeff';
   if (node.evidenceType === 'missing') return '#fed7aa';
   if (node.evidenceType === 'heuristic') return '#cbd5e1';
-  if (node.kind === 'folder') return '#bae6fd';
-  if (node.metadata.category === 'documentation') return '#ddd6fe';
-  if (node.metadata.category === 'agent-instruction') return '#ccfbf1';
-  if (node.metadata.category === 'test') return '#dcfce7';
   return '#e5f7ff';
 }
 
@@ -802,20 +786,6 @@ function shortLabel(label: string) {
 function visualPositionFor(position: RepositoryUniversePosition, isRoot = false) {
   if (isRoot) return new THREE.Vector3(position.x, position.y, position.z);
   return new THREE.Vector3(position.x * LAYOUT_SPREAD_XZ, position.y * LAYOUT_SPREAD_Y, position.z * LAYOUT_SPREAD_XZ);
-}
-
-function blendHex(first: number, second: number, amount: number) {
-  const clamped = Math.max(0, Math.min(1, amount));
-  const firstRed = (first >> 16) & 255;
-  const firstGreen = (first >> 8) & 255;
-  const firstBlue = first & 255;
-  const secondRed = (second >> 16) & 255;
-  const secondGreen = (second >> 8) & 255;
-  const secondBlue = second & 255;
-  const red = Math.round(firstRed + (secondRed - firstRed) * clamped);
-  const green = Math.round(firstGreen + (secondGreen - firstGreen) * clamped);
-  const blue = Math.round(firstBlue + (secondBlue - firstBlue) * clamped);
-  return (red << 16) | (green << 8) | blue;
 }
 
 function clampCameraState(state: UniverseCameraState): UniverseCameraState {

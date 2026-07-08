@@ -130,6 +130,10 @@ export interface RepositoryUniverseFilters {
   missing: boolean;
 }
 
+export type RepositoryUniverseFilterKey = keyof RepositoryUniverseFilters;
+
+export type RepositoryUniverseFilterCounts = Record<RepositoryUniverseFilterKey, number>;
+
 export const DEFAULT_REPOSITORY_UNIVERSE_FILTERS: RepositoryUniverseFilters = {
   files: true,
   folders: true,
@@ -397,6 +401,37 @@ export function repositoryUniverseVisibleNodeIds(model: RepositoryUniverseModel,
 
 export function repositoryUniverseEdgeVisible(edge: RepositoryUniverseEdge, visibleNodeIds: Set<string>) {
   return visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target);
+}
+
+export function repositoryUniverseFilterCounts(model: RepositoryUniverseModel): RepositoryUniverseFilterCounts {
+  const counts: RepositoryUniverseFilterCounts = {
+    files: 0,
+    folders: 0,
+    concepts: 0,
+    evidence: 0,
+    heuristic: 0,
+    missing: 0,
+  };
+
+  for (const node of model.nodes) {
+    if (node.id === model.rootNodeId || node.kind === 'repository') continue;
+    for (const key of repositoryUniverseFilterKeysForNode(node)) {
+      counts[key] += 1;
+    }
+  }
+
+  return counts;
+}
+
+export function repositoryUniverseFilterKeysForNode(node: RepositoryUniverseNode): RepositoryUniverseFilterKey[] {
+  const keys: RepositoryUniverseFilterKey[] = [];
+  if (node.kind === 'file') keys.push('files');
+  if (node.kind === 'folder') keys.push('folders');
+  if (node.kind === 'concept' || node.kind === 'workflow' || node.kind === 'recommendation') keys.push('concepts');
+  if (node.evidenceType === 'evidence') keys.push('evidence');
+  if (node.evidenceType === 'heuristic') keys.push('heuristic');
+  if (node.evidenceType === 'missing' || node.kind === 'recommendation') keys.push('missing');
+  return keys;
 }
 
 function normalizedAnalyzedFiles(report: ReadinessReport): RepoFileSummary[] {

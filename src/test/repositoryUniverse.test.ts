@@ -5,8 +5,10 @@ import {
   buildRepositoryAtlasModel,
   buildRepositoryUniverseModel,
   repositoryUniverseEdgeVisible,
+  repositoryUniverseFilterCounts,
   repositoryUniverseVisibleNodeIds,
 } from '@/lib/workspace';
+import { repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken } from '@/lib/workspace/repositoryUniverseVisual';
 
 function reportWithFiles() {
   return buildReport({
@@ -164,5 +166,89 @@ describe('Repository Universe model', () => {
       return !node || node.id === universe.rootNodeId || node.evidenceType !== 'evidence';
     })).toBe(true);
     expect(withoutHeuristic.size).toBeLessThanOrEqual(universe.nodes.length);
+  });
+
+  it('reports filter counts from real graph entities without fabricating zero-state nodes', () => {
+    const universe = buildRepositoryUniverseModel(reportWithFiles());
+    const counts = repositoryUniverseFilterCounts(universe);
+
+    expect(counts.files).toBe(universe.nodes.filter(node => node.kind === 'file').length);
+    expect(counts.folders).toBe(universe.nodes.filter(node => node.kind === 'folder').length);
+    expect(counts.concepts).toBe(universe.nodes.filter(node => node.kind === 'concept' || node.kind === 'workflow' || node.kind === 'recommendation').length);
+    expect(counts.evidence).toBe(universe.nodes.filter(node => node.id !== universe.rootNodeId && node.kind !== 'repository' && node.evidenceType === 'evidence').length);
+    expect(counts.missing).toBe(0);
+    expect(universe.nodes.every(node => node.evidenceType !== 'missing' && node.kind !== 'recommendation')).toBe(true);
+  });
+
+  it('applies entity-kind filters and zero-count filters without changing the canonical graph', () => {
+    const universe = buildRepositoryUniverseModel(reportWithFiles());
+    const counts = repositoryUniverseFilterCounts(universe);
+    const beforeNodeIds = universe.nodes.map(node => node.id);
+    const withoutFolders = repositoryUniverseVisibleNodeIds(universe, { ...DEFAULT_REPOSITORY_UNIVERSE_FILTERS, folders: false });
+    const withoutConcepts = repositoryUniverseVisibleNodeIds(universe, { ...DEFAULT_REPOSITORY_UNIVERSE_FILTERS, concepts: false });
+    const withoutHeuristic = repositoryUniverseVisibleNodeIds(universe, { ...DEFAULT_REPOSITORY_UNIVERSE_FILTERS, heuristic: false });
+    const withoutMissing = repositoryUniverseVisibleNodeIds(universe, { ...DEFAULT_REPOSITORY_UNIVERSE_FILTERS, missing: false });
+
+    expect(counts.folders).toBeGreaterThan(0);
+    expect([...withoutFolders].every(id => universe.nodes.find(node => node.id === id)?.kind !== 'folder')).toBe(true);
+    expect(counts.concepts).toBeGreaterThan(0);
+    expect([...withoutConcepts].every(id => !['concept', 'workflow', 'recommendation'].includes(universe.nodes.find(node => node.id === id)?.kind || ''))).toBe(true);
+    expect(counts.heuristic).toBe(0);
+    expect(withoutHeuristic.size).toBe(universe.nodes.length);
+    expect(counts.missing).toBe(0);
+    expect(withoutMissing.size).toBe(universe.nodes.length);
+    expect(universe.nodes.map(node => node.id)).toEqual(beforeNodeIds);
+  });
+
+  it('applies heuristic and proposed filters when matching entities exist', () => {
+    const universe = buildRepositoryUniverseModel(reportWithFiles());
+    const heuristicId = 'concept:heuristic-test';
+    const proposedId = 'recommendation:proposed-test';
+    const withStates = {
+      ...universe,
+      nodes: [
+        ...universe.nodes,
+        {
+          ...universe.nodes[0],
+          id: heuristicId,
+          kind: 'concept' as const,
+          label: 'Heuristic entity',
+          clusterId: 'cluster:context',
+          evidenceType: 'heuristic' as const,
+          parentId: undefined,
+        },
+        {
+          ...universe.nodes[0],
+          id: proposedId,
+          kind: 'recommendation' as const,
+          label: 'Proposed entity',
+          clusterId: 'cluster:context',
+          evidenceType: 'missing' as const,
+          parentId: undefined,
+        },
+      ],
+    };
+    const counts = repositoryUniverseFilterCounts(withStates);
+    const withoutHeuristic = repositoryUniverseVisibleNodeIds(withStates, { ...DEFAULT_REPOSITORY_UNIVERSE_FILTERS, heuristic: false });
+    const withoutMissing = repositoryUniverseVisibleNodeIds(withStates, { ...DEFAULT_REPOSITORY_UNIVERSE_FILTERS, missing: false });
+
+    expect(counts.heuristic).toBe(1);
+    expect(counts.missing).toBe(1);
+    expect(withoutHeuristic.has(heuristicId)).toBe(false);
+    expect(withoutMissing.has(proposedId)).toBe(false);
+    expect(withStates.nodes.some(node => node.id === heuristicId)).toBe(true);
+    expect(withStates.nodes.some(node => node.id === proposedId)).toBe(true);
+  });
+
+  it('keeps cluster color assignment deterministic and shared across same-cluster nodes', () => {
+    const universe = buildRepositoryUniverseModel(reportWithFiles());
+    const documentationNodes = universe.nodes.filter(node => node.clusterId === 'cluster:documentation');
+    const sourceNodes = universe.nodes.filter(node => node.clusterId.startsWith('cluster:src'));
+
+    expect(repositoryUniverseClusterToken('cluster:documentation')).toEqual(repositoryUniverseClusterToken('cluster:documentation'));
+    expect(new Set(documentationNodes.map(node => repositoryUniverseNodeClusterToken(node).hex)).size).toBe(1);
+    if (sourceNodes.length) {
+      expect(repositoryUniverseNodeClusterToken(documentationNodes[0]).hex).not.toBe(repositoryUniverseNodeClusterToken(sourceNodes[0]).hex);
+    }
   });
 });

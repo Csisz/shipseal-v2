@@ -15,6 +15,8 @@ export {
   DEFAULT_REPOSITORY_UNIVERSE_FILTERS,
   buildRepositoryUniverseModel,
   repositoryUniverseEdgeVisible,
+  repositoryUniverseFilterCounts,
+  repositoryUniverseFilterKeysForNode,
   repositoryUniverseNodeVisible,
   repositoryUniverseVisibleNodeIds,
 } from './repositoryUniverse';
@@ -56,6 +58,8 @@ export type {
   RepositoryUniverseEdge,
   RepositoryUniverseFileCategory,
   RepositoryUniverseFilters,
+  RepositoryUniverseFilterCounts,
+  RepositoryUniverseFilterKey,
   RepositoryUniverseFileRecord,
   RepositoryUniverseImportance,
   RepositoryUniverseModel,

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel } from '@/components/agentready/RepositoryUniverse3D';
+import { brightenClusterColor, repositoryUniverseClusterToken } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryUniverseNode } from '@/lib/workspace';
 
 function node(overrides: Partial<RepositoryUniverseNode>) {
@@ -32,12 +33,15 @@ describe('Repository Universe 3D labels', () => {
     expect(repositoryUniverseNodeDisplayLabel({ id: '', label: '', path: '' })).toBe('Unknown repository entity');
   });
 
-  it('keeps Repository Universe colors tied to evidence and repository role', () => {
-    expect(repositoryUniverseNodeBaseColor(node({ kind: 'repository', metadata: {} }))).toBe(0x67e8f9);
-    expect(repositoryUniverseNodeBaseColor(node({ metadata: { category: 'documentation' } }))).toBe(0xa78bfa);
-    expect(repositoryUniverseNodeBaseColor(node({ metadata: { category: 'agent-instruction' } }))).toBe(0x2dd4bf);
-    expect(repositoryUniverseNodeBaseColor(node({ metadata: { category: 'test' } }))).toBe(0x86efac);
-    expect(repositoryUniverseNodeBaseColor(node({ evidenceType: 'heuristic', metadata: { category: 'source' } }))).toBe(0x94a3b8);
-    expect(repositoryUniverseNodeBaseColor(node({ evidenceType: 'missing', metadata: { category: 'source' } }))).toBe(0xf97316);
+  it('keeps Repository Universe colors tied to stable cluster membership', () => {
+    const documentation = node({ clusterId: 'cluster:documentation', metadata: { category: 'documentation' } });
+    const documentationFolder = node({ kind: 'folder', clusterId: 'cluster:documentation', metadata: { category: 'documentation' } });
+    const memory = node({ clusterId: 'cluster:project-memory', metadata: { category: 'agent-instruction' } });
+
+    expect(repositoryUniverseClusterToken('cluster:documentation')).toEqual(repositoryUniverseClusterToken('cluster:documentation'));
+    expect(repositoryUniverseNodeBaseColor(documentation)).toBe(repositoryUniverseNodeBaseColor(documentationFolder));
+    expect(repositoryUniverseNodeBaseColor(documentation)).not.toBe(repositoryUniverseNodeBaseColor(memory));
+    expect(brightenClusterColor(repositoryUniverseNodeBaseColor(documentation), 0.44)).not.toBe(0xf8fafc);
+    expect(repositoryUniverseNodeBaseColor(node({ clusterId: 'cluster:documentation', evidenceType: 'heuristic', metadata: { category: 'documentation' } }))).not.toBe(repositoryUniverseNodeBaseColor(documentation));
   });
 });
