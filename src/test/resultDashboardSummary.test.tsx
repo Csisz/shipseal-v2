@@ -10,6 +10,7 @@ const universeMockState = vi.hoisted(() => ({
   selectedNodeIds: [] as Array<string | undefined>,
   cameraRadii: [] as number[],
   visibleNodeCounts: [] as number[],
+  shouldThrow: false,
 }));
 
 vi.mock('@/components/agentready/ScoreGauge', () => ({
@@ -59,6 +60,9 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
     animateIn?: boolean;
     onSelectNode: (nodeId: string) => void;
   }) => {
+    if (universeMockState.shouldThrow) {
+      throw new Error('Simulated Repository Universe render failure');
+    }
     universeMockState.models.push(model);
     universeMockState.selectedNodeIds.push(selectedNodeId);
     universeMockState.cameraRadii.push(cameraState.radius);
@@ -114,6 +118,7 @@ describe('ResultDashboard summary copy', () => {
     universeMockState.selectedNodeIds = [];
     universeMockState.cameraRadii = [];
     universeMockState.visibleNodeCounts = [];
+    universeMockState.shouldThrow = false;
   });
 
   it('uses compact Delivery Pack summary text that does not truncate the old wording', () => {
@@ -250,6 +255,24 @@ describe('ResultDashboard summary copy', () => {
     expect(container.querySelectorAll('[data-testid^="atlas-edge-"]').length).toBeGreaterThan(0);
   });
 
+  it('renders the result workspace when optional complete file inventory is absent', async () => {
+    const legacyReport = { ...buildSampleReport() };
+    delete legacyReport.analyzedFiles;
+
+    render(
+      <ResultDashboard
+        report={legacyReport}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('heading', { name: /What ShipSeal understood/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Export what the workspace produced/i })).toBeInTheDocument();
+  });
+
   it('syncs Repository Atlas selection with Workspace Story chapters', () => {
     render(
       <ResultDashboard
@@ -365,6 +388,62 @@ describe('ResultDashboard summary copy', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Repository Universe fullscreen/i })).not.toBeInTheDocument());
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-selected-node', selectedNodeId || '');
+  });
+
+  it('contains Repository Universe render failures and keeps Atlas 2D accessible', async () => {
+    const onReset = vi.fn();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    universeMockState.shouldThrow = true;
+
+    try {
+      render(
+        <ResultDashboard
+          report={buildSampleReport()}
+          history={[]}
+          onReset={onReset}
+          onClearHistory={vi.fn()}
+        />
+      );
+
+      expect(await screen.findByText(/Repository Universe could not be rendered/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /What ShipSeal understood/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Export what the workspace produced/i })).toBeInTheDocument();
+      expect(screen.getByText(/Your scan and repository evidence are still available/i)).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Open Atlas 2D/i }));
+
+      expect(screen.getByRole('img', { name: /Repository Atlas knowledge graph/i })).toBeInTheDocument();
+      expect(onReset).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('retries a failed Repository Universe without rerunning the scan or replacing the report', async () => {
+    const onReset = vi.fn();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    universeMockState.shouldThrow = true;
+
+    try {
+      render(
+        <ResultDashboard
+          report={buildSampleReport()}
+          history={[]}
+          onReset={onReset}
+          onClearHistory={vi.fn()}
+        />
+      );
+
+      expect(await screen.findByText(/Repository Universe could not be rendered/i)).toBeInTheDocument();
+      universeMockState.shouldThrow = false;
+      fireEvent.click(screen.getByRole('button', { name: /Retry Universe/i }));
+
+      expect(await screen.findByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
+      expect(screen.getAllByText('sample-nextjs-app').length).toBeGreaterThan(0);
+      expect(onReset).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   it('shows the final Repository Atlas layout immediately with reduced motion', () => {

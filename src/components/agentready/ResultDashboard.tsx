@@ -1,5 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
+import type { ReactNode } from 'react';
 import { AlertOctagon, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, Layers, Lightbulb, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { AgentOperatingModeId, AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { evaluateReadiness } from '@/lib/scoring';
@@ -47,6 +48,45 @@ import {
 import type { UniverseCameraState } from './RepositoryUniverse3D';
 
 const RepositoryUniverse3D = lazy(() => import('./RepositoryUniverse3D'));
+
+interface RepositoryUniverseBoundaryProps {
+  resetKey: string;
+  children: ReactNode;
+  fallback: (retry: () => void) => ReactNode;
+}
+
+interface RepositoryUniverseBoundaryState {
+  error: Error | null;
+}
+
+class RepositoryUniverseErrorBoundary extends Component<RepositoryUniverseBoundaryProps, RepositoryUniverseBoundaryState> {
+  state: RepositoryUniverseBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    if (import.meta.env.DEV) {
+      console.error('Repository Universe could not be rendered.', error);
+    }
+  }
+
+  componentDidUpdate(previousProps: RepositoryUniverseBoundaryProps) {
+    if (this.state.error && previousProps.resetKey !== this.props.resetKey) {
+      this.setState({ error: null });
+    }
+  }
+
+  retry = () => {
+    this.setState({ error: null });
+  };
+
+  render() {
+    if (this.state.error) return this.props.fallback(this.retry);
+    return this.props.children;
+  }
+}
 
 interface Props {
   report: ReadinessReport;
@@ -796,6 +836,7 @@ function RepositoryAtlasVisualization({
   const [universeCamera, setUniverseCamera] = useState<UniverseCameraState>(initialUniverseCamera);
   const [universeRotationPaused, setUniverseRotationPaused] = useState(prefersReducedMotion);
   const [universeSceneSettled, setUniverseSceneSettled] = useState(prefersReducedMotion);
+  const [universeRetryKey, setUniverseRetryKey] = useState(0);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; detail: string } | null>(null);
   const [atlasReady, setAtlasReady] = useState(prefersReducedMotion);
   const [navigationActive, setNavigationActive] = useState(false);
@@ -987,6 +1028,15 @@ function RepositoryAtlasVisualization({
     setViewMode(mode);
   };
 
+  const openAtlasFallback = () => {
+    changeViewMode('atlas2d');
+  };
+
+  const retryUniverse = () => {
+    setUniverseRetryKey(current => current + 1);
+    setViewMode('universe3d');
+  };
+
   const resetAtlas = () => {
     setSelectedNodeId(initialNodeId);
     setSelectedUniverseNodeId(universe.rootNodeId);
@@ -995,6 +1045,7 @@ function RepositoryAtlasVisualization({
     setFilters({ files: true, folders: true, concepts: true, evidence: true, heuristic: true, missing: true });
     setView({ x: 0, y: 0, scale: 0.82 });
     setUniverseCamera(initialUniverseCamera);
+    setUniverseRetryKey(current => current + 1);
   };
 
   const setScale = (next: number) => {
@@ -1305,34 +1356,41 @@ function RepositoryAtlasVisualization({
 
   const universeCanvas = (
     <div className={`${fullscreen ? 'min-h-0 flex-1' : 'min-h-[560px]'}`}>
-      <Suspense fallback={
-        <div className="grid h-full min-h-[560px] place-items-center rounded-[1.5rem] border border-primary/15 bg-[#050914] p-8 text-center">
-          <div>
-            <div className="font-display text-xl font-semibold">Opening Repository Universe</div>
-            <p className="mt-2 text-sm text-muted-foreground">Preparing the WebGL knowledge space.</p>
-          </div>
-        </div>
-      }>
-        <RepositoryUniverse3D
-          model={universe}
-          selectedNodeId={selectedUniverseNode?.id}
-          focusedClusterId={focusedClusterId}
-          searchMatchIds={[...universeSearchMatches]}
-          visibleNodeIds={visibleUniverseNodeIdList}
-          visibleEdgeIds={visibleUniverseEdgeIdList}
-          cameraState={universeCamera}
-          rotationPaused={universeRotationPaused || prefersReducedMotion}
-          reducedMotion={prefersReducedMotion}
-          animateIn={!universeSceneSettled}
-          fullscreen={fullscreen}
-          onCameraStateChange={setUniverseCamera}
-          onSelectNode={nodeId => {
-            const node = universe.nodes.find(item => item.id === nodeId);
-            if (node) selectUniverseNode(node);
-          }}
-          onSceneSettled={() => setUniverseSceneSettled(true)}
-        />
-      </Suspense>
+      <RepositoryUniverseErrorBoundary
+        resetKey={`${report.repoName}:${report.scannedAt}:${universeRetryKey}:universe3d`}
+        fallback={(resetBoundary) => (
+          <RepositoryUniverseRecovery
+            onOpenAtlas={openAtlasFallback}
+            onRetry={() => {
+              resetBoundary();
+              retryUniverse();
+            }}
+          />
+        )}
+      >
+        <Suspense fallback={<RepositoryUniverseLoading onOpenAtlas={openAtlasFallback} />}>
+          <RepositoryUniverse3D
+            key={`${report.repoName}:${report.scannedAt}:${universeRetryKey}:${fullscreen ? 'fullscreen' : 'embedded'}`}
+            model={universe}
+            selectedNodeId={selectedUniverseNode?.id}
+            focusedClusterId={focusedClusterId}
+            searchMatchIds={[...universeSearchMatches]}
+            visibleNodeIds={visibleUniverseNodeIdList}
+            visibleEdgeIds={visibleUniverseEdgeIdList}
+            cameraState={universeCamera}
+            rotationPaused={universeRotationPaused || prefersReducedMotion}
+            reducedMotion={prefersReducedMotion}
+            animateIn={!universeSceneSettled}
+            fullscreen={fullscreen}
+            onCameraStateChange={setUniverseCamera}
+            onSelectNode={nodeId => {
+              const node = universe.nodes.find(item => item.id === nodeId);
+              if (node) selectUniverseNode(node);
+            }}
+            onSceneSettled={() => setUniverseSceneSettled(true)}
+          />
+        </Suspense>
+      </RepositoryUniverseErrorBoundary>
     </div>
   );
 
@@ -1456,6 +1514,41 @@ function AtlasFilterButton({ label, active, onClick }: { label: string; active: 
     >
       {label}
     </button>
+  );
+}
+
+function RepositoryUniverseLoading({ onOpenAtlas }: { onOpenAtlas: () => void }) {
+  return (
+    <div className="grid h-full min-h-[560px] place-items-center rounded-[1.5rem] border border-primary/15 bg-[#050914] p-8 text-center">
+      <div className="max-w-md">
+        <div className="font-display text-xl font-semibold">Opening Repository Universe</div>
+        <p className="mt-2 text-sm text-muted-foreground">Preparing the WebGL knowledge space. Your scan is already available.</p>
+        <Button type="button" variant="outline" size="sm" onClick={onOpenAtlas} className="mt-5 border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+          Open Atlas 2D
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function RepositoryUniverseRecovery({ onOpenAtlas, onRetry }: { onOpenAtlas: () => void; onRetry: () => void }) {
+  return (
+    <div className="grid h-full min-h-[560px] place-items-center rounded-[1.5rem] border border-primary/15 bg-[#050914] p-8 text-center">
+      <div className="max-w-md rounded-3xl border border-primary/20 bg-background/35 p-6 shadow-sm shadow-primary/10">
+        <div className="font-display text-xl font-semibold">Repository Universe could not be rendered.</div>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Your scan and repository evidence are still available. Continue in Atlas 2D or retry the 3D view.
+        </p>
+        <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+          <Button type="button" variant="outline" onClick={onOpenAtlas} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+            Open Atlas 2D
+          </Button>
+          <Button type="button" variant="ghost" onClick={onRetry}>
+            Retry Universe
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
