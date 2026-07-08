@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildReport, buildSampleReport } from '@/lib/readiness';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
@@ -41,6 +41,19 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
 }));
 
 import { ResultDashboard } from '@/components/agentready/ResultDashboard';
+
+function atlasViewport() {
+  return screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
+}
+
+function dispatchAtlasWheel(target: Element, deltaY: number) {
+  const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY });
+  let dispatchResult = true;
+  act(() => {
+    dispatchResult = target.dispatchEvent(event);
+  });
+  return { event, prevented: !dispatchResult };
+}
 
 describe('ResultDashboard summary copy', () => {
   it('uses compact Delivery Pack summary text that does not truncate the old wording', () => {
@@ -246,6 +259,150 @@ describe('ResultDashboard summary copy', () => {
     } finally {
       window.matchMedia = originalMatchMedia;
     }
+  });
+
+  it('keeps embedded Atlas wheel passive until navigation is deliberately active', async () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    const atlas = atlasViewport();
+    const initialScale = atlas.getAttribute('data-scale');
+    const inactiveWheel = dispatchAtlasWheel(atlas, -120);
+
+    expect(inactiveWheel.prevented).toBe(false);
+    expect(atlas).toHaveAttribute('data-navigation-active', 'false');
+    expect(atlas).toHaveAttribute('data-scale', initialScale);
+
+    fireEvent.pointerDown(atlas, { pointerId: 1, clientX: 100, clientY: 100 });
+
+    await waitFor(() => expect(atlas).toHaveAttribute('data-navigation-active', 'true'));
+
+    const activeWheel = dispatchAtlasWheel(atlas, -120);
+
+    expect(activeWheel.prevented).toBe(true);
+    await waitFor(() => expect(atlas.getAttribute('data-scale')).not.toBe(initialScale));
+  });
+
+  it('releases embedded Atlas navigation with Escape', async () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    const atlas = atlasViewport();
+    fireEvent.pointerDown(atlas, { pointerId: 1, clientX: 100, clientY: 100 });
+    await waitFor(() => expect(atlas).toHaveAttribute('data-navigation-active', 'true'));
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => expect(atlas).toHaveAttribute('data-navigation-active', 'false'));
+    expect(screen.getByText(/Click to explore/i)).toBeInTheDocument();
+  });
+
+  it('opens fullscreen Atlas, preserves selected node and pan/zoom state, then exits with Escape', async () => {
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+    const exitFullscreen = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: exitFullscreen,
+    });
+
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('atlas-node-file:documentation:readme.md'));
+    const atlas = atlasViewport();
+    fireEvent.pointerDown(atlas, { pointerId: 1, clientX: 100, clientY: 100 });
+    fireEvent.pointerDown(atlas, { pointerId: 2, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(atlas, { pointerId: 2, clientX: 130, clientY: 122 });
+    fireEvent.pointerUp(atlas, { pointerId: 2, clientX: 130, clientY: 122 });
+    dispatchAtlasWheel(atlas, -120);
+
+    await waitFor(() => expect(atlas.getAttribute('data-scale')).not.toBe('0.82'));
+    const zoomedScale = atlas.getAttribute('data-scale');
+
+    fireEvent.click(screen.getByRole('button', { name: /Fullscreen/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Repository Atlas fullscreen/i });
+    expect(requestFullscreen).toHaveBeenCalled();
+    expect(within(dialog).getAllByText('README.md').length).toBeGreaterThan(0);
+    expect(within(dialog).getByRole('img', { name: /Repository Atlas knowledge graph/i })).toHaveAttribute('data-scale', zoomedScale);
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Repository Atlas fullscreen/i })).not.toBeInTheDocument());
+    expect(screen.getByTestId('atlas-node-file:documentation:readme.md')).toHaveAttribute('aria-pressed', 'true');
+    expect(atlasViewport()).toHaveAttribute('data-scale', zoomedScale);
+  });
+
+  it('keeps fullscreen reset and inspector collapse scoped to Atlas state', async () => {
+    const onReset = vi.fn();
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={onReset}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Fullscreen/i }));
+    const dialog = await screen.findByRole('dialog', { name: /Repository Atlas fullscreen/i });
+    const fullscreenAtlas = within(dialog).getByRole('img', { name: /Repository Atlas knowledge graph/i });
+
+    dispatchAtlasWheel(fullscreenAtlas, -120);
+    await waitFor(() => expect(fullscreenAtlas.getAttribute('data-scale')).not.toBe('0.82'));
+
+    fireEvent.click(within(dialog).getAllByRole('button', { name: /Collapse inspector/i })[0]);
+    expect(within(dialog).getAllByRole('button', { name: /Expand inspector/i }).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(/relationships/i).length).toBeGreaterThan(0);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /Reset view/i }));
+
+    await waitFor(() => expect(fullscreenAtlas).toHaveAttribute('data-scale', '0.82'));
+    expect(onReset).not.toHaveBeenCalled();
+  });
+
+  it('cleans up the Atlas wheel listener on unmount', () => {
+    const addSpy = vi.spyOn(HTMLElement.prototype, 'addEventListener');
+    const removeSpy = vi.spyOn(HTMLElement.prototype, 'removeEventListener');
+
+    const { unmount } = render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(addSpy).toHaveBeenCalledWith('wheel', expect.any(Function), { passive: false });
+
+    unmount();
+
+    expect(removeSpy).toHaveBeenCalledWith('wheel', expect.any(Function));
+    addSpy.mockRestore();
+    removeSpy.mockRestore();
   });
 
   it('keeps the selected Workspace Story chapter through unrelated UI changes', () => {

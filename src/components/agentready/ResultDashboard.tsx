@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
-import { AlertOctagon, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, Layers, Lightbulb, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { AlertOctagon, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, Layers, Lightbulb, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { AgentOperatingModeId, AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { evaluateReadiness } from '@/lib/scoring';
 import { ScoreGauge } from './ScoreGauge';
@@ -763,6 +763,11 @@ function RepositoryAtlasVisualization({
 }) {
   const atlas = useMemo(() => buildRepositoryAtlasModel(report), [report]);
   const prefersReducedMotion = usePrefersReducedMotion();
+  const atlasRootRef = useRef<HTMLElement | null>(null);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const fullscreenLayerRef = useRef<HTMLDivElement | null>(null);
+  const fullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
+  const exitFullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
   const initialNodeId = activeChapter?.knowledgeNodeId || atlas.rootNodeId;
   const [selectedNodeId, setSelectedNodeId] = useState(initialNodeId);
   const [focusedClusterId, setFocusedClusterId] = useState<string | null>(activeChapter ? `cluster:${activeChapter.id}` : null);
@@ -778,7 +783,10 @@ function RepositoryAtlasVisualization({
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.82 });
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; detail: string } | null>(null);
   const [atlasReady, setAtlasReady] = useState(prefersReducedMotion);
-  const dragRef = useRef<{ pointerId: number; x: number; y: number; viewX: number; viewY: number } | null>(null);
+  const [navigationActive, setNavigationActive] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const dragRef = useRef<{ pointerId: number; x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
   const selectedNode = atlas.nodes.find(node => node.id === selectedNodeId) || atlas.nodes.find(node => node.id === initialNodeId) || atlas.nodes[0];
   const activeCluster = focusedClusterId ? atlas.clusters.find(cluster => cluster.id === focusedClusterId) : null;
   const activeChapterNodeId = activeChapter?.knowledgeNodeId;
@@ -790,6 +798,7 @@ function RepositoryAtlasVisualization({
   const searchResults = query.trim()
     ? atlas.nodes.filter(node => searchMatches.has(node.id)).slice(0, 5)
     : [];
+  const atlasNavigationActive = navigationActive || fullscreen;
 
   useEffect(() => {
     setSelectedNodeId(current => {
@@ -816,6 +825,79 @@ function RepositoryAtlasVisualization({
     return () => window.clearTimeout(timer);
   }, [prefersReducedMotion, report.repoName, report.scannedAt]);
 
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+
+    const handleWheel = (event: WheelEvent) => {
+      if (!fullscreen && !navigationActive) return;
+      event.preventDefault();
+      const direction = event.deltaY > 0 ? -0.08 : 0.08;
+      setView(current => ({ ...current, scale: clamp(current.scale + direction, 0.55, 1.55) }));
+    };
+
+    viewport.addEventListener('wheel', handleWheel, { passive: false });
+    return () => viewport.removeEventListener('wheel', handleWheel);
+  }, [fullscreen, navigationActive]);
+
+  useEffect(() => {
+    if (!navigationActive || fullscreen) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!atlasRootRef.current?.contains(event.target as Node)) {
+        setNavigationActive(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [fullscreen, navigationActive]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (tooltip) {
+        setTooltip(null);
+        return;
+      }
+      if (fullscreen) {
+        exitFullscreen();
+        return;
+      }
+      if (navigationActive) {
+        setNavigationActive(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [fullscreen, navigationActive, tooltip]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const layer = fullscreenLayerRef.current;
+    layer?.requestFullscreen?.().catch(() => undefined);
+    window.setTimeout(() => exitFullscreenButtonRef.current?.focus(), 0);
+
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setFullscreen(false);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [fullscreen]);
+
+  useEffect(() => {
+    if (fullscreen) return;
+    fullscreenButtonRef.current?.focus();
+  }, [fullscreen]);
+
   const selectNode = (node: RepositoryAtlasNode) => {
     setSelectedNodeId(node.id);
     if (node.clusterId) setFocusedClusterId(node.clusterId);
@@ -841,20 +923,40 @@ function RepositoryAtlasVisualization({
     setView(current => ({ ...current, scale: clamp(next, 0.55, 1.55) }));
   };
 
+  const enterFullscreen = () => {
+    setNavigationActive(false);
+    setFullscreen(true);
+  };
+
+  const exitFullscreen = useCallback(() => {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => undefined);
+    }
+    setFullscreen(false);
+  }, []);
+
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     if (target.closest('button') || target.closest('input')) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y };
+    if (!fullscreen && !navigationActive) {
+      setNavigationActive(true);
+      return;
+    }
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, viewX: view.x, viewY: view.y, moved: false };
   };
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.x;
+    const deltaY = event.clientY - drag.y;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 4) return;
+    drag.moved = true;
     setView(current => ({
       ...current,
-      x: drag.viewX + event.clientX - drag.x,
-      y: drag.viewY + event.clientY - drag.y,
+      x: drag.viewX + deltaX,
+      y: drag.viewY + deltaY,
     }));
   };
 
@@ -862,221 +964,294 @@ function RepositoryAtlasVisualization({
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
   };
 
-  const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const direction = event.deltaY > 0 ? -0.08 : 0.08;
-    setScale(view.scale + direction);
-  };
+  const atlasToolbar = (
+    <div className="flex flex-wrap items-center gap-2">
+      <label className="relative min-w-[220px] flex-1 xl:flex-none">
+        <span className="sr-only">Search repository atlas</span>
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={event => setQuery(event.target.value)}
+          onFocus={() => setNavigationActive(true)}
+          className="h-9 w-full rounded-full border border-border/60 bg-background/35 pl-8 pr-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/25"
+          placeholder="Search files, paths, roles"
+        />
+      </label>
+      <Button type="button" variant="outline" size="sm" onClick={() => setScale(view.scale + 0.14)} className="border-border/60 bg-background/25" aria-label="Zoom in">
+        <ZoomIn className="h-3.5 w-3.5" />
+      </Button>
+      <Button type="button" variant="outline" size="sm" onClick={() => setScale(view.scale - 0.14)} className="border-border/60 bg-background/25" aria-label="Zoom out">
+        <ZoomOut className="h-3.5 w-3.5" />
+      </Button>
+      <Button type="button" variant="outline" size="sm" onClick={resetAtlas} className="border-border/60 bg-background/25">
+        <Crosshair className="mr-1.5 h-3.5 w-3.5" /> Reset view
+      </Button>
+      {!fullscreen && (
+        <Button ref={fullscreenButtonRef} type="button" variant="outline" size="sm" onClick={enterFullscreen} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+          <Maximize2 className="mr-1.5 h-3.5 w-3.5" /> Fullscreen
+        </Button>
+      )}
+      {fullscreen && (
+        <>
+          <Button type="button" variant="outline" size="sm" onClick={() => setInspectorCollapsed(current => !current)} className="border-border/60 bg-background/25">
+            {inspectorCollapsed ? <PanelRightOpen className="mr-1.5 h-3.5 w-3.5" /> : <PanelRightClose className="mr-1.5 h-3.5 w-3.5" />}
+            {inspectorCollapsed ? 'Expand inspector' : 'Collapse inspector'}
+          </Button>
+          <Button ref={exitFullscreenButtonRef} type="button" variant="outline" size="sm" onClick={exitFullscreen} className="border-primary/45 bg-primary/10 text-primary-glow hover:text-primary-glow">
+            <Minimize2 className="mr-1.5 h-3.5 w-3.5" /> Exit fullscreen
+          </Button>
+        </>
+      )}
+    </div>
+  );
+
+  const atlasFilters = (
+    <div className="flex flex-wrap gap-2" aria-label="Repository Atlas filters">
+      <AtlasFilterButton label="Files" active={filters.files} onClick={() => setFilters(current => ({ ...current, files: !current.files }))} />
+      <AtlasFilterButton label="Folders" active={filters.folders} onClick={() => setFilters(current => ({ ...current, folders: !current.folders }))} />
+      <AtlasFilterButton label="Concepts" active={filters.concepts} onClick={() => setFilters(current => ({ ...current, concepts: !current.concepts }))} />
+      <AtlasFilterButton label="Evidence-backed" active={filters.evidence} onClick={() => setFilters(current => ({ ...current, evidence: !current.evidence }))} />
+      <AtlasFilterButton label="Heuristic" active={filters.heuristic} onClick={() => setFilters(current => ({ ...current, heuristic: !current.heuristic }))} />
+      <AtlasFilterButton label="Missing/recommended" active={filters.missing} onClick={() => setFilters(current => ({ ...current, missing: !current.missing }))} />
+    </div>
+  );
+
+  const searchResultList = searchResults.length > 0 && (
+    <div className="flex flex-wrap gap-2" aria-label="Repository Atlas search results">
+      {searchResults.map(node => (
+        <button
+          key={node.id}
+          type="button"
+          onClick={() => selectNode(node)}
+          className="rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs text-primary-glow transition hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {node.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  const atlasCanvas = (
+    <div
+      ref={viewportRef}
+      className={`relative overflow-hidden rounded-[1.5rem] border border-primary/15 bg-[radial-gradient(circle_at_50%_48%,hsl(var(--primary)/0.16),transparent_34%),linear-gradient(180deg,hsl(var(--background)/0.2),hsl(var(--background)/0.08))] select-none ${fullscreen ? 'min-h-0 flex-1' : 'min-h-[560px]'} ${atlasNavigationActive ? 'touch-none overscroll-contain cursor-grab' : 'touch-pan-y cursor-default'}`}
+      role="img"
+      tabIndex={0}
+      aria-label="Repository Atlas knowledge graph. Select nodes to inspect evidence and relationships."
+      aria-describedby="repository-atlas-navigation-status"
+      data-motion={prefersReducedMotion ? 'reduced' : 'animated'}
+      data-ready={atlasReady ? 'true' : 'false'}
+      data-navigation-active={atlasNavigationActive ? 'true' : 'false'}
+      data-fullscreen={fullscreen ? 'true' : 'false'}
+      data-scale={view.scale.toFixed(2)}
+      onFocusCapture={() => setNavigationActive(true)}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onContextMenu={event => {
+        if (atlasNavigationActive) event.preventDefault();
+      }}
+    >
+      <div
+        className="absolute left-1/2 top-1/2 h-[640px] w-[920px] origin-center transition-transform duration-300"
+        style={{ transform: `translate(calc(-50% + ${view.x}px), calc(-50% + ${view.y}px)) scale(${view.scale})` }}
+      >
+        <svg viewBox="0 0 920 640" className="absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
+          <defs>
+            <linearGradient id="atlas-edge-evidence" x1="0" y1="0" x2="1" y2="1">
+              <stop stopColor="hsl(var(--primary))" stopOpacity="0.72" />
+              <stop offset="1" stopColor="hsl(var(--accent))" stopOpacity="0.36" />
+            </linearGradient>
+          </defs>
+          {visibleEdges.map(edge => {
+            const source = atlas.nodes.find(node => node.id === edge.source);
+            const target = atlas.nodes.find(node => node.id === edge.target);
+            if (!source || !target) return null;
+            const selectedEdge = edge.source === selectedNode?.id || edge.target === selectedNode?.id || edge.source === activeChapterNodeId || edge.target === activeChapterNodeId;
+            return (
+              <line
+                key={edge.id}
+                data-testid={`atlas-edge-${edge.id}`}
+                x1={source.x + 460}
+                y1={source.y + 320}
+                x2={target.x + 460}
+                y2={target.y + 320}
+                stroke={edge.evidenceType === 'evidence' ? 'url(#atlas-edge-evidence)' : 'hsl(var(--muted-foreground))'}
+                strokeWidth={selectedEdge ? 2.6 : edge.evidenceType === 'evidence' ? 1.5 : 1}
+                strokeOpacity={selectedEdge ? 0.9 : 0.34}
+                strokeDasharray={edge.evidenceType === 'heuristic' ? '6 8' : undefined}
+                className="transition-all duration-500"
+              />
+            );
+          })}
+        </svg>
+
+        {atlas.clusters.filter(cluster => cluster.id !== 'cluster:repository').map((cluster, index) => {
+          const focused = focusedClusterId === cluster.id;
+          const storyFocused = activeChapter && cluster.id === `cluster:${activeChapter.id}`;
+          return (
+            <button
+              key={cluster.id}
+              type="button"
+              onClick={() => setFocusedClusterId(cluster.id)}
+              className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border text-left transition-all duration-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                focused
+                  ? 'border-primary/45 bg-primary/10 shadow-sm shadow-primary/20'
+                  : storyFocused
+                    ? 'border-accent/35 bg-accent/10'
+                    : 'border-primary/15 bg-background/5 hover:border-primary/35'
+              } ${!atlasReady && !prefersReducedMotion ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
+              style={{
+                left: cluster.x + 460,
+                top: cluster.y + 320,
+                width: cluster.radius * 2,
+                height: cluster.radius * 2,
+                transitionDelay: prefersReducedMotion ? '0ms' : `${180 + index * 130}ms`,
+              }}
+              aria-label={`${cluster.label} cluster`}
+            >
+              <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full border border-border/50 bg-background/70 px-3 py-1 text-[11px] font-semibold text-foreground shadow-sm">
+                {cluster.category}
+              </span>
+            </button>
+          );
+        })}
+
+        {visibleNodes.map((node, index) => {
+          const selected = selectedNode?.id === node.id;
+          const related = relatedNodeIds.has(node.id);
+          const matched = searchMatches.has(node.id);
+          const dimmed = Boolean((selectedNode || activeChapter || focusedClusterId || query.trim()) && !selected && !related && !matched && node.id !== atlas.rootNodeId);
+          const labelVisible = node.labelPriority !== 'detail' || selected || related || matched || view.scale > 1.05;
+          return (
+            <button
+              key={node.id}
+              type="button"
+              data-testid={`atlas-node-${node.id}`}
+              aria-pressed={selected}
+              aria-label={`${node.label} ${node.kind} ${evidenceStateLabel(node.evidenceType)}`}
+              onClick={() => selectNode(node)}
+              onMouseEnter={event => setTooltip({
+                x: event.clientX,
+                y: event.clientY,
+                label: node.label,
+                detail: `${node.kind} · ${evidenceStateLabel(node.evidenceType)} · ${atlas.edges.filter(edge => edge.source === node.id || edge.target === node.id).length} relationships`,
+              })}
+              onMouseMove={event => setTooltip(current => current ? { ...current, x: event.clientX, y: event.clientY } : current)}
+              onMouseLeave={() => setTooltip(null)}
+              className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-center transition-all duration-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                selected
+                  ? 'z-30 border-primary/75 bg-primary/25 text-primary-glow shadow-glow'
+                  : node.evidenceType === 'evidence'
+                    ? 'z-20 border-primary/45 bg-background/70 text-foreground'
+                    : node.evidenceType === 'missing'
+                      ? 'z-10 border-warning/45 bg-background/45 text-warning'
+                      : 'z-10 border-border/60 bg-background/45 text-muted-foreground'
+              } ${matched ? 'ring-2 ring-accent/55' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
+              style={{
+                left: node.x + 460,
+                top: node.y + 320,
+                width: node.radius * 2,
+                height: node.radius * 2,
+                transitionDelay: prefersReducedMotion ? '0ms' : `${node.kind === 'repository' ? 0 : 720 + index * 38}ms`,
+              }}
+            >
+              <span className={`${node.kind === 'repository' ? 'h-3 w-3' : 'h-2 w-2'} rounded-full ${atlasNodeDotClass(node)}`} />
+              {labelVisible && (
+                <span className={`pointer-events-none absolute left-1/2 top-[calc(100%+7px)] max-w-[150px] -translate-x-1/2 rounded-full border border-border/45 bg-background/75 px-2 py-1 text-[10px] font-medium leading-tight shadow-sm ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {shortAtlasLabel(node.label)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {tooltip && (
+        <div
+          role="tooltip"
+          className="pointer-events-none fixed z-50 max-w-[220px] rounded-xl border border-border/60 bg-background/95 px-3 py-2 text-xs shadow-xl"
+          style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
+        >
+          <div className="font-semibold text-foreground">{tooltip.label}</div>
+          <div className="mt-1 text-muted-foreground">{tooltip.detail}</div>
+        </div>
+      )}
+    </div>
+  );
+
+  const inspector = (
+    <AtlasInspector
+      atlas={atlas}
+      node={selectedNode}
+      cluster={activeCluster}
+      activeChapter={activeChapter}
+      collapsed={fullscreen && inspectorCollapsed}
+      onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
+      onFocusCluster={() => selectedNode?.clusterId && setFocusedClusterId(selectedNode.clusterId)}
+      onClearFocus={() => setFocusedClusterId(null)}
+      onSelectNode={selectNode}
+    />
+  );
 
   return (
-    <section className="relative rounded-[1.75rem] border border-primary/25 bg-[hsl(224_31%_6%)] p-4 shadow-sm shadow-primary/10 md:p-5" aria-labelledby="repository-atlas-heading">
+    <section ref={atlasRootRef} className="relative rounded-[1.75rem] border border-primary/25 bg-[hsl(224_31%_6%)] p-4 shadow-sm shadow-primary/10 md:p-5" aria-labelledby="repository-atlas-heading">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Atlas</div>
           <h2 id="repository-atlas-heading" className="mt-1 font-display text-2xl font-semibold">Explore the repository knowledge map</h2>
           <p className="mt-1 text-sm text-muted-foreground">{atlas.statusNote}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="relative min-w-[220px] flex-1 xl:flex-none">
-            <span className="sr-only">Search repository atlas</span>
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-              className="h-9 w-full rounded-full border border-border/60 bg-background/35 pl-8 pr-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/25"
-              placeholder="Search files, paths, roles"
-            />
-          </label>
-          <Button type="button" variant="outline" size="sm" onClick={() => setScale(view.scale + 0.14)} className="border-border/60 bg-background/25" aria-label="Zoom in">
-            <ZoomIn className="h-3.5 w-3.5" />
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setScale(view.scale - 0.14)} className="border-border/60 bg-background/25" aria-label="Zoom out">
-            <ZoomOut className="h-3.5 w-3.5" />
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={resetAtlas} className="border-border/60 bg-background/25">
-            <Crosshair className="mr-1.5 h-3.5 w-3.5" /> Reset view
-          </Button>
-        </div>
+        {!fullscreen && atlasToolbar}
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2" aria-label="Repository Atlas filters">
-        <AtlasFilterButton label="Files" active={filters.files} onClick={() => setFilters(current => ({ ...current, files: !current.files }))} />
-        <AtlasFilterButton label="Folders" active={filters.folders} onClick={() => setFilters(current => ({ ...current, folders: !current.folders }))} />
-        <AtlasFilterButton label="Concepts" active={filters.concepts} onClick={() => setFilters(current => ({ ...current, concepts: !current.concepts }))} />
-        <AtlasFilterButton label="Evidence-backed" active={filters.evidence} onClick={() => setFilters(current => ({ ...current, evidence: !current.evidence }))} />
-        <AtlasFilterButton label="Heuristic" active={filters.heuristic} onClick={() => setFilters(current => ({ ...current, heuristic: !current.heuristic }))} />
-        <AtlasFilterButton label="Missing/recommended" active={filters.missing} onClick={() => setFilters(current => ({ ...current, missing: !current.missing }))} />
-      </div>
-
-      {searchResults.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2" aria-label="Repository Atlas search results">
-          {searchResults.map(node => (
-            <button
-              key={node.id}
-              type="button"
-              onClick={() => selectNode(node)}
-              className="rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs text-primary-glow transition hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {node.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div
-          className="relative min-h-[560px] overflow-hidden rounded-[1.5rem] border border-primary/15 bg-[radial-gradient(circle_at_50%_48%,hsl(var(--primary)/0.16),transparent_34%),linear-gradient(180deg,hsl(var(--background)/0.2),hsl(var(--background)/0.08))] select-none touch-none"
-          role="img"
-          aria-label="Repository Atlas knowledge graph. Select nodes to inspect evidence and relationships."
-          data-motion={prefersReducedMotion ? 'reduced' : 'animated'}
-          data-ready={atlasReady ? 'true' : 'false'}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onWheel={handleWheel}
-        >
-          <div
-            className="absolute left-1/2 top-1/2 h-[640px] w-[920px] origin-center transition-transform duration-300"
-            style={{ transform: `translate(calc(-50% + ${view.x}px), calc(-50% + ${view.y}px)) scale(${view.scale})` }}
-          >
-            <svg viewBox="0 0 920 640" className="absolute inset-0 h-full w-full overflow-visible" aria-hidden="true">
-              <defs>
-                <linearGradient id="atlas-edge-evidence" x1="0" y1="0" x2="1" y2="1">
-                  <stop stopColor="hsl(var(--primary))" stopOpacity="0.72" />
-                  <stop offset="1" stopColor="hsl(var(--accent))" stopOpacity="0.36" />
-                </linearGradient>
-              </defs>
-              {visibleEdges.map(edge => {
-                const source = atlas.nodes.find(node => node.id === edge.source);
-                const target = atlas.nodes.find(node => node.id === edge.target);
-                if (!source || !target) return null;
-                const selectedEdge = edge.source === selectedNode?.id || edge.target === selectedNode?.id || edge.source === activeChapterNodeId || edge.target === activeChapterNodeId;
-                return (
-                  <line
-                    key={edge.id}
-                    data-testid={`atlas-edge-${edge.id}`}
-                    x1={source.x + 460}
-                    y1={source.y + 320}
-                    x2={target.x + 460}
-                    y2={target.y + 320}
-                    stroke={edge.evidenceType === 'evidence' ? 'url(#atlas-edge-evidence)' : 'hsl(var(--muted-foreground))'}
-                    strokeWidth={selectedEdge ? 2.6 : edge.evidenceType === 'evidence' ? 1.5 : 1}
-                    strokeOpacity={selectedEdge ? 0.9 : 0.34}
-                    strokeDasharray={edge.evidenceType === 'heuristic' ? '6 8' : undefined}
-                    className="transition-all duration-500"
-                  />
-                );
-              })}
-            </svg>
-
-            {atlas.clusters.filter(cluster => cluster.id !== 'cluster:repository').map((cluster, index) => {
-              const focused = focusedClusterId === cluster.id;
-              const storyFocused = activeChapter && cluster.id === `cluster:${activeChapter.id}`;
-              return (
-                <button
-                  key={cluster.id}
-                  type="button"
-                  onClick={() => setFocusedClusterId(cluster.id)}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border text-left transition-all duration-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    focused
-                      ? 'border-primary/45 bg-primary/10 shadow-sm shadow-primary/20'
-                      : storyFocused
-                        ? 'border-accent/35 bg-accent/10'
-                        : 'border-primary/15 bg-background/5 hover:border-primary/35'
-                  } ${!atlasReady && !prefersReducedMotion ? 'opacity-0 scale-95' : 'opacity-100 scale-100'}`}
-                  style={{
-                    left: cluster.x + 460,
-                    top: cluster.y + 320,
-                    width: cluster.radius * 2,
-                    height: cluster.radius * 2,
-                    transitionDelay: prefersReducedMotion ? '0ms' : `${180 + index * 130}ms`,
-                  }}
-                  aria-label={`${cluster.label} cluster`}
-                >
-                  <span className="absolute left-1/2 top-3 -translate-x-1/2 whitespace-nowrap rounded-full border border-border/50 bg-background/70 px-3 py-1 text-[11px] font-semibold text-foreground shadow-sm">
-                    {cluster.category}
-                  </span>
-                </button>
-              );
-            })}
-
-            {visibleNodes.map((node, index) => {
-              const selected = selectedNode?.id === node.id;
-              const related = relatedNodeIds.has(node.id);
-              const matched = searchMatches.has(node.id);
-              const dimmed = Boolean((selectedNode || activeChapter || focusedClusterId || query.trim()) && !selected && !related && !matched && node.id !== atlas.rootNodeId);
-              const labelVisible = node.labelPriority !== 'detail' || selected || related || matched || view.scale > 1.05;
-              return (
-                <button
-                  key={node.id}
-                  type="button"
-                  data-testid={`atlas-node-${node.id}`}
-                  aria-pressed={selected}
-                  aria-label={`${node.label} ${node.kind} ${evidenceStateLabel(node.evidenceType)}`}
-                  onClick={() => selectNode(node)}
-                  onMouseEnter={event => setTooltip({
-                    x: event.clientX,
-                    y: event.clientY,
-                    label: node.label,
-                    detail: `${node.kind} · ${evidenceStateLabel(node.evidenceType)} · ${atlas.edges.filter(edge => edge.source === node.id || edge.target === node.id).length} relationships`,
-                  })}
-                  onMouseMove={event => setTooltip(current => current ? { ...current, x: event.clientX, y: event.clientY } : current)}
-                  onMouseLeave={() => setTooltip(null)}
-                  className={`absolute flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-center transition-all duration-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    selected
-                      ? 'z-30 border-primary/75 bg-primary/25 text-primary-glow shadow-glow'
-                      : node.evidenceType === 'evidence'
-                        ? 'z-20 border-primary/45 bg-background/70 text-foreground'
-                        : node.evidenceType === 'missing'
-                          ? 'z-10 border-warning/45 bg-background/45 text-warning'
-                          : 'z-10 border-border/60 bg-background/45 text-muted-foreground'
-                  } ${matched ? 'ring-2 ring-accent/55' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
-                  style={{
-                    left: node.x + 460,
-                    top: node.y + 320,
-                    width: node.radius * 2,
-                    height: node.radius * 2,
-                    transitionDelay: prefersReducedMotion ? '0ms' : `${node.kind === 'repository' ? 0 : 720 + index * 38}ms`,
-                  }}
-                >
-                  <span className={`${node.kind === 'repository' ? 'h-3 w-3' : 'h-2 w-2'} rounded-full ${atlasNodeDotClass(node)}`} />
-                  {labelVisible && (
-                    <span className={`pointer-events-none absolute left-1/2 top-[calc(100%+7px)] max-w-[150px] -translate-x-1/2 rounded-full border border-border/45 bg-background/75 px-2 py-1 text-[10px] font-medium leading-tight shadow-sm ${selected ? 'text-foreground' : 'text-muted-foreground'}`}>
-                      {shortAtlasLabel(node.label)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+      {!fullscreen && (
+        <>
+          <div id="repository-atlas-navigation-status" className="mb-4 rounded-full border border-border/50 bg-background/20 px-3 py-2 text-xs text-muted-foreground" aria-live="polite">
+            {atlasNavigationActive ? 'Atlas navigation active · Press Esc to release' : 'Click to explore · Scroll to zoom · Drag to move'}
           </div>
 
-          {tooltip && (
-            <div
-              role="tooltip"
-              className="pointer-events-none fixed z-50 max-w-[220px] rounded-xl border border-border/60 bg-background/95 px-3 py-2 text-xs shadow-xl"
-              style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
-            >
-              <div className="font-semibold text-foreground">{tooltip.label}</div>
-              <div className="mt-1 text-muted-foreground">{tooltip.detail}</div>
-            </div>
-          )}
-        </div>
+          <div className="mb-4">{atlasFilters}</div>
+          {searchResultList && <div className="mb-4">{searchResultList}</div>}
+        </>
+      )}
 
-        <AtlasInspector
-          atlas={atlas}
-          node={selectedNode}
-          cluster={activeCluster}
-          activeChapter={activeChapter}
-          onFocusCluster={() => selectedNode?.clusterId && setFocusedClusterId(selectedNode.clusterId)}
-          onClearFocus={() => setFocusedClusterId(null)}
-          onSelectNode={selectNode}
-        />
-      </div>
+      {!fullscreen && (
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+          {atlasCanvas}
+          {inspector}
+        </div>
+      )}
 
       <p className="sr-only" aria-live="polite">
         {selectedNode ? `Selected ${selectedNode.label}. ${atlas.edges.filter(edge => edge.source === selectedNode.id || edge.target === selectedNode.id).length} relationships available.` : 'Repository Atlas loaded.'}
       </p>
+
+      {fullscreen && (
+        <div
+          ref={fullscreenLayerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Repository Atlas fullscreen"
+          className="fixed inset-0 z-[100] flex flex-col bg-[hsl(224_31%_5%)] p-4 text-foreground md:p-6"
+        >
+          <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Atlas</div>
+              <h2 className="mt-1 font-display text-2xl font-semibold">Fullscreen exploration</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Atlas navigation active · Press Esc to exit fullscreen</p>
+            </div>
+            {atlasToolbar}
+          </div>
+          <div className="mb-4">{atlasFilters}</div>
+          {searchResultList && <div className="mb-4">{searchResultList}</div>}
+          <div className={`grid min-h-0 flex-1 gap-4 ${inspectorCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_220px]' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}`}>
+            {atlasCanvas}
+            {inspector}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -1101,6 +1276,8 @@ function AtlasInspector({
   node,
   cluster,
   activeChapter,
+  collapsed = false,
+  onToggleCollapsed,
   onFocusCluster,
   onClearFocus,
   onSelectNode,
@@ -1109,6 +1286,8 @@ function AtlasInspector({
   node?: RepositoryAtlasNode;
   cluster?: RepositoryKnowledgeCluster | null;
   activeChapter: WorkspaceStoryChapter | null;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
   onFocusCluster: () => void;
   onClearFocus: () => void;
   onSelectNode: (node: RepositoryAtlasNode) => void;
@@ -1118,6 +1297,25 @@ function AtlasInspector({
     .map(edge => atlas.nodes.find(item => item.id === (edge.source === node?.id ? edge.target : edge.source)))
     .filter(Boolean) as RepositoryAtlasNode[];
   const clusterNodes = cluster ? cluster.nodeIds.map(id => atlas.nodes.find(node => node.id === id)).filter(Boolean) as RepositoryAtlasNode[] : [];
+
+  if (collapsed) {
+    return (
+      <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="atlas-inspector-heading-collapsed">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Selected entity</div>
+            <h3 id="atlas-inspector-heading-collapsed" className="mt-1 truncate font-display text-base font-semibold">{node?.label || 'Repository Atlas'}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">{node ? `${atlasKindLabel(node.kind)} · ${relationships.length} relationships` : 'No entity selected'}</p>
+          </div>
+          {onToggleCollapsed && (
+            <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} aria-label="Expand inspector">
+              <PanelRightOpen className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="atlas-inspector-heading">
@@ -1129,6 +1327,11 @@ function AtlasInspector({
           <Badge variant="outline" className="border-accent/40 text-accent">
             {activeChapter.shortLabel}
           </Badge>
+        )}
+        {onToggleCollapsed && (
+          <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} className="ml-auto" aria-label="Collapse inspector">
+            <PanelRightClose className="h-3.5 w-3.5" />
+          </Button>
         )}
       </div>
 

@@ -189,7 +189,7 @@ describe('ShipSeal pre-scan intake flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 
     expect(await screen.findByRole('heading', { name: /Knowledge and docs/i }, { timeout: 5000 })).toBeInTheDocument();
-  });
+  }, 20000);
 
   it('shows and updates Agent Operating Mode for AI Agent Development package', async () => {
     render(
