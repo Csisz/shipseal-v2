@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { AlertOctagon, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, Layers, Lightbulb, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { AgentOperatingModeId, AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
@@ -25,11 +25,14 @@ import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentO
 import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
 import {
   buildRepositoryAtlasModel,
+  buildRepositoryUniverseModel,
   buildWorkspaceStory,
   chapterForDnaDimension,
   chapterForMentalModelNode,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
+  type RepositoryUniverseModel,
+  type RepositoryUniverseNode,
   type RepositoryKnowledgeCluster,
   type RepositoryKnowledgeEdge,
   type WorkspaceStory,
@@ -39,6 +42,9 @@ import {
   type WorkspaceStoryDnaDimensionId,
   type WorkspaceStoryMentalNodeId,
 } from '@/lib/workspace';
+import type { UniverseCameraState } from './RepositoryUniverse3D';
+
+const RepositoryUniverse3D = lazy(() => import('./RepositoryUniverse3D'));
 
 interface Props {
   report: ReadinessReport;
@@ -762,6 +768,7 @@ function RepositoryAtlasVisualization({
   onSelectChapter: (chapterId: WorkspaceStoryChapterId) => void;
 }) {
   const atlas = useMemo(() => buildRepositoryAtlasModel(report), [report]);
+  const universe = useMemo(() => buildRepositoryUniverseModel(report), [report]);
   const prefersReducedMotion = usePrefersReducedMotion();
   const atlasRootRef = useRef<HTMLElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -781,6 +788,15 @@ function RepositoryAtlasVisualization({
     missing: true,
   });
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.82 });
+  const [viewMode, setViewMode] = useState<'universe3d' | 'atlas2d'>('universe3d');
+  const [selectedUniverseNodeId, setSelectedUniverseNodeId] = useState(universe.rootNodeId);
+  const [universeCamera, setUniverseCamera] = useState<UniverseCameraState>({
+    theta: -0.78,
+    phi: 1.18,
+    radius: 620,
+    target: { x: 0, y: 0, z: 0 },
+  });
+  const [universeRotationPaused, setUniverseRotationPaused] = useState(prefersReducedMotion);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; detail: string } | null>(null);
   const [atlasReady, setAtlasReady] = useState(prefersReducedMotion);
   const [navigationActive, setNavigationActive] = useState(false);
@@ -788,15 +804,20 @@ function RepositoryAtlasVisualization({
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
   const selectedNode = atlas.nodes.find(node => node.id === selectedNodeId) || atlas.nodes.find(node => node.id === initialNodeId) || atlas.nodes[0];
+  const selectedUniverseNode = universe.nodes.find(node => node.id === selectedUniverseNodeId) || universe.nodes.find(node => node.id === universe.rootNodeId) || universe.nodes[0];
   const activeCluster = focusedClusterId ? atlas.clusters.find(cluster => cluster.id === focusedClusterId) : null;
+  const activeUniverseCluster = focusedClusterId ? universe.clusters.find(cluster => cluster.id === focusedClusterId) : null;
   const activeChapterNodeId = activeChapter?.knowledgeNodeId;
   const relatedNodeIds = useMemo(() => relatedAtlasNodeIds(atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId), [atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId]);
   const searchMatches = useMemo(() => matchingAtlasNodeIds(atlas, query), [atlas, query]);
+  const universeSearchMatches = useMemo(() => matchingUniverseNodeIds(universe, query), [universe, query]);
   const visibleNodes = atlas.nodes.filter(node => nodeVisibleInAtlas(node, filters));
   const visibleNodeIds = new Set(visibleNodes.map(node => node.id));
   const visibleEdges = atlas.edges.filter(edge => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target) && edgeVisibleInAtlas(edge, selectedNode?.id, activeChapterNodeId, focusedClusterId));
   const searchResults = query.trim()
-    ? atlas.nodes.filter(node => searchMatches.has(node.id)).slice(0, 5)
+    ? (viewMode === 'universe3d'
+      ? universe.nodes.filter(node => universeSearchMatches.has(node.id)).slice(0, 8)
+      : atlas.nodes.filter(node => searchMatches.has(node.id)).slice(0, 5))
     : [];
   const atlasNavigationActive = navigationActive || fullscreen;
 
@@ -812,7 +833,15 @@ function RepositoryAtlasVisualization({
       return initialNodeId;
     });
     setFocusedClusterId(activeChapter ? `cluster:${activeChapter.id}` : null);
-  }, [atlas.nodes, initialNodeId, activeChapter?.id, report.repoName, report.scannedAt]);
+    setSelectedUniverseNodeId(current => {
+      const currentNode = universe.nodes.find(node => node.id === current);
+      if (activeChapter?.id && currentNode?.metadata.storyChapterId === activeChapter.id) return current;
+      const chapterNode = universe.nodes.find(node => node.metadata.storyChapterId === activeChapter?.id && node.importance === 'primary')
+        || universe.nodes.find(node => node.metadata.storyChapterId === activeChapter?.id)
+        || universe.nodes.find(node => node.id === universe.rootNodeId);
+      return chapterNode?.id || universe.rootNodeId;
+    });
+  }, [atlas.nodes, initialNodeId, activeChapter?.id, report.repoName, report.scannedAt, universe.nodes, universe.rootNodeId]);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -838,7 +867,7 @@ function RepositoryAtlasVisualization({
 
     viewport.addEventListener('wheel', handleWheel, { passive: false });
     return () => viewport.removeEventListener('wheel', handleWheel);
-  }, [fullscreen, navigationActive]);
+  }, [fullscreen, navigationActive, viewMode]);
 
   useEffect(() => {
     if (!navigationActive || fullscreen) return;
@@ -900,6 +929,10 @@ function RepositoryAtlasVisualization({
 
   const selectNode = (node: RepositoryAtlasNode) => {
     setSelectedNodeId(node.id);
+    const matchingUniverseNode = node.path
+      ? universe.nodes.find(item => item.path === node.path)
+      : universe.nodes.find(item => item.metadata.atlasNodeId === node.id);
+    if (matchingUniverseNode) setSelectedUniverseNodeId(matchingUniverseNode.id);
     if (node.clusterId) setFocusedClusterId(node.clusterId);
     const chapterId = typeof node.metadata.storyChapterId === 'string'
       ? node.metadata.storyChapterId as WorkspaceStoryChapterId
@@ -911,12 +944,42 @@ function RepositoryAtlasVisualization({
     }
   };
 
+  const selectUniverseNode = (node: RepositoryUniverseNode) => {
+    setSelectedUniverseNodeId(node.id);
+    if (node.clusterId) setFocusedClusterId(node.clusterId);
+    if (node.metadata.atlasNodeId) setSelectedNodeId(node.metadata.atlasNodeId);
+    const chapterId = typeof node.metadata.storyChapterId === 'string' ? node.metadata.storyChapterId as WorkspaceStoryChapterId : null;
+    if (chapterId && story.chapters.some(chapter => chapter.id === chapterId)) {
+      onSelectChapter(chapterId);
+    }
+  };
+
+  const changeViewMode = (mode: 'universe3d' | 'atlas2d') => {
+    if (mode === viewMode) return;
+    if (mode === 'atlas2d') {
+      const universeNode = universe.nodes.find(node => node.id === selectedUniverseNodeId);
+      const atlasNode = universeNode?.path
+        ? atlas.nodes.find(node => node.path === universeNode.path)
+        : atlas.nodes.find(node => node.id === universeNode?.metadata.atlasNodeId);
+      if (atlasNode) setSelectedNodeId(atlasNode.id);
+    } else {
+      const atlasNode = atlas.nodes.find(node => node.id === selectedNodeId);
+      const universeNode = atlasNode?.path
+        ? universe.nodes.find(node => node.path === atlasNode.path)
+        : universe.nodes.find(node => node.metadata.atlasNodeId === atlasNode?.id);
+      if (universeNode) setSelectedUniverseNodeId(universeNode.id);
+    }
+    setViewMode(mode);
+  };
+
   const resetAtlas = () => {
     setSelectedNodeId(initialNodeId);
+    setSelectedUniverseNodeId(universe.rootNodeId);
     setFocusedClusterId(activeChapter ? `cluster:${activeChapter.id}` : null);
     setQuery('');
     setFilters({ files: true, folders: true, concepts: true, evidence: true, heuristic: true, missing: true });
     setView({ x: 0, y: 0, scale: 0.82 });
+    setUniverseCamera({ theta: -0.78, phi: 1.18, radius: 620, target: { x: 0, y: 0, z: 0 } });
   };
 
   const setScale = (next: number) => {
@@ -967,7 +1030,7 @@ function RepositoryAtlasVisualization({
   const atlasToolbar = (
     <div className="flex flex-wrap items-center gap-2">
       <label className="relative min-w-[220px] flex-1 xl:flex-none">
-        <span className="sr-only">Search repository atlas</span>
+        <span className="sr-only">Search repository atlas or universe</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <input
           value={query}
@@ -977,10 +1040,51 @@ function RepositoryAtlasVisualization({
           placeholder="Search files, paths, roles"
         />
       </label>
-      <Button type="button" variant="outline" size="sm" onClick={() => setScale(view.scale + 0.14)} className="border-border/60 bg-background/25" aria-label="Zoom in">
+      <div className="flex rounded-full border border-border/60 bg-background/25 p-1" aria-label="Repository view selector">
+        <button
+          type="button"
+          aria-pressed={viewMode === 'universe3d'}
+          onClick={() => changeViewMode('universe3d')}
+          className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'universe3d' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          Universe 3D
+        </button>
+        <button
+          type="button"
+          aria-pressed={viewMode === 'atlas2d'}
+          onClick={() => changeViewMode('atlas2d')}
+          className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'atlas2d' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+        >
+          Atlas 2D
+        </button>
+      </div>
+      {viewMode === 'universe3d' && (
+        <Button type="button" variant="outline" size="sm" onClick={() => setUniverseRotationPaused(current => !current)} className="border-border/60 bg-background/25">
+          {universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}
+        </Button>
+      )}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => viewMode === 'universe3d'
+          ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) }))
+          : setScale(view.scale + 0.14)}
+        className="border-border/60 bg-background/25"
+        aria-label="Zoom in"
+      >
         <ZoomIn className="h-3.5 w-3.5" />
       </Button>
-      <Button type="button" variant="outline" size="sm" onClick={() => setScale(view.scale - 0.14)} className="border-border/60 bg-background/25" aria-label="Zoom out">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => viewMode === 'universe3d'
+          ? setUniverseCamera(current => ({ ...current, radius: Math.min(1500, current.radius + 80) }))
+          : setScale(view.scale - 0.14)}
+        className="border-border/60 bg-background/25"
+        aria-label="Zoom out"
+      >
         <ZoomOut className="h-3.5 w-3.5" />
       </Button>
       <Button type="button" variant="outline" size="sm" onClick={resetAtlas} className="border-border/60 bg-background/25">
@@ -1017,15 +1121,18 @@ function RepositoryAtlasVisualization({
   );
 
   const searchResultList = searchResults.length > 0 && (
-    <div className="flex flex-wrap gap-2" aria-label="Repository Atlas search results">
+    <div className="flex flex-wrap gap-2" aria-label="Repository search results">
       {searchResults.map(node => (
         <button
           key={node.id}
           type="button"
-          onClick={() => selectNode(node)}
+          onClick={() => viewMode === 'universe3d'
+            ? selectUniverseNode(node as RepositoryUniverseNode)
+            : selectNode(node as RepositoryAtlasNode)}
           className="rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs text-primary-glow transition hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {node.label}
+          {viewMode === 'universe3d' && 'path' in node && node.path ? <span className="ml-1 text-primary-glow/65">{node.path}</span> : null}
         </button>
       ))}
     </div>
@@ -1181,27 +1288,78 @@ function RepositoryAtlasVisualization({
     </div>
   );
 
+  const universeCanvas = (
+    <div className={`${fullscreen ? 'min-h-0 flex-1' : 'min-h-[560px]'}`}>
+      <Suspense fallback={
+        <div className="grid h-full min-h-[560px] place-items-center rounded-[1.5rem] border border-primary/15 bg-[#050914] p-8 text-center">
+          <div>
+            <div className="font-display text-xl font-semibold">Opening Repository Universe</div>
+            <p className="mt-2 text-sm text-muted-foreground">Preparing the WebGL knowledge space.</p>
+          </div>
+        </div>
+      }>
+        <RepositoryUniverse3D
+          model={universe}
+          selectedNodeId={selectedUniverseNode?.id}
+          focusedClusterId={focusedClusterId}
+          searchMatchIds={[...universeSearchMatches]}
+          cameraState={universeCamera}
+          rotationPaused={universeRotationPaused || prefersReducedMotion}
+          reducedMotion={prefersReducedMotion}
+          fullscreen={fullscreen}
+          onCameraStateChange={setUniverseCamera}
+          onSelectNode={nodeId => {
+            const node = universe.nodes.find(item => item.id === nodeId);
+            if (node) selectUniverseNode(node);
+          }}
+        />
+      </Suspense>
+    </div>
+  );
+
   const inspector = (
-    <AtlasInspector
-      atlas={atlas}
-      node={selectedNode}
-      cluster={activeCluster}
-      activeChapter={activeChapter}
-      collapsed={fullscreen && inspectorCollapsed}
-      onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
-      onFocusCluster={() => selectedNode?.clusterId && setFocusedClusterId(selectedNode.clusterId)}
-      onClearFocus={() => setFocusedClusterId(null)}
-      onSelectNode={selectNode}
-    />
+    viewMode === 'universe3d'
+      ? (
+        <UniverseInspector
+          universe={universe}
+          node={selectedUniverseNode}
+          cluster={activeUniverseCluster}
+          activeChapter={activeChapter}
+          collapsed={fullscreen && inspectorCollapsed}
+          onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
+          onFocusNode={() => selectedUniverseNode && setUniverseCamera(current => ({ ...current, radius: selectedUniverseNode.kind === 'file' ? 170 : 240, target: selectedUniverseNode.position }))}
+          onFocusCluster={() => selectedUniverseNode?.clusterId && setFocusedClusterId(selectedUniverseNode.clusterId)}
+          onClearFocus={() => setFocusedClusterId(null)}
+          onReturnRepository={() => {
+            setSelectedUniverseNodeId(universe.rootNodeId);
+            setUniverseCamera({ theta: -0.78, phi: 1.18, radius: 620, target: { x: 0, y: 0, z: 0 } });
+          }}
+          onOpenAtlas={() => changeViewMode('atlas2d')}
+          onSelectNode={selectUniverseNode}
+        />
+      )
+      : (
+        <AtlasInspector
+          atlas={atlas}
+          node={selectedNode}
+          cluster={activeCluster}
+          activeChapter={activeChapter}
+          collapsed={fullscreen && inspectorCollapsed}
+          onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
+          onFocusCluster={() => selectedNode?.clusterId && setFocusedClusterId(selectedNode.clusterId)}
+          onClearFocus={() => setFocusedClusterId(null)}
+          onSelectNode={selectNode}
+        />
+      )
   );
 
   return (
     <section ref={atlasRootRef} className="relative rounded-[1.75rem] border border-primary/25 bg-[hsl(224_31%_6%)] p-4 shadow-sm shadow-primary/10 md:p-5" aria-labelledby="repository-atlas-heading">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Atlas</div>
-          <h2 id="repository-atlas-heading" className="mt-1 font-display text-2xl font-semibold">Explore the repository knowledge map</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{atlas.statusNote}</p>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Universe</div>
+          <h2 id="repository-atlas-heading" className="mt-1 font-display text-2xl font-semibold">Explore the repository universe</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{viewMode === 'universe3d' ? universe.statusNote : atlas.statusNote}</p>
         </div>
         {!fullscreen && atlasToolbar}
       </div>
@@ -1209,7 +1367,7 @@ function RepositoryAtlasVisualization({
       {!fullscreen && (
         <>
           <div id="repository-atlas-navigation-status" className="mb-4 rounded-full border border-border/50 bg-background/20 px-3 py-2 text-xs text-muted-foreground" aria-live="polite">
-            {atlasNavigationActive ? 'Atlas navigation active · Press Esc to release' : 'Click to explore · Scroll to zoom · Drag to move'}
+            {atlasNavigationActive ? `${viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to release` : 'Click to explore - Scroll to zoom - Drag to move'}
           </div>
 
           <div className="mb-4">{atlasFilters}</div>
@@ -1219,13 +1377,19 @@ function RepositoryAtlasVisualization({
 
       {!fullscreen && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-          {atlasCanvas}
+          {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
           {inspector}
         </div>
       )}
 
       <p className="sr-only" aria-live="polite">
-        {selectedNode ? `Selected ${selectedNode.label}. ${atlas.edges.filter(edge => edge.source === selectedNode.id || edge.target === selectedNode.id).length} relationships available.` : 'Repository Atlas loaded.'}
+        {viewMode === 'universe3d'
+          ? selectedUniverseNode
+            ? `Selected ${selectedUniverseNode.label}. ${universe.edges.filter(edge => edge.source === selectedUniverseNode.id || edge.target === selectedUniverseNode.id).length} relationships available.`
+            : 'Repository Universe loaded.'
+          : selectedNode
+            ? `Selected ${selectedNode.label}. ${atlas.edges.filter(edge => edge.source === selectedNode.id || edge.target === selectedNode.id).length} relationships available.`
+            : 'Repository Atlas loaded.'}
       </p>
 
       {fullscreen && (
@@ -1233,21 +1397,21 @@ function RepositoryAtlasVisualization({
           ref={fullscreenLayerRef}
           role="dialog"
           aria-modal="true"
-          aria-label="Repository Atlas fullscreen"
+          aria-label={`${viewMode === 'universe3d' ? 'Repository Universe' : 'Repository Atlas'} fullscreen`}
           className="fixed inset-0 z-[100] flex flex-col bg-[hsl(224_31%_5%)] p-4 text-foreground md:p-6"
         >
           <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div>
-              <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Atlas</div>
+              <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{viewMode === 'universe3d' ? 'Repository Universe' : 'Repository Atlas'}</div>
               <h2 className="mt-1 font-display text-2xl font-semibold">Fullscreen exploration</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Atlas navigation active · Press Esc to exit fullscreen</p>
+              <p className="mt-1 text-sm text-muted-foreground">{viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to exit fullscreen</p>
             </div>
             {atlasToolbar}
           </div>
           <div className="mb-4">{atlasFilters}</div>
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
           <div className={`grid min-h-0 flex-1 gap-4 ${inspectorCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_220px]' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}`}>
-            {atlasCanvas}
+            {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
             {inspector}
           </div>
         </div>
@@ -1268,6 +1432,201 @@ function AtlasFilterButton({ label, active, onClick }: { label: string; active: 
     >
       {label}
     </button>
+  );
+}
+
+function UniverseInspector({
+  universe,
+  node,
+  cluster,
+  activeChapter,
+  collapsed = false,
+  onToggleCollapsed,
+  onFocusNode,
+  onFocusCluster,
+  onClearFocus,
+  onReturnRepository,
+  onOpenAtlas,
+  onSelectNode,
+}: {
+  universe: RepositoryUniverseModel;
+  node?: RepositoryUniverseNode;
+  cluster?: RepositoryUniverseModel['clusters'][number] | null;
+  activeChapter: WorkspaceStoryChapter | null;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  onFocusNode: () => void;
+  onFocusCluster: () => void;
+  onClearFocus: () => void;
+  onReturnRepository: () => void;
+  onOpenAtlas: () => void;
+  onSelectNode: (node: RepositoryUniverseNode) => void;
+}) {
+  const relationships = node ? universe.edges.filter(edge => edge.source === node.id || edge.target === node.id) : [];
+  const relatedNodes = relationships
+    .map(edge => universe.nodes.find(item => item.id === (edge.source === node?.id ? edge.target : edge.source)))
+    .filter(Boolean) as RepositoryUniverseNode[];
+  const sameFolderNodes = node?.metadata.directory
+    ? universe.nodes.filter(item => item.kind === 'file' && item.id !== node.id && item.metadata.directory === node.metadata.directory).slice(0, 8)
+    : [];
+  const clusterNodes = cluster ? cluster.nodeIds.map(id => universe.nodes.find(item => item.id === id)).filter(Boolean).slice(0, 8) as RepositoryUniverseNode[] : [];
+
+  if (collapsed) {
+    return (
+      <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="universe-inspector-heading-collapsed">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Selected entity</div>
+            <h3 id="universe-inspector-heading-collapsed" className="mt-1 truncate font-display text-base font-semibold">{node?.label || 'Repository Universe'}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">{node ? `${universeKindLabel(node.kind)} - ${relationships.length} relationships` : 'No entity selected'}</p>
+          </div>
+          {onToggleCollapsed && (
+            <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} aria-label="Expand inspector">
+              <PanelRightOpen className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="universe-inspector-heading">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className={node?.evidenceType === 'evidence' ? 'border-primary/40 text-primary-glow' : node?.evidenceType === 'missing' ? 'border-warning/50 text-warning' : 'border-border/70 text-muted-foreground'}>
+          {node ? evidenceStateLabel(node.evidenceType) : 'Entity'}
+        </Badge>
+        {node?.importance && (
+          <Badge variant="outline" className="border-border/60 text-muted-foreground">
+            {node.importance}
+          </Badge>
+        )}
+        {activeChapter && (
+          <Badge variant="outline" className="border-accent/40 text-accent">
+            {activeChapter.shortLabel}
+          </Badge>
+        )}
+        {onToggleCollapsed && (
+          <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} className="ml-auto" aria-label="Collapse inspector">
+            <PanelRightClose className="h-3.5 w-3.5" />
+          </Button>
+        )}
+      </div>
+
+      <h3 id="universe-inspector-heading" className="mt-3 font-display text-xl font-semibold">Selected entity</h3>
+      <div className="mt-2 break-words text-lg font-semibold text-foreground">{node?.label || 'Repository Universe'}</div>
+      {node?.path && <p className="mt-1 break-all text-xs text-muted-foreground">{node.path}</p>}
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{String(node?.metadata.repositoryRole || 'Select a file, folder or knowledge node to inspect how ShipSeal understands it.')}</p>
+
+      <div className="mt-4 grid gap-2 text-sm">
+        <Row label="Type" value={node ? universeKindLabel(node.kind) : 'n/a'} />
+        <Row label="Cluster" value={cluster?.label || 'Repository'} />
+        <Row label="Category" value={String(node?.metadata.category || 'n/a')} />
+        <Row label="Parent folder" value={String(node?.metadata.directory || 'root')} />
+        <Row label="Relationships" value={String(relationships.length)} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={onFocusNode} disabled={!node} className="border-border/60 bg-background/20">
+          Focus node
+        </Button>
+        <Button type="button" variant="outline" size="sm" onClick={onFocusCluster} disabled={!node?.clusterId} className="border-border/60 bg-background/20">
+          Focus cluster
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onReturnRepository}>
+          Return to repository
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onOpenAtlas}>
+          Open in 2D Atlas
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onClearFocus}>
+          Clear focus
+        </Button>
+      </div>
+
+      {cluster && (
+        <details open className="mt-5 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+          <summary className="cursor-pointer select-none text-sm font-semibold">Focused cluster</summary>
+          <p className="mt-2 text-sm text-muted-foreground">{cluster.summary}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {clusterNodes.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelectNode(item)}
+                className="rounded-full border border-border/55 bg-background/25 px-2.5 py-1 text-[11px] text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {shortAtlasLabel(item.label)}
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
+
+      <details open className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold">Evidence</summary>
+        <ul className="mt-3 space-y-2">
+          {(node?.evidenceItems || []).slice(0, 5).map((item, index) => (
+            <li key={`${item.state}-${item.label}-${index}`} className="text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="break-all text-foreground/90">{item.label}</span>
+                <Badge variant="outline" className={evidenceStateClass(item.state)}>
+                  {evidenceStateLabel(item.state)}
+                </Badge>
+              </div>
+              {item.detail && <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>}
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold">Connected repository entities</summary>
+        <div className="mt-3 space-y-2">
+          {relationships.length ? relationships.slice(0, 8).map(edge => {
+            const related = relatedNodes.find(item => item.id === (edge.source === node?.id ? edge.target : edge.source));
+            return (
+              <button
+                key={edge.id}
+                type="button"
+                onClick={() => related && onSelectNode(related)}
+                className="block w-full rounded-xl border border-border/50 bg-background/20 p-3 text-left text-sm transition hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="font-medium text-foreground">{related?.label || 'Related entity'}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">{relationshipLabel(edge)} - {edge.evidenceType}</span>
+              </button>
+            );
+          }) : (
+            <p className="text-sm text-muted-foreground">No direct relationship selected.</p>
+          )}
+        </div>
+      </details>
+
+      {sameFolderNodes.length > 0 && (
+        <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+          <summary className="cursor-pointer select-none text-sm font-semibold">Same folder</summary>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {sameFolderNodes.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onSelectNode(item)}
+                className="rounded-full border border-border/55 bg-background/25 px-2.5 py-1 text-[11px] text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {shortAtlasLabel(item.label)}
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
+
+      <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold">Agent relevance</summary>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{String(node?.metadata.agentRelevance || 'No agent-specific relevance surfaced for this entity.')}</p>
+        {node?.metadata.dnaDimensionId && <p className="mt-2 text-xs text-muted-foreground">DNA: {String(node.metadata.dnaDimensionId)}</p>}
+        {Array.isArray(node?.metadata.simulatorStepIds) && <p className="mt-1 text-xs text-muted-foreground">Simulator: {node.metadata.simulatorStepIds.join(', ')}</p>}
+      </details>
+    </aside>
   );
 }
 
@@ -1596,6 +1955,27 @@ function matchingAtlasNodeIds(atlas: RepositoryAtlasModel, query: string) {
   }).map(node => node.id));
 }
 
+function matchingUniverseNodeIds(universe: RepositoryUniverseModel, query: string) {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return new Set<string>();
+
+  return new Set(universe.nodes.filter(node => {
+    const cluster = universe.clusters.find(item => item.id === node.clusterId);
+    return [
+      node.label,
+      node.path,
+      node.metadata.directory,
+      node.metadata.extension,
+      node.metadata.category,
+      node.metadata.language,
+      node.metadata.repositoryRole,
+      node.metadata.agentRelevance,
+      cluster?.label,
+      cluster?.category,
+    ].some(value => String(value || '').toLowerCase().includes(normalized));
+  }).map(node => node.id));
+}
+
 function nodeVisibleInAtlas(node: RepositoryAtlasNode, filters: AtlasFilters) {
   if (node.kind === 'repository') return true;
   if (node.kind === 'file' && !filters.files) return false;
@@ -1636,12 +2016,21 @@ function atlasKindLabel(kind: RepositoryAtlasNode['kind']) {
   return 'Concept';
 }
 
+function universeKindLabel(kind: RepositoryUniverseNode['kind']) {
+  if (kind === 'repository') return 'Repository';
+  if (kind === 'file') return 'File';
+  if (kind === 'folder') return 'Folder';
+  if (kind === 'workflow') return 'Workflow';
+  if (kind === 'recommendation') return 'Recommendation';
+  return 'Concept';
+}
+
 function clusterLabelForNode(atlas: RepositoryAtlasModel, node?: RepositoryAtlasNode) {
   if (!node?.clusterId) return 'Repository';
   return atlas.clusters.find(cluster => cluster.id === node.clusterId)?.label || node.clusterId;
 }
 
-function relationshipLabel(edge: RepositoryKnowledgeEdge) {
+function relationshipLabel(edge: Pick<RepositoryKnowledgeEdge, 'relationship'>) {
   if (edge.relationship === 'related-concept') return 'Related concept';
   if (edge.relationship === 'routes-agent-to') return 'Routes agent to';
   if (edge.relationship === 'supports-workflow') return 'Supports workflow';

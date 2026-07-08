@@ -16,6 +16,7 @@ Last updated: 2026-07-02
 - `docs/implementation/PRODUCT_POSITION_AUDIT.md` - Sprint Omega.3 audit of readiness/audit/report/Delivery Pack language that should become secondary.
 - `docs/implementation/WORKSPACE_TRANSFORMATION_PLAN.md` - migration plan from Repository Health as the current bridge score to future AI Workspace Quality.
 - `docs/implementation/DASHBOARD_REDESIGN_PLAN.md` - planned dashboard classification, future navigation, and non-goals for simulator/heatmap/timeline work.
+- `docs/experience/REPOSITORY_UNIVERSE_3D_MVP.md` - Sprint Omega.11 architecture note for the WebGL Repository Universe, analyzed-file inventory, graph derivation and relationship boundaries.
 - `docs/security/CRITICAL_FILES_POLICY.md` - files that require careful review before AI-assisted changes.
 - `docs/release/RELEASE_CHECKLIST.md` - release readiness checks.
 - `docs/implementation/READINESS_FIX_PACK.md` - generated repository improvement pack workflow.

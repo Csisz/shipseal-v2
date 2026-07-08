@@ -12,6 +12,10 @@ export {
 } from './intelligenceReveal';
 
 export {
+  buildRepositoryUniverseModel,
+} from './repositoryUniverse';
+
+export {
   buildRepositoryAtlasModel,
   buildRepositoryKnowledgeModel,
   buildWorkspaceStory,
@@ -42,6 +46,20 @@ export type {
   IntelligenceRevealSignal,
   IntelligenceRevealSignalKind,
 } from './intelligenceReveal';
+
+export type {
+  RepositoryUniverseCluster,
+  RepositoryUniverseEdge,
+  RepositoryUniverseFileCategory,
+  RepositoryUniverseFileRecord,
+  RepositoryUniverseImportance,
+  RepositoryUniverseModel,
+  RepositoryUniverseNode,
+  RepositoryUniverseNodeKind,
+  RepositoryUniversePosition,
+  RepositoryUniverseRelationship,
+  RepositoryUniverseSummary,
+} from './repositoryUniverse';
 
 export type {
   RepositoryAtlasCluster,

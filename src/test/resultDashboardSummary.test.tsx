@@ -40,9 +40,41 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
   ),
 }));
 
+vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
+  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, onSelectNode }: {
+    model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string }[] };
+    selectedNodeId?: string;
+    rotationPaused?: boolean;
+    reducedMotion?: boolean;
+    onSelectNode: (nodeId: string) => void;
+  }) => (
+    <div
+      role="img"
+      aria-label={`Repository Universe 3D graph. ${model.summary.representedFileNodeCount} analyzed file nodes represented.`}
+      data-testid="repository-universe-canvas"
+      data-node-count={model.summary.representedFileNodeCount}
+      data-edge-count={model.summary.edgeCount}
+      data-selected-node={selectedNodeId}
+      data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}
+    >
+      <button type="button" onClick={() => model.nodes[1] && onSelectNode(model.nodes[1].id)}>
+        Select universe node
+      </button>
+    </div>
+  ),
+}));
+
 import { ResultDashboard } from '@/components/agentready/ResultDashboard';
 
+function switchToAtlas2D() {
+  const atlasButton = screen.getByRole('button', { name: /Atlas 2D/i });
+  if (atlasButton.getAttribute('aria-pressed') !== 'true') {
+    fireEvent.click(atlasButton);
+  }
+}
+
 function atlasViewport() {
+  switchToAtlas2D();
   return screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
 }
 
@@ -176,7 +208,9 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: /Explore the repository knowledge map/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Explore the repository universe/i })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
+    switchToAtlas2D();
     expect(screen.getByText(/Showing .* high-signal entities from .* analyzed files/i)).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Repository Atlas knowledge graph/i })).toBeInTheDocument();
 
@@ -198,6 +232,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    switchToAtlas2D();
     fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
     expect(screen.getByTestId('atlas-node-concept:documentation')).toHaveAttribute('aria-pressed', 'true');
 
@@ -217,6 +252,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    switchToAtlas2D();
     fireEvent.change(screen.getByLabelText(/Search repository atlas/i), { target: { value: 'README' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'README.md' })[0]);
     expect(screen.getAllByText('README.md').length).toBeGreaterThan(0);
@@ -253,6 +289,7 @@ describe('ResultDashboard summary copy', () => {
         />
       );
 
+      switchToAtlas2D();
       const atlas = screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
       expect(atlas).toHaveAttribute('data-motion', 'reduced');
       expect(atlas).toHaveAttribute('data-ready', 'true');
@@ -330,6 +367,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    switchToAtlas2D();
     fireEvent.click(screen.getByTestId('atlas-node-file:documentation:readme.md'));
     const atlas = atlasViewport();
     fireEvent.pointerDown(atlas, { pointerId: 1, clientX: 100, clientY: 100 });
@@ -366,6 +404,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    switchToAtlas2D();
     fireEvent.click(screen.getByRole('button', { name: /Fullscreen/i }));
     const dialog = await screen.findByRole('dialog', { name: /Repository Atlas fullscreen/i });
     const fullscreenAtlas = within(dialog).getByRole('img', { name: /Repository Atlas knowledge graph/i });
@@ -383,7 +422,7 @@ describe('ResultDashboard summary copy', () => {
     expect(onReset).not.toHaveBeenCalled();
   });
 
-  it('cleans up the Atlas wheel listener on unmount', () => {
+  it('cleans up the Atlas wheel listener on unmount', async () => {
     const addSpy = vi.spyOn(HTMLElement.prototype, 'addEventListener');
     const removeSpy = vi.spyOn(HTMLElement.prototype, 'removeEventListener');
 
@@ -396,7 +435,8 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(addSpy).toHaveBeenCalledWith('wheel', expect.any(Function), { passive: false });
+    switchToAtlas2D();
+    await waitFor(() => expect(addSpy).toHaveBeenCalledWith('wheel', expect.any(Function), { passive: false }));
 
     unmount();
 

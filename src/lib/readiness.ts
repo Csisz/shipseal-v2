@@ -133,6 +133,12 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     aiInstructions: aiAgentInstructions,
     mcpNarrative,
   });
+  const analyzedFiles = normalizedInput.files
+    .filter(file => isAnalyzedReportFile(file))
+    .map(file => ({
+      ...file,
+      path: normalizeReportFilePath(file.path),
+    }));
 
   const report: ReadinessReport = {
     repoName: normalizedInput.repoName,
@@ -157,7 +163,8 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     repositoryHealth,
     scanSummary,
     scanEvidence,
-    sampleFiles: normalizedInput.files.filter(f => !f.isDir && !f.ignored && !isGeneratedOrVendorPath(f.path) && !isBinaryLikePath(f.path)).slice(0, 30),
+    analyzedFiles,
+    sampleFiles: analyzedFiles.slice(0, 30),
     recommendedAgentOperatingMode: DEFAULT_AGENT_OPERATING_MODE,
   };
 
@@ -165,6 +172,14 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
     ...report,
     agentPack: applyAgentOperatingModeToFiles(report, DEFAULT_AGENT_OPERATING_MODE),
   };
+}
+
+function isAnalyzedReportFile(file: RepoFileSummary) {
+  return !file.isDir && !file.ignored && !isGeneratedOrVendorPath(file.path) && !isBinaryLikePath(file.path);
+}
+
+function normalizeReportFilePath(path: string) {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/').trim();
 }
 
 function normalizeScanSource(source?: ScanSourceMetadata): ScanSourceMetadata {

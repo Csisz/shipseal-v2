@@ -306,6 +306,7 @@ export interface ReadinessReport {
   repositoryHealth: RepositoryHealthModel;
   scanSummary: ScanSummary;
   scanEvidence: ScanEvidence;
+  analyzedFiles?: RepoFileSummary[];
   sampleFiles: RepoFileSummary[];
   recommendedAgentOperatingMode?: AgentOperatingModeId;
 }
