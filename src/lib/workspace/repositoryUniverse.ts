@@ -121,6 +121,24 @@ export interface RepositoryUniverseModel {
   statusNote: string;
 }
 
+export interface RepositoryUniverseFilters {
+  files: boolean;
+  folders: boolean;
+  concepts: boolean;
+  evidence: boolean;
+  heuristic: boolean;
+  missing: boolean;
+}
+
+export const DEFAULT_REPOSITORY_UNIVERSE_FILTERS: RepositoryUniverseFilters = {
+  files: true,
+  folders: true,
+  concepts: true,
+  evidence: true,
+  heuristic: true,
+  missing: true,
+};
+
 type KnowledgeMetadata = RepositoryUniverseFileRecord & {
   evidenceItems: WorkspaceEvidenceItem[];
 };
@@ -358,6 +376,27 @@ export function buildRepositoryUniverseModel(report: ReadinessReport): Repositor
     summary,
     statusNote: `All ${summary.representedFileNodeCount.toLocaleString()} analyzed files are represented.`,
   };
+}
+
+export function repositoryUniverseNodeVisible(node: RepositoryUniverseNode, filters: RepositoryUniverseFilters, rootNodeId: string) {
+  if (node.id === rootNodeId || node.kind === 'repository') return true;
+  if (node.kind === 'file' && !filters.files) return false;
+  if (node.kind === 'folder' && !filters.folders) return false;
+  if ((node.kind === 'concept' || node.kind === 'workflow' || node.kind === 'recommendation') && !filters.concepts) return false;
+  if (node.evidenceType === 'evidence' && !filters.evidence) return false;
+  if (node.evidenceType === 'heuristic' && !filters.heuristic) return false;
+  if ((node.evidenceType === 'missing' || node.kind === 'recommendation') && !filters.missing) return false;
+  return true;
+}
+
+export function repositoryUniverseVisibleNodeIds(model: RepositoryUniverseModel, filters: RepositoryUniverseFilters) {
+  return new Set(model.nodes
+    .filter(node => repositoryUniverseNodeVisible(node, filters, model.rootNodeId))
+    .map(node => node.id));
+}
+
+export function repositoryUniverseEdgeVisible(edge: RepositoryUniverseEdge, visibleNodeIds: Set<string>) {
+  return visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target);
 }
 
 function normalizedAnalyzedFiles(report: ReadinessReport): RepoFileSummary[] {

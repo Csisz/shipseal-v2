@@ -1,9 +1,16 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildReport, buildSampleReport } from '@/lib/readiness';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { createEmptyScanSummary } from '@/lib/scannerLimits';
+
+const universeMockState = vi.hoisted(() => ({
+  models: [] as unknown[],
+  selectedNodeIds: [] as Array<string | undefined>,
+  cameraRadii: [] as number[],
+  visibleNodeCounts: [] as number[],
+}));
 
 vi.mock('@/components/agentready/ScoreGauge', () => ({
   ScoreGauge: ({ score }: { score: number }) => <div>Score gauge {score}</div>,
@@ -41,27 +48,41 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
 }));
 
 vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
-  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, onSelectNode }: {
+  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode }: {
     model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string }[] };
     selectedNodeId?: string;
     rotationPaused?: boolean;
     reducedMotion?: boolean;
+    visibleNodeIds: string[];
+    visibleEdgeIds: string[];
+    cameraState: { radius: number };
+    animateIn?: boolean;
     onSelectNode: (nodeId: string) => void;
-  }) => (
-    <div
-      role="img"
-      aria-label={`Repository Universe 3D graph. ${model.summary.representedFileNodeCount} analyzed file nodes represented.`}
-      data-testid="repository-universe-canvas"
-      data-node-count={model.summary.representedFileNodeCount}
-      data-edge-count={model.summary.edgeCount}
-      data-selected-node={selectedNodeId}
-      data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}
-    >
-      <button type="button" onClick={() => model.nodes[1] && onSelectNode(model.nodes[1].id)}>
-        Select universe node
-      </button>
-    </div>
-  ),
+  }) => {
+    universeMockState.models.push(model);
+    universeMockState.selectedNodeIds.push(selectedNodeId);
+    universeMockState.cameraRadii.push(cameraState.radius);
+    universeMockState.visibleNodeCounts.push(visibleNodeIds.length);
+    return (
+      <div
+        role="img"
+        aria-label={`Repository Universe 3D graph. ${model.summary.representedFileNodeCount} analyzed file nodes represented.`}
+        data-testid="repository-universe-canvas"
+        data-node-count={model.summary.representedFileNodeCount}
+        data-edge-count={model.summary.edgeCount}
+        data-visible-node-count={visibleNodeIds.length}
+        data-visible-edge-count={visibleEdgeIds.length}
+        data-selected-node={selectedNodeId}
+        data-camera-radius={cameraState.radius}
+        data-animate-in={animateIn ? 'true' : 'false'}
+        data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}
+      >
+        <button type="button" onClick={() => model.nodes[1] && onSelectNode(model.nodes[1].id)}>
+          Select universe node
+        </button>
+      </div>
+    );
+  },
 }));
 
 import { ResultDashboard } from '@/components/agentready/ResultDashboard';
@@ -88,6 +109,13 @@ function dispatchAtlasWheel(target: Element, deltaY: number) {
 }
 
 describe('ResultDashboard summary copy', () => {
+  beforeEach(() => {
+    universeMockState.models = [];
+    universeMockState.selectedNodeIds = [];
+    universeMockState.cameraRadii = [];
+    universeMockState.visibleNodeCounts = [];
+  });
+
   it('uses compact Delivery Pack summary text that does not truncate the old wording', () => {
     const report = buildSampleReport();
     const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
@@ -264,6 +292,79 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByLabelText(/Search repository atlas/i)).toHaveValue('');
     expect(screen.getByTestId('atlas-node-file:documentation:readme.md')).toBeInTheDocument();
     expect(onReset).not.toHaveBeenCalled();
+  });
+
+  it('keeps the Repository Universe model stable across selection, filters, search and zoom', async () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    const universe = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+    const initialModel = universeMockState.models.at(-1);
+    const initialVisibleCount = Number(universe.getAttribute('data-visible-node-count'));
+    const initialRadius = Number(universe.getAttribute('data-camera-radius'));
+    const initialSelectedNode = universe.getAttribute('data-selected-node');
+
+    fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
+    await waitFor(() => expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).not.toHaveAttribute('data-selected-node', initialSelectedNode || ''));
+    expect(universeMockState.models.at(-1)).toBe(initialModel);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Files' }));
+    const afterFilesFilter = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+    expect(Number(afterFilesFilter.getAttribute('data-visible-node-count'))).toBeLessThan(initialVisibleCount);
+    expect(universeMockState.models.at(-1)).toBe(initialModel);
+
+    fireEvent.change(screen.getByLabelText(/Search repository atlas or universe/i), { target: { value: 'README' } });
+    expect(universeMockState.models.at(-1)).toBe(initialModel);
+
+    fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
+    await waitFor(() => expect(Number(screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-radius'))).toBeLessThan(initialRadius));
+    expect(universeMockState.models.at(-1)).toBe(initialModel);
+  });
+
+  it('preserves Repository Universe selection and camera state in fullscreen', async () => {
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+    const exitFullscreen = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: exitFullscreen,
+    });
+
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
+    const selectedNodeId = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-selected-node');
+    const cameraRadius = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-radius');
+
+    fireEvent.click(screen.getByRole('button', { name: /Fullscreen/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Repository Universe fullscreen/i });
+    const fullscreenUniverse = within(dialog).getByRole('img', { name: /Repository Universe 3D graph/i });
+    expect(requestFullscreen).toHaveBeenCalled();
+    expect(fullscreenUniverse).toHaveAttribute('data-selected-node', selectedNodeId || '');
+    expect(fullscreenUniverse).toHaveAttribute('data-camera-radius', cameraRadius || '');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Repository Universe fullscreen/i })).not.toBeInTheDocument());
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-selected-node', selectedNodeId || '');
   });
 
   it('shows the final Repository Atlas layout immediately with reduced motion', () => {

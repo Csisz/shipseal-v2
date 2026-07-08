@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { buildReport, buildSampleReport } from '@/lib/readiness';
-import { buildRepositoryAtlasModel, buildRepositoryUniverseModel } from '@/lib/workspace';
+import {
+  DEFAULT_REPOSITORY_UNIVERSE_FILTERS,
+  buildRepositoryAtlasModel,
+  buildRepositoryUniverseModel,
+  repositoryUniverseEdgeVisible,
+  repositoryUniverseVisibleNodeIds,
+} from '@/lib/workspace';
 
 function reportWithFiles() {
   return buildReport({
@@ -123,5 +129,40 @@ describe('Repository Universe model', () => {
     expect(sample.summary.representedFileNodeCount).toBeGreaterThan(0);
     expect(sample.rootNodeId).not.toBe(other.rootNodeId);
     expect(other.nodes.filter(node => node.kind === 'file')).toHaveLength(2);
+  });
+
+  it('filters visible Universe nodes and edges without changing graph identity', () => {
+    const universe = buildRepositoryUniverseModel(reportWithFiles());
+    const allVisible = repositoryUniverseVisibleNodeIds(universe, DEFAULT_REPOSITORY_UNIVERSE_FILTERS);
+    const withoutFiles = repositoryUniverseVisibleNodeIds(universe, {
+      ...DEFAULT_REPOSITORY_UNIVERSE_FILTERS,
+      files: false,
+    });
+
+    expect(allVisible.size).toBe(universe.nodes.length);
+    expect(withoutFiles.has(universe.rootNodeId)).toBe(true);
+    expect([...withoutFiles].every(id => universe.nodes.find(node => node.id === id)?.kind !== 'file')).toBe(true);
+    expect(withoutFiles.size).toBeLessThan(allVisible.size);
+    expect(universe.nodes.filter(node => node.kind === 'file')).toHaveLength(universe.summary.representedFileNodeCount);
+    expect(universe.edges.filter(edge => repositoryUniverseEdgeVisible(edge, withoutFiles)).length).toBeLessThan(universe.edges.length);
+  });
+
+  it('keeps evidence-state filters explicit for Universe visibility', () => {
+    const universe = buildRepositoryUniverseModel(reportWithFiles());
+    const withoutEvidence = repositoryUniverseVisibleNodeIds(universe, {
+      ...DEFAULT_REPOSITORY_UNIVERSE_FILTERS,
+      evidence: false,
+    });
+    const withoutHeuristic = repositoryUniverseVisibleNodeIds(universe, {
+      ...DEFAULT_REPOSITORY_UNIVERSE_FILTERS,
+      heuristic: false,
+    });
+
+    expect(withoutEvidence.has(universe.rootNodeId)).toBe(true);
+    expect([...withoutEvidence].every(id => {
+      const node = universe.nodes.find(item => item.id === id);
+      return !node || node.id === universe.rootNodeId || node.evidenceType !== 'evidence';
+    })).toBe(true);
+    expect(withoutHeuristic.size).toBeLessThanOrEqual(universe.nodes.length);
   });
 });

@@ -29,6 +29,8 @@ import {
   buildWorkspaceStory,
   chapterForDnaDimension,
   chapterForMentalModelNode,
+  repositoryUniverseEdgeVisible,
+  repositoryUniverseVisibleNodeIds,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
   type RepositoryUniverseModel,
@@ -769,6 +771,7 @@ function RepositoryAtlasVisualization({
 }) {
   const atlas = useMemo(() => buildRepositoryAtlasModel(report), [report]);
   const universe = useMemo(() => buildRepositoryUniverseModel(report), [report]);
+  const initialUniverseCamera = useMemo(() => initialUniverseCameraState(universe), [universe]);
   const prefersReducedMotion = usePrefersReducedMotion();
   const atlasRootRef = useRef<HTMLElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -790,13 +793,9 @@ function RepositoryAtlasVisualization({
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.82 });
   const [viewMode, setViewMode] = useState<'universe3d' | 'atlas2d'>('universe3d');
   const [selectedUniverseNodeId, setSelectedUniverseNodeId] = useState(universe.rootNodeId);
-  const [universeCamera, setUniverseCamera] = useState<UniverseCameraState>({
-    theta: -0.78,
-    phi: 1.18,
-    radius: 620,
-    target: { x: 0, y: 0, z: 0 },
-  });
+  const [universeCamera, setUniverseCamera] = useState<UniverseCameraState>(initialUniverseCamera);
   const [universeRotationPaused, setUniverseRotationPaused] = useState(prefersReducedMotion);
+  const [universeSceneSettled, setUniverseSceneSettled] = useState(prefersReducedMotion);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; detail: string } | null>(null);
   const [atlasReady, setAtlasReady] = useState(prefersReducedMotion);
   const [navigationActive, setNavigationActive] = useState(false);
@@ -811,12 +810,23 @@ function RepositoryAtlasVisualization({
   const relatedNodeIds = useMemo(() => relatedAtlasNodeIds(atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId), [atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId]);
   const searchMatches = useMemo(() => matchingAtlasNodeIds(atlas, query), [atlas, query]);
   const universeSearchMatches = useMemo(() => matchingUniverseNodeIds(universe, query), [universe, query]);
-  const visibleNodes = atlas.nodes.filter(node => nodeVisibleInAtlas(node, filters));
-  const visibleNodeIds = new Set(visibleNodes.map(node => node.id));
-  const visibleEdges = atlas.edges.filter(edge => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target) && edgeVisibleInAtlas(edge, selectedNode?.id, activeChapterNodeId, focusedClusterId));
+  const visibleNodes = useMemo(() => atlas.nodes.filter(node => nodeVisibleInAtlas(node, filters)), [atlas.nodes, filters]);
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(node => node.id)), [visibleNodes]);
+  const visibleEdges = useMemo(
+    () => atlas.edges.filter(edge => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target) && edgeVisibleInAtlas(edge, selectedNode?.id, activeChapterNodeId, focusedClusterId)),
+    [atlas.edges, visibleNodeIds, selectedNode?.id, activeChapterNodeId, focusedClusterId]
+  );
+  const visibleUniverseNodeIds = useMemo(() => repositoryUniverseVisibleNodeIds(universe, filters), [universe, filters]);
+  const visibleUniverseEdgeIds = useMemo(
+    () => new Set(universe.edges.filter(edge => repositoryUniverseEdgeVisible(edge, visibleUniverseNodeIds)).map(edge => edge.id)),
+    [universe.edges, visibleUniverseNodeIds]
+  );
+  const visibleUniverseNodeIdList = useMemo(() => [...visibleUniverseNodeIds], [visibleUniverseNodeIds]);
+  const visibleUniverseEdgeIdList = useMemo(() => [...visibleUniverseEdgeIds], [visibleUniverseEdgeIds]);
+  const selectedUniverseNodeVisible = selectedUniverseNode ? visibleUniverseNodeIds.has(selectedUniverseNode.id) : false;
   const searchResults = query.trim()
     ? (viewMode === 'universe3d'
-      ? universe.nodes.filter(node => universeSearchMatches.has(node.id)).slice(0, 8)
+      ? universe.nodes.filter(node => universeSearchMatches.has(node.id) && visibleUniverseNodeIds.has(node.id)).slice(0, 8)
       : atlas.nodes.filter(node => searchMatches.has(node.id)).slice(0, 5))
     : [];
   const atlasNavigationActive = navigationActive || fullscreen;
@@ -842,6 +852,11 @@ function RepositoryAtlasVisualization({
       return chapterNode?.id || universe.rootNodeId;
     });
   }, [atlas.nodes, initialNodeId, activeChapter?.id, report.repoName, report.scannedAt, universe.nodes, universe.rootNodeId]);
+
+  useEffect(() => {
+    setUniverseCamera(initialUniverseCamera);
+    setUniverseSceneSettled(prefersReducedMotion);
+  }, [report.repoName, report.scannedAt, initialUniverseCamera, prefersReducedMotion]);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -979,7 +994,7 @@ function RepositoryAtlasVisualization({
     setQuery('');
     setFilters({ files: true, folders: true, concepts: true, evidence: true, heuristic: true, missing: true });
     setView({ x: 0, y: 0, scale: 0.82 });
-    setUniverseCamera({ theta: -0.78, phi: 1.18, radius: 620, target: { x: 0, y: 0, z: 0 } });
+    setUniverseCamera(initialUniverseCamera);
   };
 
   const setScale = (next: number) => {
@@ -1303,15 +1318,19 @@ function RepositoryAtlasVisualization({
           selectedNodeId={selectedUniverseNode?.id}
           focusedClusterId={focusedClusterId}
           searchMatchIds={[...universeSearchMatches]}
+          visibleNodeIds={visibleUniverseNodeIdList}
+          visibleEdgeIds={visibleUniverseEdgeIdList}
           cameraState={universeCamera}
           rotationPaused={universeRotationPaused || prefersReducedMotion}
           reducedMotion={prefersReducedMotion}
+          animateIn={!universeSceneSettled}
           fullscreen={fullscreen}
           onCameraStateChange={setUniverseCamera}
           onSelectNode={nodeId => {
             const node = universe.nodes.find(item => item.id === nodeId);
             if (node) selectUniverseNode(node);
           }}
+          onSceneSettled={() => setUniverseSceneSettled(true)}
         />
       </Suspense>
     </div>
@@ -1323,6 +1342,7 @@ function RepositoryAtlasVisualization({
         <UniverseInspector
           universe={universe}
           node={selectedUniverseNode}
+          nodeHiddenByFilters={Boolean(selectedUniverseNode && !selectedUniverseNodeVisible)}
           cluster={activeUniverseCluster}
           activeChapter={activeChapter}
           collapsed={fullscreen && inspectorCollapsed}
@@ -1332,7 +1352,7 @@ function RepositoryAtlasVisualization({
           onClearFocus={() => setFocusedClusterId(null)}
           onReturnRepository={() => {
             setSelectedUniverseNodeId(universe.rootNodeId);
-            setUniverseCamera({ theta: -0.78, phi: 1.18, radius: 620, target: { x: 0, y: 0, z: 0 } });
+            setUniverseCamera(initialUniverseCamera);
           }}
           onOpenAtlas={() => changeViewMode('atlas2d')}
           onSelectNode={selectUniverseNode}
@@ -1359,7 +1379,11 @@ function RepositoryAtlasVisualization({
         <div>
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Universe</div>
           <h2 id="repository-atlas-heading" className="mt-1 font-display text-2xl font-semibold">Explore the repository universe</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{viewMode === 'universe3d' ? universe.statusNote : atlas.statusNote}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {viewMode === 'universe3d'
+              ? `${visibleUniverseNodeIds.size.toLocaleString()} entities visible. ${universe.statusNote}`
+              : atlas.statusNote}
+          </p>
         </div>
         {!fullscreen && atlasToolbar}
       </div>
@@ -1438,6 +1462,7 @@ function AtlasFilterButton({ label, active, onClick }: { label: string; active: 
 function UniverseInspector({
   universe,
   node,
+  nodeHiddenByFilters = false,
   cluster,
   activeChapter,
   collapsed = false,
@@ -1451,6 +1476,7 @@ function UniverseInspector({
 }: {
   universe: RepositoryUniverseModel;
   node?: RepositoryUniverseNode;
+  nodeHiddenByFilters?: boolean;
   cluster?: RepositoryUniverseModel['clusters'][number] | null;
   activeChapter: WorkspaceStoryChapter | null;
   collapsed?: boolean;
@@ -1517,6 +1543,11 @@ function UniverseInspector({
       <div className="mt-2 break-words text-lg font-semibold text-foreground">{node?.label || 'Repository Universe'}</div>
       {node?.path && <p className="mt-1 break-all text-xs text-muted-foreground">{node.path}</p>}
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{String(node?.metadata.repositoryRole || 'Select a file, folder or knowledge node to inspect how ShipSeal understands it.')}</p>
+      {nodeHiddenByFilters && (
+        <p className="mt-3 rounded-2xl border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-warning">
+          This entity is selected but hidden by the current filters. Re-enable its type or evidence state to show it in the Universe.
+        </p>
+      )}
 
       <div className="mt-4 grid gap-2 text-sm">
         <Row label="Type" value={node ? universeKindLabel(node.kind) : 'n/a'} />
@@ -2040,6 +2071,43 @@ function relationshipLabel(edge: Pick<RepositoryKnowledgeEdge, 'relationship'>) 
   if (edge.relationship === 'configures') return 'Configures';
   if (edge.relationship === 'heuristic') return 'Heuristic link';
   return 'References';
+}
+
+function initialUniverseCameraState(universe: RepositoryUniverseModel): UniverseCameraState {
+  const visibleNodes = universe.nodes.filter(node => node.kind !== 'concept' || node.id === universe.rootNodeId);
+  if (!visibleNodes.length) {
+    return { theta: -0.72, phi: 1.12, radius: 620, target: { x: 0, y: 0, z: 0 } };
+  }
+
+  const bounds = visibleNodes.reduce((box, node) => ({
+    minX: Math.min(box.minX, node.position.x),
+    maxX: Math.max(box.maxX, node.position.x),
+    minY: Math.min(box.minY, node.position.y),
+    maxY: Math.max(box.maxY, node.position.y),
+    minZ: Math.min(box.minZ, node.position.z),
+    maxZ: Math.max(box.maxZ, node.position.z),
+  }), {
+    minX: Number.POSITIVE_INFINITY,
+    maxX: Number.NEGATIVE_INFINITY,
+    minY: Number.POSITIVE_INFINITY,
+    maxY: Number.NEGATIVE_INFINITY,
+    minZ: Number.POSITIVE_INFINITY,
+    maxZ: Number.NEGATIVE_INFINITY,
+  });
+
+  const target = {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+    z: (bounds.minZ + bounds.maxZ) / 2,
+  };
+  const spread = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, bounds.maxZ - bounds.minZ);
+
+  return {
+    theta: -0.72,
+    phi: 1.12,
+    radius: clamp(spread * 1.45, 430, 980),
+    target,
+  };
 }
 
 function clamp(value: number, min: number, max: number) {

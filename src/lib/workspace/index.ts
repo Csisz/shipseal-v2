@@ -12,7 +12,11 @@ export {
 } from './intelligenceReveal';
 
 export {
+  DEFAULT_REPOSITORY_UNIVERSE_FILTERS,
   buildRepositoryUniverseModel,
+  repositoryUniverseEdgeVisible,
+  repositoryUniverseNodeVisible,
+  repositoryUniverseVisibleNodeIds,
 } from './repositoryUniverse';
 
 export {
@@ -51,6 +55,7 @@ export type {
   RepositoryUniverseCluster,
   RepositoryUniverseEdge,
   RepositoryUniverseFileCategory,
+  RepositoryUniverseFilters,
   RepositoryUniverseFileRecord,
   RepositoryUniverseImportance,
   RepositoryUniverseModel,

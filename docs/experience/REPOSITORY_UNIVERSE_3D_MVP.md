@@ -56,6 +56,23 @@ The 3D view is lazy-loaded and rendered with Three.js/WebGL. It supports:
 
 Atlas 2D remains the accessibility and WebGL fallback view.
 
+## Stabilization Notes
+
+Sprint Omega 11.1 keeps the graph model stable after initial construction. Selection, search, filters, zoom controls and inspector changes update renderer state without rebuilding the Universe model.
+
+Filter chips use explicit visibility semantics:
+
+- Files hides or shows file nodes.
+- Folders hides or shows folder anchors.
+- Concepts hides or shows concept, workflow and recommendation entities.
+- Evidence-backed, Heuristic and Missing/recommended filter by evidence state.
+- The repository root remains visible as an orientation anchor.
+- Edges are visible only when both endpoints are visible.
+
+The 3D renderer now applies progressive disclosure by camera distance. Far views keep only anchors and high-signal labels. Medium views reveal important files and focused relationships. Near views reveal more local labels. Selection, hover and search matches always remain legible.
+
+The renderer avoids replaying the intro formation after fullscreen transitions for the same report. Reset view returns to a report-derived camera frame computed from Universe node bounds.
+
 ## Future Work
 
 Future sprints can add progressive rendering for very large repositories, richer technical relationship extraction, semantic embeddings and true nearest-neighbor exploration. Those are intentionally out of scope for this MVP.
