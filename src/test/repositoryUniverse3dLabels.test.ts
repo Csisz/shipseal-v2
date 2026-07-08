@@ -1,0 +1,34 @@
+import { describe, expect, it } from 'vitest';
+import { repositoryUniverseNodeDisplayLabel } from '@/components/agentready/RepositoryUniverse3D';
+import type { RepositoryUniverseNode } from '@/lib/workspace';
+
+function node(overrides: Partial<RepositoryUniverseNode>) {
+  return {
+    id: 'node:unknown',
+    label: 'Unknown',
+    kind: 'file',
+    clusterId: 'cluster:test',
+    evidenceType: 'evidence',
+    importance: 'supporting',
+    radius: 3,
+    position: { x: 0, y: 0, z: 0 },
+    evidenceItems: [],
+    metadata: {},
+    ...overrides,
+  } as RepositoryUniverseNode;
+}
+
+describe('Repository Universe 3D labels', () => {
+  it('derives safe labels for repository, folder, file and concept nodes', () => {
+    expect(repositoryUniverseNodeDisplayLabel(node({ id: 'repo:test', kind: 'repository', label: 'shipseal' }))).toBe('shipseal');
+    expect(repositoryUniverseNodeDisplayLabel(node({ id: 'folder:src', kind: 'folder', label: 'src', path: 'src' }))).toBe('src');
+    expect(repositoryUniverseNodeDisplayLabel(node({ id: 'file:readme', kind: 'file', label: 'README.md', path: 'README.md' }))).toBe('README.md');
+    expect(repositoryUniverseNodeDisplayLabel(node({ id: 'concept:context', kind: 'concept', label: 'Ignored generated context' }))).toBe('Ignored generated context');
+  });
+
+  it('falls back to path, id and a final unknown label without requiring a global label variable', () => {
+    expect(repositoryUniverseNodeDisplayLabel(node({ id: 'file:path', label: '', path: 'src/App.tsx' }))).toBe('App.tsx');
+    expect(repositoryUniverseNodeDisplayLabel(node({ id: 'concept:no-label', label: '', path: '' }))).toBe('concept:no-label');
+    expect(repositoryUniverseNodeDisplayLabel({ id: '', label: '', path: '' })).toBe('Unknown repository entity');
+  });
+});

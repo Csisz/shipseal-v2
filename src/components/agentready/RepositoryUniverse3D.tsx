@@ -223,6 +223,7 @@ export default function RepositoryUniverse3D({
     }
 
     for (const node of model.nodes) {
+      const displayLabel = repositoryUniverseNodeDisplayLabel(node);
       const baseRadius = nodeRadius(node);
       const material = new THREE.MeshStandardMaterial({
         color: colorForNode(node),
@@ -249,7 +250,7 @@ export default function RepositoryUniverse3D({
       halo.position.copy(mesh.position);
       scene.add(halo);
 
-      const { sprite, material: labelMaterial, texture } = labelSprite(shortLabel(node.label), labelColorForNode(node));
+      const { sprite: label, material: labelMaterial, texture } = labelSprite(shortLabel(displayLabel), labelColorForNode(node));
       label.position.set(node.position.x, node.position.y + baseRadius + 5, node.position.z);
       label.scale.set(node.kind === 'repository' ? 70 : 42, node.kind === 'repository' ? 20 : 14, 1);
       scene.add(label);
@@ -666,6 +667,15 @@ function labelColorForNode(node: RepositoryUniverseNode) {
   if (node.kind === 'folder') return '#bae6fd';
   if (node.evidenceType === 'heuristic') return '#cbd5e1';
   return '#e5f7ff';
+}
+
+export function repositoryUniverseNodeDisplayLabel(node: Pick<RepositoryUniverseNode, 'id' | 'label' | 'path'>) {
+  const label = typeof node.label === 'string' ? node.label.trim() : '';
+  if (label) return label;
+  const path = typeof node.path === 'string' ? node.path.trim() : '';
+  if (path) return path.split('/').filter(Boolean).pop() || path;
+  const id = typeof node.id === 'string' ? node.id.trim() : '';
+  return id || 'Unknown repository entity';
 }
 
 function labelSprite(label: string, color: string) {
