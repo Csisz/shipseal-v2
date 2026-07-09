@@ -35,6 +35,12 @@ export {
   transformationDomainLabel,
 } from './repositoryTransformation';
 
+export {
+  buildRepositoryOptimizationPlan,
+  prepareRepositoryOptimizationManifest,
+  serializeRepositoryOptimizationManifest,
+} from './repositoryOptimizationPlan';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,
@@ -87,6 +93,19 @@ export type {
   RepositoryTransformationProposedEdge,
   RepositoryTransformationProposedNode,
 } from './repositoryTransformation';
+
+export type {
+  RepositoryOptimizationAction,
+  RepositoryOptimizationArtifact,
+  RepositoryOptimizationConflict,
+  RepositoryOptimizationConflictKind,
+  RepositoryOptimizationInclusionState,
+  RepositoryOptimizationManifest,
+  RepositoryOptimizationPlan,
+  RepositoryOptimizationPlanItem,
+  RepositoryOptimizationPlanSummary,
+  RepositoryOptimizationReadiness,
+} from './repositoryOptimizationPlan';
 
 export type {
   RepositoryAtlasCluster,

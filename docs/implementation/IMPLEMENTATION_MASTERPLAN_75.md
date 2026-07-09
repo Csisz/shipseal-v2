@@ -33,6 +33,12 @@ Turn software into knowledge.
 - Living knowledge graph
 - Visual navigation
 
+Î©.13 Actionable Optimization Pack foundation
+- Deterministic in-memory Optimization Plan
+- Generator-backed artifacts from the existing Delivery Pack path
+- Deduplicated proposed outputs with create, update, strengthen and blocked states
+- Reviewable future manifest without writing repository files, ZIPs or GitHub branches
+
 ## Release Gate
 A sprint ships only if it:
 - increases understanding,

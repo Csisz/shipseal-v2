@@ -26,6 +26,7 @@ import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentO
 import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
 import {
   buildRepositoryAtlasModel,
+  buildRepositoryOptimizationPlan,
   buildRepositoryTransformationProposalModel,
   buildRepositoryUniverseModel,
   buildWorkspaceStory,
@@ -35,9 +36,13 @@ import {
   repositoryUniverseFilterCounts,
   repositoryUniverseVisibleNodeIds,
   repositoryTransformationDomainCounts,
+  serializeRepositoryOptimizationManifest,
   transformationDomainLabel,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
+  type RepositoryOptimizationPlan,
+  type RepositoryOptimizationPlanItem,
+  type RepositoryOptimizationReadiness,
   type RepositoryTransformationDomain,
   type RepositoryTransformationDomainFilter,
   type RepositoryTransformationMode,
@@ -847,6 +852,8 @@ function RepositoryAtlasVisualization({
   const [transformationDomain, setTransformationDomain] = useState<RepositoryTransformationDomainFilter>('all');
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [excludedProposalIds, setExcludedProposalIds] = useState<Set<string>>(() => new Set());
+  const [optimizationPlanOpen, setOptimizationPlanOpen] = useState(false);
+  const [selectedOptimizationItemId, setSelectedOptimizationItemId] = useState<string | null>(null);
   const [selectedUniverseNodeId, setSelectedUniverseNodeId] = useState(universe.rootNodeId);
   const [universeCamera, setUniverseCamera] = useState<UniverseCameraState>(initialUniverseCamera);
   const [universeRotationPaused, setUniverseRotationPaused] = useState(prefersReducedMotion);
@@ -867,6 +874,23 @@ function RepositoryAtlasVisualization({
   const domainCounts = useMemo(() => repositoryTransformationDomainCounts(transformation.proposals), [transformation.proposals]);
   const visibleTransformationProposals = useMemo(() => transformation.proposals.filter(proposal => transformationDomain === 'all' || proposal.domain === transformationDomain), [transformation.proposals, transformationDomain]);
   const includedProposalCount = transformation.proposals.filter(proposal => !excludedProposalIds.has(proposal.id)).length;
+  const activeTransformationArtifactCount = useMemo(() => new Set(
+    transformation.proposals
+      .filter(proposal => !excludedProposalIds.has(proposal.id))
+      .flatMap(proposal => proposal.artifactActions.map(action => action.path))
+  ).size, [excludedProposalIds, transformation.proposals]);
+  const optimizationPlan = useMemo(() => optimizationPlanOpen
+    ? buildRepositoryOptimizationPlan({
+      report,
+      transformation,
+      universe,
+      atlas,
+      excludedProposalIds,
+    })
+    : null, [atlas, excludedProposalIds, optimizationPlanOpen, report, transformation, universe]);
+  const selectedOptimizationItem = selectedOptimizationItemId
+    ? optimizationPlan?.items.find(item => item.id === selectedOptimizationItemId) || null
+    : optimizationPlan?.items[0] || null;
   const relatedNodeIds = useMemo(() => relatedAtlasNodeIds(atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId), [atlas, selectedNode?.id, activeChapterNodeId, focusedClusterId]);
   const searchMatches = useMemo(() => matchingAtlasNodeIds(atlas, query), [atlas, query]);
   const universeSearchMatches = useMemo(() => matchingUniverseNodeIds(universe, query), [universe, query]);
@@ -933,7 +957,19 @@ function RepositoryAtlasVisualization({
     setTransformationDomain('all');
     setSelectedProposalId(null);
     setExcludedProposalIds(new Set());
+    setOptimizationPlanOpen(false);
+    setSelectedOptimizationItemId(null);
   }, [report.repoName, report.scannedAt, initialUniverseCamera, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (!optimizationPlan?.items.length) {
+      setSelectedOptimizationItemId(null);
+      return;
+    }
+    if (!selectedOptimizationItemId || !optimizationPlan.items.some(item => item.id === selectedOptimizationItemId)) {
+      setSelectedOptimizationItemId(optimizationPlan.items[0].id);
+    }
+  }, [optimizationPlan?.items, selectedOptimizationItemId]);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -1076,6 +1112,11 @@ function RepositoryAtlasVisualization({
   const changeTransformationMode = (mode: RepositoryTransformationMode) => {
     setTransformationMode(mode);
     if (mode === 'current') setSelectedProposalId(null);
+  };
+
+  const openOptimizationPlan = () => {
+    setTransformationMode('with-shipseal');
+    setOptimizationPlanOpen(true);
   };
 
   const selectProposal = (proposal: RepositoryTransformationProposal) => {
@@ -1282,7 +1323,34 @@ function RepositoryAtlasVisualization({
             {includedProposalCount.toLocaleString()} proposed improvements selected
           </div>
         )}
+        {transformation.proposals.length > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={openOptimizationPlan}
+            disabled={activeTransformationArtifactCount === 0}
+            className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow"
+          >
+            Review optimization plan
+          </Button>
+        )}
       </div>
+      {activeTransformationArtifactCount > 0 && (
+        <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground" aria-live="polite">
+          <span>{includedProposalCount.toLocaleString()} selected proposals</span>
+          <span>-</span>
+          <span>{activeTransformationArtifactCount.toLocaleString()} unique artifacts</span>
+          <span>-</span>
+          <span>{optimizationPlan ? `${optimizationPlan.summary.readyItemCount.toLocaleString()} ready` : 'Open plan for readiness'}</span>
+          {optimizationPlan && (
+            <>
+              <span>-</span>
+              <span>{(optimizationPlan.summary.reviewRequiredItemCount + optimizationPlan.summary.blockedItemCount).toLocaleString()} need review</span>
+            </>
+          )}
+        </div>
+      )}
       {transformation.proposals.length > 0 ? (
         <div className="flex flex-wrap gap-2" aria-label="Transformation domains">
           <TransformationDomainButton label="All improvements" count={transformation.proposals.length} active={transformationDomain === 'all'} onClick={() => setTransformationDomain('all')} />
@@ -1330,6 +1398,15 @@ function RepositoryAtlasVisualization({
         ))}
       </div>
     </details>
+  );
+
+  const optimizationPlanReview = optimizationPlanOpen && optimizationPlan && (
+    <OptimizationPlanReview
+      plan={optimizationPlan}
+      selectedItem={selectedOptimizationItem}
+      onSelectItem={item => setSelectedOptimizationItemId(item.id)}
+      onClose={() => setOptimizationPlanOpen(false)}
+    />
   );
 
   const searchResultList = searchResults.length > 0 && (
@@ -1675,6 +1752,7 @@ function RepositoryAtlasVisualization({
           </div>
 
           <div className="mb-4">{transformationControls}</div>
+          {optimizationPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
           <div className="mb-4">{atlasFilters}</div>
           {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
@@ -1715,6 +1793,7 @@ function RepositoryAtlasVisualization({
             {atlasToolbar}
           </div>
           <div className="mb-4">{transformationControls}</div>
+          {optimizationPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
           <div className="mb-4">{atlasFilters}</div>
           {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
@@ -1725,6 +1804,218 @@ function RepositoryAtlasVisualization({
         </div>
       )}
     </section>
+  );
+}
+
+function OptimizationPlanReview({
+  plan,
+  selectedItem,
+  onSelectItem,
+  onClose,
+}: {
+  plan: RepositoryOptimizationPlan;
+  selectedItem: RepositoryOptimizationPlanItem | null;
+  onSelectItem: (item: RepositoryOptimizationPlanItem) => void;
+  onClose: () => void;
+}) {
+  const manifestPreview = serializeRepositoryOptimizationManifest(plan.manifest);
+
+  return (
+    <section className="rounded-[1.5rem] border border-primary/20 bg-background/25 p-4 md:p-5" aria-labelledby="optimization-plan-heading">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Optimization Plan</div>
+          <h3 id="optimization-plan-heading" className="mt-1 font-display text-xl font-semibold">Review generator-backed artifacts</h3>
+          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+            Review the generator-backed artifacts ShipSeal is preparing. No repository files have been changed.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Badge variant="outline" className="border-primary/40 text-primary-glow">Prepared for package generation</Badge>
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            Close plan
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <OptimizationPlanMetric label="Selected proposals" value={plan.summary.selectedProposalCount} />
+        <OptimizationPlanMetric label="Unique artifacts" value={plan.summary.artifactCount} />
+        <OptimizationPlanMetric label="Create" value={plan.summary.actionCounts.create} />
+        <OptimizationPlanMetric label="Update" value={plan.summary.actionCounts.update} />
+        <OptimizationPlanMetric label="Strengthen" value={plan.summary.actionCounts.strengthen} />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {plan.summary.selectedDomains.map(domain => (
+          <Badge key={domain} variant="outline" className="border-border/60 text-muted-foreground">
+            {transformationDomainLabel(domain)}
+          </Badge>
+        ))}
+        <Badge variant="outline" className={plan.summary.blockedItemCount > 0 ? 'border-warning/50 text-warning' : plan.summary.reviewRequiredItemCount > 0 ? 'border-primary/35 text-primary-glow' : 'border-success/40 text-success'}>
+          {plan.summary.blockedItemCount > 0
+            ? `${plan.summary.blockedItemCount} blocked`
+            : plan.summary.reviewRequiredItemCount > 0
+              ? `${plan.summary.reviewRequiredItemCount} review required`
+              : 'Ready for package'}
+        </Badge>
+      </div>
+
+      {plan.items.length === 0 ? (
+        <div className="mt-5 rounded-2xl border border-border/55 bg-secondary/15 p-4 text-sm text-muted-foreground">
+          No selected proposals are active. Re-include a proposed improvement to restore its deterministic plan item.
+        </div>
+      ) : (
+        <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)]">
+          <div className="space-y-2" aria-label="Optimization Plan artifacts">
+            {plan.items.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={selectedItem?.id === item.id}
+                onClick={() => onSelectItem(item)}
+                className={`block w-full rounded-2xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  selectedItem?.id === item.id
+                    ? 'border-primary/50 bg-primary/10'
+                    : 'border-border/55 bg-background/20 hover:border-primary/35'
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-0 flex-1 break-all text-sm font-medium text-foreground">{item.artifact.path}</span>
+                  <Badge variant="outline" className={optimizationReadinessClass(item.readiness)}>
+                    {optimizationReadinessLabel(item.readiness)}
+                  </Badge>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
+                  <span>{optimizationActionLabel(item.artifact.action)}</span>
+                  <span>-</span>
+                  <span>{transformationDomainLabel(item.domains[0])}</span>
+                  <span>-</span>
+                  <span>{item.proposalIds.length} proposal{item.proposalIds.length === 1 ? '' : 's'}</span>
+                </div>
+                <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{item.purpose}</p>
+              </button>
+            ))}
+          </div>
+
+          <OptimizationPlanArtifactDetail item={selectedItem} />
+        </div>
+      )}
+
+      <details className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          Future package manifest
+        </summary>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Deterministic in-memory manifest for a future Optimization Pack. No download or GitHub action is triggered in this sprint.
+        </p>
+        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
+          {manifestPreview}
+        </pre>
+      </details>
+    </section>
+  );
+}
+
+function OptimizationPlanMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-2xl border border-border/50 bg-secondary/15 p-3">
+      <div className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="mt-1 font-display text-2xl font-semibold text-foreground">{value.toLocaleString()}</div>
+    </div>
+  );
+}
+
+function OptimizationPlanArtifactDetail({ item }: { item: RepositoryOptimizationPlanItem | null }) {
+  if (!item) {
+    return (
+      <aside className="rounded-2xl border border-border/55 bg-secondary/15 p-5 text-sm text-muted-foreground">
+        Select an artifact to inspect evidence, destination and generated content.
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="rounded-2xl border border-primary/15 bg-background/25 p-5" aria-labelledby="optimization-artifact-heading">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline" className={optimizationReadinessClass(item.readiness)}>
+          {optimizationReadinessLabel(item.readiness)}
+        </Badge>
+        <Badge variant="outline" className="border-border/60 text-muted-foreground">{optimizationActionLabel(item.artifact.action)}</Badge>
+        <Badge variant="outline" className={item.confidence === 'low' ? 'border-warning/45 text-warning' : 'border-primary/30 text-muted-foreground'}>
+          {item.confidence} confidence
+        </Badge>
+      </div>
+
+      <h4 id="optimization-artifact-heading" className="mt-3 break-words font-display text-lg font-semibold">{item.title}</h4>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.purpose}</p>
+
+      <div className="mt-4 grid gap-2 text-sm">
+        <Row label="Generated path" value={item.artifact.path} />
+        <Row label="Future destination" value={item.artifact.repositoryDestinationPath} />
+        <Row label="Generator" value={item.artifact.generatorId} />
+        <Row label="Contributors" value={item.proposalIds.join(', ')} />
+      </div>
+
+      <details open className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold">Scan evidence</summary>
+        <ul className="mt-3 space-y-2">
+          {item.evidenceReferences.slice(0, 6).map(evidence => (
+            <li key={`${evidence.state}:${evidence.label}:${evidence.detail || ''}`} className="rounded-xl border border-border/45 bg-background/20 px-3 py-2">
+              <div className="text-sm font-medium text-foreground">{evidence.label}</div>
+              {evidence.detail && <div className="mt-1 text-xs text-muted-foreground">{evidence.detail}</div>}
+            </li>
+          ))}
+        </ul>
+      </details>
+
+      <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold">Affected repository areas</summary>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {item.affectedCurrentEntities.length > 0 ? item.affectedCurrentEntities.slice(0, 8).map(entity => (
+            <span key={`${entity.source}:${entity.id}`} className="rounded-full border border-border/50 bg-background/20 px-2.5 py-1 text-[11px] text-muted-foreground">
+              {entity.path || entity.label}
+            </span>
+          )) : (
+            <span className="text-sm text-muted-foreground">No specific repository entity was mapped.</span>
+          )}
+        </div>
+      </details>
+
+      <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold">Expected agent behavior</summary>
+        <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+          {item.expectedAgentBehavior.map(text => <li key={text}>{text}</li>)}
+        </ul>
+      </details>
+
+      <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold">Generated content outline</summary>
+        <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
+          {item.artifact.outline.map(line => <li key={line} className="break-words">{line}</li>)}
+        </ul>
+      </details>
+
+      <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold">Real generated content preview</summary>
+        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
+          {item.artifact.excerpt || 'Generated content could not be prepared for this artifact.'}
+        </pre>
+      </details>
+
+      {item.conflicts.length > 0 && (
+        <details open className="mt-3 rounded-2xl border border-warning/35 bg-warning/10 p-4">
+          <summary className="cursor-pointer select-none text-sm font-semibold text-warning">Conflict and review state</summary>
+          <ul className="mt-3 space-y-2">
+            {item.conflicts.map(conflict => (
+              <li key={`${conflict.kind}:${conflict.paths.join('|')}`} className="text-sm text-warning/90">
+                <span className="font-medium">{optimizationConflictLabel(conflict.kind)}:</span> {conflict.explanation}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </aside>
   );
 }
 
@@ -2421,6 +2712,34 @@ function evidenceStateClass(state: WorkspaceStoryChapter['evidenceItems'][number
   if (state === 'evidence') return 'border-primary/40 text-primary-glow';
   if (state === 'missing') return 'border-warning/50 text-warning';
   return 'border-border/70 text-muted-foreground';
+}
+
+function optimizationActionLabel(action: RepositoryOptimizationPlanItem['artifact']['action']) {
+  if (action === 'create') return 'Create';
+  if (action === 'update') return 'Update';
+  if (action === 'strengthen') return 'Strengthen';
+  return 'Unavailable';
+}
+
+function optimizationReadinessLabel(readiness: RepositoryOptimizationReadiness) {
+  if (readiness === 'ready') return 'Ready for package';
+  if (readiness === 'review-required') return 'Review required';
+  return 'Blocked';
+}
+
+function optimizationReadinessClass(readiness: RepositoryOptimizationReadiness) {
+  if (readiness === 'ready') return 'border-success/40 text-success';
+  if (readiness === 'review-required') return 'border-primary/35 text-primary-glow';
+  return 'border-warning/50 text-warning';
+}
+
+function optimizationConflictLabel(kind: RepositoryOptimizationPlanItem['conflicts'][number]['kind']) {
+  if (kind === 'exact-existing-path') return 'Existing path';
+  if (kind === 'case-insensitive-path-collision') return 'Case collision';
+  if (kind === 'duplicate-target') return 'Consolidated target';
+  if (kind === 'unresolved-folder-agents-destination') return 'Unresolved folder destination';
+  if (kind === 'unavailable-generator-output') return 'Unavailable generator output';
+  return 'Action review';
 }
 
 function relatedAtlasNodeIds(atlas: RepositoryAtlasModel, selectedNodeId?: string, activeChapterNodeId?: string, focusedClusterId?: string | null) {

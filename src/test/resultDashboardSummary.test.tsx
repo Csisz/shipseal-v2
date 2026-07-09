@@ -4,6 +4,12 @@ import { buildReport, buildSampleReport } from '@/lib/readiness';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { createEmptyScanSummary } from '@/lib/scannerLimits';
+import {
+  buildRepositoryAtlasModel,
+  buildRepositoryOptimizationPlan,
+  buildRepositoryTransformationProposalModel,
+  buildRepositoryUniverseModel,
+} from '@/lib/workspace';
 
 const universeMockState = vi.hoisted(() => ({
   models: [] as unknown[],
@@ -110,6 +116,35 @@ function dispatchAtlasWheel(target: Element, deltaY: number) {
     dispatchResult = target.dispatchEvent(event);
   });
   return { event, prevented: !dispatchResult };
+}
+
+function optimizationPlanFor(report: ReturnType<typeof buildReport>) {
+  const universe = buildRepositoryUniverseModel(report);
+  const atlas = buildRepositoryAtlasModel(report);
+  const transformation = buildRepositoryTransformationProposalModel(report, universe, atlas);
+  return {
+    universe,
+    atlas,
+    transformation,
+    plan: buildRepositoryOptimizationPlan({ report, universe, atlas, transformation }),
+  };
+}
+
+function optimizationDashboardReport() {
+  return buildReport({
+    repoName: 'optimization-dashboard',
+    files: [
+      { path: 'README.md', size: 240 },
+      { path: 'package.json', size: 260 },
+      { path: 'src/App.tsx', size: 420 },
+      { path: 'src/App.test.tsx', size: 260 },
+      { path: '.github/workflows/ci.yml', size: 180 },
+    ],
+    textContents: {
+      'README.md': '# Optimization Dashboard\n\nRun tests before release.',
+      'package.json': JSON.stringify({ scripts: { test: 'vitest', build: 'vite build' }, dependencies: { react: '^18.3.1' } }),
+    },
+  });
 }
 
 describe('ResultDashboard summary copy', () => {
@@ -376,6 +411,56 @@ describe('ResultDashboard summary copy', () => {
     fireEvent.click(screen.getByRole('button', { name: /Universe 3D/i }));
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-node-count')).toBe(currentNodeCount);
     expect(screen.getByText(/proposed improvements selected/i)).toBeInTheDocument();
+  });
+
+  it('opens the Optimization Plan and updates it from proposal include state without losing it across view switches', async () => {
+    const report = optimizationDashboardReport();
+    const { universe, atlas, transformation, plan } = optimizationPlanFor(report);
+    const firstProposalId = transformation.proposals[0].id;
+    const excludedPlan = buildRepositoryOptimizationPlan({
+      report,
+      universe,
+      atlas,
+      transformation,
+      excludedProposalIds: [firstProposalId],
+    });
+
+    render(
+      <ResultDashboard
+        report={report}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        onReplayReveal={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
+
+    expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
+    expect(screen.getByText(`${plan.summary.selectedProposalCount.toLocaleString()} selected proposals`)).toBeInTheDocument();
+    expect(screen.getByText(`${plan.summary.artifactCount.toLocaleString()} unique artifacts`)).toBeInTheDocument();
+    expect(screen.getAllByText(/Ready for package|Review required|Blocked/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Create|Update|Strengthen/i).length).toBeGreaterThan(0);
+
+    const firstItem = plan.items[0];
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(firstItem.artifact.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }));
+    expect(screen.getByText(firstItem.artifact.generatorId)).toBeInTheDocument();
+    expect(screen.getByText(/Future package manifest/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/ShipSeal Delivery Pack/i).length).toBeGreaterThan(0);
+
+    switchToAtlas2D();
+    const proposedButtons = await screen.findAllByRole('button', { name: /Proposed With ShipSeal entity/i });
+    fireEvent.click(proposedButtons[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Remove from plan/i }));
+    expect(screen.getByText(`${excludedPlan.summary.selectedProposalCount.toLocaleString()} selected proposals`)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Current' })[0]);
+    expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'With ShipSeal' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: /Universe 3D/i }));
+    expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
   });
 
   it('preserves Repository Universe selection and camera state in fullscreen', async () => {
