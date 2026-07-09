@@ -12,15 +12,18 @@ export interface RepositoryUniverseVisualToken {
 // brightness/opacity = evidence state; glow = selection/focus;
 // relationship lines = evidence strength and current local focus.
 export const REPOSITORY_UNIVERSE_CLUSTER_PALETTE: RepositoryUniverseVisualToken[] = [
-  { id: 'cyan', label: 'Cyan', hex: 0x38bdf8, css: '#38bdf8' },
-  { id: 'violet', label: 'Violet', hex: 0xa78bfa, css: '#a78bfa' },
-  { id: 'teal', label: 'Teal', hex: 0x2dd4bf, css: '#2dd4bf' },
-  { id: 'blue', label: 'Blue', hex: 0x60a5fa, css: '#60a5fa' },
-  { id: 'green', label: 'Green', hex: 0x86efac, css: '#86efac' },
-  { id: 'amber', label: 'Amber', hex: 0xfbbf24, css: '#fbbf24' },
+  { id: 'cyan', label: 'Cyan', hex: 0x22d3ee, css: '#22d3ee' },
+  { id: 'violet', label: 'Violet', hex: 0xc084fc, css: '#c084fc' },
+  { id: 'teal', label: 'Teal', hex: 0x14b8a6, css: '#14b8a6' },
+  { id: 'blue', label: 'Blue', hex: 0x3b82f6, css: '#3b82f6' },
+  { id: 'green', label: 'Green', hex: 0x4ade80, css: '#4ade80' },
+  { id: 'amber', label: 'Amber', hex: 0xf59e0b, css: '#f59e0b' },
   { id: 'coral', label: 'Coral', hex: 0xfb7185, css: '#fb7185' },
-  { id: 'magenta', label: 'Magenta', hex: 0xf0abfc, css: '#f0abfc' },
+  { id: 'magenta', label: 'Magenta', hex: 0xe879f9, css: '#e879f9' },
   { id: 'indigo', label: 'Indigo', hex: 0x818cf8, css: '#818cf8' },
+  { id: 'lime', label: 'Lime', hex: 0xa3e635, css: '#a3e635' },
+  { id: 'sky', label: 'Sky', hex: 0x38bdf8, css: '#38bdf8' },
+  { id: 'rose', label: 'Rose', hex: 0xf43f5e, css: '#f43f5e' },
   { id: 'slate', label: 'Cool neutral', hex: 0x94a3b8, css: '#94a3b8' },
 ];
 
@@ -29,10 +32,15 @@ const CLUSTER_COLOR_OVERRIDES: Record<string, string> = {
   'cluster:documentation': 'violet',
   'cluster:project-memory': 'teal',
   'cluster:verification': 'green',
-  'cluster:ci-workflow': 'blue',
+  'cluster:ci-workflow': 'amber',
   'cluster:configuration': 'indigo',
-  'cluster:assets': 'magenta',
+  'cluster:assets': 'rose',
   'cluster:context': 'slate',
+  'cluster:source': 'blue',
+  'cluster:src': 'blue',
+  'cluster:app': 'sky',
+  'cluster:test': 'lime',
+  'cluster:tests': 'lime',
 };
 
 export function repositoryUniverseClusterToken(clusterId: string): RepositoryUniverseVisualToken {

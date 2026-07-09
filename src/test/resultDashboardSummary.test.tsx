@@ -256,7 +256,10 @@ describe('ResultDashboard summary copy', () => {
     expect(within(chapterNav).getByRole('button', { name: /Apply/i })).toBeInTheDocument();
     expect(within(chapterNav).getByRole('button', { name: /Verify/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/Next best action/i)).toHaveTextContent(/Review ShipSeal improvements/i);
-    expect(await screen.findByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
+    const universe = await screen.findByRole('img', { name: /Repository Universe 3D graph/i });
+    expect(universe).toBeInTheDocument();
+    const exportsSection = screen.getAllByText('Exports and reports')[0];
+    expect(universe.compareDocumentPosition(exportsSection) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: /^Review ShipSeal improvements$/i }));
 
@@ -279,10 +282,17 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: /What ShipSeal understood/i })).toBeInTheDocument();
-    expect(screen.getAllByText('Repository Intelligence').length).toBeGreaterThan(0);
-    expect(screen.getByText('Visual understanding')).toBeInTheDocument();
-    expect(screen.getByText(/This repository has a usable AI workspace forming/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Explore the repository universe/i })).toBeInTheDocument();
+    const universe = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+    expect(universe).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Repository overview/i })).toBeInTheDocument();
+    expect(screen.getByText(/ShipSeal mapped the scan boundary/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /What ShipSeal understood/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/Workspace story and evidence/i)).toBeInTheDocument();
+    expect(screen.getByText(/Repository models and metrics/i)).toBeInTheDocument();
+
+    openDisclosure(/Repository models and metrics/i);
     expect(screen.getByRole('heading', { name: /How ShipSeal understands this repository/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Mental Model semantic repository graph/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Architecture: .* signal/i })).toBeInTheDocument();
@@ -290,7 +300,6 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByRole('heading', { name: /AI Instructions/i })).toBeInTheDocument();
     expect(screen.getAllByText('Connections').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Repository DNA').length).toBeGreaterThan(0);
-    expect(screen.getByText(/ShipSeal connected documentation, architecture, memory, verification and context/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /AI workspace profile/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Repository DNA radar profile/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Documentation: .*current score/i })).toBeInTheDocument();
@@ -304,6 +313,7 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(/Workspace metrics and next action/i)).toBeInTheDocument();
     expect(screen.getAllByText('Workspace Quality').length).toBeGreaterThan(0);
     expect(screen.getAllByText(`${report.repositoryHealth.overall.score} / 100`).length).toBeGreaterThan(0);
+    openDisclosure(/Supporting workspace views/i);
     expect(screen.getByText('Workspace Overview')).toBeInTheDocument();
     expect(screen.getByText('Repository as an AI workspace')).toBeInTheDocument();
     expect(screen.getByText(`${report.repositoryHealth.overall.score} / 100`)).toBeInTheDocument();
@@ -314,7 +324,6 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText('Agent Heatmap')).toBeInTheDocument();
     expect(screen.getByText('Context Timeline')).toBeInTheDocument();
     expect(screen.getAllByText('Coming in upcoming Workspace Optimization updates.').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Repository Intelligence').length).toBeGreaterThan(0);
     expect(screen.getAllByText('AI Development Readiness').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Agent Routing').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Delivery Confidence').length).toBeGreaterThan(0);
@@ -331,7 +340,8 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: /Repository shape/i })).toBeInTheDocument();
+    openDisclosure(/Workspace story and evidence/i);
+    openDisclosure(/Repository models and metrics/i);
     fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
 
     expect(screen.getByRole('heading', { name: /Knowledge and docs/i })).toBeInTheDocument();
@@ -389,7 +399,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByRole('heading', { name: /What ShipSeal understood/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Explore the repository universe/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Reports and Delivery Outputs/i })).toBeInTheDocument();
   });
@@ -404,6 +414,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    openDisclosure(/Workspace story and evidence/i);
     switchToAtlas2D();
     fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
     expect(screen.getByTestId('atlas-node-concept:documentation')).toHaveAttribute('aria-pressed', 'true');
@@ -805,7 +816,7 @@ describe('ResultDashboard summary copy', () => {
       );
 
       expect(await screen.findByText(/Repository Universe could not be rendered/i)).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: /What ShipSeal understood/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Explore the repository universe/i })).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: /Reports and Delivery Outputs/i })).toBeInTheDocument();
       expect(screen.getByText(/Your scan and repository evidence are still available/i)).toBeInTheDocument();
 

@@ -222,7 +222,6 @@ const Index = () => {
 
   useEffect(() => {
     if (!activeReportKey) return;
-    setIntelligenceReveal({ key: activeReportKey, visible: true });
     setActiveStoryChapterId(null);
   }, [activeReportKey]);
 
@@ -406,7 +405,9 @@ const Index = () => {
     setSubmittedIntakeSkipped(false);
     setIntelligenceReveal(null);
     const report = buildSampleReport();
+    const key = `${report.repoName}-${report.scannedAt}`;
     setSampleReport(report);
+    setIntelligenceReveal({ key, visible: true });
     setHistory(saveScanHistory(report));
     queueMicrotask(() => scrollWindowToTop('smooth'));
   }, [scan]);

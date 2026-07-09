@@ -273,11 +273,6 @@ export function ResultDashboard({
         onChange={setActiveResultChapter}
       />
 
-      <NextBestActionCard
-        action={nextBestAction}
-        onAction={handleNextBestAction}
-      />
-
       <AiWorkspaceHero
         report={report}
         limitationReason={limitedScanReason}
@@ -293,6 +288,11 @@ export function ResultDashboard({
         verificationBaseline={verificationBaseline}
         onSaveVerificationBaseline={onSaveVerificationBaseline}
         onDiscardVerificationBaseline={onDiscardVerificationBaseline}
+      />
+
+      <NextBestActionCard
+        action={nextBestAction}
+        onAction={handleNextBestAction}
       />
 
       {activeResultChapter === 'understand' && (
@@ -743,6 +743,7 @@ function WorkspaceHeroSummary({
   onReset: () => void;
   onReplayReveal?: () => void;
 }) {
+  const unavailable = report.repositoryHealth.overall.score === null;
   const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;
   const nextMoveCount = Math.max(1, Math.min(3, report.repositoryHealth.topActions.length || report.aiNarrative.nextBestActions.length || report.improvements.length));
   return (
@@ -753,9 +754,13 @@ function WorkspaceHeroSummary({
             <Badge variant="outline" className="border-primary/45 text-primary-glow">AI Workspace</Badge>
             <span className="text-xs text-muted-foreground">{report.stack.primary}</span>
           </div>
-          <h1 id="workspace-result-heading" className="font-display text-3xl font-semibold leading-tight md:text-5xl">Repository understood.</h1>
+          <h1 id="workspace-result-heading" className="font-display text-3xl font-semibold leading-tight md:text-5xl">
+            {unavailable ? 'Repository evidence is limited.' : 'Repository understood.'}
+          </h1>
           <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">
-            ShipSeal mapped {fileCount.toLocaleString()} files into a workspace model and found {nextMoveCount} practical {nextMoveCount === 1 ? 'way' : 'ways'} to improve AI agent navigation.
+            {unavailable
+              ? `ShipSeal could only map ${fileCount.toLocaleString()} files from the available scan boundary.`
+              : `ShipSeal mapped ${fileCount.toLocaleString()} files into a workspace model and found ${nextMoveCount} practical ${nextMoveCount === 1 ? 'way' : 'ways'} to improve AI agent navigation.`}
           </p>
           {limitedScanReason && (
             <p className="mt-3 max-w-3xl rounded-2xl border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning/90">
@@ -956,7 +961,6 @@ function AiWorkspaceHero({
   const unavailable = health.overall.score === null;
   const repositoryDna = buildRepositoryDna(report);
   const mentalModel = buildMentalModel(report);
-  const primarySentence = workspaceUnderstandingSentence(report);
   const topAction = health.topActions[0];
   const [exploredChapterIds, setExploredChapterIds] = useState<WorkspaceStoryChapterId[]>([]);
   const [manualMentalNodeId, setManualMentalNodeId] = useState<MentalModelNodeId | null>(null);
@@ -987,47 +991,19 @@ function AiWorkspaceHero({
   };
 
   return (
-    <section className="mb-8 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-5 shadow-glow md:p-8 lg:p-10 animate-fade-in-up" aria-labelledby="repository-intelligence-heading">
+    <section className="mb-6 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-3 shadow-glow md:p-5 animate-fade-in-up" aria-label="Repository Intelligence">
       <div className="relative">
         <div className="absolute inset-0 -m-10 bg-[radial-gradient(circle_at_24%_18%,hsl(var(--primary)/0.22),transparent_34%),radial-gradient(circle_at_78%_26%,hsl(var(--accent)/0.13),transparent_32%),linear-gradient(180deg,hsl(var(--background)/0),hsl(var(--background)/0.2))] pointer-events-none" />
-        {activeResultChapter === 'understand' && <div className="relative mb-7 flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-4xl">
-            <div className="mb-3 flex flex-wrap items-center gap-3">
-              <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Intelligence</span>
-              <Badge variant="outline" className="border-primary/45 text-primary-glow">
-                Visual understanding
-              </Badge>
-            </div>
-            <h1 id="repository-intelligence-heading" className="font-display text-3xl font-semibold leading-tight md:text-5xl">
-              {unavailable ? 'I need more evidence to understand this repository.' : 'What ShipSeal understood'}
-            </h1>
-            {unavailable ? (
-              <div className="mt-5 rounded-2xl border border-warning/35 bg-warning/10 p-4 text-sm leading-relaxed text-warning">
-                <p className="font-medium">The repository model is incomplete.</p>
-                <p className="mt-2 text-warning/90">{limitationReason || health.blockers[0]?.detail || 'The scan was limited or synthetic fallback data was used.'}</p>
-                <p className="mt-2 text-warning/90">Reconnect GitHub, upload the complete ZIP, or retry the full scan.</p>
-              </div>
-            ) : (
-              <p className="mt-5 max-w-3xl text-base leading-relaxed text-muted-foreground md:text-lg">
-                {primarySentence} ShipSeal connected documentation, architecture, memory, verification and context into a visual model of how this workspace can be understood.
-              </p>
-            )}
+        {unavailable ? (
+          <div className="relative rounded-3xl border border-warning/35 bg-warning/10 p-5 text-sm leading-relaxed text-warning md:p-6">
+            <div className="text-xs font-mono uppercase tracking-wider text-warning/80">Repository Intelligence</div>
+            <h2 className="mt-2 font-display text-2xl font-semibold text-foreground">I need more evidence to understand this repository.</h2>
+            <p className="mt-3 font-medium text-warning">The repository model is incomplete.</p>
+            <p className="mt-3 text-warning/90">{limitationReason || health.blockers[0]?.detail || 'The scan was limited or synthetic fallback data was used.'}</p>
+            <p className="mt-2 text-warning/90">Reconnect GitHub, upload the complete ZIP, or retry the full scan.</p>
           </div>
-        </div>}
-
-        {!unavailable && (
+        ) : (
           <>
-            {activeResultChapter === 'understand' && (
-              <>
-                <WorkspaceStoryNavigator
-                  story={story}
-                  activeChapter={activeStoryChapter}
-                  exploredChapterIds={exploredChapterIds}
-                  onSelectChapter={selectStoryChapter}
-                />
-                {activeStoryChapter && <WorkspaceEvidenceTrail chapter={activeStoryChapter} />}
-              </>
-            )}
             <RepositoryAtlasVisualization
               report={report}
               story={story}
@@ -1043,6 +1019,25 @@ function AiWorkspaceHero({
               onSaveVerificationBaseline={onSaveVerificationBaseline}
               onDiscardVerificationBaseline={onDiscardVerificationBaseline}
             />
+
+            {activeResultChapter === 'understand' && <details className="relative mt-5 rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
+              <summary className="cursor-pointer select-none font-display text-lg font-semibold text-foreground">Workspace story and evidence</summary>
+              <div className="mt-5">
+                <WorkspaceStoryNavigator
+                  story={story}
+                  activeChapter={activeStoryChapter}
+                  exploredChapterIds={exploredChapterIds}
+                  onSelectChapter={selectStoryChapter}
+                />
+                {activeStoryChapter ? (
+                  <WorkspaceEvidenceTrail chapter={activeStoryChapter} />
+                ) : (
+                  <p className="rounded-2xl border border-border/55 bg-background/20 p-4 text-sm text-muted-foreground">
+                    Select a story chapter to follow the evidence trail from repository signal to agent use.
+                  </p>
+                )}
+              </div>
+            </details>}
 
             {activeResultChapter === 'understand' && <details className="relative mt-5 rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
               <summary className="cursor-pointer select-none font-display text-lg font-semibold text-foreground">Repository models and metrics</summary>
@@ -2068,9 +2063,18 @@ function RepositoryAtlasVisualization({
           nodeHiddenByFilters={Boolean(selectedUniverseNode && !selectedUniverseNodeVisible)}
           cluster={activeUniverseCluster}
           activeChapter={activeChapter}
+          repositoryName={report.repoName}
+          scanSummary={{
+            sourceLabel: isGitHubSource(report.source.sourceType)
+              ? `${report.source.githubOwner}/${report.source.githubRepo}${report.source.githubBranch ? ` @ ${report.source.githubBranch}` : ''}`
+              : 'ZIP upload',
+            analyzedFiles: report.scanEvidence.analyzedFileCount || report.scanSummary.filesAnalyzed || report.fileCount,
+            clusterCount: universe.clusters.length,
+          }}
+          rootNodeId={universe.rootNodeId}
           collapsed={fullscreen && inspectorCollapsed}
           onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
-          onFocusNode={() => selectedUniverseNode && setUniverseCamera(current => ({ ...current, radius: selectedUniverseNode.kind === 'file' ? 170 : 240, target: selectedUniverseNode.position }))}
+          onFocusNode={() => selectedUniverseNode && setUniverseCamera(current => ({ ...current, radius: selectedUniverseNode.kind === 'file' ? 220 : 300, target: selectedUniverseNode.position }))}
           onFocusCluster={() => selectedUniverseNode?.clusterId && setFocusedClusterId(selectedUniverseNode.clusterId)}
           onClearFocus={() => setFocusedClusterId(null)}
           onReturnRepository={() => {
@@ -3126,6 +3130,9 @@ function UniverseInspector({
   nodeHiddenByFilters = false,
   cluster,
   activeChapter,
+  repositoryName,
+  scanSummary,
+  rootNodeId,
   collapsed = false,
   onToggleCollapsed,
   onFocusNode,
@@ -3140,6 +3147,13 @@ function UniverseInspector({
   nodeHiddenByFilters?: boolean;
   cluster?: RepositoryUniverseModel['clusters'][number] | null;
   activeChapter: WorkspaceStoryChapter | null;
+  repositoryName: string;
+  scanSummary: {
+    sourceLabel: string;
+    analyzedFiles: number;
+    clusterCount: number;
+  };
+  rootNodeId: string;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   onFocusNode: () => void;
@@ -3149,6 +3163,7 @@ function UniverseInspector({
   onOpenAtlas: () => void;
   onSelectNode: (node: RepositoryUniverseNode) => void;
 }) {
+  const isRepositoryOverview = !node || node.id === rootNodeId || node.kind === 'repository';
   const relationships = node ? universe.edges.filter(edge => edge.source === node.id || edge.target === node.id) : [];
   const relatedNodes = relationships
     .map(edge => universe.nodes.find(item => item.id === (edge.source === node?.id ? edge.target : edge.source)))
@@ -3163,9 +3178,9 @@ function UniverseInspector({
       <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="universe-inspector-heading-collapsed">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Selected entity</div>
-            <h3 id="universe-inspector-heading-collapsed" className="mt-1 truncate font-display text-base font-semibold">{node?.label || 'Repository Universe'}</h3>
-            <p className="mt-1 text-xs text-muted-foreground">{node ? `${universeKindLabel(node.kind)} - ${relationships.length} relationships` : 'No entity selected'}</p>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{isRepositoryOverview ? 'Repository overview' : 'Selected entity'}</div>
+            <h3 id="universe-inspector-heading-collapsed" className="mt-1 truncate font-display text-base font-semibold">{isRepositoryOverview ? repositoryName : node?.label || 'Repository Universe'}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">{isRepositoryOverview ? `${scanSummary.analyzedFiles.toLocaleString()} files analyzed` : node ? `${universeKindLabel(node.kind)} - ${relationships.length} relationships` : 'No entity selected'}</p>
           </div>
           {onToggleCollapsed && (
             <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} aria-label="Expand inspector">
@@ -3200,10 +3215,14 @@ function UniverseInspector({
         )}
       </div>
 
-      <h3 id="universe-inspector-heading" className="mt-3 font-display text-xl font-semibold">Selected entity</h3>
-      <div className="mt-2 break-words text-lg font-semibold text-foreground">{node?.label || 'Repository Universe'}</div>
+      <h3 id="universe-inspector-heading" className="mt-3 font-display text-xl font-semibold">{isRepositoryOverview ? 'Repository overview' : 'Selected entity'}</h3>
+      <div className="mt-2 break-words text-lg font-semibold text-foreground">{isRepositoryOverview ? repositoryName : node?.label || 'Repository Universe'}</div>
       {node?.path && <p className="mt-1 break-all text-xs text-muted-foreground">{node.path}</p>}
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{String(node?.metadata.repositoryRole || 'Select a file, folder or knowledge node to inspect how ShipSeal understands it.')}</p>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+        {isRepositoryOverview
+          ? 'ShipSeal mapped the scan boundary, major clusters and evidence signals into a navigable AI workspace. Select a file, folder or knowledge node to inspect the local evidence.'
+          : String(node?.metadata.repositoryRole || 'Select a file, folder or knowledge node to inspect how ShipSeal understands it.')}
+      </p>
       {nodeHiddenByFilters && (
         <p className="mt-3 rounded-2xl border border-warning/35 bg-warning/10 px-3 py-2 text-xs text-warning">
           This entity is selected but hidden by the current filters. Re-enable its type or evidence state to show it in the Universe.
@@ -3218,6 +3237,9 @@ function UniverseInspector({
       <div className="mt-4 grid gap-2 text-sm">
         <Row label="Type" value={node ? universeKindLabel(node.kind) : 'n/a'} />
         <Row label="Cluster" value={cluster?.label || 'Repository'} />
+        {isRepositoryOverview && <Row label="Scan boundary" value={scanSummary.sourceLabel} />}
+        {isRepositoryOverview && <Row label="Analyzed files" value={scanSummary.analyzedFiles.toLocaleString()} />}
+        {isRepositoryOverview && <Row label="Main clusters" value={scanSummary.clusterCount.toLocaleString()} />}
         <Row label="Category" value={String(node?.metadata.category || 'n/a')} />
         <Row label="Parent folder" value={String(node?.metadata.directory || 'root')} />
         <Row label="Relationships" value={String(relationships.length)} />
@@ -3831,7 +3853,7 @@ function relationshipLabel(edge: Pick<RepositoryKnowledgeEdge, 'relationship'>) 
 function initialUniverseCameraState(universe: RepositoryUniverseModel): UniverseCameraState {
   const visibleNodes = universe.nodes.filter(node => node.kind !== 'concept' || node.id === universe.rootNodeId);
   if (!visibleNodes.length) {
-    return { theta: -0.72, phi: 1.12, radius: 620, target: { x: 0, y: 0, z: 0 } };
+    return { theta: -0.68, phi: 1.08, radius: 520, target: { x: 0, y: 0, z: 0 } };
   }
 
   const bounds = visibleNodes.reduce((box, node) => ({
@@ -3858,9 +3880,9 @@ function initialUniverseCameraState(universe: RepositoryUniverseModel): Universe
   const spread = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, bounds.maxZ - bounds.minZ);
 
   return {
-    theta: -0.72,
-    phi: 1.12,
-    radius: clamp(spread * 1.45, 430, 980),
+    theta: -0.68,
+    phi: 1.08,
+    radius: clamp(spread * 1.12, 360, 780),
     target,
   };
 }

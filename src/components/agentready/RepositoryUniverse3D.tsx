@@ -78,8 +78,8 @@ const INITIAL_APPEARANCE_MS = 1400;
 const IDLE_ROTATION_DELAY_MS = 3600;
 const LABEL_FAR_RADIUS = 720;
 const LABEL_MEDIUM_RADIUS = 420;
-const LAYOUT_SPREAD_XZ = 1.08;
-const LAYOUT_SPREAD_Y = 0.86;
+const LAYOUT_SPREAD_XZ = 0.96;
+const LAYOUT_SPREAD_Y = 0.78;
 
 export default function RepositoryUniverse3D({
   model,
@@ -498,21 +498,21 @@ export default function RepositoryUniverse3D({
         }
         const state = cameraStateRef.current;
         if (pointerMode === 'pan') {
-          const panScale = state.radius / 760;
+          const panScale = state.radius / 980;
           const theta = state.theta;
           publishCamera({
             ...state,
             target: {
               x: state.target.x - Math.cos(theta) * dx * panScale + Math.sin(theta) * dy * panScale * 0.16,
-              y: state.target.y + dy * panScale * 0.72,
+              y: state.target.y + dy * panScale * 0.52,
               z: state.target.z - Math.sin(theta) * dx * panScale - Math.cos(theta) * dy * panScale * 0.16,
             },
           });
         } else {
           publishCamera({
             ...state,
-            theta: state.theta - dx * 0.0048,
-            phi: Math.max(0.22, Math.min(Math.PI - 0.22, state.phi - dy * 0.0048)),
+            theta: state.theta - dx * (fullscreen ? 0.0042 : 0.0032),
+            phi: Math.max(0.24, Math.min(Math.PI - 0.24, state.phi - dy * (fullscreen ? 0.0042 : 0.0032))),
           });
         }
         userInteractedAt = performance.now();
@@ -563,8 +563,8 @@ export default function RepositoryUniverse3D({
 
     const handleWheel = (event: WheelEvent) => {
       const state = cameraStateRef.current;
-      const factor = Math.exp(event.deltaY * 0.0011);
-      const nextRadius = Math.max(100, Math.min(1700, state.radius * factor));
+      const factor = Math.exp(event.deltaY * (fullscreen ? 0.0009 : 0.00068));
+      const nextRadius = Math.max(150, Math.min(1500, state.radius * factor));
       publishCamera({ ...state, radius: nextRadius });
       userInteractedAt = performance.now();
       event.preventDefault();
@@ -582,7 +582,7 @@ export default function RepositoryUniverse3D({
       const target = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
       publishCamera({
         ...cameraStateRef.current,
-        radius: node.kind === 'file' ? 165 : 230,
+        radius: node.kind === 'file' ? 220 : 300,
         target,
       }, true);
       onSelectNodeRef.current(node.id);
@@ -679,7 +679,7 @@ export default function RepositoryUniverse3D({
         const quiet = Boolean(selectedId && !selected && !connected && !matched && node.id !== model.rootNodeId);
         const suppressed = Boolean(focusedCluster && !focused && !selected && !matched);
         const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.98 : connected ? 0.92 : quiet || suppressed ? 0.3 : node.importance === 'background' ? 0.58 : 0.86;
-        const scale = selected ? 2.05 : hovered ? 1.58 : matched ? 1.48 : connected ? 1.32 : node.importance === 'primary' ? 1.05 : 1;
+        const scale = selected ? 2.18 : hovered ? 1.58 : matched ? 1.48 : connected ? 1.32 : node.importance === 'primary' ? 1.08 : 1;
 
         mesh.visible = opacity > 0.02;
         mesh.material.opacity = opacity;
@@ -690,9 +690,9 @@ export default function RepositoryUniverse3D({
         mesh.scale.setScalar(scale);
 
         halo.visible = visible && (selected || hovered || matched || connected);
-        halo.material.opacity = selected ? 0.42 : hovered ? 0.24 : matched ? 0.2 : connected ? 0.105 : 0;
-        halo.material.color.setHex(selected ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.36) : connected ? repositoryUniverseNodeBaseColor(node) : 0x67e8f9);
-        halo.scale.setScalar(selected ? 1.34 : connected ? 1.14 : 1);
+        halo.material.opacity = selected ? 0.58 : hovered ? 0.25 : matched ? 0.22 : connected ? 0.13 : 0;
+        halo.material.color.setHex(selected ? 0xe0faff : connected ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16) : 0x67e8f9);
+        halo.scale.setScalar(selected ? 1.5 : connected ? 1.16 : 1);
 
         const labelVisible = visible && shouldRenderLabel(node, {
           selected,
@@ -812,8 +812,25 @@ export default function RepositoryUniverse3D({
         data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}
         data-settled={settled ? 'true' : 'false'}
       />
+      {!settled && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-[#050914]/70 backdrop-blur-[1px] transition-opacity duration-500 motion-reduce:hidden" aria-hidden="true">
+          <div className="relative flex h-52 w-52 items-center justify-center">
+            <div className="absolute h-full w-full rounded-full border border-primary/15" />
+            <div className="absolute h-36 w-36 rounded-full border border-primary/20" />
+            <div className="absolute h-20 w-20 rounded-full border border-primary/30 bg-primary/10 shadow-glow" />
+            <div className="absolute left-8 top-8 h-2.5 w-2.5 rounded-full bg-primary/80 shadow-[0_0_18px_hsl(var(--primary)/0.5)]" />
+            <div className="absolute right-10 top-14 h-2 w-2 rounded-full bg-accent/80 shadow-[0_0_16px_hsl(var(--accent)/0.45)]" />
+            <div className="absolute bottom-10 left-14 h-2 w-2 rounded-full bg-success/80 shadow-[0_0_16px_hsl(var(--success)/0.45)]" />
+            <div className="absolute bottom-14 right-9 h-2.5 w-2.5 rounded-full bg-primary-glow/80 shadow-[0_0_18px_hsl(var(--primary-glow)/0.5)]" />
+            <div className="relative rounded-full border border-primary/25 bg-background/70 px-4 py-2 text-center backdrop-blur">
+              <div className="font-display text-sm font-semibold text-foreground">Forming repository universe</div>
+              <div className="mt-1 text-[11px] text-muted-foreground">Signals are becoming clusters</div>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-primary/20 bg-background/55 px-3 py-1.5 text-[11px] text-muted-foreground backdrop-blur">
-        Drag to orbit - Scroll to zoom - Right-drag to pan - Click a node
+        Drag to orbit - gentle scroll to zoom - click a node
       </div>
       <div className="pointer-events-none absolute bottom-4 left-4 rounded-full border border-border/50 bg-background/50 px-3 py-1.5 text-[11px] text-muted-foreground backdrop-blur">
         {visibleNodeIds.length.toLocaleString()} visible - {model.summary.representedFileNodeCount.toLocaleString()} file nodes - {model.summary.folderNodeCount.toLocaleString()} folders
@@ -966,8 +983,8 @@ function visualPositionFor(position: RepositoryUniversePosition, isRoot = false)
 function clampCameraState(state: UniverseCameraState): UniverseCameraState {
   return {
     theta: state.theta,
-    phi: Math.max(0.2, Math.min(Math.PI - 0.2, state.phi)),
-    radius: Math.max(100, Math.min(1700, state.radius)),
+    phi: Math.max(0.24, Math.min(Math.PI - 0.24, state.phi)),
+    radius: Math.max(150, Math.min(1500, state.radius)),
     target: {
       x: Math.max(-900, Math.min(900, state.target.x)),
       y: Math.max(-520, Math.min(520, state.target.y)),

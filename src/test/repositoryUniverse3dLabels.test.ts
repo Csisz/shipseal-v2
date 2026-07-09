@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel } from '@/components/agentready/RepositoryUniverse3D';
-import { brightenClusterColor, repositoryUniverseClusterToken } from '@/lib/workspace/repositoryUniverseVisual';
+import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryUniverseNode } from '@/lib/workspace';
 
 function node(overrides: Partial<RepositoryUniverseNode>) {
@@ -44,4 +44,35 @@ describe('Repository Universe 3D labels', () => {
     expect(brightenClusterColor(repositoryUniverseNodeBaseColor(documentation), 0.44)).not.toBe(0xf8fafc);
     expect(repositoryUniverseNodeBaseColor(node({ clusterId: 'cluster:documentation', evidenceType: 'heuristic', metadata: { category: 'documentation' } }))).not.toBe(repositoryUniverseNodeBaseColor(documentation));
   });
+
+  it('keeps the deterministic cluster palette vivid and distinguishable', () => {
+    const keyClusters = [
+      'cluster:repository',
+      'cluster:documentation',
+      'cluster:project-memory',
+      'cluster:verification',
+      'cluster:ci-workflow',
+      'cluster:configuration',
+      'cluster:assets',
+    ];
+    const colors = keyClusters.map(clusterId => repositoryUniverseClusterToken(clusterId).hex);
+
+    expect(new Set(colors).size).toBe(colors.length);
+    for (let index = 0; index < colors.length; index += 1) {
+      for (let otherIndex = index + 1; otherIndex < colors.length; otherIndex += 1) {
+        expect(colorDistance(colors[index], colors[otherIndex])).toBeGreaterThan(54);
+      }
+    }
+    expect(new Set(REPOSITORY_UNIVERSE_CLUSTER_PALETTE.map(token => token.hex)).size).toBe(REPOSITORY_UNIVERSE_CLUSTER_PALETTE.length);
+  });
 });
+
+function colorDistance(first: number, second: number) {
+  const firstRed = (first >> 16) & 255;
+  const firstGreen = (first >> 8) & 255;
+  const firstBlue = first & 255;
+  const secondRed = (second >> 16) & 255;
+  const secondGreen = (second >> 8) & 255;
+  const secondBlue = second & 255;
+  return Math.hypot(firstRed - secondRed, firstGreen - secondGreen, firstBlue - secondBlue);
+}
