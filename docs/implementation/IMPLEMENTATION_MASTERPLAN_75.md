@@ -39,6 +39,12 @@ Turn software into knowledge.
 - Deduplicated proposed outputs with create, update, strengthen and blocked states
 - Reviewable future manifest without writing repository files, ZIPs or GitHub branches
 
+Omega.14 Apply Flow
+- Deterministic Optimization Apply Plan derived from the Optimization Plan
+- Downloadable Optimization Pack ZIP with selected artifacts, manifest, apply instructions and review notes
+- GitHub PR preview and explicit-confirmation creation through the existing GitHub App PR endpoint
+- No Applied state, verified improvement or rescan comparison
+
 ## Release Gate
 A sprint ships only if it:
 - increases understanding,

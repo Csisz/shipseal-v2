@@ -19,6 +19,10 @@ const universeMockState = vi.hoisted(() => ({
   shouldThrow: false,
 }));
 
+const githubWriteMock = vi.hoisted(() => ({
+  createGitHubAppReadinessPr: vi.fn(),
+}));
+
 vi.mock('@/components/agentready/ScoreGauge', () => ({
   ScoreGauge: ({ score }: { score: number }) => <div>Score gauge {score}</div>,
 }));
@@ -95,6 +99,14 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
   },
 }));
 
+vi.mock('@/lib/github/write', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/github/write')>('@/lib/github/write');
+  return {
+    ...actual,
+    createGitHubAppReadinessPr: githubWriteMock.createGitHubAppReadinessPr,
+  };
+});
+
 import { ResultDashboard } from '@/components/agentready/ResultDashboard';
 
 function switchToAtlas2D() {
@@ -154,6 +166,26 @@ describe('ResultDashboard summary copy', () => {
     universeMockState.cameraRadii = [];
     universeMockState.visibleNodeCounts = [];
     universeMockState.shouldThrow = false;
+    githubWriteMock.createGitHubAppReadinessPr.mockReset();
+    githubWriteMock.createGitHubAppReadinessPr.mockResolvedValue({
+      ok: true,
+      prUrl: 'https://github.com/Csisz/shipseal-v2/pull/123',
+      branchName: 'shipseal/optimization-pack',
+      baseBranch: 'main',
+      fileCount: 3,
+    });
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:shipseal-optimization-pack'),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    });
+    Object.defineProperty(HTMLAnchorElement.prototype, 'click', {
+      configurable: true,
+      value: vi.fn(),
+    });
   });
 
   it('uses compact Delivery Pack summary text that does not truncate the old wording', () => {
@@ -416,7 +448,8 @@ describe('ResultDashboard summary copy', () => {
   it('opens the Optimization Plan and updates it from proposal include state without losing it across view switches', async () => {
     const report = optimizationDashboardReport();
     const { universe, atlas, transformation, plan } = optimizationPlanFor(report);
-    const firstProposalId = transformation.proposals[0].id;
+    const firstItem = plan.items[0];
+    const firstProposalId = firstItem.proposalIds[0];
     const excludedPlan = buildRepositoryOptimizationPlan({
       report,
       universe,
@@ -444,23 +477,85 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getAllByText(/Ready for package|Review required|Blocked/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Create|Update|Strengthen/i).length).toBeGreaterThan(0);
 
-    const firstItem = plan.items[0];
     fireEvent.click(screen.getByRole('button', { name: new RegExp(firstItem.artifact.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }));
     expect(screen.getByText(firstItem.artifact.generatorId)).toBeInTheDocument();
-    expect(screen.getByText(/Future package manifest/i)).toBeInTheDocument();
+    expect(screen.getByText(/Contributing proposals/i)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: /Remove from plan/i })[0]);
+    expect(screen.getByText(`${excludedPlan.summary.selectedProposalCount.toLocaleString()} selected proposals`)).toBeInTheDocument();
+
+    const applyFlow = screen.getByLabelText(/Optimization Apply Flow/i);
+    expect(within(applyFlow).getAllByText(/Optimization Pack ZIP/i).length).toBeGreaterThan(0);
+    expect(within(applyFlow).getByText(/GitHub PR Preview/i)).toBeInTheDocument();
+    expect(within(applyFlow).getByText(/Manual fallback/i)).toBeInTheDocument();
+    expect(within(applyFlow).getByText(/APPLY_INSTRUCTIONS.md/i)).toBeInTheDocument();
+    expect(within(applyFlow).queryByText(/\bApplied\b|\bVerified\b/i)).not.toBeInTheDocument();
+
+    fireEvent.click(within(applyFlow).getByRole('button', { name: /Download Optimization Pack/i }));
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+    expect(await within(applyFlow).findByText(/Package downloaded/i)).toBeInTheDocument();
+
+    expect(screen.getByText(/Manifest and apply instructions/i)).toBeInTheDocument();
     expect(screen.getAllByText(/ShipSeal Delivery Pack/i).length).toBeGreaterThan(0);
 
     switchToAtlas2D();
     const proposedButtons = await screen.findAllByRole('button', { name: /Proposed With ShipSeal entity/i });
     fireEvent.click(proposedButtons[0]);
-    fireEvent.click(screen.getByRole('button', { name: /Remove from plan/i }));
-    expect(screen.getByText(`${excludedPlan.summary.selectedProposalCount.toLocaleString()} selected proposals`)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Add to optimization plan|Remove from plan/i }).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Current' })[0]);
     expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'With ShipSeal' })[0]);
     fireEvent.click(screen.getByRole('button', { name: /Universe 3D/i }));
     expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
+  }, 20000);
+
+  it('previews and creates an Optimization Pack PR only after explicit GitHub App confirmation', async () => {
+    const report = optimizationDashboardReport();
+    render(
+      <ResultDashboard
+        report={report}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        onReplayReveal={vi.fn()}
+        githubConnection={{
+          connectionStatus: 'connected',
+          sourceMode: 'github-app',
+          owner: 'Csisz',
+          repo: 'shipseal-v2',
+          defaultBranch: 'main',
+          installationId: 'installation-123',
+          canCreatePullRequest: true,
+          canListRepositories: true,
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
+
+    const applyFlow = screen.getByLabelText(/Optimization Apply Flow/i);
+    expect(within(applyFlow).getAllByText(/^Available$/i).length).toBeGreaterThan(0);
+    expect(within(applyFlow).getByText('shipseal/optimization-pack')).toBeInTheDocument();
+    expect(within(applyFlow).getByRole('button', { name: /Create GitHub PR/i })).toBeDisabled();
+    expect(githubWriteMock.createGitHubAppReadinessPr).not.toHaveBeenCalled();
+
+    fireEvent.click(within(applyFlow).getByRole('checkbox'));
+    fireEvent.click(within(applyFlow).getByRole('button', { name: /Create GitHub PR/i }));
+
+    await waitFor(() => expect(githubWriteMock.createGitHubAppReadinessPr).toHaveBeenCalledTimes(1));
+    const payload = githubWriteMock.createGitHubAppReadinessPr.mock.calls[0][0];
+    expect(payload).toMatchObject({
+      installationId: 'installation-123',
+      owner: 'Csisz',
+      repo: 'shipseal-v2',
+      baseBranch: 'main',
+      branchName: 'shipseal/optimization-pack',
+      prTitle: 'Add ShipSeal optimization pack',
+    });
+    expect(payload.files.length).toBeGreaterThan(0);
+    expect(payload.files.every((file: { path: string }) => !file.path.startsWith('ready/'))).toBe(true);
+    expect(await within(applyFlow).findByText(/PR created/i)).toBeInTheDocument();
   });
 
   it('preserves Repository Universe selection and camera state in fullscreen', async () => {

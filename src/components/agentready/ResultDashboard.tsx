@@ -21,10 +21,14 @@ import { createDefaultProjectIntake, normalizeProjectIntake } from '@/lib/intake
 import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages } from '@/lib/packages';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
-import type { GitHubConnectionState } from '@/lib/githubConnection/types';
+import { buildGitHubConnectionFromReport, type GitHubConnectionState } from '@/lib/githubConnection/types';
+import { CreateReadinessPrClientError, createGitHubAppReadinessPr } from '@/lib/github/write';
 import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentOperatingMode, resolveAgentOperatingMode, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
 import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
 import {
+  buildOptimizationApplyPlan,
+  buildOptimizationPackZipBlob,
+  buildOptimizationPackZipFilename,
   buildRepositoryAtlasModel,
   buildRepositoryOptimizationPlan,
   buildRepositoryTransformationProposalModel,
@@ -40,6 +44,8 @@ import {
   transformationDomainLabel,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
+  type OptimizationApplyPlan,
+  type OptimizationPrPreviewFile,
   type RepositoryOptimizationPlan,
   type RepositoryOptimizationPlanItem,
   type RepositoryOptimizationReadiness,
@@ -216,6 +222,7 @@ export function ResultDashboard({
         story={workspaceStory}
         activeStoryChapter={activeStoryChapter}
         onActiveStoryChapterChange={handleActiveStoryChapterChange}
+        githubConnection={githubConnection}
       />
 
       <WorkspaceOverview report={report} />
@@ -655,6 +662,7 @@ function AiWorkspaceHero({
   story,
   activeStoryChapter,
   onActiveStoryChapterChange,
+  githubConnection,
 }: {
   report: ReadinessReport;
   limitationReason?: string;
@@ -663,6 +671,7 @@ function AiWorkspaceHero({
   story: WorkspaceStory;
   activeStoryChapter: WorkspaceStoryChapter | null;
   onActiveStoryChapterChange?: (chapterId: WorkspaceStoryChapterId | null) => void;
+  githubConnection?: GitHubConnectionState;
 }) {
   const health = report.repositoryHealth;
   const unavailable = health.overall.score === null;
@@ -751,6 +760,7 @@ function AiWorkspaceHero({
               story={story}
               activeChapter={activeStoryChapter}
               onSelectChapter={selectStoryChapter}
+              githubConnection={githubConnection}
             />
 
             <details className="relative mt-5 rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
@@ -818,15 +828,18 @@ function RepositoryAtlasVisualization({
   story,
   activeChapter,
   onSelectChapter,
+  githubConnection,
 }: {
   report: ReadinessReport;
   story: WorkspaceStory;
   activeChapter: WorkspaceStoryChapter | null;
   onSelectChapter: (chapterId: WorkspaceStoryChapterId) => void;
+  githubConnection?: GitHubConnectionState;
 }) {
   const atlas = useMemo(() => buildRepositoryAtlasModel(report), [report]);
   const universe = useMemo(() => buildRepositoryUniverseModel(report), [report]);
   const transformation = useMemo(() => buildRepositoryTransformationProposalModel(report, universe, atlas), [report, universe, atlas]);
+  const connection = useMemo(() => githubConnection || buildGitHubConnectionFromReport(report), [githubConnection, report]);
   const initialUniverseCamera = useMemo(() => initialUniverseCameraState(universe), [universe]);
   const prefersReducedMotion = usePrefersReducedMotion();
   const atlasRootRef = useRef<HTMLElement | null>(null);
@@ -888,6 +901,12 @@ function RepositoryAtlasVisualization({
       excludedProposalIds,
     })
     : null, [atlas, excludedProposalIds, optimizationPlanOpen, report, transformation, universe]);
+  const optimizationApplyPlan = useMemo(() => optimizationPlan
+    ? buildOptimizationApplyPlan(optimizationPlan, {
+      githubAvailable: connection.canCreatePullRequest && Boolean(connection.installationId && connection.owner && connection.repo),
+      githubUnavailableReason: githubUnavailableReason(connection),
+    })
+    : null, [connection, optimizationPlan]);
   const selectedOptimizationItem = selectedOptimizationItemId
     ? optimizationPlan?.items.find(item => item.id === selectedOptimizationItemId) || null
     : optimizationPlan?.items[0] || null;
@@ -1403,8 +1422,13 @@ function RepositoryAtlasVisualization({
   const optimizationPlanReview = optimizationPlanOpen && optimizationPlan && (
     <OptimizationPlanReview
       plan={optimizationPlan}
+      applyPlan={optimizationApplyPlan}
+      connection={connection}
+      proposals={transformation.proposals}
+      excludedProposalIds={excludedProposalIds}
       selectedItem={selectedOptimizationItem}
       onSelectItem={item => setSelectedOptimizationItemId(item.id)}
+      onToggleProposalIncluded={toggleProposalIncluded}
       onClose={() => setOptimizationPlanOpen(false)}
     />
   );
@@ -1809,16 +1833,70 @@ function RepositoryAtlasVisualization({
 
 function OptimizationPlanReview({
   plan,
+  applyPlan,
+  connection,
+  proposals,
+  excludedProposalIds,
   selectedItem,
   onSelectItem,
+  onToggleProposalIncluded,
   onClose,
 }: {
   plan: RepositoryOptimizationPlan;
+  applyPlan: OptimizationApplyPlan | null;
+  connection: GitHubConnectionState;
+  proposals: RepositoryTransformationProposal[];
+  excludedProposalIds: Set<string>;
   selectedItem: RepositoryOptimizationPlanItem | null;
   onSelectItem: (item: RepositoryOptimizationPlanItem) => void;
+  onToggleProposalIncluded: (proposalId: string) => void;
   onClose: () => void;
 }) {
   const manifestPreview = serializeRepositoryOptimizationManifest(plan.manifest);
+  const [packState, setPackState] = useState<'idle' | 'building' | 'downloaded' | 'error'>('idle');
+  const [packError, setPackError] = useState('');
+  const [prConfirmed, setPrConfirmed] = useState(false);
+  const [prState, setPrState] = useState<'idle' | 'creating' | 'created' | 'error'>('idle');
+  const [prError, setPrError] = useState('');
+  const [prResult, setPrResult] = useState<{ url: string; branchName: string } | null>(null);
+
+  const handleDownloadPack = async () => {
+    if (!applyPlan) return;
+    setPackState('building');
+    setPackError('');
+    try {
+      const blob = await buildOptimizationPackZipBlob(applyPlan);
+      downloadBlob(blob, buildOptimizationPackZipFilename(plan.repositoryName));
+      setPackState('downloaded');
+    } catch (error) {
+      setPackState('error');
+      setPackError(error instanceof Error ? error.message : 'Optimization Pack ZIP could not be prepared.');
+    }
+  };
+
+  const handleCreatePr = async () => {
+    if (!applyPlan?.prPreview.canUseGitHubApp || !connection.installationId || !connection.owner || !connection.repo || !prConfirmed) return;
+    setPrState('creating');
+    setPrError('');
+    setPrResult(null);
+    try {
+      const result = await createGitHubAppReadinessPr({
+        installationId: connection.installationId,
+        owner: connection.owner,
+        repo: connection.repo,
+        baseBranch: connection.defaultBranch,
+        branchName: applyPlan.prPreview.branchName,
+        prTitle: applyPlan.prPreview.title,
+        prBody: applyPlan.prPreview.body,
+        files: applyPlan.prPreview.files.map(file => ({ path: file.path, content: file.content })),
+      });
+      setPrState('created');
+      setPrResult({ url: result.prUrl, branchName: result.branchName });
+    } catch (error) {
+      setPrState('error');
+      setPrError(friendlyOptimizationPrError(error));
+    }
+  };
 
   return (
     <section className="rounded-[1.5rem] border border-primary/20 bg-background/25 p-4 md:p-5" aria-labelledby="optimization-plan-heading">
@@ -1827,11 +1905,11 @@ function OptimizationPlanReview({
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Optimization Plan</div>
           <h3 id="optimization-plan-heading" className="mt-1 font-display text-xl font-semibold">Review generator-backed artifacts</h3>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Review the generator-backed artifacts ShipSeal is preparing. No repository files have been changed.
+            Review selected artifacts, package them for human review, or preview a GitHub PR. No repository files have been changed.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="border-primary/40 text-primary-glow">Prepared for package generation</Badge>
+          <Badge variant="outline" className="border-primary/40 text-primary-glow">Prepared for review</Badge>
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Close plan
           </Button>
@@ -1898,21 +1976,29 @@ function OptimizationPlanReview({
             ))}
           </div>
 
-          <OptimizationPlanArtifactDetail item={selectedItem} />
+          <OptimizationPlanArtifactDetail
+            item={selectedItem}
+            proposals={proposals}
+            excludedProposalIds={excludedProposalIds}
+            onToggleProposalIncluded={onToggleProposalIncluded}
+          />
         </div>
       )}
 
-      <details className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
-        <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          Future package manifest
-        </summary>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Deterministic in-memory manifest for a future Optimization Pack. No download or GitHub action is triggered in this sprint.
-        </p>
-        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
-          {manifestPreview}
-        </pre>
-      </details>
+      <OptimizationApplyFlow
+        applyPlan={applyPlan}
+        connection={connection}
+        packState={packState}
+        packError={packError}
+        prConfirmed={prConfirmed}
+        prState={prState}
+        prError={prError}
+        prResult={prResult}
+        manifestPreview={manifestPreview}
+        onDownloadPack={handleDownloadPack}
+        onPrConfirmedChange={setPrConfirmed}
+        onCreatePr={handleCreatePr}
+      />
     </section>
   );
 }
@@ -1926,7 +2012,192 @@ function OptimizationPlanMetric({ label, value }: { label: string; value: number
   );
 }
 
-function OptimizationPlanArtifactDetail({ item }: { item: RepositoryOptimizationPlanItem | null }) {
+function OptimizationApplyFlow({
+  applyPlan,
+  connection,
+  packState,
+  packError,
+  prConfirmed,
+  prState,
+  prError,
+  prResult,
+  manifestPreview,
+  onDownloadPack,
+  onPrConfirmedChange,
+  onCreatePr,
+}: {
+  applyPlan: OptimizationApplyPlan | null;
+  connection: GitHubConnectionState;
+  packState: 'idle' | 'building' | 'downloaded' | 'error';
+  packError: string;
+  prConfirmed: boolean;
+  prState: 'idle' | 'creating' | 'created' | 'error';
+  prError: string;
+  prResult: { url: string; branchName: string } | null;
+  manifestPreview: string;
+  onDownloadPack: () => void;
+  onPrConfirmedChange: (confirmed: boolean) => void;
+  onCreatePr: () => void;
+}) {
+  if (!applyPlan) return null;
+  const prPreview = applyPlan.prPreview;
+  const canCreatePr = prPreview.canUseGitHubApp && prConfirmed && prState !== 'creating';
+  const reviewCount = applyPlan.summary.reviewRequiredCount;
+  const blockedCount = applyPlan.summary.blockedCount;
+
+  return (
+    <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]" aria-label="Optimization Apply Flow">
+      <section className="rounded-2xl border border-primary/20 bg-background/20 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Optimization Pack ZIP</div>
+            <h4 className="mt-1 font-display text-lg font-semibold">Download review package</h4>
+          </div>
+          <Badge variant="outline" className={blockedCount > 0 ? 'border-warning/50 text-warning' : reviewCount > 0 ? 'border-primary/35 text-primary-glow' : 'border-success/40 text-success'}>
+            {applyPlan.summary.zipFileCount} files
+          </Badge>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <OptimizationPlanMetric label="Ready" value={applyPlan.summary.readyCount} />
+          <OptimizationPlanMetric label="Review" value={reviewCount} />
+          <OptimizationPlanMetric label="Blocked" value={blockedCount} />
+        </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Includes selected artifacts, `optimization-manifest.json`, `APPLY_INSTRUCTIONS.md` and `REVIEW_NOTES.md`.
+        </p>
+        <Button
+          type="button"
+          size="sm"
+          onClick={onDownloadPack}
+          disabled={packState === 'building'}
+          className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
+        >
+          <Download className="mr-2 h-4 w-4" />
+          {packState === 'building' ? 'Preparing ZIP' : 'Download Optimization Pack'}
+        </Button>
+        <div className="mt-3 min-h-5 text-xs" aria-live="polite">
+          {packState === 'downloaded' && <span className="text-success">Package downloaded. Review before copying files into the repository.</span>}
+          {packState === 'error' && <span className="text-warning">{packError}</span>}
+          {packState === 'idle' && <span className="text-muted-foreground">This download does not modify the repository.</span>}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-primary/20 bg-background/20 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">GitHub PR Preview</div>
+            <h4 className="mt-1 font-display text-lg font-semibold">Create through GitHub App</h4>
+          </div>
+          <Badge variant="outline" className={prPreview.canUseGitHubApp ? 'border-success/40 text-success' : 'border-border/60 text-muted-foreground'}>
+            {prPreview.canUseGitHubApp ? 'Available' : 'Manual fallback'}
+          </Badge>
+        </div>
+
+        <div className="mt-4 grid gap-2 text-sm">
+          <Row label="Repository" value={connection.owner && connection.repo ? `${connection.owner}/${connection.repo}` : 'Not connected'} />
+          <Row label="Branch" value={prPreview.branchName} />
+          <Row label="Title" value={prPreview.title} />
+          <Row label="Files in PR" value={`${prPreview.files.length}`} />
+          <Row label="Review-required" value={`${prPreview.reviewRequiredFiles.length}`} />
+          <Row label="Blocked" value={`${prPreview.blockedFiles.length}`} />
+        </div>
+
+        {prPreview.canUseGitHubApp ? (
+          <div className="mt-4 space-y-3">
+            <label className="flex gap-3 rounded-2xl border border-border/55 bg-secondary/15 p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={prConfirmed}
+                onChange={event => onPrConfirmedChange(event.target.checked)}
+                className="mt-1 h-4 w-4 accent-primary"
+              />
+              <span>
+                I understand ShipSeal will open a Pull Request only after this confirmation. Human review is still required.
+              </span>
+            </label>
+            <Button type="button" size="sm" onClick={onCreatePr} disabled={!canCreatePr} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              {prState === 'creating' ? 'Creating PR' : 'Create GitHub PR'}
+            </Button>
+            <div className="min-h-5 text-xs" aria-live="polite">
+              {prState === 'created' && prResult && (
+                <span className="text-success">
+                  PR created on `{prResult.branchName}`. <a href={prResult.url} className="underline underline-offset-4" target="_blank" rel="noreferrer">Open pull request</a>
+                </span>
+              )}
+              {prState === 'error' && <span className="text-warning">{prError}</span>}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-3 text-sm text-muted-foreground">
+            <p>{prPreview.unavailableReason}</p>
+            <p className="mt-2">Use the Optimization Pack ZIP and manual git flow, or reconnect with the GitHub App and rescan the selected repository.</p>
+          </div>
+        )}
+
+        <details className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+          <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            Diff preview
+          </summary>
+          <div className="mt-3 space-y-3">
+            {prPreview.files.slice(0, 8).map(file => <OptimizationPrFilePreview key={file.path} file={file} />)}
+            {prPreview.files.length === 0 && <p className="text-sm text-muted-foreground">No PR-ready files are selected.</p>}
+          </div>
+        </details>
+      </section>
+
+      <details className="xl:col-span-2 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          Manifest and apply instructions
+        </summary>
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
+            {JSON.stringify(applyPlan.manifest, null, 2)}
+          </pre>
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
+            {applyPlan.applyInstructions}
+          </pre>
+        </div>
+        <details className="mt-3 rounded-xl border border-border/45 bg-background/20 p-3">
+          <summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">Source Optimization Plan manifest</summary>
+          <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
+            {manifestPreview}
+          </pre>
+        </details>
+      </details>
+    </div>
+  );
+}
+
+function OptimizationPrFilePreview({ file }: { file: OptimizationPrPreviewFile }) {
+  return (
+    <article className="rounded-xl border border-border/45 bg-background/20 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1 break-all text-sm font-medium">{file.path}</span>
+        <Badge variant="outline" className={optimizationReadinessClass(file.readiness)}>
+          {optimizationReadinessLabel(file.readiness)}
+        </Badge>
+        <Badge variant="outline" className="border-border/60 text-muted-foreground">
+          {optimizationActionLabel(file.action)}
+        </Badge>
+      </div>
+      <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-2 text-[11px] text-muted-foreground">
+        {file.excerpt || 'No preview available.'}
+      </pre>
+    </article>
+  );
+}
+
+function OptimizationPlanArtifactDetail({
+  item,
+  proposals,
+  excludedProposalIds,
+  onToggleProposalIncluded,
+}: {
+  item: RepositoryOptimizationPlanItem | null;
+  proposals: RepositoryTransformationProposal[];
+  excludedProposalIds: Set<string>;
+  onToggleProposalIncluded: (proposalId: string) => void;
+}) {
   if (!item) {
     return (
       <aside className="rounded-2xl border border-border/55 bg-secondary/15 p-5 text-sm text-muted-foreground">
@@ -1934,6 +2205,12 @@ function OptimizationPlanArtifactDetail({ item }: { item: RepositoryOptimization
       </aside>
     );
   }
+
+  const relatedProposals = proposals
+    .filter(proposal => proposal.artifactActions.some(action => action.path === item.artifact.path))
+    .sort((left, right) => left.title.localeCompare(right.title));
+  const activeRelatedProposals = relatedProposals.filter(proposal => !excludedProposalIds.has(proposal.id));
+  const excludedRelatedProposals = relatedProposals.filter(proposal => excludedProposalIds.has(proposal.id));
 
   return (
     <aside className="rounded-2xl border border-primary/15 bg-background/25 p-5" aria-labelledby="optimization-artifact-heading">
@@ -1956,6 +2233,34 @@ function OptimizationPlanArtifactDetail({ item }: { item: RepositoryOptimization
         <Row label="Generator" value={item.artifact.generatorId} />
         <Row label="Contributors" value={item.proposalIds.join(', ')} />
       </div>
+
+      <details open className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold">Contributing proposals</summary>
+        <div className="mt-3 space-y-2">
+          {activeRelatedProposals.map(proposal => (
+            <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/45 bg-background/20 px-3 py-2">
+              <div className="min-w-0">
+                <div className="break-words text-sm font-medium text-foreground">{proposal.title}</div>
+                <div className="text-xs text-muted-foreground">{transformationDomainLabel(proposal.domain)}</div>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => onToggleProposalIncluded(proposal.id)} className="border-border/60 bg-background/25">
+                Remove from plan
+              </Button>
+            </div>
+          ))}
+          {excludedRelatedProposals.map(proposal => (
+            <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/45 bg-background/10 px-3 py-2 opacity-85">
+              <div className="min-w-0">
+                <div className="break-words text-sm font-medium text-muted-foreground">{proposal.title}</div>
+                <div className="text-xs text-muted-foreground">Excluded from current plan</div>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => onToggleProposalIncluded(proposal.id)} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+                Add back to plan
+              </Button>
+            </div>
+          ))}
+        </div>
+      </details>
 
       <details open className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
         <summary className="cursor-pointer select-none text-sm font-semibold">Scan evidence</summary>
@@ -2731,6 +3036,42 @@ function optimizationReadinessClass(readiness: RepositoryOptimizationReadiness) 
   if (readiness === 'ready') return 'border-success/40 text-success';
   if (readiness === 'review-required') return 'border-primary/35 text-primary-glow';
   return 'border-warning/50 text-warning';
+}
+
+function githubUnavailableReason(connection: GitHubConnectionState) {
+  if (connection.sourceMode === 'zip-upload') {
+    return 'This scan came from a ZIP upload. Download the Optimization Pack and apply it manually in a branch.';
+  }
+  if (connection.sourceMode === 'public-url') {
+    return 'This scan came from a public GitHub URL without an installed GitHub App connection.';
+  }
+  if (connection.connectionStatus === 'installation_detected') {
+    return 'GitHub App installation was detected, but no selected repository is available for PR creation.';
+  }
+  if (connection.connectionStatus === 'not_configured') {
+    return 'GitHub App PR creation is not configured for this environment.';
+  }
+  return 'Reconnect GitHub and rescan the selected repository to create this PR through the GitHub App.';
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function friendlyOptimizationPrError(error: unknown) {
+  if (error instanceof CreateReadinessPrClientError) {
+    if (error.status === 401 || error.status === 403) return 'GitHub permission was denied. Reconnect the GitHub App and try again.';
+    if (error.status === 413) return 'The PR preview contains a file larger than the GitHub App limit. Download the ZIP for manual review.';
+    return error.message.replace(/Readiness Fix Pack|Readiness PR|Readiness/gi, 'Optimization Pack');
+  }
+  return 'The GitHub PR could not be created. Download the Optimization Pack and use the manual flow.';
 }
 
 function optimizationConflictLabel(kind: RepositoryOptimizationPlanItem['conflicts'][number]['kind']) {

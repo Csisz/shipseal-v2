@@ -41,6 +41,13 @@ export {
   serializeRepositoryOptimizationManifest,
 } from './repositoryOptimizationPlan';
 
+export {
+  buildOptimizationApplyPlan,
+  buildOptimizationPackZipBlob,
+  buildOptimizationPackZipFilename,
+  optimizationPackZipFiles,
+} from './repositoryOptimizationApply';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,
@@ -106,6 +113,17 @@ export type {
   RepositoryOptimizationPlanSummary,
   RepositoryOptimizationReadiness,
 } from './repositoryOptimizationPlan';
+
+export type {
+  OptimizationApplyInstruction,
+  OptimizationApplyPlan,
+  OptimizationApplyReadiness,
+  OptimizationPackFile,
+  OptimizationPackManifest,
+  OptimizationPackZipFile,
+  OptimizationPrPreview,
+  OptimizationPrPreviewFile,
+} from './repositoryOptimizationApply';
 
 export type {
   RepositoryAtlasCluster,
