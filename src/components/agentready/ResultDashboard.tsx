@@ -965,6 +965,8 @@ function RepositoryAtlasVisualization({
   );
   const visibleUniverseNodeIdList = useMemo(() => [...visibleUniverseNodeIds], [visibleUniverseNodeIds]);
   const visibleUniverseEdgeIdList = useMemo(() => [...visibleUniverseEdgeIds], [visibleUniverseEdgeIds]);
+  const universeSearchMatchIdList = useMemo(() => [...universeSearchMatches], [universeSearchMatches]);
+  const excludedProposalIdList = useMemo(() => [...excludedProposalIds], [excludedProposalIds]);
   const selectedUniverseNodeVisible = selectedUniverseNode ? visibleUniverseNodeIds.has(selectedUniverseNode.id) : false;
   const proposalAffectedAtlasNodeIds = useMemo(() => {
     const ids = new Set<string>();
@@ -1111,7 +1113,7 @@ function RepositoryAtlasVisualization({
     fullscreenButtonRef.current?.focus();
   }, [fullscreen]);
 
-  const selectNode = (node: RepositoryAtlasNode) => {
+  const selectNode = useCallback((node: RepositoryAtlasNode) => {
     setSelectedNodeId(node.id);
     const matchingUniverseNode = node.path
       ? universe.nodes.find(item => item.path === node.path)
@@ -1126,9 +1128,9 @@ function RepositoryAtlasVisualization({
     if (chapterId && story.chapters.some(chapter => chapter.id === chapterId)) {
       onSelectChapter(chapterId);
     }
-  };
+  }, [onSelectChapter, story.chapters, universe.nodes]);
 
-  const selectUniverseNode = (node: RepositoryUniverseNode) => {
+  const selectUniverseNode = useCallback((node: RepositoryUniverseNode) => {
     setSelectedUniverseNodeId(node.id);
     if (node.clusterId) setFocusedClusterId(node.clusterId);
     if (node.metadata.atlasNodeId) setSelectedNodeId(node.metadata.atlasNodeId);
@@ -1136,7 +1138,7 @@ function RepositoryAtlasVisualization({
     if (chapterId && story.chapters.some(chapter => chapter.id === chapterId)) {
       onSelectChapter(chapterId);
     }
-  };
+  }, [onSelectChapter, story.chapters]);
 
   const changeViewMode = (mode: 'universe3d' | 'atlas2d') => {
     if (mode === viewMode) return;
@@ -1175,11 +1177,23 @@ function RepositoryAtlasVisualization({
     setOptimizationPlanOpen(true);
   };
 
-  const selectProposal = (proposal: RepositoryTransformationProposal) => {
+  const selectProposal = useCallback((proposal: RepositoryTransformationProposal) => {
     setTransformationMode('with-shipseal');
     setSelectedProposalId(proposal.id);
-    setFocusedClusterId(proposal.graphChanges.proposedNodes[0]?.clusterId || focusedClusterId);
-  };
+    setFocusedClusterId(current => proposal.graphChanges.proposedNodes[0]?.clusterId || current);
+  }, []);
+
+  const handleUniverseSelectNode = useCallback((nodeId: string) => {
+    const node = universe.nodes.find(item => item.id === nodeId);
+    if (node) selectUniverseNode(node);
+  }, [selectUniverseNode, universe.nodes]);
+
+  const handleUniverseSelectProposal = useCallback((proposalId: string) => {
+    const proposal = transformation.proposals.find(item => item.id === proposalId);
+    if (proposal) selectProposal(proposal);
+  }, [selectProposal, transformation.proposals]);
+
+  const handleUniverseSceneSettled = useCallback(() => setUniverseSceneSettled(true), []);
 
   const toggleProposalIncluded = (proposalId: string) => {
     setExcludedProposalIds(current => {
@@ -1733,7 +1747,7 @@ function RepositoryAtlasVisualization({
             model={universe}
             selectedNodeId={selectedUniverseNode?.id}
             focusedClusterId={focusedClusterId}
-            searchMatchIds={[...universeSearchMatches]}
+            searchMatchIds={universeSearchMatchIdList}
             visibleNodeIds={visibleUniverseNodeIdList}
             visibleEdgeIds={visibleUniverseEdgeIdList}
             cameraState={universeCamera}
@@ -1745,17 +1759,11 @@ function RepositoryAtlasVisualization({
             transformationMode={transformationMode === 'after-rescan' ? 'current' : transformationMode}
             transformationDomain={transformationDomain}
             selectedProposalId={selectedProposalId}
-            excludedProposalIds={[...excludedProposalIds]}
+            excludedProposalIds={excludedProposalIdList}
             onCameraStateChange={setUniverseCamera}
-            onSelectNode={nodeId => {
-              const node = universe.nodes.find(item => item.id === nodeId);
-              if (node) selectUniverseNode(node);
-            }}
-            onSelectProposal={proposalId => {
-              const proposal = transformation.proposals.find(item => item.id === proposalId);
-              if (proposal) selectProposal(proposal);
-            }}
-            onSceneSettled={() => setUniverseSceneSettled(true)}
+            onSelectNode={handleUniverseSelectNode}
+            onSelectProposal={handleUniverseSelectProposal}
+            onSceneSettled={handleUniverseSceneSettled}
           />
         </Suspense>
       </RepositoryUniverseErrorBoundary>

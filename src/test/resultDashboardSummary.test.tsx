@@ -409,12 +409,21 @@ describe('ResultDashboard summary copy', () => {
 
     const universe = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
     const initialModel = universeMockState.models.at(-1);
+    const initialNodeCount = universe.getAttribute('data-node-count');
+    const initialEdgeCount = universe.getAttribute('data-edge-count');
     const initialVisibleCount = Number(universe.getAttribute('data-visible-node-count'));
     const initialRadius = Number(universe.getAttribute('data-camera-radius'));
     const initialSelectedNode = universe.getAttribute('data-selected-node');
 
     fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
-    await waitFor(() => expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).not.toHaveAttribute('data-selected-node', initialSelectedNode || ''));
+    const afterSelection = await screen.findByRole('img', { name: /Repository Universe 3D graph/i });
+    await waitFor(() => expect(afterSelection).not.toHaveAttribute('data-selected-node', initialSelectedNode || ''));
+    expect(afterSelection).toHaveAttribute('data-node-count', initialNodeCount || '');
+    expect(afterSelection).toHaveAttribute('data-edge-count', initialEdgeCount || '');
+    expect(afterSelection).toHaveAttribute('data-visible-node-count', String(initialVisibleCount));
+    expect(afterSelection).toHaveAttribute('data-camera-radius', String(initialRadius));
+    expect(screen.getAllByRole('button', { name: 'Current' })[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText(/Repository Universe could not be rendered/i)).not.toBeInTheDocument();
     expect(universeMockState.models.at(-1)).toBe(initialModel);
 
     fireEvent.click(screen.getByRole('button', { name: 'Files' }));
@@ -423,6 +432,15 @@ describe('ResultDashboard summary copy', () => {
     expect(universeMockState.models.at(-1)).toBe(initialModel);
 
     fireEvent.change(screen.getByLabelText(/Search repository atlas or universe/i), { target: { value: 'README' } });
+    expect(universeMockState.models.at(-1)).toBe(initialModel);
+
+    fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
+    expect(screen.getByLabelText(/Search repository atlas or universe/i)).toHaveValue('README');
+    expect(screen.getByRole('button', { name: 'Files' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getAllByRole('button', { name: 'Current' })[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-node-count', initialNodeCount || '');
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-edge-count', initialEdgeCount || '');
+    expect(screen.queryByText(/Repository Universe could not be rendered/i)).not.toBeInTheDocument();
     expect(universeMockState.models.at(-1)).toBe(initialModel);
 
     fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
@@ -633,7 +651,19 @@ describe('ResultDashboard summary copy', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /After rescan/i }));
     expect(screen.getByRole('button', { name: /After rescan/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
+    const universe = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+    const initialModel = universeMockState.models.at(-1);
+    const initialNodeCount = universe.getAttribute('data-node-count');
+    const initialEdgeCount = universe.getAttribute('data-edge-count');
+    const initialSelectedNode = universe.getAttribute('data-selected-node');
+
+    fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
+    await waitFor(() => expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).not.toHaveAttribute('data-selected-node', initialSelectedNode || ''));
+    expect(screen.getByRole('button', { name: /After rescan/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-node-count', initialNodeCount || '');
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-edge-count', initialEdgeCount || '');
+    expect(screen.queryByText(/Repository Universe could not be rendered/i)).not.toBeInTheDocument();
+    expect(universeMockState.models.at(-1)).toBe(initialModel);
 
     fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
     const verification = screen.getByLabelText(/Rescan Verification/i);

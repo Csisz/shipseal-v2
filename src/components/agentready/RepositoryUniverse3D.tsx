@@ -269,6 +269,16 @@ export default function RepositoryUniverse3D({
       return geometry;
     };
 
+    const nodeById = new Map(model.nodes.map(node => [node.id, node]));
+    const relatedNodeIdsByNodeId = new Map<string, Set<string>>();
+    const addRelatedNode = (sourceId: string, targetId: string) => {
+      const existing = relatedNodeIdsByNodeId.get(sourceId);
+      if (existing) {
+        existing.add(targetId);
+        return;
+      }
+      relatedNodeIdsByNodeId.set(sourceId, new Set([targetId]));
+    };
     const visualPositionByNodeId = new Map<string, THREE.Vector3>();
     for (const node of model.nodes) {
       visualPositionByNodeId.set(node.id, visualPositionFor(node.position, node.id === model.rootNodeId));
@@ -308,6 +318,8 @@ export default function RepositoryUniverse3D({
       const line = new THREE.Line(geometry, material);
       edgeItems.set(edge.id, { edge, line });
       scene.add(line);
+      addRelatedNode(edge.source, edge.target);
+      addRelatedNode(edge.target, edge.source);
     }
 
     for (const proposal of transformation?.proposals || []) {
@@ -565,7 +577,7 @@ export default function RepositoryUniverse3D({
         onSelectProposalRef.current?.(proposalId);
         return;
       }
-      const node = model.nodes.find(item => item.id === nodeId);
+      const node = nodeId ? nodeById.get(nodeId) : undefined;
       if (!node) return;
       const target = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
       publishCamera({
@@ -575,6 +587,24 @@ export default function RepositoryUniverse3D({
       }, true);
       onSelectNodeRef.current(node.id);
       onFocusNodeSettledRef.current?.(node.id);
+    };
+
+    let selectedRelatedCacheKey = '';
+    let selectedRelatedCache = new Set<string>();
+    const relatedNodeIdsForSelection = (selectedId?: string) => {
+      const cacheKey = selectedId || '';
+      if (cacheKey === selectedRelatedCacheKey) return selectedRelatedCache;
+
+      const related = new Set<string>();
+      if (selectedId) {
+        related.add(selectedId);
+        for (const nodeId of relatedNodeIdsByNodeId.get(selectedId) || []) {
+          related.add(nodeId);
+        }
+      }
+      selectedRelatedCacheKey = cacheKey;
+      selectedRelatedCache = related;
+      return related;
     };
 
     const updateVisualState = () => {
@@ -587,17 +617,7 @@ export default function RepositoryUniverse3D({
       const domain = transformationDomainRef.current;
       const selectedProposal = selectedProposalIdRef.current;
       const excludedProposals = excludedProposalSetRef.current;
-      const selectedRelated = new Set<string>();
-
-      if (selectedId) {
-        selectedRelated.add(selectedId);
-        for (const item of edgeItems.values()) {
-          if (item.edge.source === selectedId || item.edge.target === selectedId) {
-            selectedRelated.add(item.edge.source);
-            selectedRelated.add(item.edge.target);
-          }
-        }
-      }
+      const selectedRelated = relatedNodeIdsForSelection(selectedId);
 
       const selectedClusterId = selectedId ? nodeItems.get(selectedId)?.node.clusterId : null;
       const selectedRelatedClusterIds = new Set<string>();
@@ -623,7 +643,7 @@ export default function RepositoryUniverse3D({
       for (const item of edgeItems.values()) {
         const { edge, line } = item;
         const directlySelected = Boolean(selectedId && (edge.source === selectedId || edge.target === selectedId));
-        const focused = Boolean(focusedCluster && model.nodes.find(node => node.id === edge.source)?.clusterId === focusedCluster && model.nodes.find(node => node.id === edge.target)?.clusterId === focusedCluster);
+        const focused = Boolean(focusedCluster && nodeById.get(edge.source)?.clusterId === focusedCluster && nodeById.get(edge.target)?.clusterId === focusedCluster);
         const visible = visibleEdges.has(edge.id);
         line.visible = visible;
         line.material.opacity = !visible
