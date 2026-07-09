@@ -32,6 +32,8 @@ import {
   buildRepositoryAtlasModel,
   buildRepositoryOptimizationPlan,
   buildRepositoryTransformationProposalModel,
+  buildRepositoryVerificationBaseline,
+  buildRepositoryVerificationResult,
   buildRepositoryUniverseModel,
   buildWorkspaceStory,
   chapterForDnaDimension,
@@ -46,6 +48,10 @@ import {
   type RepositoryAtlasNode,
   type OptimizationApplyPlan,
   type OptimizationPrPreviewFile,
+  type RepositoryVerificationBaseline,
+  type RepositoryVerificationResult,
+  type VerificationBaselineMethod,
+  type VerifiedArtifactMatch,
   type RepositoryOptimizationPlan,
   type RepositoryOptimizationPlanItem,
   type RepositoryOptimizationReadiness,
@@ -123,6 +129,9 @@ interface Props {
   selectedPackages?: string[];
   agentOperatingMode?: AgentOperatingModeId;
   githubConnection?: GitHubConnectionState;
+  verificationBaseline?: RepositoryVerificationBaseline | null;
+  onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
+  onDiscardVerificationBaseline?: () => void;
 }
 
 type RepositoryHealth = ReadinessReport['repositoryHealth'];
@@ -141,6 +150,9 @@ export function ResultDashboard({
   selectedPackages,
   agentOperatingMode,
   githubConnection,
+  verificationBaseline,
+  onSaveVerificationBaseline,
+  onDiscardVerificationBaseline,
 }: Props) {
   const repositoryHealth = report.repositoryHealth;
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
@@ -223,6 +235,9 @@ export function ResultDashboard({
         activeStoryChapter={activeStoryChapter}
         onActiveStoryChapterChange={handleActiveStoryChapterChange}
         githubConnection={githubConnection}
+        verificationBaseline={verificationBaseline}
+        onSaveVerificationBaseline={onSaveVerificationBaseline}
+        onDiscardVerificationBaseline={onDiscardVerificationBaseline}
       />
 
       <WorkspaceOverview report={report} />
@@ -663,6 +678,9 @@ function AiWorkspaceHero({
   activeStoryChapter,
   onActiveStoryChapterChange,
   githubConnection,
+  verificationBaseline,
+  onSaveVerificationBaseline,
+  onDiscardVerificationBaseline,
 }: {
   report: ReadinessReport;
   limitationReason?: string;
@@ -672,6 +690,9 @@ function AiWorkspaceHero({
   activeStoryChapter: WorkspaceStoryChapter | null;
   onActiveStoryChapterChange?: (chapterId: WorkspaceStoryChapterId | null) => void;
   githubConnection?: GitHubConnectionState;
+  verificationBaseline?: RepositoryVerificationBaseline | null;
+  onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
+  onDiscardVerificationBaseline?: () => void;
 }) {
   const health = report.repositoryHealth;
   const unavailable = health.overall.score === null;
@@ -761,6 +782,9 @@ function AiWorkspaceHero({
               activeChapter={activeStoryChapter}
               onSelectChapter={selectStoryChapter}
               githubConnection={githubConnection}
+              verificationBaseline={verificationBaseline}
+              onSaveVerificationBaseline={onSaveVerificationBaseline}
+              onDiscardVerificationBaseline={onDiscardVerificationBaseline}
             />
 
             <details className="relative mt-5 rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
@@ -829,12 +853,18 @@ function RepositoryAtlasVisualization({
   activeChapter,
   onSelectChapter,
   githubConnection,
+  verificationBaseline,
+  onSaveVerificationBaseline,
+  onDiscardVerificationBaseline,
 }: {
   report: ReadinessReport;
   story: WorkspaceStory;
   activeChapter: WorkspaceStoryChapter | null;
   onSelectChapter: (chapterId: WorkspaceStoryChapterId) => void;
   githubConnection?: GitHubConnectionState;
+  verificationBaseline?: RepositoryVerificationBaseline | null;
+  onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
+  onDiscardVerificationBaseline?: () => void;
 }) {
   const atlas = useMemo(() => buildRepositoryAtlasModel(report), [report]);
   const universe = useMemo(() => buildRepositoryUniverseModel(report), [report]);
@@ -861,7 +891,7 @@ function RepositoryAtlasVisualization({
   });
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.82 });
   const [viewMode, setViewMode] = useState<'universe3d' | 'atlas2d'>('universe3d');
-  const [transformationMode, setTransformationMode] = useState<RepositoryTransformationMode>('current');
+  const [transformationMode, setTransformationMode] = useState<RepositoryTransformationMode | 'after-rescan'>('current');
   const [transformationDomain, setTransformationDomain] = useState<RepositoryTransformationDomainFilter>('all');
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [excludedProposalIds, setExcludedProposalIds] = useState<Set<string>>(() => new Set());
@@ -907,6 +937,9 @@ function RepositoryAtlasVisualization({
       githubUnavailableReason: githubUnavailableReason(connection),
     })
     : null, [connection, optimizationPlan]);
+  const verificationResult = useMemo(() => verificationBaseline
+    ? buildRepositoryVerificationResult({ baseline: verificationBaseline, currentReport: report })
+    : null, [report, verificationBaseline]);
   const selectedOptimizationItem = selectedOptimizationItemId
     ? optimizationPlan?.items.find(item => item.id === selectedOptimizationItemId) || null
     : optimizationPlan?.items[0] || null;
@@ -915,6 +948,10 @@ function RepositoryAtlasVisualization({
   const universeSearchMatches = useMemo(() => matchingUniverseNodeIds(universe, query), [universe, query]);
   const universeFilterCounts = useMemo(() => repositoryUniverseFilterCounts(universe), [universe]);
   const universeClusterLegend = useMemo(() => repositoryUniverseClusterLegend(universe.clusters), [universe.clusters]);
+  const hasVerifiedRescanComparison = verificationResult?.status === 'matched-rescan';
+  const verifiedDestinationPaths = useMemo(() => new Set((verificationResult?.artifacts || [])
+    .filter(artifact => artifact.state === 'verified-file-presence' || artifact.state === 'verified-content-match')
+    .map(artifact => normalizeWorkspacePath(artifact.destinationPath))), [verificationResult?.artifacts]);
   const visibleNodes = useMemo(() => atlas.nodes.filter(node => nodeVisibleInAtlas(node, filters)), [atlas.nodes, filters]);
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(node => node.id)), [visibleNodes]);
   const visibleEdges = useMemo(
@@ -1128,9 +1165,9 @@ function RepositoryAtlasVisualization({
     setViewMode('universe3d');
   };
 
-  const changeTransformationMode = (mode: RepositoryTransformationMode) => {
+  const changeTransformationMode = (mode: RepositoryTransformationMode | 'after-rescan') => {
     setTransformationMode(mode);
-    if (mode === 'current') setSelectedProposalId(null);
+    if (mode !== 'with-shipseal') setSelectedProposalId(null);
   };
 
   const openOptimizationPlan = () => {
@@ -1331,11 +1368,24 @@ function RepositoryAtlasVisualization({
           >
             With ShipSeal
           </button>
+          {verificationResult && (
+            <button
+              type="button"
+              aria-pressed={transformationMode === 'after-rescan'}
+              disabled={!hasVerifiedRescanComparison}
+              onClick={() => changeTransformationMode('after-rescan')}
+              className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 ${transformationMode === 'after-rescan' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+            >
+              After rescan
+            </button>
+          )}
         </div>
         <div className="text-xs text-muted-foreground" aria-live="polite">
           {transformationMode === 'current'
             ? `${transformation.summary.currentFiles.toLocaleString()} current files - ${transformation.summary.currentClusters.toLocaleString()} knowledge clusters`
-            : `${transformation.summary.proposedArtifacts.toLocaleString()} proposed artifacts - ${transformation.summary.proposedRelationships.toLocaleString()} proposed relationships`}
+            : transformationMode === 'after-rescan' && verificationResult
+              ? `${verificationResult.counts.detected + verificationResult.counts.contentMatched} detected - ${verificationResult.counts.needsReview} need review`
+              : `${transformation.summary.proposedArtifacts.toLocaleString()} proposed artifacts - ${transformation.summary.proposedRelationships.toLocaleString()} proposed relationships`}
         </div>
         {transformation.proposals.length > 0 && (
           <div className="ml-auto rounded-full border border-border/45 bg-background/20 px-3 py-1.5 text-xs text-muted-foreground">
@@ -1421,14 +1471,19 @@ function RepositoryAtlasVisualization({
 
   const optimizationPlanReview = optimizationPlanOpen && optimizationPlan && (
     <OptimizationPlanReview
+      report={report}
       plan={optimizationPlan}
       applyPlan={optimizationApplyPlan}
       connection={connection}
       proposals={transformation.proposals}
       excludedProposalIds={excludedProposalIds}
+      verificationBaseline={verificationBaseline}
+      verificationResult={verificationResult}
       selectedItem={selectedOptimizationItem}
       onSelectItem={item => setSelectedOptimizationItemId(item.id)}
       onToggleProposalIncluded={toggleProposalIncluded}
+      onSaveVerificationBaseline={onSaveVerificationBaseline}
+      onDiscardVerificationBaseline={onDiscardVerificationBaseline}
       onClose={() => setOptimizationPlanOpen(false)}
     />
   );
@@ -1541,6 +1596,7 @@ function RepositoryAtlasVisualization({
         {visibleNodes.map((node, index) => {
           const selected = selectedNode?.id === node.id;
           const transformationAffected = proposalAffectedAtlasNodeIds.has(node.id);
+          const verifiedByRescan = transformationMode === 'after-rescan' && Boolean(node.path && verifiedDestinationPaths.has(normalizeWorkspacePath(node.path)));
           const related = relatedNodeIds.has(node.id) || transformationAffected;
           const matched = searchMatches.has(node.id);
           const dimmed = Boolean((selectedNode || activeChapter || focusedClusterId || query.trim()) && !selected && !related && !matched && node.id !== atlas.rootNodeId);
@@ -1569,7 +1625,7 @@ function RepositoryAtlasVisualization({
                     : node.evidenceType === 'missing'
                       ? 'z-10 border-warning/45 bg-background/45 text-warning'
                       : 'z-10 border-border/60 bg-background/45 text-muted-foreground'
-              } ${matched ? 'ring-2 ring-accent/55' : ''} ${transformationAffected ? 'ring-2 ring-primary/30' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
+              } ${matched ? 'ring-2 ring-accent/55' : ''} ${transformationAffected ? 'ring-2 ring-primary/30' : ''} ${verifiedByRescan ? 'ring-2 ring-success/60' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
               style={{
                 left: node.x + 460,
                 top: node.y + 320,
@@ -1686,7 +1742,7 @@ function RepositoryAtlasVisualization({
             animateIn={!universeSceneSettled}
             fullscreen={fullscreen}
             transformation={transformation}
-            transformationMode={transformationMode}
+            transformationMode={transformationMode === 'after-rescan' ? 'current' : transformationMode}
             transformationDomain={transformationDomain}
             selectedProposalId={selectedProposalId}
             excludedProposalIds={[...excludedProposalIds]}
@@ -1832,24 +1888,34 @@ function RepositoryAtlasVisualization({
 }
 
 function OptimizationPlanReview({
+  report,
   plan,
   applyPlan,
   connection,
   proposals,
   excludedProposalIds,
+  verificationBaseline,
+  verificationResult,
   selectedItem,
   onSelectItem,
   onToggleProposalIncluded,
+  onSaveVerificationBaseline,
+  onDiscardVerificationBaseline,
   onClose,
 }: {
+  report: ReadinessReport;
   plan: RepositoryOptimizationPlan;
   applyPlan: OptimizationApplyPlan | null;
   connection: GitHubConnectionState;
   proposals: RepositoryTransformationProposal[];
   excludedProposalIds: Set<string>;
+  verificationBaseline?: RepositoryVerificationBaseline | null;
+  verificationResult?: RepositoryVerificationResult | null;
   selectedItem: RepositoryOptimizationPlanItem | null;
   onSelectItem: (item: RepositoryOptimizationPlanItem) => void;
   onToggleProposalIncluded: (proposalId: string) => void;
+  onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
+  onDiscardVerificationBaseline?: () => void;
   onClose: () => void;
 }) {
   const manifestPreview = serializeRepositoryOptimizationManifest(plan.manifest);
@@ -1859,6 +1925,12 @@ function OptimizationPlanReview({
   const [prState, setPrState] = useState<'idle' | 'creating' | 'created' | 'error'>('idle');
   const [prError, setPrError] = useState('');
   const [prResult, setPrResult] = useState<{ url: string; branchName: string } | null>(null);
+  const baselineSavedForCurrentPlan = Boolean(verificationBaseline && applyPlan && verificationBaseline.applyPlanId === applyPlan.id);
+
+  const saveVerificationBaseline = (method: VerificationBaselineMethod) => {
+    if (!applyPlan || !onSaveVerificationBaseline) return;
+    onSaveVerificationBaseline(buildRepositoryVerificationBaseline({ report, applyPlan, method }));
+  };
 
   const handleDownloadPack = async () => {
     if (!applyPlan) return;
@@ -1867,6 +1939,7 @@ function OptimizationPlanReview({
     try {
       const blob = await buildOptimizationPackZipBlob(applyPlan);
       downloadBlob(blob, buildOptimizationPackZipFilename(plan.repositoryName));
+      saveVerificationBaseline('zip-download');
       setPackState('downloaded');
     } catch (error) {
       setPackState('error');
@@ -1892,6 +1965,7 @@ function OptimizationPlanReview({
       });
       setPrState('created');
       setPrResult({ url: result.prUrl, branchName: result.branchName });
+      saveVerificationBaseline('github-pr-created');
     } catch (error) {
       setPrState('error');
       setPrError(friendlyOptimizationPrError(error));
@@ -1995,7 +2069,12 @@ function OptimizationPlanReview({
         prError={prError}
         prResult={prResult}
         manifestPreview={manifestPreview}
+        baseline={verificationBaseline}
+        verificationResult={verificationResult}
+        baselineSavedForCurrentPlan={baselineSavedForCurrentPlan}
         onDownloadPack={handleDownloadPack}
+        onSaveBaseline={() => saveVerificationBaseline('manual-baseline')}
+        onDiscardBaseline={onDiscardVerificationBaseline}
         onPrConfirmedChange={setPrConfirmed}
         onCreatePr={handleCreatePr}
       />
@@ -2022,7 +2101,12 @@ function OptimizationApplyFlow({
   prError,
   prResult,
   manifestPreview,
+  baseline,
+  verificationResult,
+  baselineSavedForCurrentPlan,
   onDownloadPack,
+  onSaveBaseline,
+  onDiscardBaseline,
   onPrConfirmedChange,
   onCreatePr,
 }: {
@@ -2035,7 +2119,12 @@ function OptimizationApplyFlow({
   prError: string;
   prResult: { url: string; branchName: string } | null;
   manifestPreview: string;
+  baseline?: RepositoryVerificationBaseline | null;
+  verificationResult?: RepositoryVerificationResult | null;
+  baselineSavedForCurrentPlan: boolean;
   onDownloadPack: () => void;
+  onSaveBaseline: () => void;
+  onDiscardBaseline?: () => void;
   onPrConfirmedChange: (confirmed: boolean) => void;
   onCreatePr: () => void;
 }) {
@@ -2145,6 +2234,15 @@ function OptimizationApplyFlow({
         </details>
       </section>
 
+      <RepositoryVerificationPanel
+        applyPlan={applyPlan}
+        baseline={baseline}
+        verificationResult={verificationResult}
+        baselineSavedForCurrentPlan={baselineSavedForCurrentPlan}
+        onSaveBaseline={onSaveBaseline}
+        onDiscardBaseline={onDiscardBaseline}
+      />
+
       <details className="xl:col-span-2 rounded-2xl border border-border/55 bg-secondary/15 p-4">
         <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Manifest and apply instructions
@@ -2165,6 +2263,151 @@ function OptimizationApplyFlow({
         </details>
       </details>
     </div>
+  );
+}
+
+function RepositoryVerificationPanel({
+  applyPlan,
+  baseline,
+  verificationResult,
+  baselineSavedForCurrentPlan,
+  onSaveBaseline,
+  onDiscardBaseline,
+}: {
+  applyPlan: OptimizationApplyPlan;
+  baseline?: RepositoryVerificationBaseline | null;
+  verificationResult?: RepositoryVerificationResult | null;
+  baselineSavedForCurrentPlan: boolean;
+  onSaveBaseline: () => void;
+  onDiscardBaseline?: () => void;
+}) {
+  const hasMatchingRescan = verificationResult?.status === 'matched-rescan';
+  const hasMismatch = verificationResult?.status === 'repository-mismatch';
+  const sameScanBaseline = verificationResult?.status === 'baseline-scan';
+
+  return (
+    <section className="xl:col-span-2 rounded-2xl border border-primary/20 bg-background/20 p-4" aria-label="Rescan Verification">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Rescan Verification</div>
+          <h4 className="mt-1 font-display text-lg font-semibold">Verify after a later scan</h4>
+        </div>
+        <Badge variant="outline" className={hasMatchingRescan ? 'border-success/40 text-success' : hasMismatch ? 'border-warning/50 text-warning' : 'border-border/60 text-muted-foreground'}>
+          {hasMatchingRescan ? 'After rescan' : hasMismatch ? 'Baseline mismatch' : baseline ? 'Baseline saved' : 'No baseline'}
+        </Badge>
+      </div>
+
+      {!baseline && (
+        <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+          <p className="text-sm text-muted-foreground">
+            Download or create a PR, then rescan to verify. Verification requires a later scan of the changed repository.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={onSaveBaseline} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+            Save verification baseline
+          </Button>
+        </div>
+      )}
+
+      {baseline && !hasMatchingRescan && !hasMismatch && (
+        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className="text-sm text-muted-foreground">
+            <p>Baseline scan saved for {baseline.artifacts.length.toLocaleString()} selected artifacts.</p>
+            <p className="mt-1">Apply reviewed changes outside ShipSeal, then scan this repository again.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {!baselineSavedForCurrentPlan && (
+              <Button type="button" variant="outline" size="sm" onClick={onSaveBaseline} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+                Save current baseline
+              </Button>
+            )}
+            {onDiscardBaseline && (
+              <Button type="button" variant="ghost" size="sm" onClick={onDiscardBaseline}>
+                Discard baseline
+              </Button>
+            )}
+          </div>
+          {sameScanBaseline && (
+            <p className="lg:col-span-2 text-xs text-muted-foreground">
+              Current scan is the baseline scan. No after-rescan verification is shown yet.
+            </p>
+          )}
+        </div>
+      )}
+
+      {hasMismatch && verificationResult && (
+        <div className="mt-4 rounded-2xl border border-warning/35 bg-warning/10 p-4 text-sm text-warning/90">
+          <p className="font-medium">This scan does not match the saved optimization baseline.</p>
+          <ul className="mt-2 space-y-1">
+            {verificationResult.repositoryMatch.reasons.map(reason => <li key={reason}>{reason}</li>)}
+          </ul>
+          {onDiscardBaseline && (
+            <Button type="button" variant="outline" size="sm" onClick={onDiscardBaseline} className="mt-3 border-warning/45 bg-background/20 text-warning hover:text-warning">
+              Discard baseline
+            </Button>
+          )}
+        </div>
+      )}
+
+      {hasMatchingRescan && verificationResult && (
+        <div className="mt-4 space-y-4">
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            <OptimizationPlanMetric label="Detected" value={verificationResult.counts.detected} />
+            <OptimizationPlanMetric label="Content match" value={verificationResult.counts.contentMatched} />
+            <OptimizationPlanMetric label="Review" value={verificationResult.counts.needsReview} />
+            <OptimizationPlanMetric label="Missing" value={verificationResult.counts.missing} />
+            <OptimizationPlanMetric label="Static limit" value={verificationResult.counts.notVerifiable} />
+            <OptimizationPlanMetric label="Blocked" value={verificationResult.counts.blocked} />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Projected before apply is separate from verified after rescan. ShipSeal only reports what the current scan detected.
+          </p>
+          {verificationResult.metrics.length > 0 && (
+            <details className="rounded-2xl border border-border/55 bg-secondary/15 p-4">
+              <summary className="cursor-pointer select-none text-sm font-semibold">Observed workspace metrics</summary>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {verificationResult.metrics.map(metric => (
+                  <div key={metric.id} className="rounded-xl border border-border/45 bg-background/20 p-3">
+                    <div className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">{metric.label}</div>
+                    <div className="mt-1 text-sm text-foreground">{metric.baseline} to {metric.current}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">Changed since baseline: {metric.delta !== null && metric.delta > 0 ? '+' : ''}{metric.delta}</div>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+          <details open className="rounded-2xl border border-border/55 bg-secondary/15 p-4">
+            <summary className="cursor-pointer select-none text-sm font-semibold">Artifact verification details</summary>
+            <div className="mt-3 space-y-2">
+              {verificationResult.artifacts.map(artifact => <RepositoryVerificationArtifactRow key={`${artifact.generatedPath}:${artifact.destinationPath}`} artifact={artifact} />)}
+            </div>
+          </details>
+        </div>
+      )}
+
+      {applyPlan.summary.selectedArtifactCount === 0 && (
+        <p className="mt-3 text-xs text-muted-foreground">No selected artifacts are available for a verification baseline.</p>
+      )}
+    </section>
+  );
+}
+
+function RepositoryVerificationArtifactRow({ artifact }: { artifact: VerifiedArtifactMatch }) {
+  return (
+    <article className="rounded-xl border border-border/45 bg-background/20 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="min-w-0 flex-1 break-all text-sm font-medium text-foreground">{artifact.destinationPath}</span>
+        <Badge variant="outline" className={verificationStateClass(artifact.state)}>{artifact.label}</Badge>
+        <Badge variant="outline" className="border-border/60 text-muted-foreground">{optimizationActionLabel(artifact.action)}</Badge>
+      </div>
+      <div className="mt-2 grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+        <Row label="Generated path" value={artifact.generatedPath} />
+        <Row label="Previous state" value={artifact.previousState} />
+        <Row label="Current scan" value={artifact.currentScanState} />
+        <Row label="Content match" value={artifact.contentMatch} />
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">{artifact.reason}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{artifact.recommendedNextAction}</p>
+    </article>
   );
 }
 
@@ -3036,6 +3279,17 @@ function optimizationReadinessClass(readiness: RepositoryOptimizationReadiness) 
   if (readiness === 'ready') return 'border-success/40 text-success';
   if (readiness === 'review-required') return 'border-primary/35 text-primary-glow';
   return 'border-warning/50 text-warning';
+}
+
+function verificationStateClass(state: VerifiedArtifactMatch['state']) {
+  if (state === 'verified-file-presence' || state === 'verified-content-match') return 'border-success/40 text-success';
+  if (state === 'needs-human-review') return 'border-primary/35 text-primary-glow';
+  if (state === 'blocked' || state === 'missing-after-rescan' || state === 'not-detected') return 'border-warning/50 text-warning';
+  return 'border-border/60 text-muted-foreground';
+}
+
+function normalizeWorkspacePath(path: string) {
+  return path.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/').trim();
 }
 
 function githubUnavailableReason(connection: GitHubConnectionState) {

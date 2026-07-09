@@ -45,6 +45,12 @@ Omega.14 Apply Flow
 - GitHub PR preview and explicit-confirmation creation through the existing GitHub App PR endpoint
 - No Applied state, verified improvement or rescan comparison
 
+Omega.15 Rescan and Verified Improvement
+- Session-local verification baseline derived from the Optimization Apply Plan
+- Conservative later-scan comparison for detected files, content signatures, review-needed items and missing artifacts
+- After rescan view available only when a matching later scan exists
+- Observed metric deltas without causality claims
+
 ## Release Gate
 A sprint ships only if it:
 - increases understanding,

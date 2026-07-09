@@ -48,6 +48,11 @@ export {
   optimizationPackZipFiles,
 } from './repositoryOptimizationApply';
 
+export {
+  buildRepositoryVerificationBaseline,
+  buildRepositoryVerificationResult,
+} from './repositoryVerification';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,
@@ -124,6 +129,19 @@ export type {
   OptimizationPrPreview,
   OptimizationPrPreviewFile,
 } from './repositoryOptimizationApply';
+
+export type {
+  RepositoryVerificationBaseline,
+  RepositoryVerificationBaselineArtifact,
+  RepositoryVerificationIdentity,
+  RepositoryVerificationReadinessState,
+  RepositoryVerificationResult,
+  VerificationBaselineMethod,
+  VerificationManifest,
+  VerifiedArtifactMatch,
+  VerifiedArtifactState,
+  WorkspaceMetricComparison,
+} from './repositoryVerification';
 
 export type {
   RepositoryAtlasCluster,

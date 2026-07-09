@@ -6,8 +6,10 @@ import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { createEmptyScanSummary } from '@/lib/scannerLimits';
 import {
   buildRepositoryAtlasModel,
+  buildOptimizationApplyPlan,
   buildRepositoryOptimizationPlan,
   buildRepositoryTransformationProposalModel,
+  buildRepositoryVerificationBaseline,
   buildRepositoryUniverseModel,
 } from '@/lib/workspace';
 
@@ -152,6 +154,17 @@ function optimizationDashboardReport() {
       { path: 'src/App.test.tsx', size: 260 },
       { path: '.github/workflows/ci.yml', size: 180 },
     ],
+    textContents: {
+      'README.md': '# Optimization Dashboard\n\nRun tests before release.',
+      'package.json': JSON.stringify({ scripts: { test: 'vitest', build: 'vite build' }, dependencies: { react: '^18.3.1' } }),
+    },
+  });
+}
+
+function optimizationDashboardReportWithFiles(files: string[], repoName = 'optimization-dashboard') {
+  return buildReport({
+    repoName,
+    files: files.map(path => ({ path, size: 260 })),
     textContents: {
       'README.md': '# Optimization Dashboard\n\nRun tests before release.',
       'package.json': JSON.stringify({ scripts: { test: 'vitest', build: 'vite build' }, dependencies: { react: '^18.3.1' } }),
@@ -556,6 +569,107 @@ describe('ResultDashboard summary copy', () => {
     expect(payload.files.length).toBeGreaterThan(0);
     expect(payload.files.every((file: { path: string }) => !file.path.startsWith('ready/'))).toBe(true);
     expect(await within(applyFlow).findByText(/PR created/i)).toBeInTheDocument();
+  });
+
+  it('saves a verification baseline after Optimization Pack download and keeps verification truthful before rescan', async () => {
+    const report = optimizationDashboardReport();
+    const onSaveVerificationBaseline = vi.fn();
+
+    render(
+      <ResultDashboard
+        report={report}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        onReplayReveal={vi.fn()}
+        onSaveVerificationBaseline={onSaveVerificationBaseline}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
+    const applyFlow = screen.getByLabelText(/Optimization Apply Flow/i);
+
+    expect(within(applyFlow).getByText(/Rescan Verification/i)).toBeInTheDocument();
+    expect(within(applyFlow).getByText(/Verification requires a later scan/i)).toBeInTheDocument();
+    fireEvent.click(within(applyFlow).getByRole('button', { name: /Download Optimization Pack/i }));
+
+    await waitFor(() => expect(onSaveVerificationBaseline).toHaveBeenCalledTimes(1));
+    expect(onSaveVerificationBaseline.mock.calls[0][0]).toMatchObject({
+      schemaVersion: 'shipseal.repository-verification-baseline.v1',
+      applyMethod: 'zip-download',
+    });
+    expect(within(applyFlow).queryByText(/fixed|guaranteed improvement|verified improvement/i)).not.toBeInTheDocument();
+  });
+
+  it('shows after-rescan verification for a matching rescan without mutating the current graph', async () => {
+    const baselineReport = optimizationDashboardReport();
+    const { plan } = optimizationPlanFor(baselineReport);
+    const baseline = buildRepositoryVerificationBaseline({
+      report: baselineReport,
+      applyPlan: buildOptimizationApplyPlan(plan),
+      method: 'zip-download',
+    });
+    const currentReport = optimizationDashboardReportWithFiles([
+      'README.md',
+      'package.json',
+      'src/App.tsx',
+      'src/App.test.tsx',
+      '.github/workflows/ci.yml',
+      'AGENTS.md',
+      '07-context/ARCHITECTURE.md',
+    ]);
+
+    render(
+      <ResultDashboard
+        report={currentReport}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        onReplayReveal={vi.fn()}
+        verificationBaseline={baseline}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /After rescan/i }));
+    expect(screen.getByRole('button', { name: /After rescan/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
+    const verification = screen.getByLabelText(/Rescan Verification/i);
+    expect(within(verification).getAllByText(/^Detected after rescan$|^Content match verified$/i).length).toBeGreaterThan(0);
+    expect(within(verification).getByText(/Projected before apply is separate/i)).toBeInTheDocument();
+    expect(within(verification).getByText(/Observed workspace metrics/i)).toBeInTheDocument();
+    expect(within(verification).queryByText(/fixed|guaranteed improvement|verified improvement/i)).not.toBeInTheDocument();
+  });
+
+  it('shows a calm mismatch state for a different repository baseline', () => {
+    const baselineReport = optimizationDashboardReport();
+    const { plan } = optimizationPlanFor(baselineReport);
+    const baseline = buildRepositoryVerificationBaseline({
+      report: baselineReport,
+      applyPlan: buildOptimizationApplyPlan(plan),
+      method: 'zip-download',
+    });
+    const onDiscardVerificationBaseline = vi.fn();
+
+    render(
+      <ResultDashboard
+        report={optimizationDashboardReportWithFiles(['README.md', 'package.json'], 'different-repository')}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        onReplayReveal={vi.fn()}
+        verificationBaseline={baseline}
+        onDiscardVerificationBaseline={onDiscardVerificationBaseline}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
+    const verification = screen.getByLabelText(/Rescan Verification/i);
+    expect(within(verification).getByText(/This scan does not match the saved optimization baseline/i)).toBeInTheDocument();
+    fireEvent.click(within(verification).getByRole('button', { name: /Discard baseline/i }));
+    expect(onDiscardVerificationBaseline).toHaveBeenCalledTimes(1);
   });
 
   it('preserves Repository Universe selection and camera state in fullscreen', async () => {

@@ -22,7 +22,7 @@ import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppReposi
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
 import { ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
-import type { WorkspaceStoryChapterId } from '@/lib/workspace';
+import type { RepositoryVerificationBaseline, WorkspaceStoryChapterId } from '@/lib/workspace';
 
 type PendingSource =
   | { type: 'zip'; file: File; projectName: string }
@@ -114,6 +114,7 @@ const Index = () => {
   const [repositoryListMessage, setRepositoryListMessage] = useState('');
   const [intelligenceReveal, setIntelligenceReveal] = useState<{ key: string; visible: boolean } | null>(null);
   const [activeStoryChapterId, setActiveStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
+  const [verificationBaseline, setVerificationBaseline] = useState<RepositoryVerificationBaseline | null>(null);
   const savedReportKey = useRef<string | null>(null);
   const lastError = useRef<string | null>(null);
   const scanSectionRef = useRef<HTMLDivElement>(null);
@@ -450,6 +451,9 @@ const Index = () => {
               selectedPackages={selectedPackages}
               agentOperatingMode={agentOperatingMode}
               githubConnection={activeGithubConnection}
+              verificationBaseline={verificationBaseline}
+              onSaveVerificationBaseline={setVerificationBaseline}
+              onDiscardVerificationBaseline={() => setVerificationBaseline(null)}
             />
           </Suspense>
         </main>

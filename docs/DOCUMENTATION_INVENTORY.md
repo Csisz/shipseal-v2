@@ -23,6 +23,7 @@ Last updated: 2026-07-02
 - `docs/implementation/SUGGESTED_READINESS_FIX_PACK.md` - current suggested fix pack explanation.
 - `docs/implementation/CREATE_READINESS_PR_PLAN.md` - Create Readiness PR behavior and guardrails.
 - `docs/implementation/OPTIMIZATION_APPLY_FLOW.md` - Sprint Omega.14 Apply Flow model, Optimization Pack ZIP contents, GitHub PR boundary and truthfulness safeguards.
+- `docs/implementation/RESCAN_VERIFICATION_LOOP.md` - Sprint Omega.15 session-local rescan verification model, matching rules, metric safeguards and visual overlay boundaries.
 - `docs/github/GITHUB_APP_CONNECT_PLAN.md` - GitHub App connection plan and permissions.
 - `docs/implementation/GITHUB_IMPORT_PROXY_PLAN.md` - public GitHub archive import proxy plan.
 - `docs/demo/HOSTED_DEMO_READINESS.md` - hosted demo setup and validation.
