@@ -118,6 +118,20 @@ function switchToAtlas2D() {
   }
 }
 
+function switchResultChapter(label: 'Understand' | 'Improve' | 'Apply' | 'Verify') {
+  const chapterNav = screen.getByRole('navigation', { name: /Result chapters/i });
+  const chapterButton = within(chapterNav).getByRole('button', { name: new RegExp(label, 'i') });
+  if (chapterButton.getAttribute('aria-pressed') !== 'true') {
+    fireEvent.click(chapterButton);
+  }
+}
+
+function openDisclosure(title: RegExp | string) {
+  const summary = screen.getAllByText(title).find(element => element.tagName.toLowerCase() === 'summary');
+  if (!summary) throw new Error(`Disclosure summary not found: ${String(title)}`);
+  fireEvent.click(summary);
+}
+
 function atlasViewport() {
   switchToAtlas2D();
   return screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
@@ -223,6 +237,33 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
     expect(screen.getByText(/Advanced details/i)).toBeInTheDocument();
     expect(screen.getByText(/Available ShipSeal improvements/i)).toBeInTheDocument();
+  });
+
+  it('opens the result workspace in Understand with chapter navigation and a next best action', async () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    const chapterNav = screen.getByRole('navigation', { name: /Result chapters/i });
+    expect(screen.getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
+    expect(within(chapterNav).getByRole('button', { name: /Understand/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(chapterNav).getByRole('button', { name: /Improve/i })).toBeInTheDocument();
+    expect(within(chapterNav).getByRole('button', { name: /Apply/i })).toBeInTheDocument();
+    expect(within(chapterNav).getByRole('button', { name: /Verify/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Next best action/i)).toHaveTextContent(/Review ShipSeal improvements/i);
+    expect(await screen.findByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Review ShipSeal improvements$/i }));
+
+    expect(within(chapterNav).getByRole('button', { name: /Improve/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('heading', { name: /Review ShipSeal improvements/i })).toBeInTheDocument();
+    expect(screen.getByText(/Preview what ShipSeal can prepare/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Prepare optimization package/i })).toBeInTheDocument();
   });
 
   it('makes visual understanding the primary dashboard summary and keeps Repository Health secondary', () => {
@@ -350,7 +391,7 @@ describe('ResultDashboard summary copy', () => {
 
     expect(screen.getByRole('heading', { name: /What ShipSeal understood/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Export what the workspace produced/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Reports and Delivery Outputs/i })).toBeInTheDocument();
   });
 
   it('syncs Repository Atlas selection with Workspace Story chapters', () => {
@@ -422,7 +463,7 @@ describe('ResultDashboard summary copy', () => {
     expect(afterSelection).toHaveAttribute('data-edge-count', initialEdgeCount || '');
     expect(afterSelection).toHaveAttribute('data-visible-node-count', String(initialVisibleCount));
     expect(afterSelection).toHaveAttribute('data-camera-radius', String(initialRadius));
-    expect(screen.getAllByRole('button', { name: 'Current' })[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(within(screen.getByRole('navigation', { name: /Result chapters/i })).getByRole('button', { name: /Understand/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText(/Repository Universe could not be rendered/i)).not.toBeInTheDocument();
     expect(universeMockState.models.at(-1)).toBe(initialModel);
 
@@ -437,7 +478,7 @@ describe('ResultDashboard summary copy', () => {
     fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
     expect(screen.getByLabelText(/Search repository atlas or universe/i)).toHaveValue('README');
     expect(screen.getByRole('button', { name: 'Files' })).toHaveAttribute('aria-pressed', 'false');
-    expect(screen.getAllByRole('button', { name: 'Current' })[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(within(screen.getByRole('navigation', { name: /Result chapters/i })).getByRole('button', { name: /Understand/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-node-count', initialNodeCount || '');
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-edge-count', initialEdgeCount || '');
     expect(screen.queryByText(/Repository Universe could not be rendered/i)).not.toBeInTheDocument();
@@ -461,6 +502,7 @@ describe('ResultDashboard summary copy', () => {
 
     const universe = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
     const currentNodeCount = universe.getAttribute('data-node-count');
+    switchResultChapter('Improve');
     fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
     expect(screen.getByText(/proposed artifacts/i)).toBeInTheDocument();
     expect(screen.getByText(/proposed improvements selected/i)).toBeInTheDocument();
@@ -499,6 +541,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    switchResultChapter('Improve');
     fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
     fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
 
@@ -562,6 +605,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    switchResultChapter('Improve');
     fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
     fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
 
@@ -604,6 +648,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    switchResultChapter('Improve');
     fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
     fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
     const applyFlow = screen.getByLabelText(/Optimization Apply Flow/i);
@@ -649,8 +694,10 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /After rescan/i }));
-    expect(screen.getByRole('button', { name: /After rescan/i })).toHaveAttribute('aria-pressed', 'true');
+    switchResultChapter('Improve');
+    const transformationMode = screen.getByLabelText(/Repository transformation preview mode/i);
+    fireEvent.click(within(transformationMode).getByRole('button', { name: /After rescan/i }));
+    expect(within(transformationMode).getByRole('button', { name: /After rescan/i })).toHaveAttribute('aria-pressed', 'true');
     const universe = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
     const initialModel = universeMockState.models.at(-1);
     const initialNodeCount = universe.getAttribute('data-node-count');
@@ -659,7 +706,7 @@ describe('ResultDashboard summary copy', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
     await waitFor(() => expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).not.toHaveAttribute('data-selected-node', initialSelectedNode || ''));
-    expect(screen.getByRole('button', { name: /After rescan/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(transformationMode).getByRole('button', { name: /After rescan/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-node-count', initialNodeCount || '');
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-edge-count', initialEdgeCount || '');
     expect(screen.queryByText(/Repository Universe could not be rendered/i)).not.toBeInTheDocument();
@@ -673,7 +720,7 @@ describe('ResultDashboard summary copy', () => {
     expect(within(verification).queryByText(/fixed|guaranteed improvement|verified improvement/i)).not.toBeInTheDocument();
   });
 
-  it('shows a calm mismatch state for a different repository baseline', () => {
+  it('shows a calm mismatch state for a different repository baseline', async () => {
     const baselineReport = optimizationDashboardReport();
     const { plan } = optimizationPlanFor(baselineReport);
     const baseline = buildRepositoryVerificationBaseline({
@@ -695,8 +742,8 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
-    const verification = screen.getByLabelText(/Rescan Verification/i);
+    switchResultChapter('Apply');
+    const verification = await screen.findByLabelText(/Rescan Verification/i);
     expect(within(verification).getByText(/This scan does not match the saved optimization baseline/i)).toBeInTheDocument();
     fireEvent.click(within(verification).getByRole('button', { name: /Discard baseline/i }));
     expect(onDiscardVerificationBaseline).toHaveBeenCalledTimes(1);
@@ -759,7 +806,7 @@ describe('ResultDashboard summary copy', () => {
 
       expect(await screen.findByText(/Repository Universe could not be rendered/i)).toBeInTheDocument();
       expect(screen.getByRole('heading', { name: /What ShipSeal understood/i })).toBeInTheDocument();
-      expect(screen.getByRole('heading', { name: /Export what the workspace produced/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Reports and Delivery Outputs/i })).toBeInTheDocument();
       expect(screen.getByText(/Your scan and repository evidence are still available/i)).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole('button', { name: /Open Atlas 2D/i }));
@@ -1009,6 +1056,7 @@ describe('ResultDashboard summary copy', () => {
         />
       );
 
+      openDisclosure(/Supporting workspace views/i);
       expect(screen.getByRole('heading', { name: /estimated repository exploration/i })).toBeInTheDocument();
       expect(screen.getByText(/Estimated repository exploration based on ShipSeal Repository Intelligence/i)).toBeInTheDocument();
       expect(screen.getByText('Repository detected')).toBeInTheDocument();
@@ -1145,8 +1193,9 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    expect(screen.getByText('Delivery Outputs')).toBeInTheDocument();
-    expect(screen.getByText('Export what the workspace produced')).toBeInTheDocument();
+    openDisclosure(/Exports and reports/i);
+    expect(screen.getAllByText('Exports and reports').length).toBeGreaterThan(0);
+    expect(screen.getByText('Reports and Delivery Outputs')).toBeInTheDocument();
     expect(screen.getByText('Delivery readiness details')).toBeInTheDocument();
     expect(screen.getByText('Delivery readiness categories')).toBeInTheDocument();
     expect(screen.getByText('Category breakdown mock')).toBeInTheDocument();
@@ -1196,6 +1245,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    openDisclosure(/Exports and reports/i);
     expect(screen.getByText('Agent development pack')).toBeInTheDocument();
     expect(screen.getAllByText(`${resolveDeliveryPackFocus(['agent-readiness'], { folderAgentPaths }).generatedPaths.length} outputs`).length).toBeGreaterThan(0);
     expect(screen.getByText(/Context Compression Pack generated/i)).toBeInTheDocument();
@@ -1221,6 +1271,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    openDisclosure(/Exports and reports/i);
     expect(screen.getByText('Recommended operating mode')).toBeInTheDocument();
     expect(screen.getByText('Focused Context')).toBeInTheDocument();
     expect(screen.getAllByText('Lowest context use').length).toBeGreaterThan(0);
@@ -1238,6 +1289,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    openDisclosure(/Exports and reports/i);
     expect(screen.getByText('Project package')).toBeInTheDocument();
     expect(screen.getByText('Security and data pre-screen')).toBeInTheDocument();
     expect(screen.getAllByText(`${resolveDeliveryPackFocus(['safety-risk']).generatedPaths.length} outputs`).length).toBeGreaterThan(0);
@@ -1256,6 +1308,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    openDisclosure(/Exports and reports/i);
     expect(screen.getAllByText('Partially Ready').length).toBeGreaterThan(0);
     expect(screen.getByText(/not a limited scan/i)).toBeInTheDocument();
     expect(screen.getByText(/strengthen security and data readiness/i)).toBeInTheDocument();
@@ -1274,6 +1327,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    openDisclosure(/Exports and reports/i);
     expect(screen.getByText('Almost there - improve a few areas to reach AI Coding Ready.')).toBeInTheDocument();
   });
 
@@ -1288,6 +1342,7 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    openDisclosure(/Exports and reports/i);
     expect(screen.getAllByText(/Client report quality is limited because project intake was skipped/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Project context used for Delivery Outputs')).toBeInTheDocument();
     expect(screen.getByText('Edit project context')).toBeInTheDocument();

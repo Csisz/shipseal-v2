@@ -136,6 +136,14 @@ interface Props {
 
 type RepositoryHealth = ReadinessReport['repositoryHealth'];
 type RepositoryHealthSignal = RepositoryHealth['dimensions']['repositoryIntelligence']['signals'][number];
+type ResultChapterId = 'understand' | 'improve' | 'apply' | 'verify';
+
+const RESULT_CHAPTERS: Array<{ id: ResultChapterId; label: string }> = [
+  { id: 'understand', label: 'Understand' },
+  { id: 'improve', label: 'Improve' },
+  { id: 'apply', label: 'Apply' },
+  { id: 'verify', label: 'Verify' },
+];
 
 export function ResultDashboard({
   report,
@@ -167,6 +175,10 @@ export function ResultDashboard({
   const [draftIntake, setDraftIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [wasIntakeSkipped, setWasIntakeSkipped] = useState(intakeSkipped);
   const [localStoryChapterId, setLocalStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
+  const [activeResultChapter, setActiveResultChapter] = useState<ResultChapterId>('understand');
+  const [planReviewed, setPlanReviewed] = useState(false);
+  const [packagePrepared, setPackagePrepared] = useState(false);
+  const [prCreated, setPrCreated] = useState(false);
   const readiness = evaluateReadiness(report.score, report.blockers);
   const ready = readiness.isReady;
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
@@ -181,6 +193,9 @@ export function ResultDashboard({
   const repoContextJson = buildRepoContextPackJson(report);
   const scoreJson = buildScoreJson(report, { selectedPackages: resolvedPackages, agentOperatingMode: resolvedAgentMode });
   const toolingRecommendationCounts = recommendationCounts(buildToolingRecommendationBundle(report));
+  const verificationResult = useMemo(() => verificationBaseline
+    ? buildRepositoryVerificationResult({ baseline: verificationBaseline, currentReport: report })
+    : null, [report, verificationBaseline]);
   const mcpPackFiles: AgentPackFile[] = report.mcpReadiness.generatedFiles.map(file => ({
     name: file.filename,
     language: 'markdown',
@@ -198,6 +213,10 @@ export function ResultDashboard({
     setAppliedIntake(nextIntake);
     setDraftIntake(nextIntake);
     setWasIntakeSkipped(intakeSkipped);
+    setActiveResultChapter('understand');
+    setPlanReviewed(false);
+    setPackagePrepared(false);
+    setPrCreated(false);
   }, [initialIntake, intakeSkipped, report.repoName, report.scannedAt]);
 
   useEffect(() => {
@@ -219,6 +238,21 @@ export function ResultDashboard({
   const clearIntake = () => {
     setDraftIntake(createDefaultProjectIntake(report.repoName));
   };
+  const nextBestAction = getNextBestAction({
+    planReviewed,
+    packagePrepared: packagePrepared || prCreated,
+    verificationStatus: verificationResult?.status,
+  });
+  const handleNextBestAction = () => {
+    if (nextBestAction.targetChapter === 'improve') setPlanReviewed(true);
+    setActiveResultChapter(nextBestAction.targetChapter);
+  };
+  const chapterStatuses = getResultChapterStatuses({
+    report,
+    planReviewed,
+    packagePrepared: packagePrepared || prCreated,
+    verificationResult,
+  });
 
   return (
     <section className="container py-12 md:py-16 animate-fade-in-up">
@@ -226,25 +260,52 @@ export function ResultDashboard({
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
 
+      <WorkspaceHeroSummary
+        report={report}
+        limitedScanReason={limitedScanReason}
+        onReset={onReset}
+        onReplayReveal={onReplayReveal}
+      />
+
+      <WorkspaceChapterNav
+        activeChapter={activeResultChapter}
+        statuses={chapterStatuses}
+        onChange={setActiveResultChapter}
+      />
+
+      <NextBestActionCard
+        action={nextBestAction}
+        onAction={handleNextBestAction}
+      />
+
       <AiWorkspaceHero
         report={report}
         limitationReason={limitedScanReason}
-        onReset={onReset}
-        onReplayReveal={onReplayReveal}
         story={workspaceStory}
         activeStoryChapter={activeStoryChapter}
         onActiveStoryChapterChange={handleActiveStoryChapterChange}
+        activeResultChapter={activeResultChapter}
+        onResultChapterChange={setActiveResultChapter}
+        onPlanReviewed={() => setPlanReviewed(true)}
+        onPackagePrepared={() => setPackagePrepared(true)}
+        onPrCreated={() => setPrCreated(true)}
         githubConnection={githubConnection}
         verificationBaseline={verificationBaseline}
         onSaveVerificationBaseline={onSaveVerificationBaseline}
         onDiscardVerificationBaseline={onDiscardVerificationBaseline}
       />
 
-      <WorkspaceOverview report={report} />
-      <LiveAgentSimulator report={report} activeChapter={activeStoryChapter} />
-      <WorkspaceModulePlaceholders />
+      {activeResultChapter === 'understand' && (
+        <Disclosure title="Supporting workspace views">
+          <div className="grid gap-6">
+            <WorkspaceOverview report={report} />
+            <LiveAgentSimulator report={report} activeChapter={activeStoryChapter} />
+            <WorkspaceModulePlaceholders />
+          </div>
+        </Disclosure>
+      )}
 
-      <Disclosure title="Workspace evidence">
+      <Disclosure title="Workspace evidence" defaultOpen={false}>
         {repositoryHealth.overall.score !== null && (
           <>
             <RepositoryHealthActions repositoryHealth={repositoryHealth} />
@@ -260,11 +321,12 @@ export function ResultDashboard({
         <DecisionSummary report={report} ready={ready} nextActions={report.aiNarrative.nextBestActions.slice(0, 3)} />
       </Disclosure>
 
+      <Disclosure title="Exports and reports">
       <section className="mb-8" aria-labelledby="delivery-outputs-heading">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Delivery Outputs</div>
-            <h2 id="delivery-outputs-heading" className="mt-1 font-display text-2xl font-semibold">Export what the workspace produced</h2>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Exports and reports</div>
+            <h2 id="delivery-outputs-heading" className="mt-1 font-display text-2xl font-semibold">Reports and Delivery Outputs</h2>
           </div>
           <Badge variant="outline" className="border-primary/40 text-primary-glow">
             Export scope
@@ -420,6 +482,7 @@ export function ResultDashboard({
         />
       </Disclosure>
       </section>
+      </Disclosure>
 
       <Disclosure title="Available ShipSeal improvements - optional fixes you can add back">
         <SuggestedReadinessFixPack report={report} githubConnection={githubConnection} selectedPackages={resolvedPackages} />
@@ -669,14 +732,206 @@ export function ResultDashboard({
   );
 }
 
+function WorkspaceHeroSummary({
+  report,
+  limitedScanReason,
+  onReset,
+  onReplayReveal,
+}: {
+  report: ReadinessReport;
+  limitedScanReason?: string;
+  onReset: () => void;
+  onReplayReveal?: () => void;
+}) {
+  const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;
+  const nextMoveCount = Math.max(1, Math.min(3, report.repositoryHealth.topActions.length || report.aiNarrative.nextBestActions.length || report.improvements.length));
+  return (
+    <section className="mb-5 rounded-[2rem] border border-primary/20 bg-[hsl(225_28%_7%)] p-5 shadow-sm shadow-primary/10 md:p-8" aria-labelledby="workspace-result-heading">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-4xl">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-primary/45 text-primary-glow">AI Workspace</Badge>
+            <span className="text-xs text-muted-foreground">{report.stack.primary}</span>
+          </div>
+          <h1 id="workspace-result-heading" className="font-display text-3xl font-semibold leading-tight md:text-5xl">Repository understood.</h1>
+          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">
+            ShipSeal mapped {fileCount.toLocaleString()} files into a workspace model and found {nextMoveCount} practical {nextMoveCount === 1 ? 'way' : 'ways'} to improve AI agent navigation.
+          </p>
+          {limitedScanReason && (
+            <p className="mt-3 max-w-3xl rounded-2xl border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning/90">
+              Limited scan: {limitedScanReason}
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2 lg:justify-end">
+          {onReplayReveal && (
+            <Button variant="outline" size="sm" onClick={onReplayReveal} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Replay reveal
+            </Button>
+          )}
+          <Button variant="outline" size="sm" onClick={onReset} className="border-border/60 bg-background/20">
+            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function WorkspaceChapterNav({
+  activeChapter,
+  statuses,
+  onChange,
+}: {
+  activeChapter: ResultChapterId;
+  statuses: Record<ResultChapterId, string>;
+  onChange: (chapter: ResultChapterId) => void;
+}) {
+  return (
+    <nav className="mb-5 grid gap-2 md:grid-cols-4" aria-label="Result chapters">
+      {RESULT_CHAPTERS.map(chapter => (
+        <button
+          key={chapter.id}
+          type="button"
+          aria-pressed={activeChapter === chapter.id}
+          onClick={() => onChange(chapter.id)}
+          className={`rounded-2xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+            activeChapter === chapter.id
+              ? 'border-primary/45 bg-primary/10 text-foreground shadow-sm shadow-primary/10'
+              : 'border-border/55 bg-background/20 text-muted-foreground hover:border-primary/30 hover:text-foreground'
+          }`}
+        >
+          <div className="text-sm font-semibold">{chapter.label}</div>
+          <div className="mt-1 text-xs">{statuses[chapter.id]}</div>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function NextBestActionCard({
+  action,
+  onAction,
+}: {
+  action: ReturnType<typeof getNextBestAction>;
+  onAction: () => void;
+}) {
+  return (
+    <section className="mb-6 rounded-3xl border border-primary/20 bg-background/25 p-4 md:p-5" aria-label="Next best action">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Next best action</div>
+          <h2 className="mt-1 font-display text-xl font-semibold">{action.label}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{action.description}</p>
+        </div>
+        <Button type="button" onClick={onAction} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 md:w-auto">
+          {action.buttonLabel}
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function getResultChapterStatuses({
+  report,
+  planReviewed,
+  packagePrepared,
+  verificationResult,
+}: {
+  report: ReadinessReport;
+  planReviewed: boolean;
+  packagePrepared: boolean;
+  verificationResult: RepositoryVerificationResult | null;
+}) {
+  return {
+    understand: 'Repository mapped',
+    improve: planReviewed ? 'Plan reviewed' : `${Math.max(1, Math.min(6, report.repositoryHealth.topActions.length || report.improvements.length || 1))} next moves`,
+    apply: packagePrepared ? 'Package prepared' : 'Package available',
+    verify: verificationResult?.status === 'matched-rescan'
+      ? 'After rescan available'
+      : verificationResult?.status === 'repository-mismatch'
+        ? 'Baseline mismatch'
+        : 'Needs later scan',
+  } satisfies Record<ResultChapterId, string>;
+}
+
+function getNextBestAction({
+  planReviewed,
+  packagePrepared,
+  verificationStatus,
+}: {
+  planReviewed: boolean;
+  packagePrepared: boolean;
+  verificationStatus?: RepositoryVerificationResult['status'];
+}) {
+  if (verificationStatus === 'repository-mismatch') {
+    return {
+      label: 'Scan the original repository again',
+      description: 'The saved baseline belongs to another repository state.',
+      buttonLabel: 'Review verification',
+      targetChapter: 'verify' as ResultChapterId,
+    };
+  }
+  if (verificationStatus === 'matched-rescan') {
+    return {
+      label: 'Review detected changes',
+      description: 'ShipSeal found after-rescan evidence. Review what was actually detected.',
+      buttonLabel: 'Review detected changes',
+      targetChapter: 'verify' as ResultChapterId,
+    };
+  }
+  if (packagePrepared) {
+    return {
+      label: 'Apply changes, then rescan',
+      description: 'Use the reviewed package or PR, then scan this repository again.',
+      buttonLabel: 'Open verification',
+      targetChapter: 'verify' as ResultChapterId,
+    };
+  }
+  if (planReviewed) {
+    return {
+      label: 'Download Optimization Pack',
+      description: 'Package the selected improvements for human review.',
+      buttonLabel: 'Open apply flow',
+      targetChapter: 'apply' as ResultChapterId,
+    };
+  }
+  return {
+    label: 'Review ShipSeal improvements',
+    description: 'See the concrete improvements ShipSeal can prepare from this scan.',
+    buttonLabel: 'Review ShipSeal improvements',
+    targetChapter: 'improve' as ResultChapterId,
+  };
+}
+
+function workspaceInsights(report: ReadinessReport, universe: RepositoryUniverseModel) {
+  const documentation = report.summary.instructionFiles.length || report.summary.keyFolders.some(folder => /doc|docs/i.test(folder))
+    ? 'Documentation and instruction signals are available.'
+    : 'Documentation signals are thin and should be strengthened.';
+  const verification = report.stack.runCommands.length || report.stack.testFrameworks.length
+    ? 'Verification paths are visible to future agents.'
+    : 'Verification commands are not obvious from this scan.';
+  const context = universe.summary.folderNodeCount > 0
+    ? `${universe.summary.folderNodeCount.toLocaleString()} folders were shaped into navigable workspace context.`
+    : 'ShipSeal built a compact workspace model from available repository evidence.';
+  return [
+    { title: 'Agents have a starting point', detail: documentation },
+    { title: 'Context can be routed', detail: context },
+    { title: 'Verification is visible', detail: verification },
+  ];
+}
+
 function AiWorkspaceHero({
   report,
   limitationReason,
-  onReset,
-  onReplayReveal,
   story,
   activeStoryChapter,
   onActiveStoryChapterChange,
+  activeResultChapter,
+  onResultChapterChange,
+  onPlanReviewed,
+  onPackagePrepared,
+  onPrCreated,
   githubConnection,
   verificationBaseline,
   onSaveVerificationBaseline,
@@ -684,11 +939,14 @@ function AiWorkspaceHero({
 }: {
   report: ReadinessReport;
   limitationReason?: string;
-  onReset: () => void;
-  onReplayReveal?: () => void;
   story: WorkspaceStory;
   activeStoryChapter: WorkspaceStoryChapter | null;
   onActiveStoryChapterChange?: (chapterId: WorkspaceStoryChapterId | null) => void;
+  activeResultChapter: ResultChapterId;
+  onResultChapterChange: (chapter: ResultChapterId) => void;
+  onPlanReviewed: () => void;
+  onPackagePrepared: () => void;
+  onPrCreated: () => void;
   githubConnection?: GitHubConnectionState;
   verificationBaseline?: RepositoryVerificationBaseline | null;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
@@ -732,7 +990,7 @@ function AiWorkspaceHero({
     <section className="mb-8 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-5 shadow-glow md:p-8 lg:p-10 animate-fade-in-up" aria-labelledby="repository-intelligence-heading">
       <div className="relative">
         <div className="absolute inset-0 -m-10 bg-[radial-gradient(circle_at_24%_18%,hsl(var(--primary)/0.22),transparent_34%),radial-gradient(circle_at_78%_26%,hsl(var(--accent)/0.13),transparent_32%),linear-gradient(180deg,hsl(var(--background)/0),hsl(var(--background)/0.2))] pointer-events-none" />
-        <div className="relative mb-7 flex flex-wrap items-start justify-between gap-4">
+        {activeResultChapter === 'understand' && <div className="relative mb-7 flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-4xl">
             <div className="mb-3 flex flex-wrap items-center gap-3">
               <span className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Intelligence</span>
@@ -755,40 +1013,39 @@ function AiWorkspaceHero({
               </p>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {onReplayReveal && (
-              <Button variant="outline" size="sm" onClick={onReplayReveal} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Replay reveal
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={onReset} className="border-border/60 bg-background/20">
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
-            </Button>
-          </div>
-        </div>
+        </div>}
 
         {!unavailable && (
           <>
-            <WorkspaceStoryNavigator
-              story={story}
-              activeChapter={activeStoryChapter}
-              exploredChapterIds={exploredChapterIds}
-              onSelectChapter={selectStoryChapter}
-            />
-            {activeStoryChapter && <WorkspaceEvidenceTrail chapter={activeStoryChapter} />}
+            {activeResultChapter === 'understand' && (
+              <>
+                <WorkspaceStoryNavigator
+                  story={story}
+                  activeChapter={activeStoryChapter}
+                  exploredChapterIds={exploredChapterIds}
+                  onSelectChapter={selectStoryChapter}
+                />
+                {activeStoryChapter && <WorkspaceEvidenceTrail chapter={activeStoryChapter} />}
+              </>
+            )}
             <RepositoryAtlasVisualization
               report={report}
               story={story}
               activeChapter={activeStoryChapter}
               onSelectChapter={selectStoryChapter}
+              activeResultChapter={activeResultChapter}
+              onResultChapterChange={onResultChapterChange}
+              onPlanReviewed={onPlanReviewed}
+              onPackagePrepared={onPackagePrepared}
+              onPrCreated={onPrCreated}
               githubConnection={githubConnection}
               verificationBaseline={verificationBaseline}
               onSaveVerificationBaseline={onSaveVerificationBaseline}
               onDiscardVerificationBaseline={onDiscardVerificationBaseline}
             />
 
-            <details className="relative mt-5 rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
-              <summary className="cursor-pointer select-none font-display text-lg font-semibold text-foreground">Supporting workspace views</summary>
+            {activeResultChapter === 'understand' && <details className="relative mt-5 rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
+              <summary className="cursor-pointer select-none font-display text-lg font-semibold text-foreground">Repository models and metrics</summary>
               <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
                 <div className="min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
                   <MentalModelVisualization
@@ -810,11 +1067,11 @@ function AiWorkspaceHero({
                   />
                 </aside>
               </div>
-            </details>
+            </details>}
           </>
         )}
 
-        <details className="relative mt-6 rounded-2xl border border-border/60 bg-secondary/15 px-4 py-3 text-sm text-muted-foreground">
+        {activeResultChapter === 'understand' && <details className="relative mt-6 rounded-2xl border border-border/60 bg-secondary/15 px-4 py-3 text-sm text-muted-foreground">
           <summary className="cursor-pointer select-none font-medium text-foreground">Workspace metrics and next action</summary>
           <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
             <div className="flex flex-wrap items-center gap-2">
@@ -832,7 +1089,7 @@ function AiWorkspaceHero({
               </div>
             )}
           </div>
-        </details>
+        </details>}
       </div>
     </section>
   );
@@ -852,6 +1109,11 @@ function RepositoryAtlasVisualization({
   story,
   activeChapter,
   onSelectChapter,
+  activeResultChapter,
+  onResultChapterChange,
+  onPlanReviewed,
+  onPackagePrepared,
+  onPrCreated,
   githubConnection,
   verificationBaseline,
   onSaveVerificationBaseline,
@@ -861,6 +1123,11 @@ function RepositoryAtlasVisualization({
   story: WorkspaceStory;
   activeChapter: WorkspaceStoryChapter | null;
   onSelectChapter: (chapterId: WorkspaceStoryChapterId) => void;
+  activeResultChapter: ResultChapterId;
+  onResultChapterChange: (chapter: ResultChapterId) => void;
+  onPlanReviewed: () => void;
+  onPackagePrepared: () => void;
+  onPrCreated: () => void;
   githubConnection?: GitHubConnectionState;
   verificationBaseline?: RepositoryVerificationBaseline | null;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
@@ -985,6 +1252,7 @@ function RepositoryAtlasVisualization({
       : atlas.nodes.filter(node => searchMatches.has(node.id)).slice(0, 5))
     : [];
   const atlasNavigationActive = navigationActive || fullscreen;
+  const planReadyForChapter = activeResultChapter === 'apply' || activeResultChapter === 'verify';
 
   useEffect(() => {
     setSelectedNodeId(current => {
@@ -1028,6 +1296,13 @@ function RepositoryAtlasVisualization({
       setSelectedOptimizationItemId(optimizationPlan.items[0].id);
     }
   }, [optimizationPlan?.items, selectedOptimizationItemId]);
+
+  useEffect(() => {
+    if (!planReadyForChapter || transformation.proposals.length === 0) return;
+    setTransformationMode(current => current === 'after-rescan' ? current : 'with-shipseal');
+    setOptimizationPlanOpen(true);
+    onPlanReviewed();
+  }, [onPlanReviewed, planReadyForChapter, transformation.proposals.length]);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -1175,6 +1450,7 @@ function RepositoryAtlasVisualization({
   const openOptimizationPlan = () => {
     setTransformationMode('with-shipseal');
     setOptimizationPlanOpen(true);
+    onPlanReviewed();
   };
 
   const selectProposal = useCallback((proposal: RepositoryTransformationProposal) => {
@@ -1498,6 +1774,8 @@ function RepositoryAtlasVisualization({
       onToggleProposalIncluded={toggleProposalIncluded}
       onSaveVerificationBaseline={onSaveVerificationBaseline}
       onDiscardVerificationBaseline={onDiscardVerificationBaseline}
+      onPackDownloaded={onPackagePrepared}
+      onPrCreated={onPrCreated}
       onClose={() => setOptimizationPlanOpen(false)}
     />
   );
@@ -1817,37 +2095,93 @@ function RepositoryAtlasVisualization({
         />
       )
   );
+  const resultChapterTitle = activeResultChapter === 'understand'
+    ? 'Explore the repository universe'
+    : activeResultChapter === 'improve'
+      ? 'Review ShipSeal improvements'
+      : activeResultChapter === 'apply'
+        ? 'Prepare the optimization package'
+        : 'Verify after rescan';
+  const resultChapterEyebrow = activeResultChapter === 'understand'
+    ? 'Repository Universe'
+    : activeResultChapter === 'improve'
+      ? 'Improve'
+      : activeResultChapter === 'apply'
+        ? 'Apply'
+        : 'Verify';
+  const resultChapterSummary = activeResultChapter === 'understand'
+    ? (viewMode === 'universe3d'
+      ? `${visibleUniverseNodeIds.size.toLocaleString()} entities visible. ${universe.statusNote}`
+      : atlas.statusNote)
+    : activeResultChapter === 'improve'
+      ? 'Preview what ShipSeal can prepare. No repository files change here.'
+      : activeResultChapter === 'apply'
+        ? 'Download a review package or create a GitHub PR after explicit confirmation.'
+        : verificationResult?.status === 'matched-rescan'
+          ? 'ShipSeal is showing only what this later scan detected.'
+          : 'Verification requires a saved baseline and a later scan of the changed repository.';
+  const showUniverseWorkspace = activeResultChapter === 'understand' || activeResultChapter === 'improve';
+  const showTransformationPanel = activeResultChapter === 'improve';
+  const showPlanReview = optimizationPlanReview && activeResultChapter !== 'understand';
 
   return (
     <section ref={atlasRootRef} className="relative rounded-[1.75rem] border border-primary/25 bg-[hsl(224_31%_6%)] p-4 shadow-sm shadow-primary/10 md:p-5" aria-labelledby="repository-atlas-heading">
       <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository Universe</div>
-          <h2 id="repository-atlas-heading" className="mt-1 font-display text-2xl font-semibold">Explore the repository universe</h2>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{resultChapterEyebrow}</div>
+          <h2 id="repository-atlas-heading" className="mt-1 font-display text-2xl font-semibold">{resultChapterTitle}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            {viewMode === 'universe3d'
-              ? `${visibleUniverseNodeIds.size.toLocaleString()} entities visible. ${universe.statusNote}`
-              : atlas.statusNote}
+            {resultChapterSummary}
           </p>
         </div>
-        {!fullscreen && atlasToolbar}
+        {!fullscreen && showUniverseWorkspace && atlasToolbar}
       </div>
 
       {!fullscreen && (
         <>
-          <div id="repository-atlas-navigation-status" className="mb-4 rounded-full border border-border/50 bg-background/20 px-3 py-2 text-xs text-muted-foreground" aria-live="polite">
-            {atlasNavigationActive ? `${viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to release` : 'Click to explore - Scroll to zoom - Drag to move'}
-          </div>
+          {showUniverseWorkspace && (
+            <div id="repository-atlas-navigation-status" className="mb-4 rounded-full border border-border/50 bg-background/20 px-3 py-2 text-xs text-muted-foreground" aria-live="polite">
+              {atlasNavigationActive ? `${viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to release` : 'Click to explore - Scroll to zoom - Drag to move'}
+            </div>
+          )}
 
-          <div className="mb-4">{transformationControls}</div>
-          {optimizationPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
-          <div className="mb-4">{atlasFilters}</div>
-          {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
-          {searchResultList && <div className="mb-4">{searchResultList}</div>}
+          {activeResultChapter === 'understand' && (
+            <div className="mb-4 grid gap-3 md:grid-cols-3">
+              {workspaceInsights(report, universe).map(insight => (
+                <div key={insight.title} className="rounded-2xl border border-border/50 bg-background/20 p-4">
+                  <div className="text-sm font-semibold text-foreground">{insight.title}</div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{insight.detail}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showTransformationPanel && <div className="mb-4">{transformationControls}</div>}
+          {showPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
+          {activeResultChapter === 'improve' && !optimizationPlanOpen && (
+            <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className="font-display text-lg font-semibold">ShipSeal found concrete improvements.</div>
+              <p className="mt-1 text-sm text-muted-foreground">Review the generated plan, then package only what should be human-reviewed.</p>
+              <Button type="button" size="sm" onClick={openOptimizationPlan} className="mt-3 bg-primary text-primary-foreground hover:bg-primary/90">
+                Prepare optimization package
+              </Button>
+            </div>
+          )}
+          {(activeResultChapter === 'apply' || activeResultChapter === 'verify') && !optimizationPlanReview && (
+            <div className="mb-4 rounded-2xl border border-border/55 bg-background/20 p-4">
+              <p className="text-sm text-muted-foreground">No active optimization artifacts are selected yet.</p>
+              <Button type="button" size="sm" onClick={() => onResultChapterChange('improve')} className="mt-3 bg-primary text-primary-foreground hover:bg-primary/90">
+                Review ShipSeal improvements
+              </Button>
+            </div>
+          )}
+          {showUniverseWorkspace && <div className="mb-4">{atlasFilters}</div>}
+          {showUniverseWorkspace && clusterLegend && <div className="mb-4">{clusterLegend}</div>}
+          {showUniverseWorkspace && searchResultList && <div className="mb-4">{searchResultList}</div>}
         </>
       )}
 
-      {!fullscreen && (
+      {!fullscreen && showUniverseWorkspace && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
           {inspector}
@@ -1909,6 +2243,8 @@ function OptimizationPlanReview({
   onToggleProposalIncluded,
   onSaveVerificationBaseline,
   onDiscardVerificationBaseline,
+  onPackDownloaded,
+  onPrCreated,
   onClose,
 }: {
   report: ReadinessReport;
@@ -1924,6 +2260,8 @@ function OptimizationPlanReview({
   onToggleProposalIncluded: (proposalId: string) => void;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
+  onPackDownloaded?: () => void;
+  onPrCreated?: () => void;
   onClose: () => void;
 }) {
   const manifestPreview = serializeRepositoryOptimizationManifest(plan.manifest);
@@ -1949,6 +2287,7 @@ function OptimizationPlanReview({
       downloadBlob(blob, buildOptimizationPackZipFilename(plan.repositoryName));
       saveVerificationBaseline('zip-download');
       setPackState('downloaded');
+      onPackDownloaded?.();
     } catch (error) {
       setPackState('error');
       setPackError(error instanceof Error ? error.message : 'Optimization Pack ZIP could not be prepared.');
@@ -1974,6 +2313,7 @@ function OptimizationPlanReview({
       setPrState('created');
       setPrResult({ url: result.prUrl, branchName: result.branchName });
       saveVerificationBaseline('github-pr-created');
+      onPrCreated?.();
     } catch (error) {
       setPrState('error');
       setPrError(friendlyOptimizationPrError(error));
