@@ -1,95 +1,94 @@
 # ShipSeal Positioning
 
-Last updated: 2026-07-02
+Last updated: 2026-07-14
 
-## Category
+This is the canonical source of truth for ShipSeal product direction and hierarchy. The canonical implementation contract for the primary paid outcome is `docs/implementation/REPOSITORY_INTELLIGENCE_PR_SPEC.md`.
 
-Primary category:
+## Primary product promise
 
-AI Repository Optimization / Repository Intelligence
+> ShipSeal helps AI coding agents understand and work inside a repository more effectively.
 
-Secondary category:
+ShipSeal scans a repository, identifies where coding agents will struggle, explains findings with concrete repository evidence, generates repository-specific workspace improvements, applies selected improvements through a reviewed GitHub PR, and verifies detected changes after a rescan.
 
-Delivery Pack and client handoff report generation
+## Category and identity
 
-## One-line Positioning
+Primary identity:
 
-ShipSeal is the missing layer between a Git repository and AI coding agents, turning messy codebases into agent-ready workspaces for Claude Code, Codex, Cursor, Windsurf, and similar tools.
+**AI repository intelligence and AI workspace improvement.**
 
-## Core Message
+Approved category language:
 
-Stop wasting AI context. Prepare your repository once. Help Claude Code, Codex, Cursor, Windsurf, and other AI coding agents work faster with less unnecessary context.
+- AI Repository Intelligence Platform
+- AI repository optimization platform
+- the repository-understanding layer between a Git repository and AI coding agents
 
-## What ShipSeal Does
+ShipSeal improves the repository as an agent workspace. It does not replace Claude Code, Codex, Cursor, Windsurf, GitHub Copilot, or similar tools.
 
-ShipSeal scans a repository and generates:
+## Product hierarchy
 
-- Repository Intelligence,
-- compact project memory,
-- context compression guidance,
-- Agent Cost Optimizer recommendations,
-- folder-level `AGENTS.md` suggestions,
-- specialized context packs,
-- skill and MCP recommendations,
-- readiness evidence,
-- Delivery Pack export,
-- client handoff reports,
-- manifest and `score.json` outputs.
+### Primary paid outcome
 
-## What ShipSeal Is Not
+**Repository Intelligence PR**
 
-ShipSeal should not be positioned primarily as:
+The PR contains repository-specific workspace knowledge and instructions derived from actual structure, source responsibilities, commands, relationships, and risks. It is reviewed before merge and must not be a collection of generic templates.
 
-- an audit tool,
-- a founder review service,
-- a human review product,
-- a legal compliance tool,
-- only a Delivery Pack generator.
+### Signature experience
 
-ShipSeal can still generate review-friendly artifacts, disclaimers, and client-facing reports, but those outputs support the repository optimization story.
+**Repository Universe**
 
-## Key Differentiator
+Repository Universe is preserved as:
 
-ShipSeal optimizes the repository, not the AI model.
+- visual proof that ShipSeal understood the repository;
+- an exploratory interface backed by repository evidence;
+- a memorable ShipSeal experience and launch/marketing asset;
+- an optional, lazy-loaded advanced surface.
 
-Most AI coding tools get slower or less consistent when the repository has scattered instructions, stale docs, missing ownership notes, and too much low-signal context. ShipSeal makes the repository itself easier for agents to use before the next session begins.
+It is not the main paid output, is not removed or deprecated, and does not need major new functionality during the Repository Intelligence PR implementation sprints.
 
-Repository Intelligence is the product system: Context Compression, Folder-level AGENTS, Specialized Context Packs, Agent Cost Optimizer, Skill Recommendations, MCP Recommendations and Agent Memory working together.
+### Secondary commercial output
 
-## Target Users
+**Client Handoff Pack**
 
-- AI freelancers
-- Small AI agencies
-- Indie SaaS builders
-- No-code and low-code AI builders
-- Teams maintaining AI-generated or AI-assisted repositories
-- Consultants preparing client repositories for ongoing AI-assisted development
+Client handoff remains available after repository understanding as an export path. It does not compete with AI repository intelligence in the landing-page hero or first promise.
 
-## Packaging Language
+### Supporting outputs
 
-Use:
+Delivery Packs, PDF/HTML reports, security notes, testing outputs, MCP guidance, AI Act documentation, readiness signals, manifests, and `score.json` remain valid supporting outputs and compatibility contracts. They are not separate top-level product identities.
 
-- Free Demo
-- Builder
-- AI Workspace Pro
-- Agency / White-label
+## Initial target
 
-Avoid:
+Deep Repository Intelligence is optimized first for JavaScript and TypeScript application repositories, especially React, Vite, Next.js, Node.js, Express, and similar stacks.
 
-- Expert Review Add-On
-- Human Review Option
-- Founder-reviewed audit
-- Request audit
+Other stacks continue to receive the current deterministic scan. ShipSeal must not imply equivalent deep-generation quality before a stack has been validated.
 
-## Pricing Value Language
+## Quality rule
 
-AI Workspace Pro should emphasize:
+> Generated files must describe the actual code structure, responsibilities, commands, relationships and risks of the scanned repository. Generic best-practice templates are not sufficient.
 
-- Agent Cost Optimizer
-- Context Compression Pack
-- Folder-level AGENTS
-- Specialized Context Packs
-- Skill and MCP recommendations
-- Delivery Pack export
+Every factual generated statement must be traceable to repository evidence. Unsupported claims are rejected or clearly marked as limitations/inferences; they are not presented as verified.
 
-Agency / White-label should emphasize repeatable branded delivery, multi-project workflows, and professional client-facing exports.
+## Target users
+
+- AI freelancers and consultants
+- small AI agencies
+- indie SaaS builders
+- teams maintaining AI-generated or AI-assisted applications
+- builders using AI coding agents for repeated repository work
+
+## What ShipSeal is not
+
+ShipSeal is not primarily:
+
+- an audit or founder-review service;
+- a generic report or Delivery Pack generator;
+- a legal compliance or production security tool;
+- a code-execution service;
+- a generic instruction-template generator.
+
+Applicable client-facing governance outputs retain the boundary: **This is not legal advice.**
+
+## Packaging direction
+
+The free experience provides deterministic scanning, evidence-backed friction findings, and a preview of improvement opportunities. The paid value centers on the reviewed Repository Intelligence PR. Client Handoff and supporting exports can be packaged alongside or after that outcome.
+
+Authentication, payment entitlements, persistence, public sharing, and badges are later commercial-foundation work and do not redefine the product promise.

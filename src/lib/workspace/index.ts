@@ -53,6 +53,10 @@ export {
   buildRepositoryVerificationResult,
 } from './repositoryVerification';
 
+export {
+  buildRepositoryAgentFlightPath,
+} from './repositoryAgentFlightPath';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,
@@ -142,6 +146,20 @@ export type {
   VerifiedArtifactState,
   WorkspaceMetricComparison,
 } from './repositoryVerification';
+
+export type {
+  AgentFlightPathAvoidance,
+  AgentFlightPathCommand,
+  AgentFlightPathConfidence,
+  AgentFlightPathContextFile,
+  AgentFlightPathEvidence,
+  AgentFlightPathEvidenceState,
+  AgentFlightPathRequest,
+  AgentFlightPathReviewGate,
+  AgentFlightPathStep,
+  AgentFlightPathStepType,
+  RepositoryAgentFlightPath,
+} from './repositoryAgentFlightPath';
 
 export type {
   RepositoryAtlasCluster,

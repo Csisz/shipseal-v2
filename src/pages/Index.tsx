@@ -6,6 +6,7 @@ import { ScanProgress } from '@/components/agentready/ScanProgress';
 import { IntelligenceReveal } from '@/components/agentready/IntelligenceReveal';
 import { ProjectIntakeForm } from '@/components/agentready/ProjectIntakeForm';
 import { buildSampleReport } from '@/lib/readiness';
+import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
 import { clearScanHistory, getScanHistory, saveScanHistory } from '@/lib/scanHistory';
 import type { AgentOperatingModeId, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { toast } from '@/hooks/use-toast';
@@ -23,6 +24,7 @@ import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/l
 import { ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import type { RepositoryVerificationBaseline, WorkspaceStoryChapterId } from '@/lib/workspace';
+import type { RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
 
 type PendingSource =
   | { type: 'zip'; file: File; projectName: string }
@@ -97,7 +99,8 @@ function importErrorTitle(category?: string | null) {
 }
 
 const Index = () => {
-  const scan = useRepoScan();
+  const [repositoryIntelligenceVerificationBaseline, setRepositoryIntelligenceVerificationBaseline] = useState<RepositoryIntelligenceVerificationBaseline | null>(null);
+  const scan = useRepoScan(repositoryIntelligenceVerificationBaseline);
   const [sampleReport, setSampleReport] = useState<ReadinessReport | null>(null);
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
   const [pendingSource, setPendingSource] = useState<PendingSource | null>(null);
@@ -134,6 +137,28 @@ const Index = () => {
     if (!isScanning) return;
     scrollWindowToTop('auto');
   }, [isScanning]);
+
+  const prepareSampleRepositoryIntelligenceReview = useCallback(async () => {
+    const { buildRepositoryIntelligenceArtifactReview } = await import('@/lib/repositoryIntelligence');
+    const result = buildRepositoryIntelligenceArtifactReview({ scanInput: SAMPLE_PROJECT_REPO_INPUT });
+    return { artifactSet: result.artifactSet, review: result.review };
+  }, []);
+
+  const rescanRepositoryIntelligence = useCallback(() => {
+    if (!pendingSource) return;
+    if (pendingSource.type === 'github-app') {
+      const connection = pendingSource.connection;
+      if (!connection.installationId || !connection.owner || !connection.repo) return;
+      void scan.startGitHubAppScan({
+        installationId: connection.installationId,
+        owner: connection.owner,
+        repo: connection.repo,
+        ref: pendingSource.branch || connection.defaultBranch,
+      });
+      return;
+    }
+    if (pendingSource.type === 'github') void scan.startGitHubScan(pendingSource.url, pendingSource.branch);
+  }, [pendingSource, scan]);
 
   useEffect(() => {
     setHistory(getScanHistory());
@@ -441,6 +466,10 @@ const Index = () => {
           <Suspense fallback={<div className="container py-24 text-sm text-muted-foreground">Loading report...</div>}>
             <ResultDashboard
               report={activeReport}
+              repositoryIntelligenceReviewSession={sampleReport ? null : scan.repositoryIntelligenceReview}
+              repositoryIntelligenceReviewPreparing={sampleReport ? false : scan.repositoryIntelligenceReviewPreparing}
+              repositoryIntelligenceReviewError={sampleReport ? null : scan.repositoryIntelligenceReviewError}
+              prepareRepositoryIntelligenceReview={sampleReport ? prepareSampleRepositoryIntelligenceReview : undefined}
               history={history}
               onReset={reset}
               onClearHistory={handleClearHistory}
@@ -455,6 +484,13 @@ const Index = () => {
               verificationBaseline={verificationBaseline}
               onSaveVerificationBaseline={setVerificationBaseline}
               onDiscardVerificationBaseline={() => setVerificationBaseline(null)}
+              repositoryIntelligenceVerificationBaseline={repositoryIntelligenceVerificationBaseline}
+              repositoryIntelligenceVerificationResult={sampleReport ? null : scan.repositoryIntelligenceVerification}
+              repositoryIntelligenceVerificationStatus={sampleReport ? 'idle' : scan.repositoryIntelligenceVerificationStatus}
+              repositoryIntelligenceVerificationError={sampleReport ? null : scan.repositoryIntelligenceVerificationError}
+              onSaveRepositoryIntelligenceVerificationBaseline={setRepositoryIntelligenceVerificationBaseline}
+              onDiscardRepositoryIntelligenceVerificationBaseline={() => setRepositoryIntelligenceVerificationBaseline(null)}
+              onRescanRepositoryIntelligence={pendingSource?.type === 'github' || pendingSource?.type === 'github-app' ? rescanRepositoryIntelligence : undefined}
             />
           </Suspense>
         </main>

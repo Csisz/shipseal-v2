@@ -1,8 +1,13 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { GITHUB_APP_SCAN_STEPS, GITHUB_PUBLIC_SCAN_STEPS, localScanEngine, ScanCancelledError, SCAN_ENGINE_STEPS } from '@/lib/scanEngine';
 import { GitHubImportError, importGitHubAppRepoArchive, importPublicGitHubRepo } from '@/lib/github/githubImport';
 import type { GitHubImportErrorCategory } from '@/lib/github/types';
-import type { ReadinessReport, ScanSourceMetadata, ScanSummary } from '@/lib/types';
+import type { ReadinessReport, RepoScanInput, ScanSourceMetadata, ScanSummary } from '@/lib/types';
+import type {
+  BuildRepositoryIntelligenceArtifactReviewResult,
+  RepositoryIntelligenceVerificationBaseline,
+  RepositoryIntelligenceVerificationResult,
+} from '@/lib/repositoryIntelligence';
 
 export type RepoScanStatus = 'idle' | 'scanning' | 'completed' | 'failed' | 'cancelled';
 
@@ -16,11 +21,24 @@ export interface RepoScanState {
   error: string | null;
   errorCategory: GitHubImportErrorCategory | null;
   report: ReadinessReport | null;
+  /** Safe UI boundary: validated drafts and review metadata, without selected source context. */
+  repositoryIntelligenceReview: Pick<BuildRepositoryIntelligenceArtifactReviewResult, 'artifactSet' | 'review'> | null;
+  repositoryIntelligenceReviewPreparing: boolean;
+  repositoryIntelligenceReviewError: string | null;
+  /** Safe internal UI boundary: fingerprints, finite states and repository-relative paths only. */
+  repositoryIntelligenceVerification: RepositoryIntelligenceVerificationResult | null;
+  repositoryIntelligenceVerificationStatus: 'idle' | 'scanning' | 'completed' | 'failed';
+  repositoryIntelligenceVerificationError: string | null;
   steps: readonly string[];
   activeRepositoryLabel: string | null;
   activeScanSourceLabel: string | null;
   discoveredFileCount: number | null;
   analyzedFileCount: number | null;
+}
+
+interface PreparedRepositoryIntelligenceVerification {
+  result: RepositoryIntelligenceVerificationResult | null;
+  error: string | null;
 }
 
 const MIN_SCAN_VISIBLE_MS = 900;
@@ -35,6 +53,12 @@ const initialState: RepoScanState = {
   error: null,
   errorCategory: null,
   report: null,
+  repositoryIntelligenceReview: null,
+  repositoryIntelligenceReviewPreparing: false,
+  repositoryIntelligenceReviewError: null,
+  repositoryIntelligenceVerification: null,
+  repositoryIntelligenceVerificationStatus: 'idle',
+  repositoryIntelligenceVerificationError: null,
   steps: SCAN_ENGINE_STEPS,
   activeRepositoryLabel: null,
   activeScanSourceLabel: null,
@@ -56,7 +80,7 @@ async function waitForMinimumVisibleDuration(startedAt: number) {
   }
 }
 
-export function useRepoScan() {
+export function useRepoScan(repositoryIntelligenceVerificationBaseline?: RepositoryIntelligenceVerificationBaseline | null) {
   const [state, setState] = useState<RepoScanState>(initialState);
   const abortRef = useRef<AbortController | null>(null);
   const scanTokenRef = useRef(0);
@@ -80,6 +104,11 @@ export function useRepoScan() {
         errorCategory: null,
         progress: 0,
         report: null,
+        repositoryIntelligenceReview: null,
+        repositoryIntelligenceReviewPreparing: false,
+        repositoryIntelligenceReviewError: null,
+        repositoryIntelligenceVerificationStatus: current.repositoryIntelligenceVerification ? 'completed' : 'idle',
+        repositoryIntelligenceVerificationError: null,
     }));
   }, []);
 
@@ -90,15 +119,19 @@ export function useRepoScan() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setState({
+    setState(current => ({
       ...initialState,
+      repositoryIntelligenceVerification: current.repositoryIntelligenceVerification,
+      repositoryIntelligenceVerificationStatus: repositoryIntelligenceVerificationBaseline ? 'scanning' : 'idle',
       selectedFile: file,
       status: 'scanning',
       currentStep: SCAN_ENGINE_STEPS[0],
       steps: SCAN_ENGINE_STEPS,
       activeRepositoryLabel: file.name.replace(/\.zip$/i, '') || file.name,
       activeScanSourceLabel: 'ZIP upload',
-    });
+    }));
+
+    let verificationPromise: Promise<PreparedRepositoryIntelligenceVerification> | null = null;
 
     try {
       const report = await localScanEngine.scan(
@@ -120,11 +153,18 @@ export function useRepoScan() {
             if (scanTokenRef.current !== token) return;
             setState(current => ({ ...current, ...applyScanSummary(summary) }));
           },
+          onScanInput: scanInput => {
+            if (scanTokenRef.current !== token) return;
+            void setRepositoryIntelligenceReview(setState, scanInput, () => scanTokenRef.current === token);
+            verificationPromise = prepareRepositoryIntelligenceVerification(scanInput, repositoryIntelligenceVerificationBaseline);
+          },
         }
       );
 
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       await waitForMinimumVisibleDuration(startedAt);
+      if (scanTokenRef.current !== token || controller.signal.aborted) return null;
+      const verification = verificationPromise ? await verificationPromise : { result: null, error: null };
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({
         ...current,
@@ -133,6 +173,9 @@ export function useRepoScan() {
         currentStepIndex: SCAN_ENGINE_STEPS.length,
         progress: 100,
         report,
+        repositoryIntelligenceVerification: verification.result || current.repositoryIntelligenceVerification,
+        repositoryIntelligenceVerificationStatus: repositoryIntelligenceVerificationBaseline ? verification.error ? 'failed' : 'completed' : 'idle',
+        repositoryIntelligenceVerificationError: verification.error,
       }));
       abortRef.current = null;
       return report;
@@ -146,11 +189,16 @@ export function useRepoScan() {
         error: cancelled ? 'Scan cancelled' : error instanceof Error ? error.message : String(error),
         errorCategory: null,
         report: null,
+        repositoryIntelligenceReview: null,
+        repositoryIntelligenceReviewPreparing: false,
+        repositoryIntelligenceReviewError: null,
+        repositoryIntelligenceVerificationStatus: cancelled ? current.repositoryIntelligenceVerification ? 'completed' : 'idle' : repositoryIntelligenceVerificationBaseline ? 'failed' : current.repositoryIntelligenceVerification ? 'completed' : 'idle',
+        repositoryIntelligenceVerificationError: repositoryIntelligenceVerificationBaseline && !cancelled ? 'Repository Intelligence verification could not be completed from this scan.' : null,
       }));
       abortRef.current = null;
       return null;
     }
-  }, []);
+  }, [repositoryIntelligenceVerificationBaseline]);
 
   const startGitHubScan = useCallback(async (url: string, branch?: string, sourceOverride: Partial<ScanSourceMetadata> = {}) => {
     const startedAt = Date.now();
@@ -159,14 +207,18 @@ export function useRepoScan() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setState({
+    setState(current => ({
       ...initialState,
+      repositoryIntelligenceVerification: current.repositoryIntelligenceVerification,
+      repositoryIntelligenceVerificationStatus: repositoryIntelligenceVerificationBaseline ? 'scanning' : 'idle',
       status: 'scanning',
       currentStep: GITHUB_PUBLIC_SCAN_STEPS[0],
       steps: GITHUB_PUBLIC_SCAN_STEPS,
       activeRepositoryLabel: url,
       activeScanSourceLabel: 'Public GitHub',
-    });
+    }));
+
+    let verificationPromise: Promise<PreparedRepositoryIntelligenceVerification> | null = null;
 
     try {
       const imported = await importPublicGitHubRepo(
@@ -211,11 +263,18 @@ export function useRepoScan() {
             if (scanTokenRef.current !== token) return;
             setState(current => ({ ...current, ...applyScanSummary(summary) }));
           },
+          onScanInput: scanInput => {
+            if (scanTokenRef.current !== token) return;
+            void setRepositoryIntelligenceReview(setState, scanInput, () => scanTokenRef.current === token);
+            verificationPromise = prepareRepositoryIntelligenceVerification(scanInput, repositoryIntelligenceVerificationBaseline);
+          },
         }
       );
 
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       await waitForMinimumVisibleDuration(startedAt);
+      if (scanTokenRef.current !== token || controller.signal.aborted) return null;
+      const verification = verificationPromise ? await verificationPromise : { result: null, error: null };
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({
         ...current,
@@ -224,6 +283,9 @@ export function useRepoScan() {
         currentStepIndex: GITHUB_PUBLIC_SCAN_STEPS.length,
         progress: 100,
         report,
+        repositoryIntelligenceVerification: verification.result || current.repositoryIntelligenceVerification,
+        repositoryIntelligenceVerificationStatus: repositoryIntelligenceVerificationBaseline ? verification.error ? 'failed' : 'completed' : 'idle',
+        repositoryIntelligenceVerificationError: verification.error,
       }));
       abortRef.current = null;
       return report;
@@ -244,11 +306,16 @@ export function useRepoScan() {
         error: message,
         errorCategory: error instanceof GitHubImportError ? error.category : null,
         report: null,
+        repositoryIntelligenceReview: null,
+        repositoryIntelligenceReviewPreparing: false,
+        repositoryIntelligenceReviewError: null,
+        repositoryIntelligenceVerificationStatus: cancelled ? current.repositoryIntelligenceVerification ? 'completed' : 'idle' : repositoryIntelligenceVerificationBaseline ? 'failed' : current.repositoryIntelligenceVerification ? 'completed' : 'idle',
+        repositoryIntelligenceVerificationError: repositoryIntelligenceVerificationBaseline && !cancelled ? 'Repository Intelligence verification could not be completed from this scan.' : null,
       }));
       abortRef.current = null;
       return null;
     }
-  }, []);
+  }, [repositoryIntelligenceVerificationBaseline]);
 
   const startGitHubAppScan = useCallback(async (input: { installationId: string; owner: string; repo: string; ref?: string }) => {
     const startedAt = Date.now();
@@ -257,14 +324,18 @@ export function useRepoScan() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setState({
+    setState(current => ({
       ...initialState,
+      repositoryIntelligenceVerification: current.repositoryIntelligenceVerification,
+      repositoryIntelligenceVerificationStatus: repositoryIntelligenceVerificationBaseline ? 'scanning' : 'idle',
       status: 'scanning',
       currentStep: GITHUB_APP_SCAN_STEPS[0],
       steps: GITHUB_APP_SCAN_STEPS,
       activeRepositoryLabel: `${input.owner}/${input.repo}`,
       activeScanSourceLabel: 'GitHub App',
-    });
+    }));
+
+    let verificationPromise: Promise<PreparedRepositoryIntelligenceVerification> | null = null;
 
     try {
       setState(current => ({ ...current, currentStep: GITHUB_APP_SCAN_STEPS[1], currentStepIndex: 1, progress: 12 }));
@@ -296,11 +367,18 @@ export function useRepoScan() {
             if (scanTokenRef.current !== token) return;
             setState(current => ({ ...current, ...applyScanSummary(summary) }));
           },
+          onScanInput: scanInput => {
+            if (scanTokenRef.current !== token) return;
+            void setRepositoryIntelligenceReview(setState, scanInput, () => scanTokenRef.current === token);
+            verificationPromise = prepareRepositoryIntelligenceVerification(scanInput, repositoryIntelligenceVerificationBaseline);
+          },
         }
       );
 
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       await waitForMinimumVisibleDuration(startedAt);
+      if (scanTokenRef.current !== token || controller.signal.aborted) return null;
+      const verification = verificationPromise ? await verificationPromise : { result: null, error: null };
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({
         ...current,
@@ -309,6 +387,9 @@ export function useRepoScan() {
         currentStepIndex: GITHUB_APP_SCAN_STEPS.length,
         progress: 100,
         report,
+        repositoryIntelligenceVerification: verification.result || current.repositoryIntelligenceVerification,
+        repositoryIntelligenceVerificationStatus: repositoryIntelligenceVerificationBaseline ? verification.error ? 'failed' : 'completed' : 'idle',
+        repositoryIntelligenceVerificationError: verification.error,
       }));
       abortRef.current = null;
       return report;
@@ -322,11 +403,16 @@ export function useRepoScan() {
         error: cancelled ? 'Scan cancelled' : error instanceof Error ? error.message : String(error),
         errorCategory: error instanceof GitHubImportError ? error.category : null,
         report: null,
+        repositoryIntelligenceReview: null,
+        repositoryIntelligenceReviewPreparing: false,
+        repositoryIntelligenceReviewError: null,
+        repositoryIntelligenceVerificationStatus: cancelled ? current.repositoryIntelligenceVerification ? 'completed' : 'idle' : repositoryIntelligenceVerificationBaseline ? 'failed' : current.repositoryIntelligenceVerification ? 'completed' : 'idle',
+        repositoryIntelligenceVerificationError: repositoryIntelligenceVerificationBaseline && !cancelled ? 'Repository Intelligence verification could not be completed from this scan.' : null,
       }));
       abortRef.current = null;
       return null;
     }
-  }, []);
+  }, [repositoryIntelligenceVerificationBaseline]);
 
   return {
     ...state,
@@ -336,4 +422,45 @@ export function useRepoScan() {
     cancelScan,
     resetScan,
   };
+}
+
+async function prepareRepositoryIntelligenceVerification(
+  scanInput: RepoScanInput,
+  baseline?: RepositoryIntelligenceVerificationBaseline | null,
+): Promise<PreparedRepositoryIntelligenceVerification> {
+  if (!baseline) return { result: null, error: null };
+  try {
+    const { verifyRepositoryIntelligenceArtifacts } = await import('@/lib/repositoryIntelligence');
+    return { result: verifyRepositoryIntelligenceArtifacts({ baseline, currentScan: scanInput }), error: null };
+  } catch {
+    return { result: null, error: 'Repository Intelligence verification could not be completed safely. The previous valid result was preserved.' };
+  }
+}
+
+async function setRepositoryIntelligenceReview(
+  setState: Dispatch<SetStateAction<RepoScanState>>,
+  scanInput: RepoScanInput,
+  isCurrent: () => boolean,
+) {
+  setState(current => ({ ...current, repositoryIntelligenceReviewPreparing: true, repositoryIntelligenceReviewError: null }));
+  try {
+    const { buildRepositoryIntelligenceArtifactReview } = await import('@/lib/repositoryIntelligence');
+    if (!isCurrent()) return;
+    const result = buildRepositoryIntelligenceArtifactReview({ scanInput });
+    if (!isCurrent()) return;
+    setState(current => ({
+      ...current,
+      repositoryIntelligenceReview: { artifactSet: result.artifactSet, review: result.review },
+      repositoryIntelligenceReviewPreparing: false,
+      repositoryIntelligenceReviewError: null,
+    }));
+  } catch (error) {
+    if (!isCurrent()) return;
+    setState(current => ({
+      ...current,
+      repositoryIntelligenceReview: null,
+      repositoryIntelligenceReviewPreparing: false,
+      repositoryIntelligenceReviewError: error instanceof Error ? error.message : 'Repository Intelligence review could not be prepared.',
+    }));
+  }
 }

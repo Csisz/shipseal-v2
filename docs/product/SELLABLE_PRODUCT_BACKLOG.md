@@ -1,23 +1,20 @@
 # ShipSeal Sellable Product Backlog
 
-Last updated: 2026-06-22
+Last updated: 2026-07-14
 
 This document lists the remaining functionality needed to turn ShipSeal from a strong MVP prototype into a sellable product. It combines the current product direction, recent implementation progress, and the next feature ideas that fit the ShipSeal positioning.
 
 ## Product Positioning
 
-ShipSeal turns AI-built or AI-assisted software projects into AI-optimized workspaces.
+The canonical direction is defined in `docs/vision/POSITIONING.md`; Repository Intelligence PR implementation is defined in `docs/implementation/REPOSITORY_INTELLIGENCE_PR_SPEC.md`.
 
-The strategic product is an AI Workspace Optimizer: Repository Intelligence, Project Memory, Context Compression, Agent Routing, AI Workspace Analytics, and Delivery Outputs working together. Client-ready and agent-ready Delivery Packs remain valuable outputs, but they are not the core product identity.
+ShipSeal helps AI coding agents understand and work inside a repository more effectively. Its primary identity is AI repository intelligence and AI workspace improvement. Its primary paid outcome is the **Repository Intelligence PR**: reviewed, repository-specific memory and instructions derived from real structure, source responsibilities, commands, relationships, and risks.
 
-The product should help users answer four practical questions:
+Repository Universe remains the signature visual proof and optional advanced exploration experience. Client Handoff Pack is a secondary commercial export after repository understanding. Delivery Packs, reports, readiness, testing, security, MCP, AI Act notes, manifests, and `score.json` remain supporting outputs and compatibility contracts.
 
-1. How good is this repository as an AI Workspace?
-2. Where is Repository Friction wasting agent context or human review time?
-3. What project memory, routing, instructions, and verification signals should agents receive first?
-4. Which files, reports, tests, policies, and instructions should be generated as Delivery Outputs?
+The first deep-intelligence release is JS/TS-first, especially React, Vite, Next.js, Node.js, and Express. Other stacks retain the deterministic scan until deep quality is validated.
 
-ShipSeal is not a general AI governance platform, a legal advisor, or a generic code quality scanner. It is an AI Workspace Optimizer for builders, freelancers, small agencies, and teams using AI coding tools. Delivery readiness, reports, and Delivery Packs support that workspace optimization story.
+Release gate: generated files must describe the actual repository. Generic best-practice templates are not sufficient.
 
 ## Current Working Baseline
 
@@ -40,9 +37,9 @@ Recent progress:
 
 The next phase should focus on making exports, reports, PR creation, and AI-agent operating guidance feel professional and commercially usable.
 
-## ShipSeal 2.0 Strategic Priorities
+## ShipSeal strategic priorities
 
-These priorities extend the existing sellable MVP into the new ShipSeal 2.0 direction: an AI Agent Efficiency Platform that turns chaotic AI-built projects into efficient AI workspaces. Existing Delivery Pack, report, GitHub App, and readiness PR functionality remains part of the product foundation.
+The immediate priority is Omega 16: evidence, bounded JS/TS source selection, validated deep-intelligence results, repository-specific artifacts, Repository Intelligence PR integration, and rescan quality evaluation. Existing Delivery Pack, report, GitHub App, readiness PR, optimization apply, Repository Universe, and rescan functionality remain foundations.
 
 ## Priority: Context Compression Engine
 
@@ -128,17 +125,18 @@ Expected outcomes:
 - Avoid broad automated rewrites.
 - Prioritize changes that reduce agent confusion and improve future PR quality.
 
-## Priority: Agent Efficiency PR
+## Priority: Repository Intelligence PR
 
 Goal:
 
-Create a reviewed GitHub PR that adds safe agent-efficiency improvements to the selected repository.
+Create a reviewed GitHub PR that adds evidence-backed repository memory and agent-workspace improvements to the selected repository.
 
 Expected outcomes:
 
 - Use the connected GitHub App flow.
 - Add only generated safe documentation/configuration files.
-- Include clear PR body language about context compression, token waste reduction, and human review.
+- Include statement-level evidence, create/update/strengthen/skip decisions, limitations, and human-review flags.
+- Reject generic or unsupported artifacts instead of filling the PR with templates.
 - Do not include active workflows by default.
 
 ## Priority: AI Workspace Optimization
@@ -155,18 +153,18 @@ Expected outcomes:
 
 ## Definition Of A Sellable MVP
 
-ShipSeal becomes sellable when a user can:
+The deep-intelligence product becomes sellable when a user can:
 
 1. Connect GitHub or upload a ZIP.
 2. Select a project and scan it reliably.
-3. Choose a clear goal.
-4. Receive a trustworthy score and scan evidence.
-5. Download a professional Delivery Pack.
-6. Export a polished client-ready PDF/HTML report.
-7. Optionally create a reviewed GitHub PR with generated readiness files.
-8. Understand what to fix next.
-9. Use generated AI-agent instructions without wasting excessive token/rate-limit budget.
-10. Show a sample report/demo before purchase.
+3. Receive evidence-backed findings about where coding agents will struggle.
+4. See the selected source scope, budgets, exclusions, and limitations.
+5. Preview repository-specific memory and instructions with citations.
+6. Review create, update, strengthen, skip, unavailable, and blocked decisions.
+7. Create a reviewed Repository Intelligence PR or download a manual package.
+8. Rescan and see conservative detected changes.
+9. Open Repository Universe as optional visual evidence exploration.
+10. Export a Client Handoff Pack and existing supporting outputs when needed.
 
 ## Priority 1: Client Report And Delivery Pack Export Quality
 
@@ -629,33 +627,34 @@ Possible tiers:
 - focused packages,
 - PDF/HTML report.
 
-### AI Workspace Pro
+### Repository Intelligence
 
-- Agent Cost Optimizer modes,
-- Context Compression Pack,
-- folder-level AGENTS,
-- Specialized Context Packs,
-- Skill and MCP recommendations,
-- Delivery Pack export.
+- evidence-backed repository findings,
+- bounded JS/TS deep analysis,
+- root and selected folder-level `AGENTS.md`,
+- repository-specific `AGENT_MEMORY/` artifacts,
+- evidence manifest and reviewed Repository Intelligence PR,
+- conservative rescan verification,
+- supporting Delivery Pack export.
 
 ### Agency / White-label
 
 - multi-project workspace flow,
 - white-label report,
 - client handoff exports,
-- reviewed Readiness PR workflow,
+- reviewed Repository Intelligence PR and compatibility Readiness PR workflows,
 - richer export history.
 
 ## Suggested Implementation Order
 
-1. Polish PDF/client report and export consistency.
-2. Finalize Create Readiness PR.
-3. Deepen scan engine and score explainability.
-4. Add Agent Cost Optimizer MVP inside AI Agent Development pack.
-5. Improve demo/sample assets and pricing page.
-6. Add trust/privacy/security notices.
-7. Stabilize CI, dependency audit, and release checklist.
-8. Add white-label/client branding options.
+1. Omega 16.1: evidence model and JS/TS responsibility extraction.
+2. Omega 16.2: bounded source selection and sanitized context preparation.
+3. Omega 16.3: validated deep-intelligence provider boundary.
+4. Omega 16.4: repository-specific artifact generation and evidence manifest.
+5. Omega 16.5: Repository Intelligence PR preview and existing apply integration.
+6. Omega 16.6: rescan verification and quality evaluation.
+7. Omega 17: simplified post-scan flow and `ResultDashboard` decomposition.
+8. Omega 18: minimal accounts, persistence, sharing, badge, and payment entitlement.
 
 ## Near-Term Manual Test Checklist
 
@@ -679,8 +678,10 @@ Before calling a build sellable, test these flows:
 
 ## Open Product Questions
 
-- Should Agent Cost Optimizer be part of AI Agent Development only, or a standalone paid feature?
-- Should ShipSeal store scan history server-side or remain mostly browser/session based for MVP?
+- What measured quality thresholds should join zero invented paths/commands and complete evidence linkage after the first golden JS/TS baseline?
+- Which provider/model and repository-data retention policy can satisfy the privacy boundary before production use?
+- How should existing handwritten instructions be merged when a line-level structured merge is unsafe?
+- Which persistence is minimally necessary for durable rescan history without storing raw source?
 - Should PDF reports support white-label branding in the first paid version?
 - Should human services stay completely separate from the automated ShipSeal product?
 - Should AI Act readiness be framed as legal-adjacent documentation support rather than compliance advice?

@@ -1,8 +1,8 @@
 # ShipSeal
 
-ShipSeal is an AI Repository Optimization Platform: the missing layer between a Git repository and AI coding agents.
+ShipSeal helps AI coding agents understand and work inside a repository more effectively. Its primary identity is AI repository intelligence and AI workspace improvement.
 
-ShipSeal prepares repositories for Claude Code, Codex, Cursor, Windsurf and similar tools before the next AI coding session begins. Instead of rereading the whole codebase every time, agents receive Repository Intelligence: structured project memory, context compression, routing guidance and delivery-ready documentation.
+ShipSeal prepares repositories for Claude Code, Codex, Cursor, Windsurf and similar tools before the next AI coding session begins. Instead of rereading the whole codebase every time, agents receive Repository Intelligence: structured project memory, context compression, routing guidance and delivery-ready documentation. The planned primary paid outcome is a reviewed Repository Intelligence PR; the implementation contract is in [Repository Intelligence PR Specification](docs/implementation/REPOSITORY_INTELLIGENCE_PR_SPEC.md).
 
 The current demo-ready MVP scans a repository ZIP or GitHub repository, calculates a deterministic ShipSeal score, explains the readiness signal, and generates Repository Intelligence outputs such as Agent Cost Optimizer guidance, Context Compression, folder-level `AGENTS.md` recommendations, Specialized Context Packs, Skill and MCP recommendations, and a Delivery Pack export with reports, manifests, tests, AI Act readiness notes, repo context, and `score.json`.
 
@@ -167,6 +167,7 @@ Repository source modes:
 Current MVP:
 
 - public GitHub import for scan inputs,
+- private repository support through GitHub App installation when the app and server credentials are configured,
 - temporary token mode for developer/testing PR creation,
 - `Connect GitHub` opens the GitHub App install page when frontend app env is configured,
 - `/api/github-app/callback` reads `installation_id` and redirects to `/?githubInstallationId=...#scan`,
@@ -206,9 +207,9 @@ Next:
 
 Later:
 
-- private repository support through GitHub App installation,
-- selected-repository access by default,
-- audit log for connect, scan, branch, file write, and PR events.
+- durable account-backed GitHub connection state,
+- webhook and installation lifecycle handling,
+- organization-level repository governance.
 
 See [GitHub App Connect Plan](docs/github/GITHUB_APP_CONNECT_PLAN.md).
 
@@ -324,7 +325,7 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 - No backend worker.
 - No database or authentication.
 - No payments.
-- No private repo access or GitHub App integration.
+- Private repository access requires a configured GitHub App and server-side credentials; there is no persistent account/session model, webhook hardening, or stored repository history yet.
 - No external AI API calls.
 - No browser API keys.
 - Scan cancellation is best-effort while JSZip work is in progress.

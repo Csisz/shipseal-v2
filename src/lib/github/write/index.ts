@@ -21,3 +21,5 @@ export {
   readinessPrFiles,
   readinessPrPreviewFiles,
 } from './readinessPrPayload';
+export { submitRepositoryIntelligencePrRequest, RepositoryIntelligencePrClientError } from './repositoryIntelligencePrClient';
+export type { RepositoryIntelligencePrPreviewResponse, RepositoryIntelligencePrApplyResponse } from './repositoryIntelligencePrClient';

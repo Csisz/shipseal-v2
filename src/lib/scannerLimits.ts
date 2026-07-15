@@ -46,8 +46,22 @@ export class ScannerValidationError extends Error {
   }
 }
 
+/**
+ * Canonical repository-path normalization used by the scanner and repository
+ * evidence layers. Invalid absolute, null-byte, or parent-traversal paths are
+ * rejected with an empty result instead of being turned into evidence.
+ */
 export function normalizeZipPath(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!path || path.includes('\0')) return '';
+  if (/^[a-zA-Z]:[\\/]/.test(path) || path.startsWith('/') || path.startsWith('\\')) return '';
+
+  const parts: string[] = [];
+  for (const part of path.replace(/\\/g, '/').split('/')) {
+    if (!part || part === '.') continue;
+    if (part === '..') return '';
+    parts.push(part);
+  }
+  return parts.join('/');
 }
 
 export function getUnsafeZipPathReason(rawPath: string): string | null {
@@ -56,8 +70,8 @@ export function getUnsafeZipPathReason(rawPath: string): string | null {
   if (rawPath.startsWith('/') || rawPath.startsWith('\\')) return 'File paths look unsafe: absolute paths are not allowed.';
   if (rawPath.length > SCANNER_LIMITS.maxPathLength) return `File paths look unsafe: paths longer than ${SCANNER_LIMITS.maxPathLength} characters are not allowed.`;
 
-  const normalized = normalizeZipPath(rawPath);
-  if (normalized.split('/').some(part => part === '..')) return 'File paths look unsafe: parent-directory traversal is not allowed.';
+  const rawSegments = rawPath.replace(/\\/g, '/').split('/');
+  if (rawSegments.some(part => part === '..')) return 'File paths look unsafe: parent-directory traversal is not allowed.';
 
   return null;
 }

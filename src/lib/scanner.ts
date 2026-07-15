@@ -48,11 +48,13 @@ const TEXT_CONFIG_FILES = [
 ];
 
 const TEXT_EXT_RE = /\.(md|json|ya?ml|toml|txt|gitignore|env\.example|cursorrules)$/i;
+const JS_TS_SOURCE_EXT_RE = /\.(?:[cm]?[jt]sx?)$/i;
 
-function isLikelyTextConfig(path: string): boolean {
+function isReadableRepositoryText(path: string): boolean {
   const base = path.split('/').pop() || '';
   if (path === '.cursor/rules' || path.startsWith('.cursor/rules/')) return true;
   if (TEXT_CONFIG_FILES.includes(base)) return true;
+  if (JS_TS_SOURCE_EXT_RE.test(base)) return true;
   if (TEXT_EXT_RE.test(base)) return true;
   if (path.includes('.github/workflows/')) return true;
   return false;
@@ -263,7 +265,7 @@ export async function scanZipFile(file: File, source?: RepoScanInput['source']):
     } else if (binary) {
       ignoredReason = 'binary';
       summary.binaryFilesIgnored += 1;
-    } else if (isLikelyTextConfig(path) && size > SCANNER_LIMITS.maxReadableTextFileSizeBytes) {
+    } else if (isReadableRepositoryText(path) && size > SCANNER_LIMITS.maxReadableTextFileSizeBytes) {
       ignoredReason = 'too-large-text';
     }
 
@@ -276,7 +278,7 @@ export async function scanZipFile(file: File, source?: RepoScanInput['source']):
 
     files.push({ path, size, isDir: false, ignored, ignoredReason });
 
-    if (!ignored && isLikelyTextConfig(path)) {
+    if (!ignored && isReadableRepositoryText(path)) {
       try {
         const txt = await entry.async('string');
         const readableBytes = txt.length;

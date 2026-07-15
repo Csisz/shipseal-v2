@@ -1,4 +1,4 @@
-import type { ReadinessReport } from '../types';
+import type { ReadinessReport, RepoScanInput } from '../types';
 import type { SCANNER_LIMITS } from '../scannerLimits';
 import type { ScanSourceMetadata, ScanSummary } from '../types';
 
@@ -18,6 +18,8 @@ export interface ScanProgressCallbacks {
   onStepComplete?: (step: string, index: number) => void;
   onProgress?: (progress: number) => void;
   onScanSummary?: (summary: ScanSummary) => void;
+  /** Internal session boundary for consumers that need scanner-loaded, bounded text without rereading the repository. */
+  onScanInput?: (input: RepoScanInput) => void;
   onWarning?: (warning: string) => void;
   onError?: (error: Error) => void;
 }

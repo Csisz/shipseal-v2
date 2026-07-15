@@ -76,6 +76,7 @@ export class LocalScanEngine implements ScanEngine {
           }
           if (scanInput.scanSummary) callbacks.onScanSummary?.(scanInput.scanSummary);
         }
+        if (scanInput) callbacks.onScanInput?.(scanInput);
       });
 
       await runStep(1);

@@ -61,11 +61,12 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
 }));
 
 vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
-  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode }: {
+  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode }: {
     model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string }[] };
     selectedNodeId?: string;
     rotationPaused?: boolean;
     reducedMotion?: boolean;
+    routeNodeIds?: string[];
     visibleNodeIds: string[];
     visibleEdgeIds: string[];
     cameraState: { radius: number };
@@ -88,6 +89,7 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
         data-edge-count={model.summary.edgeCount}
         data-visible-node-count={visibleNodeIds.length}
         data-visible-edge-count={visibleEdgeIds.length}
+        data-route-node-count={routeNodeIds.length}
         data-selected-node={selectedNodeId}
         data-camera-radius={cameraState.radius}
         data-animate-in={animateIn ? 'true' : 'false'}
@@ -498,6 +500,96 @@ describe('ResultDashboard summary copy', () => {
     fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
     await waitFor(() => expect(Number(screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-radius'))).toBeLessThan(initialRadius));
     expect(universeMockState.models.at(-1)).toBe(initialModel);
+  });
+
+  it('renders Agent Flight Path in Understand and generates an evidence-bound route', async () => {
+    const report = optimizationDashboardReportWithFiles([
+      'README.md',
+      'AGENTS.md',
+      'package.json',
+      'src/components/PricingPanel.tsx',
+      'src/styles/theme.css',
+      'src/lib/pdfExport.ts',
+      'src/lib/reportExport.ts',
+      'src/__tests__/pricing.test.tsx',
+    ], 'flight-path-dashboard');
+    render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
+
+    expect(screen.getByRole('region', { name: /Agent Flight Path/i })).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'Fix the mobile pricing layout' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+
+    const panel = screen.getByRole('region', { name: /Agent Flight Path/i });
+    expect(within(panel).getAllByText(/UI or layout work/i).length).toBeGreaterThan(0);
+    expect(within(panel).getAllByText(/src\/components\/PricingPanel\.tsx/i).length).toBeGreaterThan(0);
+    expect(within(panel).getByRole('button', { name: /Copy prompt/i })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('repository-universe-canvas')).toBeInTheDocument());
+    expect(Number(screen.getByTestId('repository-universe-canvas').getAttribute('data-route-node-count'))).toBeGreaterThan(0);
+    expect(within(panel).queryByText(/guaranteed correct route|will fix the issue|productivity guaranteed/i)).not.toBeInTheDocument();
+  });
+
+  it('shows payment review gates without inventing Stripe files', () => {
+    const report = optimizationDashboardReportWithFiles([
+      'README.md',
+      'AGENTS.md',
+      'package.json',
+      'src/api/billing.ts',
+      'src/components/CheckoutPanel.tsx',
+      'src/__tests__/billing.test.ts',
+    ], 'billing-dashboard');
+    render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'Add Stripe billing' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+
+    const panel = screen.getByRole('region', { name: /Agent Flight Path/i });
+    expect(within(panel).getAllByText(/Payment and billing review/i).length).toBeGreaterThan(0);
+    expect(within(panel).queryByText(/src\/stripe\.ts/i)).not.toBeInTheDocument();
+  });
+
+  it('shows low-confidence guidance for vague tasks and preserves the route across chapters', () => {
+    const report = optimizationDashboardReport();
+    render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'make it better' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+
+    expect(screen.getByText(/low confidence/i)).toBeInTheDocument();
+    expect(screen.getByText(/Clarify the task for a sharper route/i)).toBeInTheDocument();
+
+    switchResultChapter('Improve');
+    expect(screen.getByRole('button', { name: /Prepare optimization package/i })).toBeInTheDocument();
+    switchResultChapter('Apply');
+    expect(screen.getByText(/Prepare the optimization package/i)).toBeInTheDocument();
+    switchResultChapter('Verify');
+    expect(screen.getByText(/Verify after rescan/i)).toBeInTheDocument();
+    switchResultChapter('Understand');
+    expect(screen.getByText(/Clarify the task for a sharper route/i)).toBeInTheDocument();
+    expect(screen.getByTestId('repository-universe-canvas')).toBeInTheDocument();
+  });
+
+  it('copies the generated agent prompt when clipboard is available', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    const report = optimizationDashboardReportWithFiles([
+      'README.md',
+      'AGENTS.md',
+      'package.json',
+      'src/lib/pdfExport.ts',
+      'src/lib/reportExport.ts',
+      'src/__tests__/pdfExport.test.ts',
+    ], 'prompt-dashboard');
+    render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'Improve PDF export' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Copy prompt/i }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Task: Improve PDF export')));
+    expect(writeText.mock.calls[0][0]).toContain('Do not commit or push unless explicitly requested.');
   });
 
   it('previews With ShipSeal proposals and preserves review state without changing the current graph', async () => {

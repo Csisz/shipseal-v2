@@ -1,92 +1,106 @@
 # ShipSeal Messaging
 
-Last updated: 2026-07-02
+Last updated: 2026-07-14
 
-## Hero Message
+Messaging follows the canonical product hierarchy in `POSITIONING.md`. This document guides future copy changes; Omega 16.0 does not redesign the landing page.
 
-Headline:
+## First product message
 
-Stop wasting AI context.
+Headline direction:
 
-Supporting headline options:
-
-- Turn any repository into an AI-optimized workspace.
-- Prepare your repository once. Let every AI agent work smarter.
+**Help AI coding agents understand your repository.**
 
 Subheadline:
 
-ShipSeal scans your repository and prepares it for Claude Code, Codex, Cursor, Windsurf and other AI coding agents. Instead of rereading your entire codebase every session, agents receive structured project memory, context compression, routing guidance and repository intelligence.
+ShipSeal finds where coding agents will struggle, explains the repository evidence, and prepares reviewed, repository-specific workspace improvements.
 
 Primary CTA:
 
-Scan my repository
+**Scan my repository**
 
 Secondary CTA:
 
-Try sample project
+**Try sample project**
 
-## Message Pillars
+## Primary outcome message
 
-### Repository Intelligence
+**Repository Intelligence PR** is the main paid outcome.
 
-Repository Intelligence is the missing layer between a Git repository and AI coding agents. It combines Context Compression, Folder-level AGENTS, Specialized Context Packs, Agent Cost Optimizer, Skill Recommendations, MCP Recommendations and Agent Memory into one system.
+Use:
 
-### AI Repository Optimization
+> Turn repository evidence into a reviewed PR with project-specific agent instructions, architecture memory, command guidance, task routing, critical files, and known risks.
 
-ShipSeal prepares the repository before the agent starts work. It does not replace Claude Code, Codex, Cursor, Windsurf, or other tools. It gives them cleaner context.
+Do not describe the outcome as a generic best-practice pack. The value is that generated knowledge refers to real files, responsibilities, commands, and relationships in the scanned repository.
 
-### Context Compression
+## Message pillars
 
-ShipSeal helps agents avoid unnecessary full-repo scans by separating durable project memory, high-signal files, low-signal files, and task-specific context.
+### Understand the repository
 
-### Folder-level Instructions
+ShipSeal maps structure, commands, instructions, tests, configuration, source responsibilities, and relationships without executing imported code.
 
-ShipSeal recommends where local `AGENTS.md` files should exist so agents can work inside important folders without dragging the whole repository into every prompt.
+### Find agent friction
 
-### Specialized Context Packs
+ShipSeal shows where an agent is likely to waste context, choose the wrong starting point, miss a local rule, or lack a trustworthy verification path.
 
-ShipSeal packages context for common workflows such as agent development, client handoff, testing, security/data review, MCP readiness, and refactor work.
+### Improve the workspace
 
-### Delivery Pack Output
+ShipSeal prepares evidence-linked repository memory and instructions through a reviewed GitHub PR. Existing handwritten instructions remain reviewable and are not silently overwritten.
 
-Delivery Packs remain available, but they should be presented as one output of an AI-optimized workspace rather than the whole product.
+### Verify the change
 
-## Approved Phrases
+A later scan reports which proposed artifacts are detected or content-matched. ShipSeal does not claim that code ran, production behavior changed, or the PR caused score movement.
 
-- AI repository optimization platform
-- Repository Intelligence Platform
-- missing layer between a Git repository and AI coding agents
-- AI-native development workspace
-- Agent-ready repository
-- Stop wasting AI context
-- Compact project memory
-- Context Compression Pack
-- Agent Cost Optimizer
-- Folder-level AGENTS
-- Specialized Context Packs
-- Skill and MCP recommendations
-- Delivery Pack export
+## Product hierarchy in copy
 
-## Phrases To Avoid
+- Lead with AI repository intelligence and workspace improvement.
+- Name Repository Intelligence PR as the paid outcome.
+- Keep Repository Universe as the signature visual proof and optional exploration experience.
+- Present Client Handoff Pack after repository understanding as a secondary export.
+- Present Delivery Packs, PDF/HTML, testing, security, MCP, AI Act notes, manifests, and `score.json` as supporting outputs.
 
-- AI Project Delivery Pack Generator as the primary description
-- Founder-reviewed audit
-- Expert Review Add-On
-- Human Review Option
-- Request audit
-- Legal compliance tool
-- Production security audit
+## Initial scope message
 
-## Short Descriptions
+Deep Repository Intelligence starts with JavaScript and TypeScript repositories, especially React, Vite, Next.js, Node.js, and Express. Other stacks can still use the deterministic ShipSeal scan while deeper support expands.
 
-### 25 Words
+## Approved phrases
 
-ShipSeal adds Repository Intelligence between Git repositories and AI coding agents so Claude Code, Codex, Cursor and Windsurf waste less context.
+- AI repository intelligence
+- AI workspace improvement
+- Repository Intelligence PR
+- repository-understanding layer for AI coding agents
+- evidence-backed repository memory
+- repository-specific agent instructions
+- reviewed workspace improvements
+- Repository Universe
+- Client Handoff Pack
+- non-executing deterministic scan
+- rescan verification
 
-### 50 Words
+Compatibility phrases such as Delivery Pack, readiness score, Readiness PR, `score.json`, and client report remain valid when referring to those implemented outputs.
 
-ShipSeal scans your repository and prepares it for AI-native development. Instead of repeatedly rereading the codebase, Claude Code, Codex, Cursor, Windsurf and other agents receive Repository Intelligence: project memory, context compression, routing guidance, operating modes, skills, MCP recommendations and delivery-ready documentation.
+## Phrases to avoid
 
-### Product Footer
+- generic AI instruction generator
+- generic best-practice pack
+- AI Project Delivery Pack Generator as the primary identity
+- Repository Universe as the main paid deliverable
+- Client Handoff as the hero promise
+- founder-reviewed audit
+- legal compliance tool
+- production security audit
+- verified improvement when only file presence was observed
+- guaranteed token, time, cost, or productivity savings
 
-ShipSeal turns repositories into AI-optimized workspaces for faster, cleaner agent-assisted development.
+## Short descriptions
+
+### 25 words
+
+ShipSeal helps coding agents understand repositories, then prepares evidence-backed workspace knowledge and instructions as a reviewed Repository Intelligence PR.
+
+### 50 words
+
+ShipSeal scans a repository without executing it, finds where AI coding agents will struggle, and explains why with concrete evidence. Its paid outcome is a reviewed Repository Intelligence PR containing project-specific architecture memory, commands, task routing, critical files, risks, and scoped instructions—followed by a conservative rescan verification.
+
+### Product footer
+
+ShipSeal turns repository evidence into a workspace AI coding agents can understand and use.

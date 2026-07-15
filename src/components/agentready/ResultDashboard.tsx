@@ -27,6 +27,7 @@ import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentO
 import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
 import {
   buildOptimizationApplyPlan,
+  buildRepositoryAgentFlightPath,
   buildOptimizationPackZipBlob,
   buildOptimizationPackZipFilename,
   buildRepositoryAtlasModel,
@@ -46,6 +47,7 @@ import {
   transformationDomainLabel,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
+  type RepositoryAgentFlightPath,
   type OptimizationApplyPlan,
   type OptimizationPrPreviewFile,
   type RepositoryVerificationBaseline,
@@ -73,6 +75,9 @@ import {
 } from '@/lib/workspace';
 import { repositoryUniverseClusterLegend } from '@/lib/workspace/repositoryUniverseVisual';
 import type { UniverseCameraState } from './RepositoryUniverse3D';
+import { RepositoryIntelligenceReviewPanel, type RepositoryIntelligenceReviewUiSession } from './RepositoryIntelligenceReviewPanel';
+import { RepositoryIntelligenceVerificationPanel } from './RepositoryIntelligenceVerificationPanel';
+import type { RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
 
 const RepositoryUniverse3D = lazy(() => import('./RepositoryUniverse3D'));
 
@@ -127,6 +132,11 @@ interface Props {
   intakeSkipped?: boolean;
   /** Package options the user picked before the scan; defaults to the full package. */
   selectedPackages?: string[];
+  /** Internal validated review drafts; selected source context is intentionally not passed into the dashboard. */
+  repositoryIntelligenceReviewSession?: RepositoryIntelligenceReviewUiSession | null;
+  repositoryIntelligenceReviewPreparing?: boolean;
+  repositoryIntelligenceReviewError?: string | null;
+  prepareRepositoryIntelligenceReview?: () => Promise<RepositoryIntelligenceReviewUiSession>;
   agentOperatingMode?: AgentOperatingModeId;
   githubConnection?: GitHubConnectionState;
   verificationBaseline?: RepositoryVerificationBaseline | null;
@@ -156,11 +166,22 @@ export function ResultDashboard({
   initialIntake,
   intakeSkipped = false,
   selectedPackages,
+  repositoryIntelligenceReviewSession,
+  repositoryIntelligenceReviewPreparing,
+  repositoryIntelligenceReviewError,
+  prepareRepositoryIntelligenceReview,
   agentOperatingMode,
   githubConnection,
   verificationBaseline,
   onSaveVerificationBaseline,
   onDiscardVerificationBaseline,
+  repositoryIntelligenceVerificationBaseline,
+  repositoryIntelligenceVerificationResult,
+  repositoryIntelligenceVerificationStatus,
+  repositoryIntelligenceVerificationError,
+  onSaveRepositoryIntelligenceVerificationBaseline,
+  onDiscardRepositoryIntelligenceVerificationBaseline,
+  onRescanRepositoryIntelligence,
 }: Props) {
   const repositoryHealth = report.repositoryHealth;
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
@@ -289,6 +310,32 @@ export function ResultDashboard({
         onSaveVerificationBaseline={onSaveVerificationBaseline}
         onDiscardVerificationBaseline={onDiscardVerificationBaseline}
       />
+
+      <div className={activeResultChapter === 'improve' ? 'mb-6' : 'hidden'} aria-hidden={activeResultChapter !== 'improve'}>
+        <RepositoryIntelligenceReviewPanel
+          session={repositoryIntelligenceReviewSession}
+          preparing={repositoryIntelligenceReviewPreparing}
+          error={repositoryIntelligenceReviewError}
+          enabled={activeResultChapter === 'improve'}
+          prepareSession={prepareRepositoryIntelligenceReview}
+          githubConnection={githubConnection || buildGitHubConnectionFromReport(report)}
+          onVerificationBaseline={onSaveRepositoryIntelligenceVerificationBaseline}
+        />
+      </div>
+
+      <div className={activeResultChapter === 'verify' ? 'mb-6' : 'hidden'} aria-hidden={activeResultChapter !== 'verify'}>
+        <RepositoryIntelligenceVerificationPanel
+          baseline={repositoryIntelligenceVerificationBaseline}
+          result={repositoryIntelligenceVerificationResult}
+          status={repositoryIntelligenceVerificationStatus}
+          error={repositoryIntelligenceVerificationError}
+          currentRepository={report.scanEvidence.repositoryFullName || (report.source.githubOwner && report.source.githubRepo ? `${report.source.githubOwner}/${report.source.githubRepo}` : report.repoName)}
+          currentBranch={report.source.githubBranch || report.source.githubDefaultBranch || report.scanEvidence.branchOrRef}
+          scanLimited={report.scanSummary.limited}
+          onRescan={onRescanRepositoryIntelligence}
+          onDiscardBaseline={onDiscardRepositoryIntelligenceVerificationBaseline}
+        />
+      </div>
 
       <NextBestActionCard
         action={nextBestAction}
@@ -1169,6 +1216,9 @@ function RepositoryAtlasVisualization({
   const [navigationActive, setNavigationActive] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [agentFlightPathTask, setAgentFlightPathTask] = useState('');
+  const [agentFlightPath, setAgentFlightPath] = useState<RepositoryAgentFlightPath | null>(null);
+  const [agentFlightPathCopied, setAgentFlightPathCopied] = useState(false);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
   const selectedNode = atlas.nodes.find(node => node.id === selectedNodeId) || atlas.nodes.find(node => node.id === initialNodeId) || atlas.nodes[0];
   const selectedUniverseNode = universe.nodes.find(node => node.id === selectedUniverseNodeId) || universe.nodes.find(node => node.id === universe.rootNodeId) || universe.nodes[0];
@@ -1248,6 +1298,8 @@ function RepositoryAtlasVisualization({
     : [];
   const atlasNavigationActive = navigationActive || fullscreen;
   const planReadyForChapter = activeResultChapter === 'apply' || activeResultChapter === 'verify';
+  const flightPathUniverseNodeIds = useMemo(() => agentFlightPath?.routeNodeIds.universeNodeIds || [], [agentFlightPath]);
+  const flightPathAtlasNodeIdSet = useMemo(() => new Set(agentFlightPath?.routeNodeIds.atlasNodeIds || []), [agentFlightPath]);
 
   useEffect(() => {
     setSelectedNodeId(current => {
@@ -1280,6 +1332,9 @@ function RepositoryAtlasVisualization({
     setExcludedProposalIds(new Set());
     setOptimizationPlanOpen(false);
     setSelectedOptimizationItemId(null);
+    setAgentFlightPathTask('');
+    setAgentFlightPath(null);
+    setAgentFlightPathCopied(false);
   }, [report.repoName, report.scannedAt, initialUniverseCamera, prefersReducedMotion]);
 
   useEffect(() => {
@@ -1465,6 +1520,57 @@ function RepositoryAtlasVisualization({
   }, [selectProposal, transformation.proposals]);
 
   const handleUniverseSceneSettled = useCallback(() => setUniverseSceneSettled(true), []);
+
+  const generateAgentFlightPath = useCallback(() => {
+    const next = buildRepositoryAgentFlightPath({
+      task: agentFlightPathTask,
+      report,
+      universe,
+      atlas,
+    });
+    setAgentFlightPath(next);
+    setAgentFlightPathCopied(false);
+  }, [agentFlightPathTask, atlas, report, universe]);
+
+  const copyAgentFlightPathPrompt = useCallback(async () => {
+    if (!agentFlightPath?.prompt) return;
+    try {
+      await navigator.clipboard?.writeText(agentFlightPath.prompt);
+      setAgentFlightPathCopied(true);
+    } catch {
+      setAgentFlightPathCopied(false);
+    }
+  }, [agentFlightPath?.prompt]);
+
+  const focusAgentFlightPathRoute = useCallback(() => {
+    if (!agentFlightPath) return;
+    const universeNode = agentFlightPath.routeNodeIds.universeNodeIds
+      .map(id => universe.nodes.find(node => node.id === id))
+      .find(Boolean);
+    if (universeNode) {
+      setSelectedUniverseNodeId(universeNode.id);
+      if (universeNode.metadata.atlasNodeId) setSelectedNodeId(universeNode.metadata.atlasNodeId);
+      if (universeNode.clusterId) setFocusedClusterId(universeNode.clusterId);
+      setUniverseCamera(current => ({
+        ...current,
+        radius: universeNode.kind === 'file' ? 220 : 300,
+        target: universeNode.position,
+      }));
+      return;
+    }
+
+    const atlasNode = agentFlightPath.routeNodeIds.atlasNodeIds
+      .map(id => atlas.nodes.find(node => node.id === id))
+      .find(Boolean);
+    if (atlasNode) {
+      setSelectedNodeId(atlasNode.id);
+      if (atlasNode.clusterId) setFocusedClusterId(atlasNode.clusterId);
+      const matchingUniverseNode = atlasNode.path
+        ? universe.nodes.find(node => node.path === atlasNode.path)
+        : universe.nodes.find(node => node.metadata.atlasNodeId === atlasNode.id);
+      if (matchingUniverseNode) setSelectedUniverseNodeId(matchingUniverseNode.id);
+    }
+  }, [agentFlightPath, atlas.nodes, universe.nodes]);
 
   const toggleProposalIncluded = (proposalId: string) => {
     setExcludedProposalIds(current => {
@@ -1884,7 +1990,8 @@ function RepositoryAtlasVisualization({
           const selected = selectedNode?.id === node.id;
           const transformationAffected = proposalAffectedAtlasNodeIds.has(node.id);
           const verifiedByRescan = transformationMode === 'after-rescan' && Boolean(node.path && verifiedDestinationPaths.has(normalizeWorkspacePath(node.path)));
-          const related = relatedNodeIds.has(node.id) || transformationAffected;
+          const routeHighlighted = flightPathAtlasNodeIdSet.has(node.id);
+          const related = relatedNodeIds.has(node.id) || transformationAffected || routeHighlighted;
           const matched = searchMatches.has(node.id);
           const dimmed = Boolean((selectedNode || activeChapter || focusedClusterId || query.trim()) && !selected && !related && !matched && node.id !== atlas.rootNodeId);
           const labelVisible = node.labelPriority !== 'detail' || selected || related || matched || view.scale > 1.05;
@@ -1893,6 +2000,7 @@ function RepositoryAtlasVisualization({
               key={node.id}
               type="button"
               data-testid={`atlas-node-${node.id}`}
+              data-route-node={routeHighlighted ? 'true' : 'false'}
               aria-pressed={selected}
               aria-label={`${node.label} ${node.kind} ${evidenceStateLabel(node.evidenceType)}`}
               onClick={() => selectNode(node)}
@@ -1912,7 +2020,7 @@ function RepositoryAtlasVisualization({
                     : node.evidenceType === 'missing'
                       ? 'z-10 border-warning/45 bg-background/45 text-warning'
                       : 'z-10 border-border/60 bg-background/45 text-muted-foreground'
-              } ${matched ? 'ring-2 ring-accent/55' : ''} ${transformationAffected ? 'ring-2 ring-primary/30' : ''} ${verifiedByRescan ? 'ring-2 ring-success/60' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
+              } ${matched ? 'ring-2 ring-accent/55' : ''} ${routeHighlighted ? 'ring-2 ring-primary/55 shadow-sm shadow-primary/20' : ''} ${transformationAffected ? 'ring-2 ring-primary/30' : ''} ${verifiedByRescan ? 'ring-2 ring-success/60' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
               style={{
                 left: node.x + 460,
                 top: node.y + 320,
@@ -2020,6 +2128,7 @@ function RepositoryAtlasVisualization({
             model={universe}
             selectedNodeId={selectedUniverseNode?.id}
             focusedClusterId={focusedClusterId}
+            routeNodeIds={flightPathUniverseNodeIds}
             searchMatchIds={universeSearchMatchIdList}
             visibleNodeIds={visibleUniverseNodeIdList}
             visibleEdgeIds={visibleUniverseEdgeIdList}
@@ -2160,6 +2269,20 @@ function RepositoryAtlasVisualization({
             </div>
           )}
 
+          {activeResultChapter === 'understand' && (
+            <div className="mb-4">
+              <AgentFlightPathPanel
+                task={agentFlightPathTask}
+                flightPath={agentFlightPath}
+                copied={agentFlightPathCopied}
+                onTaskChange={setAgentFlightPathTask}
+                onGenerate={generateAgentFlightPath}
+                onCopyPrompt={copyAgentFlightPathPrompt}
+                onFocusRoute={focusAgentFlightPathRoute}
+              />
+            </div>
+          )}
+
           {showTransformationPanel && <div className="mb-4">{transformationControls}</div>}
           {showPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
           {activeResultChapter === 'improve' && !optimizationPlanOpen && (
@@ -2233,6 +2356,194 @@ function RepositoryAtlasVisualization({
   );
 }
 
+function AgentFlightPathPanel({
+  task,
+  flightPath,
+  copied,
+  onTaskChange,
+  onGenerate,
+  onCopyPrompt,
+  onFocusRoute,
+}: {
+  task: string;
+  flightPath: RepositoryAgentFlightPath | null;
+  copied: boolean;
+  onTaskChange: (task: string) => void;
+  onGenerate: () => void;
+  onCopyPrompt: () => void;
+  onFocusRoute: () => void;
+}) {
+  const routeNodeCount = flightPath?.metadata.routeNodeCount || 0;
+
+  return (
+    <section className="rounded-[1.35rem] border border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.08),hsl(var(--background)/0.24)_42%,hsl(var(--accent)/0.06))] p-4 shadow-sm shadow-primary/10" aria-label="Agent Flight Path">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-2xl">
+          <div className="text-xs font-mono uppercase tracking-wider text-primary-glow/80">Agent Flight Path</div>
+          <h3 id="agent-flight-path-heading" className="mt-1 font-display text-xl font-semibold text-foreground">Plan the first pass before coding.</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Evidence-bound repository route for an AI coding agent.</p>
+        </div>
+        {flightPath && (
+          <div className="flex flex-wrap gap-2 text-xs">
+            <Badge variant="outline" className={agentFlightPathConfidenceClass(flightPath.confidence)}>
+              {flightPath.confidence} confidence
+            </Badge>
+            <Badge variant="outline" className="border-border/60 bg-background/25 text-muted-foreground">
+              {routeNodeCount.toLocaleString()} mapped nodes
+            </Badge>
+          </div>
+        )}
+      </div>
+
+      <form
+        className="mt-4 flex flex-col gap-3 md:flex-row"
+        onSubmit={event => {
+          event.preventDefault();
+          onGenerate();
+        }}
+      >
+        <label className="min-w-0 flex-1">
+          <span className="sr-only">Describe what your AI agent should do</span>
+          <input
+            value={task}
+            onChange={event => onTaskChange(event.target.value)}
+            className="h-11 w-full rounded-full border border-border/60 bg-background/45 px-4 text-sm outline-none transition placeholder:text-muted-foreground/70 focus:border-primary/55 focus:ring-2 focus:ring-primary/25"
+            placeholder="Describe what your AI agent should do..."
+          />
+        </label>
+        <Button type="submit" className="h-11 rounded-full bg-primary px-5 text-primary-foreground hover:bg-primary/90">
+          <Sparkles className="mr-2 h-4 w-4" />
+          Generate flight path
+        </Button>
+      </form>
+
+      {!flightPath && (
+        <div className="mt-4 rounded-2xl border border-border/50 bg-background/20 p-4 text-sm text-muted-foreground">
+          Try “Improve PDF export”, “Fix the mobile pricing layout” or “Add tests for the scan flow”.
+        </div>
+      )}
+
+      {flightPath && (
+        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="rounded-2xl border border-border/55 bg-background/24 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-foreground">{flightPath.normalizedTaskIntent}</div>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{flightPath.summary}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={onCopyPrompt} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                  {copied ? 'Prompt copied' : 'Copy prompt'}
+                </Button>
+                <Button type="button" variant="outline" size="sm" disabled={routeNodeCount === 0} onClick={onFocusRoute} className="border-border/60 bg-background/25">
+                  <Crosshair className="mr-1.5 h-3.5 w-3.5" />
+                  Focus route
+                </Button>
+              </div>
+            </div>
+
+            <ol className="mt-4 grid gap-2" aria-label="Agent Flight Path route steps">
+              {flightPath.routeSteps.map(step => (
+                <li key={step.id} className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 rounded-2xl border border-border/45 bg-background/20 p-3">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/35 bg-primary/10 text-xs font-semibold text-primary-glow">
+                    {step.order}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-foreground">{step.title}</span>
+                      <Badge variant="outline" className={step.evidenceState === 'evidence' ? 'border-success/35 bg-success/10 text-success' : 'border-warning/35 bg-warning/10 text-warning'}>
+                        {step.evidenceState}
+                      </Badge>
+                    </div>
+                    {step.path && <div className="mt-1 truncate font-mono text-xs text-primary-glow/85">{step.path}</div>}
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.reason}</p>
+                    {step.command && (
+                      <div className="mt-2 rounded-xl border border-border/45 bg-background/25 px-3 py-2 font-mono text-xs text-foreground">
+                        {step.command.cmd}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ol>
+
+            {flightPath.status === 'needs-clarification' && (
+              <div className="mt-4 rounded-2xl border border-warning/25 bg-warning/10 p-3">
+                <div className="text-sm font-semibold text-warning">Clarify the task for a sharper route.</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {flightPath.clarificationSuggestions.map(suggestion => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onClick={() => onTaskChange(suggestion)}
+                      className="rounded-full border border-warning/30 bg-background/20 px-3 py-1.5 text-xs text-foreground transition hover:border-warning/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid content-start gap-3">
+            <div className="rounded-2xl border border-border/55 bg-background/20 p-4">
+              <div className="text-sm font-semibold text-foreground">Review gates</div>
+              {flightPath.reviewGates.length ? (
+                <div className="mt-3 grid gap-2">
+                  {flightPath.reviewGates.map(gate => (
+                    <div key={gate.id} className="rounded-xl border border-warning/25 bg-warning/10 p-3">
+                      <div className="text-xs font-semibold text-warning">{gate.label}</div>
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{gate.reason}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">No special review gate detected from the task wording.</p>
+              )}
+            </div>
+
+            <details className="rounded-2xl border border-border/55 bg-background/20 p-4">
+              <summary className="cursor-pointer select-none text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Evidence and avoided paths</summary>
+              <div className="mt-3 grid gap-3 text-xs text-muted-foreground">
+                <div>
+                  <div className="font-semibold text-foreground">Context</div>
+                  <ul className="mt-2 grid gap-1">
+                    {flightPath.contextFiles.slice(0, 8).map(file => (
+                      <li key={`${file.role}:${file.path}`} className="truncate font-mono">{file.path}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <div className="font-semibold text-foreground">Avoid unless needed</div>
+                  <ul className="mt-2 grid gap-1">
+                    {flightPath.avoidances.length
+                      ? flightPath.avoidances.map(item => <li key={item.path} className="truncate font-mono">{item.path}</li>)
+                      : <li>No generated/vendor folders were reported by the scan.</li>}
+                  </ul>
+                </div>
+              </div>
+            </details>
+
+            <details className="rounded-2xl border border-border/55 bg-background/20 p-4">
+              <summary className="cursor-pointer select-none text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Prompt preview</summary>
+              <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl border border-border/45 bg-background/35 p-3 text-xs leading-relaxed text-muted-foreground">{flightPath.prompt}</pre>
+            </details>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function agentFlightPathConfidenceClass(confidence: RepositoryAgentFlightPath['confidence']) {
+  if (confidence === 'high') return 'border-success/40 bg-success/10 text-success';
+  if (confidence === 'medium') return 'border-primary/40 bg-primary/10 text-primary-glow';
+  if (confidence === 'low') return 'border-warning/40 bg-warning/10 text-warning';
+  return 'border-border/60 bg-background/25 text-muted-foreground';
+}
+
 function OptimizationPlanReview({
   report,
   plan,
@@ -2264,6 +2575,13 @@ function OptimizationPlanReview({
   onToggleProposalIncluded: (proposalId: string) => void;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
+  repositoryIntelligenceVerificationBaseline?: RepositoryIntelligenceVerificationBaseline | null;
+  repositoryIntelligenceVerificationResult?: RepositoryIntelligenceVerificationResult | null;
+  repositoryIntelligenceVerificationStatus?: 'idle' | 'scanning' | 'completed' | 'failed';
+  repositoryIntelligenceVerificationError?: string | null;
+  onSaveRepositoryIntelligenceVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void;
+  onDiscardRepositoryIntelligenceVerificationBaseline?: () => void;
+  onRescanRepositoryIntelligence?: () => void;
   onPackDownloaded?: () => void;
   onPrCreated?: () => void;
   onClose: () => void;

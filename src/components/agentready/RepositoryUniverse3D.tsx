@@ -14,6 +14,7 @@ interface RepositoryUniverse3DProps {
   model: RepositoryUniverseModel;
   selectedNodeId?: string;
   focusedClusterId?: string | null;
+  routeNodeIds?: string[];
   searchMatchIds: string[];
   visibleNodeIds: string[];
   visibleEdgeIds: string[];
@@ -85,6 +86,7 @@ export default function RepositoryUniverse3D({
   model,
   selectedNodeId,
   focusedClusterId,
+  routeNodeIds = [],
   searchMatchIds,
   visibleNodeIds,
   visibleEdgeIds,
@@ -110,6 +112,7 @@ export default function RepositoryUniverse3D({
   const renderCameraStateRef = useRef(cameraState);
   const selectedNodeIdRef = useRef(selectedNodeId);
   const focusedClusterIdRef = useRef(focusedClusterId);
+  const routeNodeIdSetRef = useRef(new Set(routeNodeIds));
   const searchMatchSetRef = useRef(new Set(searchMatchIds));
   const visibleNodeSetRef = useRef(new Set(visibleNodeIds));
   const visibleEdgeSetRef = useRef(new Set(visibleEdgeIds));
@@ -142,6 +145,10 @@ export default function RepositoryUniverse3D({
   useEffect(() => {
     focusedClusterIdRef.current = focusedClusterId;
   }, [focusedClusterId]);
+
+  useEffect(() => {
+    routeNodeIdSetRef.current = new Set(routeNodeIds);
+  }, [routeNodeIds]);
 
   useEffect(() => {
     searchMatchSetRef.current = new Set(searchMatchIds);
@@ -610,6 +617,8 @@ export default function RepositoryUniverse3D({
     const updateVisualState = () => {
       const selectedId = selectedNodeIdRef.current;
       const focusedCluster = focusedClusterIdRef.current;
+      const routeNodeIds = routeNodeIdSetRef.current;
+      const routeActive = routeNodeIds.size > 0;
       const searchMatches = searchMatchSetRef.current;
       const visibleNodes = visibleNodeSetRef.current;
       const visibleEdges = visibleEdgeSetRef.current;
@@ -674,31 +683,32 @@ export default function RepositoryUniverse3D({
         const selected = node.id === selectedId;
         const hovered = node.id === hoveredNodeId;
         const matched = searchMatches.has(node.id);
+        const routeHighlighted = routeNodeIds.has(node.id);
         const connected = selectedRelated.has(node.id);
         const focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
-        const quiet = Boolean(selectedId && !selected && !connected && !matched && node.id !== model.rootNodeId);
-        const suppressed = Boolean(focusedCluster && !focused && !selected && !matched);
-        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.98 : connected ? 0.92 : quiet || suppressed ? 0.3 : node.importance === 'background' ? 0.58 : 0.86;
-        const scale = selected ? 2.18 : hovered ? 1.58 : matched ? 1.48 : connected ? 1.32 : node.importance === 'primary' ? 1.08 : 1;
+        const quiet = Boolean((selectedId || routeActive) && !selected && !connected && !matched && !routeHighlighted && node.id !== model.rootNodeId);
+        const suppressed = Boolean(focusedCluster && !focused && !selected && !matched && !routeHighlighted);
+        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.98 : routeHighlighted ? 0.96 : connected ? 0.92 : quiet || suppressed ? 0.3 : node.importance === 'background' ? 0.58 : 0.86;
+        const scale = selected ? 2.18 : hovered ? 1.58 : matched ? 1.48 : routeHighlighted ? 1.38 : connected ? 1.32 : node.importance === 'primary' ? 1.08 : 1;
 
         mesh.visible = opacity > 0.02;
         mesh.material.opacity = opacity;
-        mesh.material.color.setHex(colorForNode(node, selected, matched, hovered, connected));
-        mesh.material.emissive.setHex(emissiveForNode(node, selected, matched, hovered));
-        mesh.material.emissiveIntensity = selected ? 1.25 : hovered || matched ? 0.78 : connected ? 0.54 : node.importance === 'primary' ? 0.32 : 0.09;
+        mesh.material.color.setHex(colorForNode(node, selected, matched || routeHighlighted, hovered, connected));
+        mesh.material.emissive.setHex(emissiveForNode(node, selected, matched || routeHighlighted, hovered));
+        mesh.material.emissiveIntensity = selected ? 1.25 : hovered || matched ? 0.78 : routeHighlighted ? 0.64 : connected ? 0.54 : node.importance === 'primary' ? 0.32 : 0.09;
         mesh.material.wireframe = node.evidenceType === 'missing' || node.kind === 'recommendation';
         mesh.scale.setScalar(scale);
 
-        halo.visible = visible && (selected || hovered || matched || connected);
-        halo.material.opacity = selected ? 0.58 : hovered ? 0.25 : matched ? 0.22 : connected ? 0.13 : 0;
-        halo.material.color.setHex(selected ? 0xe0faff : connected ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16) : 0x67e8f9);
-        halo.scale.setScalar(selected ? 1.5 : connected ? 1.16 : 1);
+        halo.visible = visible && (selected || hovered || matched || routeHighlighted || connected);
+        halo.material.opacity = selected ? 0.58 : hovered ? 0.25 : matched ? 0.22 : routeHighlighted ? 0.18 : connected ? 0.13 : 0;
+        halo.material.color.setHex(selected ? 0xe0faff : routeHighlighted ? 0xa7f3ff : connected ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16) : 0x67e8f9);
+        halo.scale.setScalar(selected ? 1.5 : routeHighlighted ? 1.22 : connected ? 1.16 : 1);
 
         const labelVisible = visible && shouldRenderLabel(node, {
           selected,
           hovered,
-          matched,
-          connected,
+          matched: matched || routeHighlighted,
+          connected: connected || routeHighlighted,
           focused,
           focusedClusterId: focusedCluster,
           hasSelection: Boolean(selectedId),
@@ -807,6 +817,7 @@ export default function RepositoryUniverse3D({
         data-edge-count={model.summary.edgeCount}
         data-visible-node-count={visibleNodeIds.length}
         data-visible-edge-count={visibleEdgeIds.length}
+        data-route-node-count={routeNodeIds.length}
         data-selected-visible={!selectedNodeId || visibleNodeSet.has(selectedNodeId) ? 'true' : 'false'}
         data-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}

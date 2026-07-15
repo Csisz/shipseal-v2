@@ -1,295 +1,162 @@
 # ShipSeal 2026 Product Roadmap
 
-Last updated: 2026-06-22
+Last updated: 2026-07-14
 
-## Master Vision
+This roadmap is subordinate to the canonical product direction in `docs/vision/POSITIONING.md` and the Repository Intelligence PR implementation contract in `docs/implementation/REPOSITORY_INTELLIGENCE_PR_SPEC.md`.
 
-ShipSeal turns chaotic AI-built projects into efficient AI workspaces.
+## Master vision
 
-The original Delivery Pack Generator remains useful, but it is now the second layer of the product. The strategic product is an AI Agent Efficiency Platform: a system that helps builders, freelancers, agencies, and small teams make projects easier, cheaper, safer, and faster for AI coding agents to work on.
+ShipSeal helps AI coding agents understand and work inside repositories more effectively.
 
-## Positioning
+The product loop is:
 
-Primary positioning:
+1. scan the repository;
+2. identify where coding agents will struggle;
+3. explain findings with concrete repository evidence;
+4. generate repository-specific workspace improvements;
+5. apply selected improvements through a reviewed GitHub PR;
+6. rescan and verify what changed.
 
-AI Agent Efficiency Platform
+The primary paid outcome is the **Repository Intelligence PR**.
 
-Secondary value:
+## Product hierarchy
 
-Delivery Pack and client handoff reports
+- **Primary identity:** AI repository intelligence and AI workspace improvement.
+- **Primary paid outcome:** Repository Intelligence PR.
+- **Signature experience:** Repository Universe, preserved as optional visual proof and evidence exploration.
+- **Secondary commercial output:** Client Handoff Pack after repository understanding.
+- **Supporting outputs:** Delivery Packs, PDF/HTML, security and testing outputs, MCP guidance, AI Act notes, readiness, manifests, and `score.json`.
 
-ShipSeal should help users answer:
+The release gate is repository specificity: generated files must describe real structure, responsibilities, commands, relationships, and risks. Generic templates are not a paid-quality result.
 
-- What does this repository need before a client, teammate, or agent can work safely?
-- What context should an agent read first?
-- What context can be compressed, summarized, ignored, or moved into scoped guidance?
-- Which generated files should go into a Delivery Pack, a report, or a reviewed PR?
-- How can this project waste fewer tokens, fewer rate limits, and less human review time?
+## Current implemented foundation
 
-## Product Pillars
+The repository already contains:
 
-1. Readiness: score the project, explain evidence, and identify missing delivery files.
-2. Delivery: generate client reports, Delivery Packs, manifests, score exports, and safe readiness PRs.
-3. Agent efficiency: compress context, compile memory, recommend scoped instructions, and reduce token waste.
-4. Trust: keep code scanning safe, avoid executing imported code, explain GitHub permissions, and keep generated changes reviewable.
-5. Workspace optimization: turn messy AI-built repositories into durable AI workspaces.
+- deterministic browser-side ZIP and GitHub archive scanning with no imported-code execution;
+- stack, command, instruction, test/CI, readiness, and Repository Health signals;
+- Delivery Pack, PDF/HTML, Client Handoff, manifests, `score.json`, context packs, and folder-agent suggestions;
+- a local deterministic narrative provider abstraction;
+- Repository Universe and workspace models;
+- optimization proposal and plan models with conflict/readiness states;
+- an Optimization Pack ZIP and explicit review-first GitHub PR preparation path;
+- session-local rescan baselines and conservative later-scan comparison.
 
-## Phase 0 - Stabilization
+This means safe PR preparation, Repository Universe, and basic rescan verification are foundations, not wholly future phases. The next gap is deep, evidence-linked repository specificity.
 
-Goal:
+## 2026 delivery sequence
 
-Protect the existing product foundation.
+### Phase A - Repository Intelligence quality (Omega 16)
 
-Focus:
+Goal: make the Repository Intelligence PR trustworthy and repository-specific for JS/TS application repositories.
 
-- Keep tests and build green.
-- Stabilize GitHub App repository selection and scan flow.
-- Keep client report, PDF, HTML, score.json, manifest, ZIP, and PR metadata consistent.
-- Keep active workflow generation disabled by default.
-- Preserve no-code-execution guarantees.
+Work:
 
-Exit criteria:
-
-ShipSeal has a stable baseline that can be demoed and trusted.
-
-## Phase 1 - Sellable MVP
-
-Goal:
-
-Make ShipSeal commercially presentable.
-
-Focus:
-
-- Polish sample reports and demo projects.
-- Improve pricing, contact, and lead-capture paths.
-- Make the client report and Delivery Pack feel professional.
-- Show before/after examples for agencies and AI freelancers.
-- Explain what ShipSeal adds to a repository and why it matters.
+- evidence schema and provenance;
+- deterministic JS/TS responsibility and relationship extraction;
+- bounded source selection and context budgets;
+- structured provider boundary without browser secrets;
+- validation against paths, commands, symbols, and deterministic blockers;
+- root/folder instructions and `AGENT_MEMORY/` artifacts;
+- statement-level evidence manifest;
+- existing apply/PR integration;
+- rescan evidence refresh and golden quality evaluation.
 
 Exit criteria:
 
-A user can scan a repo, download a polished package, create a safe PR, and understand the value without a live walkthrough.
+- factual generated statements have evidence IDs;
+- golden React/Vite, Next.js, and Node/Express fixtures contain no invented paths or commands;
+- unsupported claims are rejected;
+- existing handwritten instructions are reviewable and never silently replaced;
+- current readiness, export, and GitHub contracts remain compatible.
 
-## Phase 2 - Trust Layer
+### Phase B - Simplified post-scan experience (Omega 17)
 
-Goal:
+Goal: make repository understanding and the Repository Intelligence PR the obvious path after a scan.
 
-Make safety and privacy understandable.
+Work:
 
-Focus:
-
-- Explain GitHub App permissions.
-- Explain static scanning and no-code-execution boundaries.
-- Add privacy, security, and data-handling pages.
-- Make legal and AI Act wording preliminary and non-advisory.
-- Make generated PRs clearly review-first.
-
-Exit criteria:
-
-Users understand what ShipSeal reads, what it writes, and what it never does.
-
-## Phase 3 - Agent Cost Optimizer
-
-Goal:
-
-Help users choose how agents should work in the repository.
-
-Focus:
-
-- Maximum Reliability mode.
-- Balanced Productivity mode.
-- Token Saver mode.
-- Mode-specific AGENTS.md and CLAUDE.md guidance.
-- A short explanation of expected tradeoffs and review needs.
+- decompose `ResultDashboard`;
+- simplify the scan-to-findings-to-artifacts-to-PR path;
+- keep Repository Universe optional and lazy-loaded;
+- keep Client Handoff and other exports accessible after understanding;
+- preserve advanced evidence and compatibility views through progressive disclosure.
 
 Exit criteria:
 
-Users can generate agent instructions that reduce unnecessary scans, broad refactors, repeated builds, and token waste.
+- users understand the core value without a walkthrough;
+- Universe remains available and recognizable;
+- no existing export path is lost.
 
-## Phase 4 - Context Compression Engine
+### Phase C - Minimal commercial foundation (Omega 18)
 
-Goal:
+Goal: support paid access and shareable results only after intelligence quality is validated.
 
-Compress repository context into high-signal summaries for agent work.
+Work:
 
-Focus:
-
-- Identify high-signal and low-signal files.
-- Generate task-specific context summaries.
-- Reduce repeated context gathering by Codex, Claude Code, Cursor, and future agents.
-- Separate stable project facts from temporary scan findings.
-
-Exit criteria:
-
-ShipSeal can produce compact context that agents can use without reading the whole repository.
-
-## Phase 5 - Context Packs
-
-Goal:
-
-Package the right context for the selected job.
-
-Focus:
-
-- Client handoff context.
-- Agent development context.
-- Security and data review context.
-- Testing and red-team context.
-- MCP readiness context.
-- Refactor and review context.
+- minimal accounts and persistence;
+- Repository Intelligence entitlement and payment;
+- public share page and badge backend;
+- data retention, tenancy, privacy, and audit boundaries;
+- metadata/history needed for durable rescan workflows.
 
 Exit criteria:
 
-Users can download or attach focused context packs instead of pushing every generated output into every workflow.
+- repository data remains isolated and governed;
+- payment state cannot expose private results;
+- public pages and badges are integrity-checked;
+- no secrets or raw source are exposed through persistence.
 
-## Phase 6 - Folder-level AGENTS
+### Phase D - Broader repository intelligence
 
-Goal:
+Goal: expand only after JS/TS quality is measurable.
 
-Generate scoped instructions where local context matters.
+Possible work:
 
-Focus:
+- validated support for additional stacks;
+- incremental/diff-aware evidence refresh;
+- richer responsibility and critical-flow extraction;
+- measured agent-efficiency analytics;
+- organization/team workflows;
+- agency and white-label packaging;
+- structured multi-perspective review for sensitive changes.
 
-- Recommend folders that need local agent guidance.
-- Generate concise folder-level AGENTS.md files.
-- Keep top-level guidance smaller.
-- Clarify local testing, ownership, and boundaries by subsystem.
+No stack should receive deep-quality claims before it has representative fixtures and release thresholds.
 
-Exit criteria:
+## Repository Universe roadmap role
 
-Agents can work inside important folders with less ambiguity and less global context.
+Repository Universe remains part of ShipSeal. Near-term work should connect existing nodes to evidence and Repository Intelligence artifacts only when the underlying evidence model is ready. Major new Universe functionality is intentionally not scheduled in Omega 16.
 
-## Phase 7 - Skill & MCP Recommendation Engine
+Future compatible overlays may show current friction, responsibilities, selected memory, current versus **With ShipSeal**, and links from a node to an evidence-backed artifact. The visualization must not fabricate applied repository state.
 
-Goal:
+## Client Handoff roadmap role
 
-Recommend useful skills, tools, and MCP servers without making unsafe assumptions.
+Client Handoff remains commercially useful for agencies and consultants, but it follows repository understanding. It can summarize findings, proposed PR artifacts, review status, and supporting outputs. It is not the hero promise or primary paid identity.
 
-Focus:
+## Trust and compatibility requirements
 
-- Detect where skills would improve review, test generation, documentation, or refactor work.
-- Recommend MCP servers and tool allowlists.
-- Flag MCP security and permission risks.
-- Keep recommendations human-reviewed.
+Across every phase:
 
-Exit criteria:
+- do not execute imported repository code as part of scanning;
+- do not send secrets or unbounded repository archives to a model;
+- do not let model output override deterministic blockers;
+- do not invent files, commands, symbols, or verified states;
+- keep writes explicit, branch-based, and human-reviewed;
+- keep applicable legal/AI Act output labeled **This is not legal advice.**;
+- preserve readiness thresholds and export schemas until a separately planned versioned migration;
+- preserve GitHub App permissions and current PR behavior until explicitly reviewed;
+- avoid unsupported token, time, cost, security, or production-readiness guarantees.
 
-ShipSeal can recommend agent tooling in a way that is useful, scoped, and safe.
+## Deferred commercial and platform work
 
-## Phase 8 - Agent Efficiency Analytics
+The following are deliberately deferred until Omega 18 or later:
 
-Goal:
-
-Measure agent efficiency as a product metric.
-
-Focus:
-
-- Agent efficiency score.
-- Context waste signals.
-- Instruction quality signals.
-- Duplicate or stale documentation detection.
-- Before/after improvement tracking.
-
-Exit criteria:
-
-Users can see why a repository is expensive or confusing for agents and what to fix first.
-
-## Phase 9 - Agent Refactor Suggestions
-
-Goal:
-
-Suggest small changes that make repositories easier for agents and humans.
-
-Focus:
-
-- Documentation structure improvements.
-- Folder organization suggestions.
-- Test and ownership improvements.
-- Context compression opportunities.
-- Safe, reviewable refactor candidates.
-
-Exit criteria:
-
-ShipSeal can recommend practical improvements without attempting broad automated rewrites.
-
-## Phase 10 - Review Council
-
-Goal:
-
-Add structured multi-perspective review for important decisions.
-
-Focus:
-
-- Product reviewer.
-- Engineering reviewer.
-- Security/data reviewer.
-- AI governance reviewer.
-- Client handoff reviewer.
-
-Exit criteria:
-
-Users can see competing risks and recommendations before merging or delivering a project.
-
-## Phase 11 - Auto-fix PR
-
-Goal:
-
-Create safe, reviewed PRs that apply selected ShipSeal recommendations.
-
-Focus:
-
-- GitHub App branch creation.
-- Safe generated files.
-- Optional small documentation changes.
-- Clear PR bodies and review steps.
-- No active workflow generation unless explicitly selected.
-
-Exit criteria:
-
-ShipSeal can move from diagnosis to carefully bounded repository improvements.
-
-## Phase 12 - White-label Agency
-
-Goal:
-
-Make ShipSeal usable by agencies as a branded delivery and optimization layer.
-
-Focus:
-
-- White-label reports.
-- Agency project templates.
-- Client-facing readiness narratives.
-- Reusable workspace optimization packages.
-- Team review workflows.
-
-Exit criteria:
-
-Agencies can use ShipSeal as part of their delivery process without exposing internal tooling.
-
-## Long-term Vision - AI Workspace Optimizer
-
-ShipSeal should become an AI Workspace Optimizer.
-
-The long-term product is not only a report generator and not only a compliance checklist. It is a system for keeping AI-built software projects understandable, reviewable, context-efficient, and ready for repeated agent collaboration.
-
-The engine direction is:
-
-Repository -> Repository Intelligence Engine -> Project Memory Engine -> Context Compression Engine -> Agent Routing Engine -> AI Workspace Analytics -> Delivery Outputs.
-
-Future roadmap work should treat AI Workspace Quality as the primary product score. Repository Health remains a supporting repository-state metric, and Delivery Packs, reports, manifests, `score.json`, and readiness PRs remain Delivery Outputs.
-
-In mature form, ShipSeal should:
-
-- compress project context,
-- compile durable agent memory,
-- create scoped instructions,
-- recommend skills and MCP tools,
-- measure token waste,
-- suggest low-risk refactors,
-- generate safe PRs,
-- support review councils,
-- and produce polished client delivery artifacts.
-
-The product promise:
-
-ShipSeal makes AI projects easier to hand over, easier to review, and easier for agents to improve without wasting the user's context budget.
+- authentication and account management;
+- Stripe or other payment implementation;
+- persistent repository/source storage;
+- public share pages and badge backend;
+- broad non-JS/TS deep intelligence;
+- automatic merge or direct `main` writes;
+- active workflow installation by default;
+- major Repository Universe expansion;
+- generalized legal or compliance claims.

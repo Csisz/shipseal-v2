@@ -1,80 +1,70 @@
 # ShipSeal Documentation Inventory
 
-Last updated: 2026-07-02
+Last updated: 2026-07-14
 
-## Current Source-of-truth Documents
+## Canonical source-of-truth documents
 
-- `README.md` - local setup, demo flow, GitHub import, exports, and current positioning overview.
-- `docs/archive/THE_AI_WORKSPACE_BOOK_v0.75.md` - current Product Bible for the AI Workspace Optimizer engine, UX direction, information architecture, and implementation priorities.
-- `docs/vision/SHIPSEAL_BOOK.md` - concise product source-of-truth draft naming ShipSeal as an AI Workspace Optimizer.
-- `docs/product/SHIPSEAL_2026_PRODUCT_ROADMAP.md` - long-term product roadmap and phase sequencing.
-- `docs/vision/SHIPSEAL_VISION.md` - current vision for AI repository optimization and agent efficiency.
-- `docs/vision/POSITIONING.md` - approved product category, positioning, package language, and anti-positioning.
-- `docs/vision/MESSAGING.md` - landing-page messaging, approved phrases, and phrases to avoid.
-- `docs/product/SELLABLE_PRODUCT_BACKLOG.md` - sellable MVP backlog and prioritized product work.
-- `docs/ARCHITECTURE.md` - technical architecture and scan/export boundaries.
-- `docs/implementation/PRODUCT_POSITION_AUDIT.md` - Sprint Omega.3 audit of readiness/audit/report/Delivery Pack language that should become secondary.
-- `docs/implementation/WORKSPACE_TRANSFORMATION_PLAN.md` - migration plan from Repository Health as the current bridge score to future AI Workspace Quality.
-- `docs/implementation/DASHBOARD_REDESIGN_PLAN.md` - planned dashboard classification, future navigation, and non-goals for simulator/heatmap/timeline work.
-- `docs/experience/REPOSITORY_UNIVERSE_3D_MVP.md` - Sprint Omega.11 architecture note for the WebGL Repository Universe, analyzed-file inventory, graph derivation and relationship boundaries.
-- `docs/security/CRITICAL_FILES_POLICY.md` - files that require careful review before AI-assisted changes.
-- `docs/release/RELEASE_CHECKLIST.md` - release readiness checks.
-- `docs/implementation/READINESS_FIX_PACK.md` - generated repository improvement pack workflow.
-- `docs/implementation/SUGGESTED_READINESS_FIX_PACK.md` - current suggested fix pack explanation.
-- `docs/implementation/CREATE_READINESS_PR_PLAN.md` - Create Readiness PR behavior and guardrails.
-- `docs/implementation/OPTIMIZATION_APPLY_FLOW.md` - Sprint Omega.14 Apply Flow model, Optimization Pack ZIP contents, GitHub PR boundary and truthfulness safeguards.
-- `docs/implementation/RESCAN_VERIFICATION_LOOP.md` - Sprint Omega.15 session-local rescan verification model, matching rules, metric safeguards and visual overlay boundaries.
-- `docs/github/GITHUB_APP_CONNECT_PLAN.md` - GitHub App connection plan and permissions.
-- `docs/implementation/GITHUB_IMPORT_PROXY_PLAN.md` - public GitHub archive import proxy plan.
-- `docs/demo/HOSTED_DEMO_READINESS.md` - hosted demo setup and validation.
-- `docs/demo/HOSTED_SMOKE_TEST.md` - hosted smoke test checklist.
-- `docs/implementation/PUBLIC_GITHUB_IMPORT_VALIDATION.md` - public GitHub import validation.
-- `docs/demo/SHIPSEAL_DEMO_VALIDATION.md` - manual demo validation checklist.
-- `docs/demo/SAMPLE_DELIVERY_PACK_REVIEW.md` - sample output review checklist.
-- `docs/demo/SAMPLE_REPOS.md` - sample repository notes.
-- `docs/demo/DEMO_SCRIPT.md` - demo walkthrough.
-- `docs/DEPLOYMENT.md` - deployment notes.
-- `docs/product/PRODUCTION_ROADMAP.md` - production hardening roadmap.
-- `docs/OWNERSHIP.md` - ownership notes.
+Authority is intentionally narrow:
 
-## Outdated Documents
+1. `docs/vision/POSITIONING.md` - canonical product promise, hierarchy, initial market/scope, and anti-positioning.
+2. `docs/implementation/REPOSITORY_INTELLIGENCE_PR_SPEC.md` - canonical implementation specification for the primary paid outcome.
+3. `docs/implementation/IMPLEMENTATION_MASTERPLAN_75.md` - canonical current sprint sequence.
 
-- `docs/legacy/shipseal_project_documents/` - old Hungarian project-start documents. These are useful for historical context only and should not drive current positioning.
-- `docs/legacy/shipseal_project_documents.zip` - archived copy of the same deprecated material.
+No archive, legacy roadmap, product bible, experience bible, or compatibility plan overrides these three documents.
 
-## Deprecated Documents
+## Current supporting documents
 
-- `docs/legacy/shipseal_project_documents/00_SHIPSEAL_PROJECT_CONTEXT_PROMPT.md`
-- `docs/legacy/shipseal_project_documents/01_CEG_ES_TERMEKLEIRAS_SHIPSEAL.md`
-- `docs/legacy/shipseal_project_documents/02_UZLETI_ES_MEGVALOSITASI_TERV.md`
-- `docs/legacy/shipseal_project_documents/03_FORRASLELTAR_ZIP_ELEMZES.md`
-- `docs/legacy/shipseal_project_documents/04_FEJLESZTESI_IGENYEK_ES_ROADMAP.md`
-- `docs/legacy/shipseal_project_documents/05_EU_AI_ACT_JOGI_WORKSTREAM.md`
-- `docs/legacy/shipseal_project_documents/06_SHIPSEAL_MVP_OUTPUT_SPEC.md`
-- `docs/legacy/shipseal_project_documents/07_FEJLESZTESI_KEZDOPONT_ES_ELSO_SPRINTEK.md`
-- `docs/legacy/shipseal_project_documents/README_SHIPSEAL_DOCS.md`
-- `docs/legacy/shipseal_project_documents/SHIPSEAL_2026_PRODUCT_ROADMAP.md`
-- `docs/legacy/shipseal_project_documents/ShipSeal_Projektindito_Dokumentacio.docx`
-- `docs/legacy/shipseal_project_documents/ShipSeal_Projektindito_Dokumentacio_OSSZES.md`
+- `README.md` - implemented setup, demo, GitHub, scan, export, and safety overview. It contains bridge language and is not the canonical product-direction document.
+- `docs/vision/MESSAGING.md` - approved messaging derived from positioning.
+- `docs/vision/SHIPSEAL_VISION.md` - broader vision; subordinate to current positioning.
+- `docs/product/SHIPSEAL_2026_PRODUCT_ROADMAP.md` - long-term roadmap under the locked hierarchy.
+- `docs/product/SELLABLE_PRODUCT_BACKLOG.md` - commercial and implementation backlog; subordinate to the spec and master plan.
+- `docs/implementation/PRODUCT_POSITION_AUDIT.md` - Omega 16.0 code/document audit and current-vs-future claim boundary.
+- `docs/ARCHITECTURE.md` - current technical architecture and non-executing scan/export boundaries.
+- `docs/implementation/WORKSPACE_TRANSFORMATION_PLAN.md` - compatibility migration notes for workspace and score hierarchy.
+- `docs/implementation/DASHBOARD_REDESIGN_PLAN.md` - future dashboard work; Omega 17 now owns the next decomposition.
+- `docs/experience/REPOSITORY_UNIVERSE_3D_MVP.md` - implemented Universe architecture and evidence boundaries.
+- `docs/implementation/OPTIMIZATION_APPLY_FLOW.md` - implemented optimization ZIP/PR preparation contract.
+- `docs/implementation/RESCAN_VERIFICATION_LOOP.md` - implemented session-local verification contract.
+- `docs/implementation/READINESS_FIX_PACK.md` and `SUGGESTED_READINESS_FIX_PACK.md` - compatibility pack behavior.
+- `docs/github/GITHUB_APP_CONNECT_PLAN.md` - GitHub App connection and permission context.
+- `docs/security/CRITICAL_FILES_POLICY.md` - sensitive-file review rules.
+- `docs/release/RELEASE_CHECKLIST.md` - release checks.
+- Demo, deployment, GitHub import, smoke-test, and sample-review documents remain operational references.
 
-## Files With Broken Encoding Or Mojibake
+## Deprecated compatibility documents
 
-Quarantined instead of manually repaired:
+- `docs/implementation/CREATE_READINESS_PR_PLAN.md` begins with `# DEPRECATED`. Its implemented API names, safety boundary, and historical decisions remain useful compatibility context, but it is not the future product plan.
+- Older root-path references inside operational documents may still name pre-reorganization locations such as `docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md`. Correct them when those documents are next edited; do not treat the stale path as authority.
 
-- `docs/legacy/shipseal_project_documents/*.md`
-- `docs/legacy/shipseal_project_documents/*.docx`
-- `docs/legacy/shipseal_project_documents.zip`
+## Historical and archived documents
 
-Active Markdown files were scanned for obvious mojibake markers during Sprint 0.1 cleanup.
+- `docs/archive/` - prior product bibles and strategic snapshots. Historical reference only.
+- `docs/legacy/shipseal_project_documents/` - old Hungarian project-start material. Historical reference only.
+- `docs/legacy/shipseal_project_documents.zip` - archived copy of deprecated material.
+- Older Living Repository, signature-experience, and experience-bible documents are design history. Repository Universe remains current because the canonical positioning and implemented code preserve it, not because every historical document is current.
 
-## Files To Remove Later
+Legacy documents are preserved rather than rewritten or deleted.
 
-- `docs/legacy/shipseal_project_documents/` after human review confirms no unique current source-of-truth content remains.
-- `docs/legacy/shipseal_project_documents.zip` after human review confirms the archive is no longer needed.
+## Encoding status
 
-## Cleanup Notes
+- Current edited documents use `Omega` or valid `Ω` characters without mojibake.
+- Malformed Omega text in `docs/implementation/IMPLEMENTATION_MASTERPLAN_75.md` was corrected in Omega 16.0.
+- Legacy files with encoding corruption remain quarantined and unchanged.
+- If mojibake is found in another current document while it is being substantively edited, repair it in the same focused change.
 
-- `AGENTS copy.md` was removed as a duplicate/noisy file.
-- `AGENTS.md` remains the active repository instruction file.
-- The current active docs should use ShipSeal's AI repository optimization positioning, with Delivery Pack export as an output rather than the primary identity.
-- Sprint Omega.3 adds the AI Workspace Foundation docs and `src/lib/workspace/` model boundary. Repository Health remains the current bridge metric until AI Workspace Quality is implemented.
+## Compatibility rules
+
+- Delivery Pack, Repository Health, readiness scores, `score.json`, manifest v2, PDF/HTML reports, Client Handoff, and existing PR endpoint names remain valid implemented contracts.
+- Supporting-output documentation must keep static/non-executing scan boundaries accurate.
+- Applicable client-facing legal or AI Act material must retain: **This is not legal advice.**
+- Repository Universe must not be removed or described as deprecated.
+- Client Handoff is secondary and post-repository-understanding.
+- Deep Repository Intelligence is JS/TS-first until other stacks pass equivalent quality validation.
+
+## Cleanup notes
+
+- Prefer updating canonical files instead of creating parallel product roadmaps.
+- Do not delete legacy material without human review.
+- Omega 16.0 creates one new canonical implementation document only: `REPOSITORY_INTELLIGENCE_PR_SPEC.md`.
+- README and UI copy remain follow-up work; Omega 16.0 is not a landing-page or dashboard rewrite.
