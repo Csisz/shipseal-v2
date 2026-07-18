@@ -40,6 +40,11 @@ export {
 export { buildRepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest';
 export { validateRepositoryDeepIntelligenceResponse, isResponsibilityCompatible } from './deepIntelligenceValidation';
 export { runRepositoryDeepIntelligence } from './deepIntelligenceExecution';
+export { requestRepositoryIntelligenceEnhancement } from './deepIntelligenceClient';
+export {
+  DETERMINISTIC_REPOSITORY_INTELLIGENCE_STATUS,
+  REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+} from './productionProviderContract';
 
 export {
   DEFAULT_REPOSITORY_INTELLIGENCE_ARTIFACT_POLICY,
@@ -165,9 +170,17 @@ export type {
   RepositoryDeepIntelligenceExecutionResult,
   RepositoryDeepIntelligenceExecutionStatus,
   RepositoryDeepIntelligenceProvider,
+  RepositoryDeepIntelligenceProviderErrorCode,
   RepositoryDeepIntelligenceRunOptions,
   RunRepositoryDeepIntelligenceInput,
 } from './deepIntelligenceProvider';
+export { RepositoryDeepIntelligenceProviderError } from './deepIntelligenceProvider';
+export type {
+  RepositoryIntelligenceProviderApiRequest,
+  RepositoryIntelligenceProviderApiResponse,
+  RepositoryIntelligenceProviderFailureCategory,
+  RepositoryIntelligenceProviderStatus,
+} from './productionProviderContract';
 
 export type {
   RepositoryDeepIntelligenceValidationOutcome,

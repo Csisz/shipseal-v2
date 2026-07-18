@@ -56,6 +56,10 @@ export default function Security() {
           ShipSeal provides technical readiness guidance and documentation support. It does not provide legal advice
           or compliance certification.
         </div>
+        <div className="mt-8 rounded-2xl border border-border/60 bg-card/60 p-6 md:p-8">
+          <h2 className="font-display text-2xl font-semibold">Account and saved-project security</h2>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">ShipSeal account identity uses GitHub OAuth without storing passwords. Opaque sessions use secure HTTP-only cookies and server-side token hashes. Every persistence request verifies the session and project owner. GitHub OAuth tokens, installation tokens, provider keys, raw provider responses, repository archives, and environment values are not stored in browser-accessible project records.</p>
+        </div>
       </section>
     </main>
   );

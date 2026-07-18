@@ -272,6 +272,7 @@ describe('content safety and structural outlines', () => {
     });
     const serialized = JSON.stringify(bundle);
     const envExample = bundle.items.find(item => item.path === '.env.example')!;
+    const envEvidence = evidenceFor(input).files.find(item => item.path === '.env.example');
     expect(bundle.items.some(item => item.path === '.env')).toBe(false);
     expect(bundle.items.some(item => item.path === 'keys/server.pem')).toBe(false);
     expect(bundle.items.some(item => item.path.startsWith('dist/') || item.path.startsWith('node_modules/'))).toBe(false);
@@ -283,6 +284,8 @@ describe('content safety and structural outlines', () => {
     expect(serialized).not.toContain('placeholder-secret');
     expect(serialized).not.toContain('package-secret');
     expect(envExample.content).toContain('API_TOKEN=<placeholder>');
+    expect(envExample.primaryResponsibility).toBe('configuration');
+    expect(envEvidence?.primaryResponsibility).toBe('configuration');
     expect(envExample.sensitiveContent.redactionKinds).toContain('environment-value');
     expect(serialized).not.toContain('D:\\');
     expect(log).not.toHaveBeenCalled();

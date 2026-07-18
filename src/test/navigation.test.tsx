@@ -6,7 +6,7 @@ import { Nav } from '@/components/agentready/Nav';
 describe('ShipSeal navigation', () => {
   it('renders landing anchors and scan CTA', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Nav />
       </MemoryRouter>
     );
@@ -23,7 +23,7 @@ describe('ShipSeal navigation', () => {
   it('calls anchor navigation callback when provided', () => {
     const onNavigateAnchor = vi.fn();
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Nav onNavigateAnchor={onNavigateAnchor} />
       </MemoryRouter>
     );
@@ -36,7 +36,7 @@ describe('ShipSeal navigation', () => {
   it('calls home navigation callback when the logo is clicked', () => {
     const onHome = vi.fn();
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Nav onHome={onHome} />
       </MemoryRouter>
     );

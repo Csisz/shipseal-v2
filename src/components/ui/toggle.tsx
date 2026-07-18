@@ -34,4 +34,6 @@ const Toggle = React.forwardRef<
 
 Toggle.displayName = TogglePrimitive.Root.displayName;
 
+// ToggleGroup consumes the same variant contract, so it stays beside the component definition.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Toggle, toggleVariants };

@@ -19,11 +19,12 @@ import {
   type RepositoryIntelligencePrPreviewResponse,
 } from '@/lib/github/write';
 
-export function RepositoryIntelligencePrApply({ artifactSet, review, connection, onVerificationBaseline }: {
+export function RepositoryIntelligencePrApply({ artifactSet, review, connection, onVerificationBaseline, submitRequest = submitRepositoryIntelligencePrRequest }: {
   artifactSet: RepositoryIntelligenceArtifactSet;
   review: RepositoryIntelligenceArtifactReview;
   connection: GitHubConnectionState;
   onVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void;
+  submitRequest?: typeof submitRepositoryIntelligencePrRequest;
 }) {
   const [state, setState] = useState<'idle' | 'previewing' | 'preview' | 'creating' | 'success' | 'error'>('idle');
   const [preview, setPreview] = useState<RepositoryIntelligencePrPreviewResponse['plan'] | null>(null);
@@ -56,7 +57,7 @@ export function RepositoryIntelligencePrApply({ artifactSet, review, connection,
     const payload = request('preview'); if (!payload || !eligible) return;
     setState('previewing'); setError(null); setConfirmed(false); setSuccess(null);
     try {
-      const response = await submitRepositoryIntelligencePrRequest(payload);
+      const response = await submitRequest(payload);
       if (response.mode !== 'preview') throw new Error('Unexpected apply response.');
       setPreview(response.plan); setState('preview');
     } catch (cause) {
@@ -69,7 +70,7 @@ export function RepositoryIntelligencePrApply({ artifactSet, review, connection,
     const payload = request('apply'); if (!payload || !confirmed || state === 'creating') return;
     setState('creating'); setError(null);
     try {
-      const response = await submitRepositoryIntelligencePrRequest(payload);
+      const response = await submitRequest(payload);
       if (response.mode !== 'apply') throw new Error('Unexpected preview response.');
       const validatedBaseline = validateRepositoryIntelligenceVerificationBaseline(response.baseline);
       if (!validatedBaseline.valid || !validatedBaseline.baseline) throw new Error('GitHub returned an incompatible Repository Intelligence verification baseline.');

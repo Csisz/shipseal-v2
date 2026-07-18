@@ -9,8 +9,6 @@ import { ReadinessBadge } from './ReadinessBadge';
 import { CategoryBreakdown } from './CategoryBreakdown';
 import { AgentPackTabs } from './AgentPackTabs';
 import { ProjectIntakeForm } from './ProjectIntakeForm';
-import { DeliveryPackPreview } from './DeliveryPackPreview';
-import { SuggestedReadinessFixPack } from './SuggestedReadinessFixPack';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { buildRepoContextPackJson, buildScoreJson, downloadJsonFile, downloadTextFile } from '@/lib/exports';
@@ -75,11 +73,23 @@ import {
 } from '@/lib/workspace';
 import { repositoryUniverseClusterLegend } from '@/lib/workspace/repositoryUniverseVisual';
 import type { UniverseCameraState } from './RepositoryUniverse3D';
-import { RepositoryIntelligenceReviewPanel, type RepositoryIntelligenceReviewUiSession } from './RepositoryIntelligenceReviewPanel';
-import { RepositoryIntelligenceVerificationPanel } from './RepositoryIntelligenceVerificationPanel';
-import type { RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
+import type { RepositoryIntelligenceReviewUiSession } from './RepositoryIntelligenceReviewPanel';
+import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
+import { PostScanOverview } from './result-dashboard/PostScanOverview';
+import { ResultChapterNav } from './result-dashboard/ResultChapterNav';
+import { ResultChapterShell } from './result-dashboard/ResultChapterShell';
+import { ResultChapterLoadBoundary, ResultChapterLoading } from './result-dashboard/ResultChapterLoadBoundary';
+import { getResultChapterStatuses, workspaceInsights } from './result-dashboard/chapterState';
+import { selectRepositoryFrictions } from './result-dashboard/repositoryFrictions';
+import type { ResultChapterId } from './result-dashboard/types';
 
 const RepositoryUniverse3D = lazy(() => import('./RepositoryUniverse3D'));
+const UnderstandChapter = lazy(() => import('./result-dashboard/chapters/UnderstandChapter'));
+const ImproveChapter = lazy(() => import('./result-dashboard/chapters/ImproveChapter'));
+const VerifyChapter = lazy(() => import('./result-dashboard/chapters/VerifyChapter'));
+const DeliverChapter = lazy(() => import('./result-dashboard/chapters/DeliverChapter'));
+const DeliveryPackPreview = lazy(() => import('./DeliveryPackPreview').then(module => ({ default: module.DeliveryPackPreview })));
+const SuggestedReadinessFixPack = lazy(() => import('./SuggestedReadinessFixPack').then(module => ({ default: module.SuggestedReadinessFixPack })));
 
 interface RepositoryUniverseBoundaryProps {
   resetKey: string;
@@ -137,23 +147,25 @@ interface Props {
   repositoryIntelligenceReviewPreparing?: boolean;
   repositoryIntelligenceReviewError?: string | null;
   prepareRepositoryIntelligenceReview?: () => Promise<RepositoryIntelligenceReviewUiSession>;
+  repositoryIntelligenceProviderStatus?: RepositoryIntelligenceProviderStatus;
+  prepareRepositoryIntelligenceEnhancement?: () => Promise<void>;
   agentOperatingMode?: AgentOperatingModeId;
   githubConnection?: GitHubConnectionState;
   verificationBaseline?: RepositoryVerificationBaseline | null;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
+  repositoryIntelligenceVerificationBaseline?: RepositoryIntelligenceVerificationBaseline | null;
+  repositoryIntelligenceVerificationResult?: RepositoryIntelligenceVerificationResult | null;
+  repositoryIntelligenceVerificationStatus?: 'idle' | 'scanning' | 'completed' | 'failed';
+  repositoryIntelligenceVerificationError?: string | null;
+  onSaveRepositoryIntelligenceVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void;
+  onDiscardRepositoryIntelligenceVerificationBaseline?: () => void;
+  onRescanRepositoryIntelligence?: () => void;
+  persistenceControl?: ReactNode;
 }
 
 type RepositoryHealth = ReadinessReport['repositoryHealth'];
 type RepositoryHealthSignal = RepositoryHealth['dimensions']['repositoryIntelligence']['signals'][number];
-type ResultChapterId = 'understand' | 'improve' | 'apply' | 'verify';
-
-const RESULT_CHAPTERS: Array<{ id: ResultChapterId; label: string }> = [
-  { id: 'understand', label: 'Understand' },
-  { id: 'improve', label: 'Improve' },
-  { id: 'apply', label: 'Apply' },
-  { id: 'verify', label: 'Verify' },
-];
 
 export function ResultDashboard({
   report,
@@ -170,6 +182,8 @@ export function ResultDashboard({
   repositoryIntelligenceReviewPreparing,
   repositoryIntelligenceReviewError,
   prepareRepositoryIntelligenceReview,
+  repositoryIntelligenceProviderStatus,
+  prepareRepositoryIntelligenceEnhancement,
   agentOperatingMode,
   githubConnection,
   verificationBaseline,
@@ -182,6 +196,7 @@ export function ResultDashboard({
   onSaveRepositoryIntelligenceVerificationBaseline,
   onDiscardRepositoryIntelligenceVerificationBaseline,
   onRescanRepositoryIntelligence,
+  persistenceControl,
 }: Props) {
   const repositoryHealth = report.repositoryHealth;
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
@@ -197,9 +212,14 @@ export function ResultDashboard({
   const [wasIntakeSkipped, setWasIntakeSkipped] = useState(intakeSkipped);
   const [localStoryChapterId, setLocalStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
   const [activeResultChapter, setActiveResultChapter] = useState<ResultChapterId>('understand');
+  const [visitedResultChapters, setVisitedResultChapters] = useState<Set<ResultChapterId>>(() => new Set(['understand']));
+  const [workspaceHeroRequested, setWorkspaceHeroRequested] = useState(false);
+  const [pendingDashboardFocus, setPendingDashboardFocus] = useState<'repository-intelligence' | 'repository-universe' | null>(null);
   const [planReviewed, setPlanReviewed] = useState(false);
   const [packagePrepared, setPackagePrepared] = useState(false);
   const [prCreated, setPrCreated] = useState(false);
+  const repositoryUniverseRef = useRef<HTMLDivElement>(null);
+  const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
   const readiness = evaluateReadiness(report.score, report.blockers);
   const ready = readiness.isReady;
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
@@ -214,6 +234,7 @@ export function ResultDashboard({
   const repoContextJson = buildRepoContextPackJson(report);
   const scoreJson = buildScoreJson(report, { selectedPackages: resolvedPackages, agentOperatingMode: resolvedAgentMode });
   const toolingRecommendationCounts = recommendationCounts(buildToolingRecommendationBundle(report));
+  const repositoryFrictions = useMemo(() => selectRepositoryFrictions(repositoryHealth), [repositoryHealth]);
   const verificationResult = useMemo(() => verificationBaseline
     ? buildRepositoryVerificationResult({ baseline: verificationBaseline, currentReport: report })
     : null, [report, verificationBaseline]);
@@ -235,6 +256,9 @@ export function ResultDashboard({
     setDraftIntake(nextIntake);
     setWasIntakeSkipped(intakeSkipped);
     setActiveResultChapter('understand');
+    setVisitedResultChapters(new Set(['understand']));
+    setWorkspaceHeroRequested(false);
+    setPendingDashboardFocus(null);
     setPlanReviewed(false);
     setPackagePrepared(false);
     setPrCreated(false);
@@ -259,15 +283,51 @@ export function ResultDashboard({
   const clearIntake = () => {
     setDraftIntake(createDefaultProjectIntake(report.repoName));
   };
-  const nextBestAction = getNextBestAction({
-    planReviewed,
-    packagePrepared: packagePrepared || prCreated,
-    verificationStatus: verificationResult?.status,
-  });
-  const handleNextBestAction = () => {
-    if (nextBestAction.targetChapter === 'improve') setPlanReviewed(true);
-    setActiveResultChapter(nextBestAction.targetChapter);
+  const focusDashboardTarget = useCallback((target: HTMLDivElement | null) => {
+    if (!target) return;
+    target.focus({ preventScroll: true });
+    target.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+  }, []);
+  const handleResultChapterChange = useCallback((chapter: ResultChapterId) => {
+    setVisitedResultChapters(current => current.has(chapter) ? current : new Set([...current, chapter]));
+    setActiveResultChapter(chapter);
+  }, []);
+  const handleReviewRepositoryIntelligence = () => {
+    setPendingDashboardFocus('repository-intelligence');
+    handleResultChapterChange('improve');
   };
+  const handleExploreRepositoryUniverse = () => {
+    setPendingDashboardFocus('repository-universe');
+    setWorkspaceHeroRequested(true);
+    handleResultChapterChange('understand');
+  };
+  const clearRepositoryIntelligenceFocus = useCallback(() => setPendingDashboardFocus(current => current === 'repository-intelligence' ? null : current), []);
+
+  useEffect(() => {
+    if (activeResultChapter === 'improve' || activeResultChapter === 'verify') setWorkspaceHeroRequested(true);
+  }, [activeResultChapter]);
+
+  useEffect(() => {
+    if (pendingDashboardFocus !== 'repository-universe' || !workspaceHeroRequested || activeResultChapter !== 'understand') return;
+    const frame = requestAnimationFrame(() => {
+      focusDashboardTarget(repositoryUniverseRef.current);
+      setPendingDashboardFocus(current => current === 'repository-universe' ? null : current);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeResultChapter, focusDashboardTarget, pendingDashboardFocus, workspaceHeroRequested]);
+
+  useEffect(() => {
+    if (workspaceHeroRequested || typeof IntersectionObserver === 'undefined') return;
+    const target = repositoryUniverseRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver(entries => {
+      if (!entries.some(entry => entry.isIntersecting)) return;
+      setWorkspaceHeroRequested(true);
+      observer.disconnect();
+    }, { rootMargin: '240px 0px' });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [workspaceHeroRequested]);
   const chapterStatuses = getResultChapterStatuses({
     report,
     planReviewed,
@@ -281,66 +341,107 @@ export function ResultDashboard({
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
 
-      <WorkspaceHeroSummary
+      <PostScanOverview
         report={report}
         limitedScanReason={limitedScanReason}
+        frictions={repositoryFrictions}
+        onReviewRepositoryIntelligence={handleReviewRepositoryIntelligence}
+        onExploreRepositoryUniverse={handleExploreRepositoryUniverse}
         onReset={onReset}
         onReplayReveal={onReplayReveal}
+        persistenceControl={persistenceControl}
       />
 
-      <WorkspaceChapterNav
+      <ResultChapterNav
         activeChapter={activeResultChapter}
         statuses={chapterStatuses}
-        onChange={setActiveResultChapter}
+        onChange={handleResultChapterChange}
       />
 
-      <AiWorkspaceHero
-        report={report}
-        limitationReason={limitedScanReason}
-        story={workspaceStory}
-        activeStoryChapter={activeStoryChapter}
-        onActiveStoryChapterChange={handleActiveStoryChapterChange}
-        activeResultChapter={activeResultChapter}
-        onResultChapterChange={setActiveResultChapter}
-        onPlanReviewed={() => setPlanReviewed(true)}
-        onPackagePrepared={() => setPackagePrepared(true)}
-        onPrCreated={() => setPrCreated(true)}
-        githubConnection={githubConnection}
-        verificationBaseline={verificationBaseline}
-        onSaveVerificationBaseline={onSaveVerificationBaseline}
-        onDiscardVerificationBaseline={onDiscardVerificationBaseline}
-      />
+      {visitedResultChapters.has('understand') && (
+        <ResultChapterShell chapter="understand" active={activeResultChapter === 'understand'}>
+          <ResultChapterLoadBoundary chapterLabel="Understand">
+            <Suspense fallback={<ResultChapterLoading chapterLabel="Understand" />}><UnderstandChapter report={report} story={workspaceStory} /></Suspense>
+          </ResultChapterLoadBoundary>
+        </ResultChapterShell>
+      )}
 
-      <div className={activeResultChapter === 'improve' ? 'mb-6' : 'hidden'} aria-hidden={activeResultChapter !== 'improve'}>
-        <RepositoryIntelligenceReviewPanel
-          session={repositoryIntelligenceReviewSession}
-          preparing={repositoryIntelligenceReviewPreparing}
-          error={repositoryIntelligenceReviewError}
-          enabled={activeResultChapter === 'improve'}
-          prepareSession={prepareRepositoryIntelligenceReview}
-          githubConnection={githubConnection || buildGitHubConnectionFromReport(report)}
-          onVerificationBaseline={onSaveRepositoryIntelligenceVerificationBaseline}
-        />
+      {visitedResultChapters.has('improve') && (
+        <ResultChapterShell chapter="improve" active={activeResultChapter === 'improve'}>
+          <ResultChapterLoadBoundary chapterLabel="Improve">
+            <Suspense fallback={<ResultChapterLoading chapterLabel="Improve" />}>
+              <ImproveChapter
+                frictions={repositoryFrictions}
+                targetRef={repositoryIntelligenceReviewRef}
+                focusTarget={pendingDashboardFocus === 'repository-intelligence'}
+                onTargetFocused={clearRepositoryIntelligenceFocus}
+                session={repositoryIntelligenceReviewSession}
+                preparing={repositoryIntelligenceReviewPreparing}
+                error={repositoryIntelligenceReviewError}
+                prepareSession={prepareRepositoryIntelligenceReview}
+                providerStatus={repositoryIntelligenceProviderStatus}
+                prepareEnhancement={prepareRepositoryIntelligenceEnhancement}
+                githubConnection={githubConnection || buildGitHubConnectionFromReport(report)}
+                report={report}
+                onVerificationBaseline={onSaveRepositoryIntelligenceVerificationBaseline}
+              />
+            </Suspense>
+          </ResultChapterLoadBoundary>
+        </ResultChapterShell>
+      )}
+
+      {visitedResultChapters.has('verify') && (
+        <ResultChapterShell chapter="verify" active={activeResultChapter === 'verify'}>
+          <ResultChapterLoadBoundary chapterLabel="Verify">
+            <Suspense fallback={<ResultChapterLoading chapterLabel="Verify" />}>
+              <VerifyChapter
+                baseline={repositoryIntelligenceVerificationBaseline}
+                result={repositoryIntelligenceVerificationResult}
+                optimizationResult={verificationResult}
+                status={repositoryIntelligenceVerificationStatus}
+                error={repositoryIntelligenceVerificationError}
+                report={report}
+                onRescan={onRescanRepositoryIntelligence}
+                onDiscardBaseline={onDiscardRepositoryIntelligenceVerificationBaseline}
+              />
+            </Suspense>
+          </ResultChapterLoadBoundary>
+        </ResultChapterShell>
+      )}
+
+      {visitedResultChapters.has('deliver') && (
+        <ResultChapterShell chapter="deliver" active={activeResultChapter === 'deliver'}>
+          <ResultChapterLoadBoundary chapterLabel="Deliver">
+            <Suspense fallback={<ResultChapterLoading chapterLabel="Deliver" />}><DeliverChapter /></Suspense>
+          </ResultChapterLoadBoundary>
+        </ResultChapterShell>
+      )}
+
+      <div ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} className="scroll-mt-24 focus:outline-none">
+        {workspaceHeroRequested ? <AiWorkspaceHero
+          report={report}
+          limitationReason={limitedScanReason}
+          story={workspaceStory}
+          activeStoryChapter={activeStoryChapter}
+          onActiveStoryChapterChange={handleActiveStoryChapterChange}
+          activeResultChapter={activeResultChapter}
+          onResultChapterChange={handleResultChapterChange}
+          onPlanReviewed={() => setPlanReviewed(true)}
+          onPackagePrepared={() => setPackagePrepared(true)}
+          onPrCreated={() => setPrCreated(true)}
+          githubConnection={githubConnection}
+          verificationBaseline={verificationBaseline}
+          onSaveVerificationBaseline={onSaveVerificationBaseline}
+          onDiscardVerificationBaseline={onDiscardVerificationBaseline}
+        /> : (
+          <section className="mb-8 rounded-3xl border border-primary/25 bg-primary/5 p-5 md:p-6" aria-labelledby="repository-universe-progressive-heading">
+            <div className="text-xs font-mono uppercase tracking-wider text-primary-glow">Repository Universe</div>
+            <h2 id="repository-universe-progressive-heading" className="mt-2 font-display text-2xl font-semibold">Explore the repository map</h2>
+            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">The interactive repository model loads when this section approaches the viewport or when you choose to explore it.</p>
+            <Button type="button" variant="outline" className="mt-4" onClick={() => setWorkspaceHeroRequested(true)}>Prepare Repository Universe</Button>
+          </section>
+        )}
       </div>
-
-      <div className={activeResultChapter === 'verify' ? 'mb-6' : 'hidden'} aria-hidden={activeResultChapter !== 'verify'}>
-        <RepositoryIntelligenceVerificationPanel
-          baseline={repositoryIntelligenceVerificationBaseline}
-          result={repositoryIntelligenceVerificationResult}
-          status={repositoryIntelligenceVerificationStatus}
-          error={repositoryIntelligenceVerificationError}
-          currentRepository={report.scanEvidence.repositoryFullName || (report.source.githubOwner && report.source.githubRepo ? `${report.source.githubOwner}/${report.source.githubRepo}` : report.repoName)}
-          currentBranch={report.source.githubBranch || report.source.githubDefaultBranch || report.scanEvidence.branchOrRef}
-          scanLimited={report.scanSummary.limited}
-          onRescan={onRescanRepositoryIntelligence}
-          onDiscardBaseline={onDiscardRepositoryIntelligenceVerificationBaseline}
-        />
-      </div>
-
-      <NextBestActionCard
-        action={nextBestAction}
-        onAction={handleNextBestAction}
-      />
 
       {activeResultChapter === 'understand' && (
         <Disclosure title="Supporting workspace views">
@@ -352,7 +453,8 @@ export function ResultDashboard({
         </Disclosure>
       )}
 
-      <Disclosure title="Workspace evidence" defaultOpen={false}>
+      <div className={activeResultChapter === 'understand' ? '' : 'hidden'} aria-hidden={activeResultChapter !== 'understand'}>
+      <Disclosure title="Repository evidence" defaultOpen={false}>
         {repositoryHealth.overall.score !== null && (
           <>
             <RepositoryHealthActions repositoryHealth={repositoryHealth} />
@@ -367,7 +469,9 @@ export function ResultDashboard({
 
         <DecisionSummary report={report} ready={ready} nextActions={report.aiNarrative.nextBestActions.slice(0, 3)} />
       </Disclosure>
+      </div>
 
+      {visitedResultChapters.has('deliver') && <div hidden={activeResultChapter !== 'deliver'}>
       <Disclosure title="Exports and reports">
       <section className="mb-8" aria-labelledby="delivery-outputs-heading">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
@@ -515,7 +619,11 @@ export function ResultDashboard({
         </div>
       </Disclosure>
 
-      <DeliveryPackPreview report={report} agentFiles={modeAgentPack} intake={appliedIntake} intakeSkipped={wasIntakeSkipped} selectedPackages={resolvedPackages} agentOperatingMode={resolvedAgentMode} />
+      <ResultChapterLoadBoundary chapterLabel="Delivery outputs">
+        <Suspense fallback={<ResultChapterLoading chapterLabel="delivery outputs" />}>
+          <DeliveryPackPreview report={report} agentFiles={modeAgentPack} intake={appliedIntake} intakeSkipped={wasIntakeSkipped} selectedPackages={resolvedPackages} agentOperatingMode={resolvedAgentMode} />
+        </Suspense>
+      </ResultChapterLoadBoundary>
 
       <Disclosure title="Project context used for Delivery Outputs" defaultOpen={wasIntakeSkipped || intakeDirty}>
         <ProjectContextPanel
@@ -530,12 +638,20 @@ export function ResultDashboard({
       </Disclosure>
       </section>
       </Disclosure>
+      </div>}
 
-      <Disclosure title="Available ShipSeal improvements - optional fixes you can add back">
-        <SuggestedReadinessFixPack report={report} githubConnection={githubConnection} selectedPackages={resolvedPackages} />
+      {visitedResultChapters.has('improve') && <div hidden={activeResultChapter !== 'improve'}>
+      <Disclosure title="Secondary repository improvements">
+        <ResultChapterLoadBoundary chapterLabel="Readiness Fix Pack">
+          <Suspense fallback={<ResultChapterLoading chapterLabel="readiness improvements" />}>
+            <SuggestedReadinessFixPack report={report} githubConnection={githubConnection} selectedPackages={resolvedPackages} />
+          </Suspense>
+        </ResultChapterLoadBoundary>
       </Disclosure>
+      </div>}
 
-      <Disclosure title="Advanced details — full scan results and generated files">
+      {visitedResultChapters.has('deliver') && <div hidden={activeResultChapter !== 'deliver'}>
+      <Disclosure title="Specialist and technical exports">
       <div className="glass rounded-2xl p-6 mb-8">
         <div className="flex flex-wrap items-start gap-3 mb-5">
           <Sparkles className={ready ? 'h-4 w-4 text-success mt-1' : 'h-4 w-4 text-accent mt-1'} />
@@ -775,202 +891,9 @@ export function ResultDashboard({
 
       <RecentScans history={history} onClear={onClearHistory} />
       </Disclosure>
+      </div>}
     </section>
   );
-}
-
-function WorkspaceHeroSummary({
-  report,
-  limitedScanReason,
-  onReset,
-  onReplayReveal,
-}: {
-  report: ReadinessReport;
-  limitedScanReason?: string;
-  onReset: () => void;
-  onReplayReveal?: () => void;
-}) {
-  const unavailable = report.repositoryHealth.overall.score === null;
-  const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;
-  const nextMoveCount = Math.max(1, Math.min(3, report.repositoryHealth.topActions.length || report.aiNarrative.nextBestActions.length || report.improvements.length));
-  return (
-    <section className="mb-5 rounded-[2rem] border border-primary/20 bg-[hsl(225_28%_7%)] p-5 shadow-sm shadow-primary/10 md:p-8" aria-labelledby="workspace-result-heading">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="max-w-4xl">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Badge variant="outline" className="border-primary/45 text-primary-glow">AI Workspace</Badge>
-            <span className="text-xs text-muted-foreground">{report.stack.primary}</span>
-          </div>
-          <h1 id="workspace-result-heading" className="font-display text-3xl font-semibold leading-tight md:text-5xl">
-            {unavailable ? 'Repository evidence is limited.' : 'Repository understood.'}
-          </h1>
-          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">
-            {unavailable
-              ? `ShipSeal could only map ${fileCount.toLocaleString()} files from the available scan boundary.`
-              : `ShipSeal mapped ${fileCount.toLocaleString()} files into a workspace model and found ${nextMoveCount} practical ${nextMoveCount === 1 ? 'way' : 'ways'} to improve AI agent navigation.`}
-          </p>
-          {limitedScanReason && (
-            <p className="mt-3 max-w-3xl rounded-2xl border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning/90">
-              Limited scan: {limitedScanReason}
-            </p>
-          )}
-        </div>
-        <div className="flex flex-wrap gap-2 lg:justify-end">
-          {onReplayReveal && (
-            <Button variant="outline" size="sm" onClick={onReplayReveal} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
-              <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Replay reveal
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onReset} className="border-border/60 bg-background/20">
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Scan another project
-          </Button>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function WorkspaceChapterNav({
-  activeChapter,
-  statuses,
-  onChange,
-}: {
-  activeChapter: ResultChapterId;
-  statuses: Record<ResultChapterId, string>;
-  onChange: (chapter: ResultChapterId) => void;
-}) {
-  return (
-    <nav className="mb-5 grid gap-2 md:grid-cols-4" aria-label="Result chapters">
-      {RESULT_CHAPTERS.map(chapter => (
-        <button
-          key={chapter.id}
-          type="button"
-          aria-pressed={activeChapter === chapter.id}
-          onClick={() => onChange(chapter.id)}
-          className={`rounded-2xl border p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-            activeChapter === chapter.id
-              ? 'border-primary/45 bg-primary/10 text-foreground shadow-sm shadow-primary/10'
-              : 'border-border/55 bg-background/20 text-muted-foreground hover:border-primary/30 hover:text-foreground'
-          }`}
-        >
-          <div className="text-sm font-semibold">{chapter.label}</div>
-          <div className="mt-1 text-xs">{statuses[chapter.id]}</div>
-        </button>
-      ))}
-    </nav>
-  );
-}
-
-function NextBestActionCard({
-  action,
-  onAction,
-}: {
-  action: ReturnType<typeof getNextBestAction>;
-  onAction: () => void;
-}) {
-  return (
-    <section className="mb-6 rounded-3xl border border-primary/20 bg-background/25 p-4 md:p-5" aria-label="Next best action">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
-          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Next best action</div>
-          <h2 className="mt-1 font-display text-xl font-semibold">{action.label}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{action.description}</p>
-        </div>
-        <Button type="button" onClick={onAction} className="w-full bg-primary text-primary-foreground hover:bg-primary/90 md:w-auto">
-          {action.buttonLabel}
-        </Button>
-      </div>
-    </section>
-  );
-}
-
-function getResultChapterStatuses({
-  report,
-  planReviewed,
-  packagePrepared,
-  verificationResult,
-}: {
-  report: ReadinessReport;
-  planReviewed: boolean;
-  packagePrepared: boolean;
-  verificationResult: RepositoryVerificationResult | null;
-}) {
-  return {
-    understand: 'Repository mapped',
-    improve: planReviewed ? 'Plan reviewed' : `${Math.max(1, Math.min(6, report.repositoryHealth.topActions.length || report.improvements.length || 1))} next moves`,
-    apply: packagePrepared ? 'Package prepared' : 'Package available',
-    verify: verificationResult?.status === 'matched-rescan'
-      ? 'After rescan available'
-      : verificationResult?.status === 'repository-mismatch'
-        ? 'Baseline mismatch'
-        : 'Needs later scan',
-  } satisfies Record<ResultChapterId, string>;
-}
-
-function getNextBestAction({
-  planReviewed,
-  packagePrepared,
-  verificationStatus,
-}: {
-  planReviewed: boolean;
-  packagePrepared: boolean;
-  verificationStatus?: RepositoryVerificationResult['status'];
-}) {
-  if (verificationStatus === 'repository-mismatch') {
-    return {
-      label: 'Scan the original repository again',
-      description: 'The saved baseline belongs to another repository state.',
-      buttonLabel: 'Review verification',
-      targetChapter: 'verify' as ResultChapterId,
-    };
-  }
-  if (verificationStatus === 'matched-rescan') {
-    return {
-      label: 'Review detected changes',
-      description: 'ShipSeal found after-rescan evidence. Review what was actually detected.',
-      buttonLabel: 'Review detected changes',
-      targetChapter: 'verify' as ResultChapterId,
-    };
-  }
-  if (packagePrepared) {
-    return {
-      label: 'Apply changes, then rescan',
-      description: 'Use the reviewed package or PR, then scan this repository again.',
-      buttonLabel: 'Open verification',
-      targetChapter: 'verify' as ResultChapterId,
-    };
-  }
-  if (planReviewed) {
-    return {
-      label: 'Download Optimization Pack',
-      description: 'Package the selected improvements for human review.',
-      buttonLabel: 'Open apply flow',
-      targetChapter: 'apply' as ResultChapterId,
-    };
-  }
-  return {
-    label: 'Review ShipSeal improvements',
-    description: 'See the concrete improvements ShipSeal can prepare from this scan.',
-    buttonLabel: 'Review ShipSeal improvements',
-    targetChapter: 'improve' as ResultChapterId,
-  };
-}
-
-function workspaceInsights(report: ReadinessReport, universe: RepositoryUniverseModel) {
-  const documentation = report.summary.instructionFiles.length || report.summary.keyFolders.some(folder => /doc|docs/i.test(folder))
-    ? 'Documentation and instruction signals are available.'
-    : 'Documentation signals are thin and should be strengthened.';
-  const verification = report.stack.runCommands.length || report.stack.testFrameworks.length
-    ? 'Verification paths are visible to future agents.'
-    : 'Verification commands are not obvious from this scan.';
-  const context = universe.summary.folderNodeCount > 0
-    ? `${universe.summary.folderNodeCount.toLocaleString()} folders were shaped into navigable workspace context.`
-    : 'ShipSeal built a compact workspace model from available repository evidence.';
-  return [
-    { title: 'Agents have a starting point', detail: documentation },
-    { title: 'Context can be routed', detail: context },
-    { title: 'Verification is visible', detail: verification },
-  ];
 }
 
 function AiWorkspaceHero({
@@ -1220,6 +1143,12 @@ function RepositoryAtlasVisualization({
   const [agentFlightPath, setAgentFlightPath] = useState<RepositoryAgentFlightPath | null>(null);
   const [agentFlightPathCopied, setAgentFlightPathCopied] = useState(false);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
+  const exitFullscreen = useCallback(() => {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => undefined);
+    }
+    setFullscreen(false);
+  }, []);
   const selectedNode = atlas.nodes.find(node => node.id === selectedNodeId) || atlas.nodes.find(node => node.id === initialNodeId) || atlas.nodes[0];
   const selectedUniverseNode = universe.nodes.find(node => node.id === selectedUniverseNodeId) || universe.nodes.find(node => node.id === universe.rootNodeId) || universe.nodes[0];
   const activeCluster = focusedClusterId ? atlas.clusters.find(cluster => cluster.id === focusedClusterId) : null;
@@ -1297,7 +1226,7 @@ function RepositoryAtlasVisualization({
       : atlas.nodes.filter(node => searchMatches.has(node.id)).slice(0, 5))
     : [];
   const atlasNavigationActive = navigationActive || fullscreen;
-  const planReadyForChapter = activeResultChapter === 'apply' || activeResultChapter === 'verify';
+  const planReadyForChapter = activeResultChapter === 'verify';
   const flightPathUniverseNodeIds = useMemo(() => agentFlightPath?.routeNodeIds.universeNodeIds || [], [agentFlightPath]);
   const flightPathAtlasNodeIdSet = useMemo(() => new Set(agentFlightPath?.routeNodeIds.atlasNodeIds || []), [agentFlightPath]);
 
@@ -1312,7 +1241,7 @@ function RepositoryAtlasVisualization({
       if (activeChapter?.id && currentChapterId === activeChapter.id) return current;
       return initialNodeId;
     });
-    setFocusedClusterId(activeChapter ? `cluster:${activeChapter.id}` : null);
+    setFocusedClusterId(activeChapter?.id ? `cluster:${activeChapter.id}` : null);
     setSelectedUniverseNodeId(current => {
       const currentNode = universe.nodes.find(node => node.id === current);
       if (activeChapter?.id && currentNode?.metadata.storyChapterId === activeChapter.id) return current;
@@ -1410,7 +1339,7 @@ function RepositoryAtlasVisualization({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [fullscreen, navigationActive, tooltip]);
+  }, [exitFullscreen, fullscreen, navigationActive, tooltip]);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -1608,13 +1537,6 @@ function RepositoryAtlasVisualization({
     setNavigationActive(false);
     setFullscreen(true);
   };
-
-  const exitFullscreen = useCallback(() => {
-    if (document.fullscreenElement && document.exitFullscreen) {
-      document.exitFullscreen().catch(() => undefined);
-    }
-    setFullscreen(false);
-  }, []);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
@@ -2212,30 +2134,30 @@ function RepositoryAtlasVisualization({
     ? 'Explore the repository universe'
     : activeResultChapter === 'improve'
       ? 'Review ShipSeal improvements'
-      : activeResultChapter === 'apply'
-        ? 'Prepare the optimization package'
-        : 'Verify after rescan';
+      : activeResultChapter === 'verify'
+        ? 'Verify after rescan'
+        : 'Delivery outputs';
   const resultChapterEyebrow = activeResultChapter === 'understand'
     ? 'Repository Universe'
     : activeResultChapter === 'improve'
       ? 'Improve'
-      : activeResultChapter === 'apply'
-        ? 'Apply'
-        : 'Verify';
+      : activeResultChapter === 'verify'
+        ? 'Verify'
+        : 'Deliver';
   const resultChapterSummary = activeResultChapter === 'understand'
     ? (viewMode === 'universe3d'
       ? `${visibleUniverseNodeIds.size.toLocaleString()} entities visible. ${universe.statusNote}`
       : atlas.statusNote)
     : activeResultChapter === 'improve'
       ? 'Preview what ShipSeal can prepare. No repository files change here.'
-      : activeResultChapter === 'apply'
-        ? 'Download a review package or create a GitHub PR after explicit confirmation.'
-        : verificationResult?.status === 'matched-rescan'
+      : activeResultChapter === 'verify' && verificationResult?.status === 'matched-rescan'
           ? 'ShipSeal is showing only what this later scan detected.'
-          : 'Verification requires a saved baseline and a later scan of the changed repository.';
+          : activeResultChapter === 'verify'
+            ? 'Verification requires a saved baseline and a later scan of the changed repository.'
+            : 'Client handoff and exports remain available without changing their contents.';
   const showUniverseWorkspace = activeResultChapter === 'understand' || activeResultChapter === 'improve';
   const showTransformationPanel = activeResultChapter === 'improve';
-  const showPlanReview = optimizationPlanReview && activeResultChapter !== 'understand';
+  const showPlanReview = optimizationPlanReview && (activeResultChapter === 'improve' || activeResultChapter === 'verify');
 
   return (
     <section ref={atlasRootRef} className="relative rounded-[1.75rem] border border-primary/25 bg-[hsl(224_31%_6%)] p-4 shadow-sm shadow-primary/10 md:p-5" aria-labelledby="repository-atlas-heading">
@@ -2294,7 +2216,7 @@ function RepositoryAtlasVisualization({
               </Button>
             </div>
           )}
-          {(activeResultChapter === 'apply' || activeResultChapter === 'verify') && !optimizationPlanReview && (
+          {activeResultChapter === 'verify' && !optimizationPlanReview && (
             <div className="mb-4 rounded-2xl border border-border/55 bg-background/20 p-4">
               <p className="text-sm text-muted-foreground">No active optimization artifacts are selected yet.</p>
               <Button type="button" size="sm" onClick={() => onResultChapterChange('improve')} className="mt-3 bg-primary text-primary-foreground hover:bg-primary/90">
@@ -2575,13 +2497,6 @@ function OptimizationPlanReview({
   onToggleProposalIncluded: (proposalId: string) => void;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
-  repositoryIntelligenceVerificationBaseline?: RepositoryIntelligenceVerificationBaseline | null;
-  repositoryIntelligenceVerificationResult?: RepositoryIntelligenceVerificationResult | null;
-  repositoryIntelligenceVerificationStatus?: 'idle' | 'scanning' | 'completed' | 'failed';
-  repositoryIntelligenceVerificationError?: string | null;
-  onSaveRepositoryIntelligenceVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void;
-  onDiscardRepositoryIntelligenceVerificationBaseline?: () => void;
-  onRescanRepositoryIntelligence?: () => void;
   onPackDownloaded?: () => void;
   onPrCreated?: () => void;
   onClose: () => void;
@@ -4638,7 +4553,7 @@ function buildRepositoryDna(report: ReadinessReport): RepositoryDnaDimension[] {
   const architectureFiles = firstMatchingFiles(files, [/architecture/i, /adr/i, /(^|\/)src\//i, /(^|\/)app\//i], 4);
   const instructionFiles = uniqueStrings([...report.summary.instructionFiles, ...report.repoContextPack.existingInstructionFiles]).slice(0, 4);
   const verificationFiles = firstMatchingFiles(files, [/test/i, /spec/i, /vitest/i, /jest/i, /\.github\/workflows/i], 4);
-  const ignoredFolders = (report.scanEvidence.ignoredFolders || []).slice(0, 4);
+  const ignoredFolders = (report.repoContextPack.ignoredFolders || []).slice(0, 4);
   const sourceFolders = uniqueStrings([...(report.summary.keyFolders || []), ...(report.repoContextPack.keyFolders || [])]).slice(0, 4);
   const runCommands = (report.stack.runCommands || []).map(command => command.label).slice(0, 4);
 
@@ -4861,7 +4776,7 @@ function buildMentalModel(report: ReadinessReport): MentalModel {
   const ciFiles = firstMatchingFiles(files, [/\.github\/workflows/i, /gitlab-ci/i, /circleci/i], 2);
   const runCommands = (report.stack.runCommands || []).map(command => command.label).slice(0, 3);
   const ignoredCount = report.scanSummary.generatedVendorFilesIgnored + report.scanSummary.binaryFilesIgnored;
-  const ignoredFolders = (report.scanEvidence.ignoredFolders || []).slice(0, 3);
+  const ignoredFolders = (report.repoContextPack.ignoredFolders || []).slice(0, 3);
   const topAction = health.topActions[0];
 
   const nodes: MentalModelNode[] = [

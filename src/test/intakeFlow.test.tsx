@@ -1,9 +1,13 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter as RouterMemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Index from '@/pages/Index';
 import type React from 'react';
 import type { GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
+
+function MemoryRouter({ children }: { children: React.ReactNode }) {
+  return <RouterMemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{children}</RouterMemoryRouter>;
+}
 
 const scanMocks = vi.hoisted(() => ({
   startScan: vi.fn(),
@@ -179,10 +183,10 @@ describe('ShipSeal pre-scan intake flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 
-    expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 15000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Explore the repository map/i }, { timeout: 15000 })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Replay reveal/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText(/Workspace story and evidence/i));
+    fireEvent.click(screen.getByRole('button', { name: /Prepare Repository Universe/i }));
+    fireEvent.click(await screen.findByText(/Workspace story and evidence/i, undefined, { timeout: 15000 }));
     fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
     expect(screen.getByRole('heading', { name: /Knowledge and docs/i })).toBeInTheDocument();
 
@@ -190,9 +194,10 @@ describe('ShipSeal pre-scan intake flow', () => {
     expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 
+    fireEvent.click(await screen.findByRole('button', { name: /Prepare Repository Universe/i }, { timeout: 15000 }));
     fireEvent.click(await screen.findByText(/Workspace story and evidence/i, undefined, { timeout: 15000 }));
     expect(await screen.findByRole('heading', { name: /Knowledge and docs/i }, { timeout: 5000 })).toBeInTheDocument();
-  }, 20000);
+  }, 30000);
 
   it('shows and updates Agent Operating Mode for AI Agent Development package', async () => {
     render(

@@ -212,7 +212,7 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
               <div className="font-display text-lg font-semibold">GitHub App permissions</div>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
                 GitHub access is used to list approved repositories, scan the selected ref, and optionally open a reviewed
-                Readiness PR. ShipSeal does not merge PRs or push to your main branch.
+                Repository Intelligence PR. ShipSeal does not merge PRs or push to your main branch.
               </p>
               <div className="mt-5 rounded-xl border border-border/60 bg-secondary/25 px-4 py-3 text-xs text-muted-foreground">
                 ShipSeal provides technical readiness guidance and documentation support. It does not provide legal advice or compliance certification.

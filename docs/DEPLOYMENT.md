@@ -6,7 +6,7 @@ ShipSeal can be deployed as a React/Vite application on Vercel. Netlify/static-o
 
 - Build command: `npm run build`
 - Output directory: `dist`
-- Environment variables: none required for the current MVP
+- Environment variables: none required for deterministic-only operation
 
 ## Vercel
 
@@ -15,7 +15,7 @@ ShipSeal can be deployed as a React/Vite application on Vercel. Netlify/static-o
 3. Set build command to `npm run build`.
 4. Set output directory to `dist`.
 5. Keep the included `vercel.json` so `/api/github-archive` is handled before the SPA fallback.
-6. Do not add OpenAI, Anthropic, GitHub, or private API keys to client-side environment variables.
+6. Keep all provider and GitHub credentials server-side. Never use a `VITE_` prefix for private keys.
 7. Deploy.
 
 ## Netlify
@@ -29,10 +29,24 @@ ShipSeal can be deployed as a React/Vite application on Vercel. Netlify/static-o
 ## Security Notes
 
 - The current MVP has a minimal Vercel serverless proxy for public GitHub ZIP archives.
-- No API keys are required.
-- No external AI API calls are made.
+- No API keys are required for the complete deterministic flow.
+- Optional enhanced Repository Intelligence calls only the configured server provider after an explicit review-flow action.
 - Uploaded/imported code is not executed.
-- Recent scan history stores metadata only in browser localStorage.
+- Anonymous recent scan history stores metadata only in browser localStorage. Account-backed projects store validated derived scan snapshots only after an explicit Save project action; repository archives and raw source are not persisted by default.
+
+## Accounts and private project persistence
+
+Omega 18.1 uses a dedicated GitHub OAuth App for identity and PostgreSQL for private server-side projects. Configure `DATABASE_URL`, `SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID`, `SHIPSEAL_ACCOUNT_GITHUB_CLIENT_SECRET`, and `SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL` only in the server environment. Apply `npm run db:migrate` before deploying, and run `npm run db:migrate:test` in validation. Static-only deployments continue to support anonymous scan/export but cannot provide durable accounts.
+
+Sessions use opaque HTTP-only cookies; only token hashes are stored. Projects are owner-scoped and private by default. Saved snapshots contain derived validated results and safe metadata, not ZIP archives, raw provider bodies, provider keys, GitHub tokens, or environment values. Managed PostgreSQL backup retention can delay physical removal from old encrypted backups after live deletion; document the chosen provider's actual retention before launch. Full setup and migration guidance is in [Account and Project Persistence Architecture](implementation/ACCOUNT_PERSISTENCE_ARCHITECTURE.md).
+
+## Optional Deep-Intelligence Provider
+
+Deterministic Repository Intelligence is enabled without configuration and remains the fallback. To test the optional server provider under `vercel dev`, configure server-side values from `.env.example`: enable the provider, choose `openai-compatible`, set a model and API key, and optionally set an HTTPS base URL, bounded timeout/output/request/response limits and a non-secret environment label. Preview and production deployments use the same variables in the hosting environment; tests use mocked transport and deterministic-only development should leave the feature disabled.
+
+The browser never receives the provider key or server adapter. `/api/repository-intelligence` accepts only the already bounded and redacted internal request. Provider failures return safe categories and leave deterministic artifacts ready for review. Do not configure the key as `VITE_*` or place it in frontend build settings.
+
+An authorized real-provider check is opt-in: set `SHIPSEAL_DEEP_INTELLIGENCE_SMOKE=true` plus the server provider variables, then run `npm run intelligence:smoke`. It sends one small controlled fixture, validates structured output, logs metadata only, and performs no GitHub write. Never run it with paid credentials without explicit authorization.
 
 ## GitHub Import Limitations
 

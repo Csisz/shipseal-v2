@@ -6,6 +6,7 @@ import {
   buildRepositoryIntelligenceArtifactReview,
   type BuildRepositoryIntelligenceArtifactReviewResult,
   type RepositoryIntelligenceArtifactReview,
+  type RepositoryIntelligenceProviderStatus,
   type RepositoryIntelligenceVerificationBaseline,
 } from '@/lib/repositoryIntelligence';
 import type { RepoScanInput } from '@/lib/types';
@@ -32,9 +33,9 @@ function fixture(extra: Record<string, string> = {}): RepoScanInput {
   };
 }
 
-function Harness({ result }: { result: BuildRepositoryIntelligenceArtifactReviewResult }) {
+function Harness({ result, providerStatus, prepareEnhancement }: { result: BuildRepositoryIntelligenceArtifactReviewResult; providerStatus?: RepositoryIntelligenceProviderStatus; prepareEnhancement?: () => Promise<void> }) {
   const [review, setReview] = useState<RepositoryIntelligenceArtifactReview>(result.review);
-  return <RepositoryIntelligenceReviewSurface artifactSet={result.artifactSet} review={review} onReviewChange={setReview} />;
+  return <RepositoryIntelligenceReviewSurface artifactSet={result.artifactSet} review={review} onReviewChange={setReview} providerStatus={providerStatus} prepareEnhancement={prepareEnhancement} />;
 }
 
 function ConnectedHarness({ result, onVerificationBaseline }: { result: BuildRepositoryIntelligenceArtifactReviewResult; onVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void }) {
@@ -58,6 +59,22 @@ describe('Repository Intelligence artifact review UI', () => {
     const reviewButton = screen.getByRole('button', { name: 'Review proposed files' });
     expect(reviewButton).toHaveAttribute('aria-expanded', 'false');
     expect(screen.queryByLabelText('Repository Intelligence artifacts')).not.toBeInTheDocument();
+  });
+
+  it('discloses enhanced preparation and deterministic fallback without blocking artifact review', () => {
+    const result = buildRepositoryIntelligenceArtifactReview({ scanInput: fixture() });
+    const prepareEnhancement = vi.fn(async () => undefined);
+    const { rerender } = render(<Harness result={result} providerStatus={{ state: 'deterministic', message: 'Deterministic repository intelligence is ready for review.', retryable: false }} prepareEnhancement={prepareEnhancement} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Review proposed files' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare enhanced intelligence' }));
+    expect(prepareEnhancement).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Repository Intelligence artifacts')).toBeInTheDocument();
+
+    rerender(<Harness result={result} providerStatus={{ state: 'fallback', category: 'rate_limited', retryable: true, message: 'Enhanced intelligence is unavailable. Deterministic repository intelligence remains ready for review.' }} prepareEnhancement={prepareEnhancement} />);
+    expect(screen.getByText('Deterministic fallback ready')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry enhanced intelligence' }));
+    expect(prepareEnhancement).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/API key|provider response body/i)).not.toBeInTheDocument();
   });
 
   it('filters artifacts and opens the correct repository-specific detail', () => {

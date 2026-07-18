@@ -119,6 +119,7 @@ export default function RepositoryUniverse3D({
   const rotationPausedRef = useRef(rotationPaused);
   const reducedMotionRef = useRef(reducedMotion);
   const animateInRef = useRef(animateIn);
+  const fullscreenRef = useRef(fullscreen);
   const transformationModeRef = useRef(transformationMode);
   const transformationDomainRef = useRef(transformationDomain);
   const selectedProposalIdRef = useRef(selectedProposalId);
@@ -170,6 +171,10 @@ export default function RepositoryUniverse3D({
     reducedMotionRef.current = reducedMotion;
     if (reducedMotion) setSettled(true);
   }, [reducedMotion]);
+
+  useEffect(() => {
+    fullscreenRef.current = fullscreen;
+  }, [fullscreen]);
 
   useEffect(() => {
     animateInRef.current = animateIn;
@@ -256,7 +261,7 @@ export default function RepositoryUniverse3D({
     const startedAt = performance.now();
 
     renderer.setClearColor(0x050914, 1);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, fullscreen ? 1.5 : 1.35));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, fullscreenRef.current ? 1.5 : 1.35));
 
     scene.add(new THREE.AmbientLight(0x8fb9ff, 1.25));
     const directional = new THREE.DirectionalLight(0xd8f7ff, 1.65);
@@ -518,8 +523,8 @@ export default function RepositoryUniverse3D({
         } else {
           publishCamera({
             ...state,
-            theta: state.theta - dx * (fullscreen ? 0.0042 : 0.0032),
-            phi: Math.max(0.24, Math.min(Math.PI - 0.24, state.phi - dy * (fullscreen ? 0.0042 : 0.0032))),
+            theta: state.theta - dx * (fullscreenRef.current ? 0.0042 : 0.0032),
+            phi: Math.max(0.24, Math.min(Math.PI - 0.24, state.phi - dy * (fullscreenRef.current ? 0.0042 : 0.0032))),
           });
         }
         userInteractedAt = performance.now();
@@ -570,7 +575,7 @@ export default function RepositoryUniverse3D({
 
     const handleWheel = (event: WheelEvent) => {
       const state = cameraStateRef.current;
-      const factor = Math.exp(event.deltaY * (fullscreen ? 0.0009 : 0.00068));
+      const factor = Math.exp(event.deltaY * (fullscreenRef.current ? 0.0009 : 0.00068));
       const nextRadius = Math.max(150, Math.min(1500, state.radius * factor));
       publishCamera({ ...state, radius: nextRadius });
       userInteractedAt = performance.now();
@@ -877,6 +882,8 @@ function colorForNode(node: RepositoryUniverseNode, selected?: boolean, matched?
   return repositoryUniverseNodeBaseColor(node);
 }
 
+// Focused visual-contract tests consume this deterministic helper alongside the renderer.
+// eslint-disable-next-line react-refresh/only-export-components
 export function repositoryUniverseNodeBaseColor(node: Pick<RepositoryUniverseNode, 'clusterId' | 'evidenceType' | 'importance'>) {
   const base = repositoryUniverseNodeClusterToken(node).hex;
   if (node.evidenceType === 'heuristic') return softenClusterColor(base, node.importance === 'background' ? 0.46 : 0.28);
@@ -950,6 +957,8 @@ function labelColorForNode(node: RepositoryUniverseNode) {
   return '#e5f7ff';
 }
 
+// Focused visual-contract tests consume this deterministic helper alongside the renderer.
+// eslint-disable-next-line react-refresh/only-export-components
 export function repositoryUniverseNodeDisplayLabel(node: Pick<RepositoryUniverseNode, 'id' | 'label' | 'path'>) {
   const label = typeof node.label === 'string' ? node.label.trim() : '';
   if (label) return label;

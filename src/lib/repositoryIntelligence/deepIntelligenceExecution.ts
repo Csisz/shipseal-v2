@@ -5,9 +5,14 @@ import type {
   RepositoryDeepIntelligenceExecutionResult,
   RunRepositoryDeepIntelligenceInput,
 } from './deepIntelligenceProvider';
+import { RepositoryDeepIntelligenceProviderError } from './deepIntelligenceProvider';
 import { validateRepositoryDeepIntelligenceResponse } from './deepIntelligenceValidation';
 
 const MAXIMUM_TIMEOUT_MS = 300_000;
+type ProviderOutcome =
+  | { type: 'response'; value: unknown }
+  | { type: 'failure'; error: unknown }
+  | { type: 'cancelled' };
 
 export async function runRepositoryDeepIntelligence({
   provider,
@@ -39,10 +44,12 @@ export async function runRepositoryDeepIntelligence({
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   let cancellationHandler: (() => void) | undefined;
   try {
-    const providerPromise = Promise.resolve()
+    const providerPromise: Promise<ProviderOutcome> = Promise.resolve()
       .then(() => provider.analyze(request, { signal: controller.signal }))
       .then(value => ({ type: 'response' as const, value }))
-      .catch(() => ({ type: controller.signal.aborted ? 'cancelled' as const : 'failure' as const }));
+      .catch((error: unknown) => controller.signal.aborted
+        ? ({ type: 'cancelled' } as const)
+        : ({ type: 'failure', error } as const));
     const timeoutPromise = new Promise<{ type: 'timeout' }>(resolve => {
       timeoutHandle = setTimeout(() => {
         controller.abort();
@@ -59,14 +66,19 @@ export async function runRepositoryDeepIntelligence({
     const outcome = await Promise.race([providerPromise, timeoutPromise, cancellationPromise]);
     if (outcome.type === 'timeout') return failure('timeout', 'timeout', 'Deep-intelligence provider exceeded the bounded timeout.');
     if (outcome.type === 'cancelled') return failure('cancelled', 'cancelled', 'Deep-intelligence execution was cancelled.');
-    if (outcome.type === 'failure') return failure('provider-failure', 'provider-failure', 'Deep-intelligence provider failed without exposing provider error details.');
+    if (outcome.type === 'failure') {
+      if (outcome.error instanceof RepositoryDeepIntelligenceProviderError) {
+        return failure('provider-failure', outcome.error.code, outcome.error.message, outcome.error.retryable);
+      }
+      return failure('provider-failure', 'unknown_provider_error', 'Deep-intelligence provider failed without exposing provider error details.');
+    }
     const validation = validateRepositoryDeepIntelligenceResponse({
       request,
       rawResponse: outcome.value,
       expectedProviderId: provider.providerId,
       policy,
     });
-    if (!validation.success) return { status: 'invalid-response', error: validation.error };
+    if ('error' in validation) return { status: 'invalid-response', error: validation.error };
     return { status: 'completed', result: validation.result };
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
@@ -79,6 +91,7 @@ function failure(
   status: RepositoryDeepIntelligenceExecutionResult['status'],
   code: string,
   message: string,
+  retryable = false,
 ): RepositoryDeepIntelligenceExecutionResult {
-  return { status, error: { code, message } };
+  return { status, error: { code, message, retryable } };
 }

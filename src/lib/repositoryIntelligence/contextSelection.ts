@@ -186,7 +186,7 @@ const SUPPORTING_RELATIONSHIP_TYPES = new Set<RepositoryRelationship['type']>([
   'imports', 'exports-through', 'tests', 'entry-point-loads',
 ]);
 const LOCKFILE_RE = /(^|\/)(?:package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|deno\.lock)$/i;
-const ENV_TEMPLATE_RE = /(^|\/)\.env\.(?:example|sample|template)$/i;
+const ENV_TEMPLATE_RE = /(^|\/)\.env(?:\.[^/]+)?\.(?:example|sample|template)$/i;
 const SECRET_ENV_RE = /(^|\/)\.env(?:\.(?!example$|sample$|template$)[^/]+)?$/i;
 const PRIVATE_KEY_RE = /(^|\/)(?:id_rsa|id_dsa|id_ecdsa|id_ed25519|.*\.(?:pem|p12|pfx|key|crt|cer))$/i;
 const CREDENTIAL_PATH_RE = /(^|\/)(?:credentials?|secrets?|tokens?)(?:\.[^/]+)?$/i;

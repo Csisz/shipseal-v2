@@ -16,6 +16,7 @@ import {
   type RepositoryIntelligenceEvidenceModel,
 } from '@/lib/repositoryIntelligence';
 import type { RepoFileSummary, RepoScanInput } from '@/lib/types';
+import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
 
 function artifactFixture(extra: Record<string, string> = {}): RepoScanInput {
   const textContents: Record<string, string> = {
@@ -37,6 +38,7 @@ function artifactFixture(extra: Record<string, string> = {}): RepoScanInput {
     'src/App.test.tsx': "import App from './App'; export const subject = App;",
     'src/misc/largeUnknown.ts': `const payload = '${'x'.repeat(10_000)}';`,
     '.env': 'API_KEY=never-include-artifact-secret',
+    '.env.example': 'API_URL=https://example.invalid\nAPI_TOKEN=placeholder-only',
     ...extra,
   };
   const generated = ['dist/assets/app.js', 'node_modules/pkg/index.js'];
@@ -288,10 +290,73 @@ describe('repository-specific artifact content', () => {
 
   it('derives context guidance from selected and generated areas without token-saving claims', () => {
     const result = build();
-    const context = result.set.artifacts.find(item => item.category === 'context-guidance')!.content;
+    const contextArtifact = result.set.artifacts.find(item => item.category === 'context-guidance')!;
+    const context = contextArtifact.content;
+    const envStatement = result.plan.artifacts.find(item => item.category === 'context-guidance')!.statements
+      .find(item => item.referencedPaths.includes('.env.example'))!;
     expect(context).toContain('src/main.tsx');
     expect(context).toMatch(/dist|node_modules/);
+    expect(context).not.toContain('selected for .');
     expect(context).not.toMatch(/save[s]? \d+ tokens|guaranteed performance/i);
+    expect(context).toContain('Review `.env.example` when changing environment configuration or local setup requirements.');
+    expect(context).not.toContain('placeholder-only');
+    expect(envStatement.type).toBe('instruction');
+    expect(envStatement.supportingEvidenceIds.length).toBeGreaterThan(0);
+  });
+
+  it('keeps provider-only fallback selection out of positive user-facing loading rules', () => {
+    const prepared = inputs();
+    const contextBundle = structuredClone(prepared.contextBundle);
+    const main = contextBundle.items.find(item => item.path === 'src/main.tsx')!;
+    main.selectionReasons = ['coverage-fallback'];
+    const plan = planRepositoryIntelligenceArtifacts({ ...prepared, contextBundle });
+    const guidance = plan.artifacts.find(item => item.category === 'context-guidance')!;
+    const mainStatements = guidance.statements.filter(item => item.referencedPaths.includes('src/main.tsx'));
+
+    expect(mainStatements.some(item => item.type === 'context-loading-rule')).toBe(false);
+    expect(mainStatements.some(item => item.type === 'limitation' && item.content.text.includes('insufficient'))).toBe(true);
+  });
+
+  it('keeps an explicitly selected unknown file visible only as a provenance-linked limitation', () => {
+    const scanInput = artifactFixture();
+    const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);
+    const contextBundle = prepareRepositoryIntelligenceContext({
+      scanInput,
+      evidenceResult,
+      policy: { explicitPriorityPaths: ['src/misc/largeUnknown.ts'], maximumSelectedFiles: 14, maximumSupportingFiles: 2 },
+    });
+    const plan = planRepositoryIntelligenceArtifacts({ scanInput, evidenceResult, contextBundle });
+    const statement = plan.artifacts.find(item => item.category === 'context-guidance')!.statements
+      .find(item => item.referencedPaths.includes('src/misc/largeUnknown.ts'))!;
+
+    expect(statement.type).toBe('limitation');
+    expect(statement.content.text).toMatch(/insufficient/i);
+    expect(statement.supportingEvidenceIds.length).toBeGreaterThan(0);
+  });
+
+  it('renders near-tied folder responsibilities as mixed instead of claiming singular primacy', () => {
+    const scanInput = artifactFixture({
+      'src/mixed/main.tsx': 'export function bootstrap() { return true; }',
+      'src/mixed/main.test.ts': "import { bootstrap } from './main'; export const subject = bootstrap;",
+      'src/mixed/main.integration.test.ts': "import { bootstrap } from './main'; export const integrationSubject = bootstrap;",
+      'src/mixed/main.browser.test.ts': "import { bootstrap } from './main'; export const browserSubject = bootstrap;",
+      'src/mixed/main.unit.test.ts': "import { bootstrap } from './main'; export const unitSubject = bootstrap;",
+    });
+    const prepared = inputs(scanInput);
+    const plan = planRepositoryIntelligenceArtifacts({ ...prepared, policy: { maximumFolderAgentArtifacts: 12 } });
+    const mixed = plan.artifacts.find(item => item.targetPath === 'src/mixed/AGENTS.md')!;
+
+    expect(mixed.statements[0].content.text).toMatch(/mixed responsibilities/i);
+    expect(mixed.statements[0].content.text).not.toMatch(/primarily|mainly|mostly/i);
+  });
+
+  it('describes the sample source folder with weighted evidence instead of raw-count primacy', () => {
+    const result = build(SAMPLE_PROJECT_REPO_INPUT);
+    const sourceInstructions = result.set.artifacts.find(item => item.targetPath === 'src/AGENTS.md')?.content || '';
+
+    expect(sourceInstructions).not.toMatch(/primarily (?:associated with|contains)/i);
+    expect(sourceInstructions).toMatch(/led by|mixed responsibilities/i);
+    expect(sourceInstructions).toMatch(/application entry point|UI component|test/i);
   });
 });
 

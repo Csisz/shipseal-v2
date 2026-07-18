@@ -42,7 +42,7 @@ export default function Privacy() {
           <PrivacyCard
             icon={<ShieldCheck className="h-5 w-5" />}
             title="Short-lived processing"
-            text="This MVP does not add backend storage for uploaded repositories or generated packs. Browser/session data can be cleared by the user."
+            text="Anonymous scans remain local/session based. If you explicitly save a project, ShipSeal stores derived intelligence, safe repository metadata, and validated artifact outputs—not the ZIP archive or full source repository by default."
           />
         </div>
 
@@ -53,6 +53,9 @@ export default function Privacy() {
             <li>You choose the selected package before generating client reports or Delivery Pack files.</li>
             <li>You review generated files before using them in a client handoff or repository PR.</li>
             <li>Do not upload real secrets if you can avoid it. Use env examples or redacted values for review.</li>
+            <li>Saved projects are private by default. You can delete individual scans, whole projects, or your ShipSeal account data.</li>
+            <li>Opening saved history does not rescan the repository, call an AI provider, or mutate GitHub.</li>
+            <li>Live records are deleted through ShipSeal; encrypted managed-database backups may retain data for the infrastructure provider's documented backup window.</li>
           </ul>
         </div>
       </section>

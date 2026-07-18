@@ -44,4 +44,6 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 );
 Button.displayName = "Button";
 
+// Shared variant metadata is intentionally colocated with the shadcn component it styles.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants };

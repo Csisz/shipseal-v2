@@ -9,6 +9,7 @@ import {
   type BuildRepositoryIntelligenceArtifactReviewResult,
   type RepositoryIntelligenceArtifactReview,
   type RepositoryIntelligenceArtifactReviewItem,
+  type RepositoryIntelligenceProviderStatus,
   type RepositoryIntelligenceReviewSelectionAction,
   type RepositoryIntelligenceVerificationBaseline,
 } from '@/lib/repositoryIntelligence';
@@ -24,6 +25,8 @@ export function RepositoryIntelligenceReviewPanel({
   error,
   enabled = true,
   prepareSession,
+  providerStatus,
+  prepareEnhancement,
   githubConnection,
   onVerificationBaseline,
 }: {
@@ -32,6 +35,8 @@ export function RepositoryIntelligenceReviewPanel({
   error?: string | null;
   enabled?: boolean;
   prepareSession?: () => Promise<RepositoryIntelligenceReviewUiSession>;
+  providerStatus?: RepositoryIntelligenceProviderStatus;
+  prepareEnhancement?: () => Promise<void>;
   githubConnection?: GitHubConnectionState;
   onVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void;
 }) {
@@ -67,15 +72,17 @@ export function RepositoryIntelligenceReviewPanel({
   if (!effectiveSession) {
     return <RepositoryIntelligenceUnavailable text={`${error || localError || 'Repository Intelligence artifact review is unavailable because validated in-memory review data is not present in this session.'} Run a complete scan and review scanner limitations before retrying.`} />;
   }
-  return <RepositoryIntelligenceReviewStatefulSurface key={effectiveSession.review.fingerprint} session={effectiveSession} githubConnection={githubConnection || createZipUploadConnection()} onVerificationBaseline={onVerificationBaseline} />;
+  return <RepositoryIntelligenceReviewStatefulSurface key={effectiveSession.review.fingerprint} session={effectiveSession} githubConnection={githubConnection || createZipUploadConnection()} providerStatus={providerStatus} prepareEnhancement={prepareEnhancement} onVerificationBaseline={onVerificationBaseline} />;
 }
 
-function RepositoryIntelligenceReviewStatefulSurface({ session, githubConnection, onVerificationBaseline }: { session: RepositoryIntelligenceReviewUiSession; githubConnection: GitHubConnectionState; onVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void }) {
+function RepositoryIntelligenceReviewStatefulSurface({ session, githubConnection, providerStatus, prepareEnhancement, onVerificationBaseline }: { session: RepositoryIntelligenceReviewUiSession; githubConnection: GitHubConnectionState; providerStatus?: RepositoryIntelligenceProviderStatus; prepareEnhancement?: () => Promise<void>; onVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void }) {
   const [review, setReview] = useState(session.review);
   return (
     <RepositoryIntelligenceReviewSurface
       artifactSet={session.artifactSet}
       review={review}
+      providerStatus={providerStatus}
+      prepareEnhancement={prepareEnhancement}
       onReviewChange={setReview}
       githubConnection={githubConnection}
       onVerificationBaseline={onVerificationBaseline}
@@ -86,12 +93,16 @@ function RepositoryIntelligenceReviewStatefulSurface({ session, githubConnection
 export function RepositoryIntelligenceReviewSurface({
   artifactSet,
   review,
+  providerStatus,
+  prepareEnhancement,
   onReviewChange,
   githubConnection,
   onVerificationBaseline,
 }: {
   artifactSet: BuildRepositoryIntelligenceArtifactReviewResult['artifactSet'];
   review: RepositoryIntelligenceArtifactReview;
+  providerStatus?: RepositoryIntelligenceProviderStatus;
+  prepareEnhancement?: () => Promise<void>;
   onReviewChange: (review: RepositoryIntelligenceArtifactReview) => void;
   githubConnection?: GitHubConnectionState;
   onVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void;
@@ -142,6 +153,7 @@ export function RepositoryIntelligenceReviewSurface({
 
       {!open ? null : (
         <div className="mt-5 space-y-4">
+          {providerStatus && <RepositoryIntelligenceProviderDisclosure status={providerStatus} onPrepare={prepareEnhancement} />}
           <RepositoryIntelligenceSelectionSummary review={review} valid={applyValidation.valid} issues={applyValidation.issues.map(issue => issue.message)} />
           <RepositoryIntelligencePrApply artifactSet={artifactSet} review={review} connection={githubConnection || createZipUploadConnection()} onVerificationBaseline={onVerificationBaseline} />
 
@@ -196,6 +208,28 @@ export function RepositoryIntelligenceReviewSurface({
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function RepositoryIntelligenceProviderDisclosure({ status, onPrepare }: { status: RepositoryIntelligenceProviderStatus; onPrepare?: () => Promise<void> }) {
+  const enhanced = status.state === 'enhanced';
+  const preparing = status.state === 'preparing';
+  const fallback = status.state === 'fallback' || status.state === 'cancelled';
+  return (
+    <section className={`rounded-2xl border p-4 ${enhanced ? 'border-success/35 bg-success/5' : fallback ? 'border-warning/35 bg-warning/5' : 'border-primary/25 bg-primary/5'}`} aria-live="polite" aria-busy={preparing}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Intelligence source</div>
+          <div className="mt-1 text-sm font-semibold text-foreground">{enhanced ? 'Enhanced intelligence validated' : fallback ? 'Deterministic fallback ready' : preparing ? 'Preparing optional enhanced intelligence' : 'Deterministic intelligence ready'}</div>
+          <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">{status.message} Deterministic repository evidence remains authoritative.</p>
+        </div>
+        {onPrepare && !enhanced && !preparing && (!fallback || status.retryable) && (
+          <Button type="button" size="sm" variant="outline" onClick={() => void onPrepare()}>
+            {fallback ? 'Retry enhanced intelligence' : 'Prepare enhanced intelligence'}
+          </Button>
+        )}
+      </div>
     </section>
   );
 }

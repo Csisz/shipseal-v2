@@ -11,6 +11,7 @@ import { downloadClientReportPdf, generateClientReportHtml } from '@/lib/report'
 import { toast } from '@/hooks/use-toast';
 import { DEFAULT_AGENT_OPERATING_MODE, buildAgentOperatingModeSummary, resolveAgentOperatingMode } from '@/lib/agentOperatingMode';
 import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
+import { useState } from 'react';
 
 interface Props {
   report: ReadinessReport;
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export function DeliveryPackPreview({ report, agentFiles = report.agentPack, intake, intakeSkipped = false, selectedPackages = [], agentOperatingMode }: Props) {
+  const [preparingExport, setPreparingExport] = useState<'pdf' | 'html' | 'delivery-pack' | null>(null);
   const normalizedIntake = normalizeProjectIntake(intake, report.repoName);
   const resolvedAgentMode = resolveAgentOperatingMode(agentOperatingMode || report.recommendedAgentOperatingMode || DEFAULT_AGENT_OPERATING_MODE);
   const agentModeSummary = buildAgentOperatingModeSummary(resolvedAgentMode);
@@ -40,6 +42,21 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
   const aiActStatus = aiActStatusText(normalizedIntake);
   const testingStatus = testingStatusText(report);
   const clientHandoffStatus = clientHandoffStatusText(normalizedIntake);
+  const runExport = async (kind: 'pdf' | 'html' | 'delivery-pack', action: () => void | Promise<void>) => {
+    if (preparingExport) return;
+    setPreparingExport(kind);
+    try {
+      await action();
+    } catch {
+      toast({
+        title: 'Export preparation failed',
+        description: 'ShipSeal could not prepare this export. Retry or use another available format.',
+        variant: 'destructive',
+      });
+    } finally {
+      setPreparingExport(null);
+    }
+  };
 
   return (
     <div className="glass rounded-2xl p-6 mb-8">
@@ -55,13 +72,17 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
         </div>
         <div className="flex flex-col sm:flex-row lg:flex-col gap-2">
           <Button
-            onClick={() => downloadPdfReport(report, normalizedIntake, scoreJson)}
+            onClick={() => void runExport('pdf', () => downloadPdfReport(report, normalizedIntake, scoreJson))}
+            disabled={preparingExport !== null}
+            aria-busy={preparingExport === 'pdf'}
             className="bg-gradient-primary border-0 shadow-glow hover:opacity-90"
           >
             <Download className="h-4 w-4 mr-2" /> Download PDF report
           </Button>
           <Button
-            onClick={() => openPrintReadyReport(report, normalizedIntake, scoreJson)}
+            onClick={() => void runExport('html', () => openPrintReadyReport(report, normalizedIntake, scoreJson))}
+            disabled={preparingExport !== null}
+            aria-busy={preparingExport === 'html'}
             variant="outline"
             className="border-border/80"
           >
@@ -71,7 +92,7 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
             PDF uses the standalone client report. If PDF generation fails, open the HTML report and use Print / Save as PDF.
           </p>
           <Button
-            onClick={() => downloadAgentPackZip(
+            onClick={() => void runExport('delivery-pack', () => downloadAgentPackZip(
               report.repoName,
               agentFiles,
               report.mcpReadiness.generatedFiles,
@@ -80,11 +101,14 @@ export function DeliveryPackPreview({ report, agentFiles = report.agentPack, int
               normalizedIntake,
               selectedPackages,
               report.repositoryHealth
-            )}
+            ))}
+            disabled={preparingExport !== null}
+            aria-busy={preparingExport === 'delivery-pack'}
             className="bg-gradient-primary border-0 shadow-glow hover:opacity-90"
           >
             <Download className="h-4 w-4 mr-2" /> Download ShipSeal Delivery Pack
           </Button>
+          {preparingExport && <div role="status" aria-live="polite" className="text-xs text-muted-foreground">Preparing {preparingExport === 'delivery-pack' ? 'Delivery Pack' : preparingExport.toUpperCase()}…</div>}
         </div>
       </div>
 

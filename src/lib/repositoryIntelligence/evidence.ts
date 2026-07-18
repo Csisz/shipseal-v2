@@ -173,9 +173,11 @@ export interface FileResponsibilityRecord {
 
 export interface FolderResponsibilityRecord {
   path: string;
+  aggregationState: 'dominant' | 'mixed' | 'insufficient-evidence';
   dominantResponsibilities: Array<{
     responsibility: RepositoryResponsibility;
     fileCount: number;
+    significanceScore: number;
   }>;
   importantChildFiles: string[];
   hasTests: boolean;

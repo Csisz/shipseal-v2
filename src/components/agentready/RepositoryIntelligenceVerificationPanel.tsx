@@ -103,9 +103,9 @@ export function RepositoryIntelligenceVerificationSummary({ baseline, result, cu
           <p className="mt-2 max-w-3xl text-sm text-foreground">{overallDescription(result.overallState)}</p>
           <p className="mt-1 text-xs text-muted-foreground">{lifecycleDescription(result.lifecycle)}</p>
         </div>
-        <div className="text-right text-xs text-muted-foreground">
+        <div aria-label="Repository and branch identity" className="w-full min-w-0 text-left text-xs text-muted-foreground sm:w-auto sm:text-right">
           <div className="break-all">{currentRepository || `${baseline.repository.owner}/${baseline.repository.repo}`}</div>
-          <div className="break-all">Scanned branch: {currentBranch || 'not available'} · PR branch: {baseline.prBranch}</div>
+          <div className="break-words">Scanned branch: {currentBranch || 'not available'} · PR branch: {baseline.prBranch}</div>
           <div>Plan: {shortFingerprint(baseline.selectedPlanFingerprint)}</div>
           <div>{scanLimited ? 'Limited scan scope' : 'Complete scanner scope reported'}</div>
         </div>

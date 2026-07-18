@@ -194,6 +194,23 @@ describe('Repository Intelligence verification experience', () => {
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('keeps repository and branch identity readable below the status on narrow screens', () => {
+    const verification = result();
+    const saved = baseline();
+    saved.repository = { owner: 'acme-with-a-long-organization-name', repo: 'repository-with-a-long-name' };
+    const longBranch = 'shipseal/repository-intelligence/a-very-long-compatible-branch-name';
+    render(<RepositoryIntelligenceVerificationSummary baseline={saved} result={verification} currentBranch={longBranch} />);
+    const identity = screen.getByLabelText('Repository and branch identity');
+
+    expect(identity.className).toContain('w-full');
+    expect(identity.className).toContain('min-w-0');
+    expect(identity.className).toContain('text-left');
+    expect(identity.className).toContain('sm:w-auto');
+    expect(identity.className).toContain('sm:text-right');
+    expect(identity).toHaveTextContent(longBranch);
+    expect(identity.querySelectorAll('div')[1].className).toContain('break-words');
+  });
+
   it('shows safe empty, awaiting and failed states without raw errors or repository mutation actions', () => {
     const { rerender } = render(<RepositoryIntelligenceVerificationPanel />);
     expect(screen.getByText('No Repository Intelligence verification baseline')).toBeInTheDocument();

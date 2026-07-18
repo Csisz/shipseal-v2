@@ -7,7 +7,7 @@ import Security from '@/pages/Security';
 describe('Trust pages', () => {
   it('renders the Privacy page with clear processing and control language', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Privacy />
       </MemoryRouter>
     );
@@ -23,7 +23,7 @@ describe('Trust pages', () => {
 
   it('renders the Security page with scan boundaries and GitHub permission language', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <Security />
       </MemoryRouter>
     );

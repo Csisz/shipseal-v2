@@ -32,6 +32,16 @@ type PendingSource =
   | { type: 'github-app'; url: string; branch?: string; projectName: string; connection: GitHubConnectionState; isPrivate?: boolean };
 
 const ResultDashboard = lazy(() => import('@/components/agentready/ResultDashboard').then(module => ({ default: module.ResultDashboard })));
+const SaveProjectControl = lazy(() => import('@/components/account/SaveProjectControl').then(module => ({ default: module.SaveProjectControl })));
+const RepositoryIntelligenceVerificationQa = import.meta.env.DEV
+  ? lazy(() => import('@/dev/RepositoryIntelligenceVerificationQa'))
+  : null;
+const PostScanOverviewQa = import.meta.env.DEV
+  ? lazy(() => import('@/dev/PostScanOverviewQa'))
+  : null;
+const PostScanChaptersQa = import.meta.env.DEV
+  ? lazy(() => import('@/dev/PostScanChaptersQa'))
+  : null;
 const GITHUB_INSTALLATION_STORAGE_KEY = 'shipseal.githubInstallationId';
 
 function scrollWindowToTop(behavior: ScrollBehavior) {
@@ -455,6 +465,18 @@ const Index = () => {
     setHistory([]);
   }, []);
 
+  if (RepositoryIntelligenceVerificationQa && new URLSearchParams(window.location.search).get('omega16Qa') === 'verification') {
+    return <Suspense fallback={<div className="min-h-screen bg-background p-8 text-muted-foreground">Loading verification fixture...</div>}><RepositoryIntelligenceVerificationQa /></Suspense>;
+  }
+
+  if (PostScanOverviewQa && new URLSearchParams(window.location.search).get('omega17Qa') === 'overview') {
+    return <Suspense fallback={<div className="min-h-screen bg-background p-8 text-muted-foreground">Loading overview fixture...</div>}><PostScanOverviewQa /></Suspense>;
+  }
+
+  if (PostScanChaptersQa && new URLSearchParams(window.location.search).get('omega17Qa') === 'chapters') {
+    return <Suspense fallback={<div className="min-h-screen bg-background p-8 text-muted-foreground">Loading chapter fixture...</div>}><PostScanChaptersQa /></Suspense>;
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       {!showIntelligenceReveal && <Nav onNavigateAnchor={handleNavAnchor} onHome={handleHome} />}
@@ -470,6 +492,8 @@ const Index = () => {
               repositoryIntelligenceReviewPreparing={sampleReport ? false : scan.repositoryIntelligenceReviewPreparing}
               repositoryIntelligenceReviewError={sampleReport ? null : scan.repositoryIntelligenceReviewError}
               prepareRepositoryIntelligenceReview={sampleReport ? prepareSampleRepositoryIntelligenceReview : undefined}
+              repositoryIntelligenceProviderStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus}
+              prepareRepositoryIntelligenceEnhancement={sampleReport ? undefined : scan.prepareRepositoryIntelligenceEnhancement}
               history={history}
               onReset={reset}
               onClearHistory={handleClearHistory}
@@ -491,6 +515,7 @@ const Index = () => {
               onSaveRepositoryIntelligenceVerificationBaseline={setRepositoryIntelligenceVerificationBaseline}
               onDiscardRepositoryIntelligenceVerificationBaseline={() => setRepositoryIntelligenceVerificationBaseline(null)}
               onRescanRepositoryIntelligence={pendingSource?.type === 'github' || pendingSource?.type === 'github-app' ? rescanRepositoryIntelligence : undefined}
+              persistenceControl={<Suspense fallback={<div className="text-xs text-muted-foreground">Preparing private save…</div>}><SaveProjectControl report={activeReport} providerStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus} /></Suspense>}
             />
           </Suspense>
         </main>

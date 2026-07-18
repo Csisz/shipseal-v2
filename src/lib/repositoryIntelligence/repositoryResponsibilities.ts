@@ -30,6 +30,7 @@ const FIXTURE_RE = /(^|\/)(?:fixtures?|__fixtures__)(\/|$)/i;
 const BUILD_CONFIG_RE = /(^|\/)(?:vite|next|webpack|rollup|esbuild|babel|postcss|tailwind)\.config\.[cm]?[jt]s$/i;
 const TEST_CONFIG_RE = /(^|\/)(?:vitest|jest|playwright|cypress)\.config\.[cm]?[jt]s$/i;
 const CONFIG_RE = /(^|\/)(?:package\.json|tsconfig(?:\.[^/]+)?\.json|jsconfig\.json|eslint\.config\.[cm]?[jt]s|\.eslintrc(?:\.[^/]+)?|\.gitignore)$/i;
+const ENV_TEMPLATE_RE = /(^|\/)\.env(?:\.[^/]+)?\.(?:example|sample|template)$/i;
 const AGENT_INSTRUCTION_RE = /(^|\/)(?:AGENTS\.md|CLAUDE\.md|CODEX\.md|\.cursorrules|\.cursor\/rules(?:\/.*)?)$/i;
 const SECRET_ASSIGNMENT_RE = /(?:api[_-]?key|token|secret|password|private[_-]?key)\s*[:=]/i;
 const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts', '.mjs', '.cjs'] as const;
@@ -352,6 +353,7 @@ function classifyResponsibility(
   if (TEST_RE.test(path) || FIXTURE_RE.test(path)) return classification('test-or-fixture', 1, `${path} matches an explicit test or fixture path convention.`);
   if (TEST_CONFIG_RE.test(path)) return classification('test-configuration', 1, `${path} is a recognized JavaScript/TypeScript test configuration file.`);
   if (BUILD_CONFIG_RE.test(path)) return classification('build-configuration', 1, `${path} is a recognized build or framework configuration file.`);
+  if (ENV_TEMPLATE_RE.test(path)) return classification('configuration', 1, `${path} is a placeholder-only environment configuration reference for repository setup.`);
   if (CONFIG_RE.test(path)) return classification('configuration', 1, `${path} is a recognized repository configuration file.`);
 
   if (next && /(^|\/)app\/api\/.+\/route\.[cm]?[jt]sx?$/.test(lower)) {
@@ -631,22 +633,43 @@ function aggregateFolders(
     }
   }
 
+  const relationshipDegreeByPath = new Map<string, number>();
+  for (const relationship of relationships) {
+    relationshipDegreeByPath.set(relationship.sourcePath, (relationshipDegreeByPath.get(relationship.sourcePath) || 0) + 1);
+    relationshipDegreeByPath.set(relationship.targetPath, (relationshipDegreeByPath.get(relationship.targetPath) || 0) + 1);
+  }
+
   return [...folderPaths].sort().map(folder => {
     const children = folderFiles.get(folder) || [];
     const usable = children.filter(file => file.extractionState !== 'excluded' && file.primaryResponsibility !== 'unknown-or-insufficient-evidence');
-    const counts = new Map<RepositoryResponsibility, number>();
-    for (const file of usable) counts.set(file.primaryResponsibility, (counts.get(file.primaryResponsibility) || 0) + 1);
-    const dominantResponsibilities = [...counts.entries()]
-      .map(([responsibility, fileCount]) => ({ responsibility, fileCount }))
-      .sort((left, right) => right.fileCount - left.fileCount || left.responsibility.localeCompare(right.responsibility))
+    const grouped = new Map<RepositoryResponsibility, { fileCount: number; significanceScore: number; confidenceTotal: number }>();
+    for (const file of usable) {
+      const current = grouped.get(file.primaryResponsibility) || { fileCount: 0, significanceScore: 0, confidenceTotal: 0 };
+      const relationshipCount = relationshipDegreeByPath.get(file.path) || 0;
+      current.fileCount += 1;
+      current.confidenceTotal += file.confidence;
+      current.significanceScore += folderResponsibilityWeight(file.primaryResponsibility) * file.confidence + Math.min(12, relationshipCount * 3);
+      grouped.set(file.primaryResponsibility, current);
+    }
+    const dominantResponsibilities = [...grouped.entries()]
+      .map(([responsibility, value]) => ({ responsibility, fileCount: value.fileCount, significanceScore: round(value.significanceScore) }))
+      .sort((left, right) => right.significanceScore - left.significanceScore || right.fileCount - left.fileCount || left.responsibility.localeCompare(right.responsibility))
       .slice(0, 3);
     const allGenerated = children.length > 0 && children.every(file => file.primaryResponsibility === 'generated-or-vendor-content');
     const limitations: string[] = [];
     if (!children.length) limitations.push('No supported child file evidence was available for this folder.');
     if (children.length && !usable.length && !allGenerated) limitations.push('Child files did not provide sufficient responsibility evidence.');
-    if (dominantResponsibilities.length > 1 && dominantResponsibilities[0].fileCount === dominantResponsibilities[1].fileCount) {
-      limitations.push('The folder has mixed responsibilities with no single deterministic dominant responsibility.');
-    }
+    const strongest = dominantResponsibilities[0];
+    const runnerUp = dominantResponsibilities[1];
+    const strongestGroup = strongest ? grouped.get(strongest.responsibility) : undefined;
+    const strongestAverageConfidence = strongestGroup ? strongestGroup.confidenceTotal / strongestGroup.fileCount : 0;
+    const aggregationState: FolderResponsibilityRecord['aggregationState'] = !strongest || strongestAverageConfidence < 0.75
+      ? 'insufficient-evidence'
+      : runnerUp && strongest.significanceScore < runnerUp.significanceScore * 1.5
+        ? 'mixed'
+        : 'dominant';
+    if (aggregationState === 'mixed') limitations.push('The folder has mixed materially important responsibilities under the deterministic folder-dominance policy.');
+    if (aggregationState === 'insufficient-evidence' && usable.length) limitations.push('Child evidence confidence was insufficient to establish a dominant folder responsibility.');
     const prioritizedChildren = [...usable]
       .filter(file => file.safeToPrioritizeForDeepAnalysis)
       .sort((left, right) => right.confidence - left.confidence || left.path.localeCompare(right.path));
@@ -656,6 +679,7 @@ function aggregateFolders(
     const confidence = usable.length ? round(usable.reduce((total, file) => total + file.confidence, 0) / usable.length) : allGenerated ? 1 : 0;
     return {
       path: folder,
+      aggregationState,
       dominantResponsibilities,
       importantChildFiles: prioritizedChildren.slice(0, 8).map(file => file.path),
       hasTests: children.some(file => file.primaryResponsibility === 'test-or-fixture'),
@@ -669,6 +693,34 @@ function aggregateFolders(
       limitations: sortedUnique(limitations),
     };
   });
+}
+
+function folderResponsibilityWeight(responsibility: RepositoryResponsibility) {
+  const weights: Partial<Record<RepositoryResponsibility, number>> = {
+    'application-entry-point': 100,
+    'framework-bootstrap': 95,
+    'ai-agent-instruction': 90,
+    'api-route-or-request-handler': 85,
+    'route-or-page': 75,
+    layout: 75,
+    'authentication-or-authorization-area': 70,
+    'build-configuration': 65,
+    'test-configuration': 65,
+    'state-management': 65,
+    'repository-or-data-access-layer': 60,
+    configuration: 60,
+    service: 55,
+    'schema-or-model': 50,
+    validation: 50,
+    'ui-component': 45,
+    hook: 45,
+    integration: 45,
+    'export-barrel': 40,
+    documentation: 40,
+    'test-or-fixture': 25,
+    utility: 20,
+  };
+  return weights[responsibility] || 0;
 }
 
 function resolveLocalModule(sourcePath: string, specifier: string, paths: Set<string>): string | null {
@@ -780,7 +832,7 @@ function sourceTypeFor(path: string): RepositoryEvidenceSourceType {
   if (TEST_RE.test(path) || FIXTURE_RE.test(path)) return 'test-source';
   if (AGENT_INSTRUCTION_RE.test(path) || isDocumentationPath(path)) return 'documentation';
   if (path.includes('.github/workflows/')) return 'ci-config';
-  if (BUILD_CONFIG_RE.test(path) || TEST_CONFIG_RE.test(path) || CONFIG_RE.test(path)) return 'config';
+  if (BUILD_CONFIG_RE.test(path) || TEST_CONFIG_RE.test(path) || CONFIG_RE.test(path) || ENV_TEMPLATE_RE.test(path)) return 'config';
   if (JS_TS_RE.test(path)) return 'source';
   return 'file-inventory';
 }

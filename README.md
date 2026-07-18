@@ -20,11 +20,13 @@ ShipSeal analyzes repository structure and metadata. It does not execute uploade
 - Folder-level `AGENTS.md` recommendations.
 - Specialized Context Packs for agent development, handoff, security/data review, testing, MCP readiness, and refactor work.
 - Skill and MCP recommendations.
+- Optional server-side enhanced Repository Intelligence with a complete deterministic fallback.
 - ShipSeal Delivery Pack export.
 - MCP governance outputs.
 - Sanitized repo context preview/export.
 - Full ZIP export with manifest-based Delivery Pack folders.
 - Metadata-only recent scan history.
+- Optional private account-backed projects and durable scan history after an explicit Save project action.
 
 ## Run Locally
 
@@ -35,7 +37,9 @@ npm run dev
 
 Vite defaults to port `8080`. If that port is busy, Vite may choose another port.
 
-Use `npm run dev` for frontend-only local development. Use `vercel dev` when you also need the Vercel API routes such as `/api/github-archive`, `/api/create-readiness-pr`, `/api/github-app/repositories`, `/api/github-app/archive`, `/api/github-app/create-readiness-pr`, and the legacy `/api/audit-request` contact endpoint.
+Use `npm run dev` for frontend-only local development. Use `vercel dev` when you also need the Vercel API routes such as `/api/repository-intelligence`, `/api/github-archive`, `/api/create-readiness-pr`, `/api/github-app/repositories`, `/api/github-app/archive`, `/api/github-app/create-readiness-pr`, and the legacy `/api/audit-request` contact endpoint.
+
+Omega 18.1 durable projects use dedicated GitHub OAuth identity and PostgreSQL. Configure the server-only account variables from `.env.example`, apply `npm run db:migrate`, then use `vercel dev`. Anonymous ZIP/public scans remain available without an account. Sign-in is requested only when saving or opening private history, and opening a saved scan does not rescan, call the provider, or mutate GitHub. See [Account and Project Persistence Architecture](docs/implementation/ACCOUNT_PERSISTENCE_ARCHITECTURE.md).
 
 If `vercel dev` shows a white page with console errors such as `GET /src/main.tsx 404`, `GET /@vite/client 404`, or `GET /@react-refresh 404`, the Vercel/Vite dev configuration is broken. `vercel.json` must use the Vite framework preset and `devCommand: "vite --host 0.0.0.0 --port $PORT"` so Vercel dev can pass its proxy port to the Vite dev server instead of serving the root `index.html` as a static file.
 
@@ -293,6 +297,8 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 - `src/lib/scanner.ts`: JSZip-based metadata scanner.
 - `src/lib/scoring.ts`: deterministic readiness scoring.
 - `src/lib/ai/`: local deterministic AI provider boundary.
+- `src/lib/repositoryIntelligence/`: deterministic evidence, bounded context, validated provider-neutral intelligence, artifact review/apply and verification.
+- `api/repository-intelligence.ts`: optional server-only enhanced-intelligence route; credentials never enter the browser.
 - `src/lib/agentPack.ts`: Agent Pack generation.
 - `src/lib/mcpReadiness.ts`: MCP readiness and governance pack generation.
 - `src/lib/repoContextPack.ts`: sanitized Repo Context Pack generation.
@@ -326,7 +332,7 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 - No database or authentication.
 - No payments.
 - Private repository access requires a configured GitHub App and server-side credentials; there is no persistent account/session model, webhook hardening, or stored repository history yet.
-- No external AI API calls.
+- Optional external intelligence is disabled by default, requires explicit server-only configuration and never replaces deterministic evidence or fallback.
 - No browser API keys.
 - Scan cancellation is best-effort while JSZip work is in progress.
 - Main readiness and MCP readiness are heuristic and deterministic.

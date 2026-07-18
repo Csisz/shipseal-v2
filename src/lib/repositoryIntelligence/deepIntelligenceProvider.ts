@@ -15,6 +15,27 @@ export interface RepositoryDeepIntelligenceRunOptions {
   signal?: AbortSignal;
 }
 
+export type RepositoryDeepIntelligenceProviderErrorCode =
+  | 'request_cancelled'
+  | 'rate_limited'
+  | 'provider_unavailable'
+  | 'authentication_failed'
+  | 'invalid_response'
+  | 'response_too_large'
+  | 'unknown_provider_error';
+
+/** Safe cross-boundary provider failure. It must never contain response bodies or credentials. */
+export class RepositoryDeepIntelligenceProviderError extends Error {
+  constructor(
+    public readonly code: RepositoryDeepIntelligenceProviderErrorCode,
+    message: string,
+    public readonly retryable = false,
+  ) {
+    super(message);
+    this.name = 'RepositoryDeepIntelligenceProviderError';
+  }
+}
+
 export interface RepositoryDeepIntelligenceProvider {
   readonly providerId: string;
   readonly capabilities: RepositoryDeepIntelligenceCapabilities;
@@ -38,6 +59,7 @@ export interface RepositoryDeepIntelligenceExecutionResult {
   error?: {
     code: string;
     message: string;
+    retryable?: boolean;
   };
 }
 

@@ -35,6 +35,7 @@ function fixtureInput(overrides: Partial<RepoScanInput> = {}): RepoScanInput {
     'README.md': '# Fixture repository',
     'AGENTS.md': '# Agent instructions',
     '.env': 'API_KEY=do-not-leak-this-value',
+    '.env.example': 'API_URL=https://example.invalid\nAPI_TOKEN=placeholder-only',
   };
   const paths = [
     ...Object.keys(textContents),
@@ -129,6 +130,8 @@ describe('deterministic JS/TS responsibility extraction', () => {
     expect(file('src/App.test.tsx')?.primaryResponsibility).toBe('test-or-fixture');
     expect(file('src/index.ts')?.primaryResponsibility).toBe('export-barrel');
     expect(file('AGENTS.md')?.primaryResponsibility).toBe('ai-agent-instruction');
+    expect(file('.env.example')?.primaryResponsibility).toBe('configuration');
+    expect(file('.env.example')?.confidence).toBe(1);
     expect(file('src/mystery.ts')?.primaryResponsibility).toBe('unknown-or-insufficient-evidence');
     expect(file('src/mystery.ts')?.safeToPrioritizeForDeepAnalysis).toBe(false);
   });
@@ -191,6 +194,10 @@ describe('folder responsibility aggregation', () => {
       { path: 'src/components/README.md', size: 20 },
       { path: 'src/mixed/Widget.tsx', size: 40 },
       { path: 'src/mixed/Widget.test.tsx', size: 40 },
+      { path: 'src/mixed/main.tsx', size: 40 },
+      { path: 'src/mixed/main.test.tsx', size: 40 },
+      { path: 'src/mixed/main.integration.test.tsx', size: 40 },
+      { path: 'src/mixed/main.browser.test.tsx', size: 40 },
       { path: 'src/mixed/AGENTS.md', size: 20 },
     );
     Object.assign(input.textContents, {
@@ -199,6 +206,10 @@ describe('folder responsibility aggregation', () => {
       'src/components/README.md': '# Components',
       'src/mixed/Widget.tsx': 'export function Widget() { return <div />; }',
       'src/mixed/Widget.test.tsx': "import { Widget } from './Widget'; export { Widget };",
+      'src/mixed/main.tsx': 'export function bootstrap() { return true; }',
+      'src/mixed/main.test.tsx': "import { bootstrap } from './main'; export const subject = bootstrap;",
+      'src/mixed/main.integration.test.tsx': "import { bootstrap } from './main'; export const integrationSubject = bootstrap;",
+      'src/mixed/main.browser.test.tsx': "import { bootstrap } from './main'; export const browserSubject = bootstrap;",
       'src/mixed/AGENTS.md': '# Mixed folder rules',
     });
     const model = buildRepositoryIntelligenceEvidence(input);
@@ -206,14 +217,43 @@ describe('folder responsibility aggregation', () => {
     const mixed = model.folders.find(folder => folder.path === 'src/mixed');
     const generated = model.folders.find(folder => folder.path === 'dist');
 
-    expect(components?.dominantResponsibilities[0]).toEqual({ responsibility: 'ui-component', fileCount: 2 });
+    expect(components?.dominantResponsibilities[0]).toEqual(expect.objectContaining({ responsibility: 'ui-component', fileCount: 2 }));
+    expect(components?.aggregationState).toBe('dominant');
     expect(components?.hasDocumentation).toBe(true);
     expect(mixed?.hasTests).toBe(true);
     expect(mixed?.hasAgentInstructions).toBe(true);
-    expect(mixed?.limitations).toContain('The folder has mixed responsibilities with no single deterministic dominant responsibility.');
+    expect(mixed?.aggregationState).toBe('mixed');
+    expect(mixed?.limitations).toContain('The folder has mixed materially important responsibilities under the deterministic folder-dominance policy.');
     expect(generated?.generatedOrVendor).toBe(true);
+    expect(generated?.aggregationState).toBe('insufficient-evidence');
     expect(generated?.importantChildFiles).toEqual([]);
     expect(model.folders.map(folder => folder.path)).toEqual([...model.folders.map(folder => folder.path)].sort());
+  });
+
+  it('does not let several low-value fixtures outweigh a clear entry point and keeps weak evidence insufficient', () => {
+    const input = fixtureInput({
+      files: [
+        { path: 'src/weighted/main.tsx', size: 40 },
+        { path: 'src/weighted/a.test.ts', size: 20 },
+        { path: 'src/weighted/b.test.ts', size: 20 },
+        { path: 'src/weak/mystery.ts', size: 20 },
+      ],
+      textContents: {
+        'package.json': JSON.stringify({ dependencies: { react: '^18', vite: '^5' } }),
+        'src/weighted/main.tsx': 'export function bootstrap() { return true; }',
+        'src/weighted/a.test.ts': 'export const a = true;',
+        'src/weighted/b.test.ts': 'export const b = true;',
+        'src/weak/mystery.ts': 'const value = 1;',
+      },
+    });
+    input.files.unshift({ path: 'package.json', size: input.textContents['package.json'].length });
+    const model = buildRepositoryIntelligenceEvidence(input);
+    const weighted = model.folders.find(folder => folder.path === 'src/weighted');
+    const weak = model.folders.find(folder => folder.path === 'src/weak');
+
+    expect(weighted?.aggregationState).toBe('dominant');
+    expect(weighted?.dominantResponsibilities[0].responsibility).toBe('application-entry-point');
+    expect(weak?.aggregationState).toBe('insufficient-evidence');
   });
 });
 

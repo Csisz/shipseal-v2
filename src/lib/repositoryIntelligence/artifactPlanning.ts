@@ -1,6 +1,6 @@
 import { normalizeZipPath } from '../scannerLimits';
 import { stableContextFingerprint } from './contextSelection';
-import type { RepositoryEvidence, RepositoryResponsibility } from './evidence';
+import type { FolderResponsibilityRecord, RepositoryEvidence, RepositoryResponsibility } from './evidence';
 import type { RepositoryDeepIntelligenceValidatedFinding } from './deepIntelligenceSchema';
 import {
   REPOSITORY_INTELLIGENCE_ARTIFACT_SCHEMA_VERSION,
@@ -135,9 +135,8 @@ function rootAgentStatements(
 ) {
   const statements: RepositoryIntelligenceArtifactStatement[] = [];
   for (const folder of eligibleFolders(input).slice(0, 5)) {
-    const dominant = folder.dominantResponsibilities[0];
     statements.push(statement('root-agent-instructions', 'Repository areas', 'responsibility-description',
-      `${folder.path}/ contains ${displayResponsibility(dominant.responsibility)} responsibilities evidenced across ${dominant.fileCount} file(s).`,
+      folderResponsibilityStatement(folder),
       [folder.path], folder.supportingEvidenceIds, [], confidenceFor(folder.confidence), folder.limitations.length ? 'limited' : 'verified', folder.limitations));
   }
   statements.push(...commandStatements(input, findings).slice(0, 5).map(item => statement(
@@ -166,7 +165,7 @@ function folderAgentSpecs(input: PlanRepositoryIntelligenceArtifactsInput, findi
     const dominant = folder.dominantResponsibilities[0];
     const statements = [
       statement('folder-agent-instructions', 'Scope', 'responsibility-description',
-        `${folder.path}/ is primarily associated with ${displayResponsibility(dominant.responsibility)} based on ${dominant.fileCount} analyzed file(s).`,
+        folderResponsibilityStatement(folder),
         [folder.path], folder.supportingEvidenceIds, [], confidenceFor(folder.confidence), folder.limitations.length ? 'limited' : 'verified', folder.limitations),
       ...folder.importantChildFiles.slice(0, 5).map(path => {
         const file = input.evidenceResult.files.find(item => item.path === path);
@@ -253,9 +252,31 @@ function taskRouteStatements(input: PlanRepositoryIntelligenceArtifactsInput, fi
 function contextStatements(input: PlanRepositoryIntelligenceArtifactsInput, findings: RepositoryDeepIntelligenceValidatedFinding[]) {
   const statements: RepositoryIntelligenceArtifactStatement[] = [];
   for (const item of input.contextBundle.items.slice(0, 10)) {
+    const file = input.evidenceResult.files.find(candidate => candidate.path === item.path);
+    const providerOnlySelection = item.selectionReasons.length > 0 && item.selectionReasons.every(reason => [
+      'coverage-fallback', 'folder-representative', 'supporting-dependency',
+    ].includes(reason));
+    if (item.primaryResponsibility === 'unknown-or-insufficient-evidence' || providerOnlySelection || !file || file.confidence < 0.65) {
+      statements.push(statement('context-guidance', 'Coverage limitations', 'limitation',
+        `${item.path} was available to the bounded provider-context selector, but deterministic responsibility evidence is insufficient for a user-facing loading rule.`,
+        [item.path], item.supportingEvidenceIds, [], 'low', 'limited', sortedUnique([
+          ...item.limitations,
+          providerOnlySelection ? 'Provider-context coverage selection does not establish user-facing context-loading relevance.' : 'Responsibility evidence does not support a positive context-loading instruction.',
+        ])));
+      continue;
+    }
+    if (item.sourceCategory === 'environment-template') {
+      statements.push(statement('context-guidance', 'Setup references', 'instruction',
+        `Review ${item.path} when changing environment configuration or local setup requirements.`,
+        [item.path], item.supportingEvidenceIds, [], confidenceFor(file.confidence), item.truncation.truncated ? 'limited' : 'verified', item.limitations));
+      continue;
+    }
+    const selectionReason = item.selectionReasons.length
+      ? `; it was selected for ${item.selectionReasons.join(', ')}`
+      : '';
     statements.push(statement('context-guidance', 'Load first', 'context-loading-rule',
-      `Load ${item.path} when work involves ${displayResponsibility(item.primaryResponsibility)}; it was selected for ${item.selectionReasons.join(', ')}.`,
-      [item.path], item.supportingEvidenceIds, [], confidenceFor(input.evidenceResult.files.find(file => file.path === item.path)?.confidence || 0.5),
+      `Load ${item.path} when work involves ${displayResponsibility(item.primaryResponsibility)}${selectionReason}.`,
+      [item.path], item.supportingEvidenceIds, [], confidenceFor(file.confidence),
       item.truncation.truncated ? 'limited' : 'verified', item.limitations));
   }
   for (const folder of input.evidenceResult.folders.filter(item => item.generatedOrVendor).sort((a, b) => a.path.localeCompare(b.path)).slice(0, 8)) {
@@ -368,7 +389,7 @@ function artifactEligible(category: RepositoryIntelligenceArtifactCategory, stat
   if (category === 'known-risks-memory') return statements.some(item => item.type === 'risk');
   if (category === 'task-router') return statements.some(item => item.type === 'route');
   if (category === 'critical-files-memory') return statements.some(item => item.type === 'repository-fact');
-  if (category === 'context-guidance') return statements.some(item => ['context-loading-rule', 'excluded-area-rule'].includes(item.type));
+  if (category === 'context-guidance') return statements.some(item => ['context-loading-rule', 'excluded-area-rule', 'instruction'].includes(item.type));
   return statements.length > 0;
 }
 
@@ -410,10 +431,23 @@ function compatiblePath(existing: Map<string, ExistingFile>, canonical: string, 
 
 function eligibleFolders(input: PlanRepositoryIntelligenceArtifactsInput) {
   return input.evidenceResult.folders.filter(folder => folder.path !== '.' && !folder.generatedOrVendor && folder.confidence >= 0.6
+    && folder.aggregationState !== 'insufficient-evidence'
     && folder.dominantResponsibilities.length > 0
     && folder.dominantResponsibilities[0].responsibility !== 'unknown-or-insufficient-evidence'
     && folder.dominantResponsibilities[0].fileCount >= 1)
-    .sort((a, b) => b.dominantResponsibilities[0].fileCount - a.dominantResponsibilities[0].fileCount || a.path.localeCompare(b.path));
+    .sort((a, b) => b.dominantResponsibilities[0].significanceScore - a.dominantResponsibilities[0].significanceScore || a.path.localeCompare(b.path));
+}
+
+function folderResponsibilityStatement(folder: FolderResponsibilityRecord) {
+  const responsibilities = folder.dominantResponsibilities.slice(0, 3);
+  if (folder.aggregationState === 'mixed') {
+    return `${folder.path}/ contains mixed responsibilities across ${responsibilities.map(item => `${displayResponsibility(item.responsibility)} (${item.fileCount} file${item.fileCount === 1 ? '' : 's'})`).join(', ')}.`;
+  }
+  const strongest = responsibilities[0];
+  const secondary = responsibilities.slice(1);
+  return secondary.length
+    ? `${folder.path}/ is led by ${displayResponsibility(strongest.responsibility)} evidence across ${strongest.fileCount} file(s), with ${secondary.map(item => displayResponsibility(item.responsibility)).join(' and ')} also represented.`
+    : `${folder.path}/ has ${displayResponsibility(strongest.responsibility)} responsibility evidence across ${strongest.fileCount} file(s).`;
 }
 
 function statement(
