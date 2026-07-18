@@ -29,12 +29,24 @@ import type {
   RepositoryIntelligenceEvidenceModel,
 } from './evidence';
 import { buildRepositoryIntelligenceEvidence } from './repositoryResponsibilities';
+import {
+  REPOSITORY_INTELLIGENCE_SELECTED_PAYLOAD_VERSION,
+  type RepositoryIntelligenceAnalysisMode,
+  type RepositoryIntelligenceExpectedFileState,
+  type RepositoryIntelligenceReviewStatementProvenance,
+  type RepositoryIntelligenceSelectedArtifactPayload,
+} from './repositoryIntelligenceApplyContract.js';
+
+export {
+  REPOSITORY_INTELLIGENCE_SELECTED_PAYLOAD_VERSION,
+  type RepositoryIntelligenceAnalysisMode,
+  type RepositoryIntelligenceExpectedFileState,
+  type RepositoryIntelligenceReviewStatementProvenance,
+  type RepositoryIntelligenceSelectedArtifactPayload,
+} from './repositoryIntelligenceApplyContract.js';
 
 export const REPOSITORY_INTELLIGENCE_REVIEW_VERSION = 'shipseal.repository-intelligence-review.v1' as const;
 export const REPOSITORY_INTELLIGENCE_REVIEW_SELECTION_VERSION = 'shipseal.repository-intelligence-review-selection.v1' as const;
-export const REPOSITORY_INTELLIGENCE_SELECTED_PAYLOAD_VERSION = 'shipseal.repository-intelligence-selected-artifacts.v1' as const;
-
-export type RepositoryIntelligenceAnalysisMode = 'deterministic-repository-evidence' | 'deep-intelligence-enhanced';
 export type RepositoryIntelligenceEligibilityState =
   | 'supported-full-scan'
   | 'supported-limited-scan'
@@ -53,26 +65,6 @@ export interface RepositoryIntelligenceReviewEvidence {
   validationState: EvidenceValidationState;
   assertionState: EvidenceAssertionState;
   limitations: string[];
-}
-
-export interface RepositoryIntelligenceReviewStatementProvenance {
-  statementId: string;
-  statementType: RepositoryIntelligenceArtifactStatement['type'];
-  statementText: string;
-  validationState: RepositoryIntelligenceArtifactStatement['validationState'];
-  evidenceIds: string[];
-  findingIds: string[];
-  referencedPaths: string[];
-  humanReviewRequired: boolean;
-  rescanVerificationTarget?: RepositoryIntelligenceArtifactStatement['rescanVerificationTarget'];
-}
-
-export interface RepositoryIntelligenceExpectedFileState {
-  presence: 'missing' | 'existing';
-  ownership: 'missing' | 'shipseal-managed' | 'handwritten';
-  contentFingerprint?: string;
-  managedSectionFingerprint?: string;
-  preservationMode: 'create-new' | 'replace-managed' | 'preserve-handwritten';
 }
 
 export interface RepositoryIntelligenceReviewDependency {
@@ -216,31 +208,6 @@ export interface RepositoryIntelligenceReviewSelectionValidation {
   issues: RepositoryIntelligenceReviewValidationIssue[];
   selectedArtifactIds: string[];
   selectedPlanFingerprint: string;
-}
-
-export interface RepositoryIntelligenceSelectedArtifactPayload {
-  version: typeof REPOSITORY_INTELLIGENCE_SELECTED_PAYLOAD_VERSION;
-  artifactSchemaVersion: typeof REPOSITORY_INTELLIGENCE_ARTIFACT_SCHEMA_VERSION;
-  reviewVersion: typeof REPOSITORY_INTELLIGENCE_REVIEW_VERSION;
-  repository: RepositoryIntelligenceContextBundle['repository'];
-  repositoryIdentityFingerprint: string;
-  scanIdentity: string;
-  artifactSetFingerprint: string;
-  selectedPlanFingerprint: string;
-  artifacts: Array<{
-    artifactId: string;
-    category: RepositoryIntelligenceArtifactCategory;
-    targetPath: string;
-    operation: Extract<RepositoryIntelligenceArtifactOperation, 'create' | 'update' | 'strengthen'>;
-    content: string;
-    contentFingerprint: string;
-    applyRepresentation: 'create-file' | 'replace-shipseal-managed' | 'proposed-addition';
-    expectedFileState: RepositoryIntelligenceExpectedFileState;
-    artifactFingerprint: string;
-    statementProvenance: RepositoryIntelligenceReviewStatementProvenance[];
-    humanReviewAcknowledgement?: { artifactId: string; artifactFingerprint: string };
-  }>;
-  fingerprint: string;
 }
 
 /**

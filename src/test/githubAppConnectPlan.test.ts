@@ -1,16 +1,16 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import startHandler from '../../api/github-app/start';
-import callbackHandler from '../../api/github-app/callback';
-import oauthCallbackHandler from '../../api/github-app/oauth-callback';
-import installationsHandler from '../../api/github-app/installations';
-import repositoriesHandler, { listInstallationRepositories } from '../../api/github-app/repositories';
-import archiveHandler from '../../api/github-app/archive';
+import startHandler from '../../api/_routes/github-app/start';
+import callbackHandler from '../../api/_routes/github-app/callback';
+import oauthCallbackHandler from '../../api/_routes/github-app/oauth-callback';
+import installationsHandler from '../../api/_routes/github-app/installations';
+import repositoriesHandler, { listInstallationRepositories } from '../../api/_routes/github-app/repositories';
+import archiveHandler from '../../api/_routes/github-app/archive';
 import createGitHubAppPrHandler, {
   createReadinessPrWithGitHubApp,
   validateGitHubAppPrRequest,
-} from '../../api/github-app/create-readiness-pr';
+} from '../../api/_routes/github-app/create-readiness-pr';
 import {
   createGitHubAppJwt,
   getGitHubAppServerConfig,
@@ -61,10 +61,10 @@ function jsonGitHubResponse(body: unknown, headers?: Record<string, string>) {
 describe('GitHub App Connect plan', () => {
   it('imports GitHub Connect serverless handlers with Vercel-compatible relative imports', async () => {
     const [loginModule, callbackModule, installationsModule, repositoriesModule] = await Promise.all([
-      import('../../api/github-app/login'),
-      import('../../api/github-app/oauth-callback'),
-      import('../../api/github-app/installations'),
-      import('../../api/github-app/repositories'),
+      import('../../api/_routes/github-app/login'),
+      import('../../api/_routes/github-app/oauth-callback'),
+      import('../../api/_routes/github-app/installations'),
+      import('../../api/_routes/github-app/repositories'),
     ]);
 
     expect(typeof loginModule.default).toBe('function');
@@ -74,12 +74,12 @@ describe('GitHub App Connect plan', () => {
 
     const apiFiles = [
       'api/create-readiness-pr.ts',
-      'api/github-app/archive.ts',
-      'api/github-app/create-readiness-pr.ts',
-      'api/github-app/installations.ts',
-      'api/github-app/oauth-callback.ts',
-      'api/github-app/repositories.ts',
-      'api/github-app/start.ts',
+      'api/_routes/github-app/archive.ts',
+      'api/_routes/github-app/create-readiness-pr.ts',
+      'api/_routes/github-app/installations.ts',
+      'api/_routes/github-app/oauth-callback.ts',
+      'api/_routes/github-app/repositories.ts',
+      'api/_routes/github-app/start.ts',
       'api/_lib/githubAppAuth.ts',
       'api/_lib/githubAppClient.ts',
       'api/_lib/githubAppOAuth.ts',

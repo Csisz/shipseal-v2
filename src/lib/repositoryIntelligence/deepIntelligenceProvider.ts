@@ -1,10 +1,10 @@
-import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest';
+import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
 import type {
   RepositoryDeepIntelligenceCapability,
   RepositoryDeepIntelligenceRawProviderResponse,
   RepositoryDeepIntelligenceResultPolicyOverride,
   RepositoryDeepIntelligenceValidatedResult,
-} from './deepIntelligenceSchema';
+} from './deepIntelligenceSchema.js';
 
 export interface RepositoryDeepIntelligenceCapabilities {
   supported: RepositoryDeepIntelligenceCapability[];

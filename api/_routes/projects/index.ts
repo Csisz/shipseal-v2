@@ -1,7 +1,7 @@
 import type { ServerResponse } from 'node:http';
-import { getAccountPersistenceStore } from '../_lib/accountPersistence.js';
-import { boundedPagination, handleAccountRouteError, readJsonBody, requireAccount, sendAccountJson, type VercelAccountRequest } from '../_lib/accountHttp.js';
-import { saveProjectRequestSchema } from '../../src/lib/persistence/schema.js';
+import { getAccountPersistenceStore } from '../../_lib/accountPersistence.js';
+import { boundedPagination, handleAccountRouteError, readJsonBody, requireAccount, sendAccountJson, type VercelAccountRequest } from '../../_lib/accountHttp.js';
+import { saveProjectRequestSchema } from '../../../src/lib/persistence/schema.js';
 
 export default async function handler(req: VercelAccountRequest, res: ServerResponse) {
   try {
@@ -21,4 +21,3 @@ export default async function handler(req: VercelAccountRequest, res: ServerResp
     res.statusCode = 405; res.end();
   } catch (error) { handleAccountRouteError(res, error); }
 }
-

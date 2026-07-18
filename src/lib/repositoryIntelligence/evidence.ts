@@ -1,4 +1,4 @@
-import { normalizeZipPath } from '../scannerLimits';
+import { normalizeZipPath } from '../scannerLimits.js';
 
 export const REPOSITORY_EVIDENCE_SCHEMA_VERSION = 'shipseal.repository-evidence.v1' as const;
 export const REPOSITORY_INTELLIGENCE_EXTRACTOR = {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ReadinessReport } from '../types';
+import type { ReadinessReport } from '../types.js';
 
 export const PERSISTENCE_SCHEMA_VERSION = 'shipseal.persistence.v1' as const;
 export const SCAN_SNAPSHOT_SCHEMA_VERSION = 'shipseal.scan-snapshot.v1' as const;
@@ -23,7 +23,7 @@ const forbiddenKeyPattern = /^(?:api[_-]?key|access[_-]?token|refresh[_-]?token|
 
 export type SafeDerivedJson = null | boolean | number | string | SafeDerivedJson[] | { [key: string]: SafeDerivedJson };
 
-export function validateSafeDerivedJson(value: unknown, limits = { maxDepth: 18, maxNodes: 80_000, maxString: 250_000 }) {
+export function validateSafeDerivedJson(value: unknown, limits = { maxDepth: 18, maxNodes: 80_000, maxString: 250_000 }): value is SafeDerivedJson {
   let nodes = 0;
   const visit = (candidate: unknown, depth: number): candidate is SafeDerivedJson => {
     nodes += 1;
@@ -78,7 +78,13 @@ const reportCoreSchema = z.object({
 });
 
 export function parsePersistedReadinessReport(value: unknown): ReadinessReport {
-  return reportCoreSchema.parse(value) as ReadinessReport;
+  const parsed = reportCoreSchema.parse(value);
+  if (!isReadinessReport(parsed)) throw new Error('Persisted readiness report does not match the public report contract.');
+  return parsed;
+}
+
+function isReadinessReport(value: unknown): value is ReadinessReport {
+  return reportCoreSchema.safeParse(value).success;
 }
 
 export const persistedUserSchema = z.object({

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createOAuthState, safeReturnPath } from '../_lib/accountSession.js';
+import { createOAuthState, safeReturnPath } from '../../_lib/accountSession.js';
 
 function config(env: NodeJS.ProcessEnv = process.env) {
   const clientId = (env.SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID || '').trim();

@@ -1,7 +1,7 @@
-import type { CriticalBlocker } from '../types';
-import type { EntryPointClassification } from '../sourceDetection';
+import type { CriticalBlocker } from '../types.js';
+import type { EntryPointClassification } from '../sourceDetection.js';
 
-export type { EntryPointClassification } from '../sourceDetection';
+export type { EntryPointClassification } from '../sourceDetection.js';
 
 export type RepositoryHealthModelVersion = 'repository-health-v1';
 export type RepositoryHealthMeasurementMethod = 'deterministic-static-scan';

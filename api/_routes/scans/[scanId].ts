@@ -1,6 +1,6 @@
 import type { ServerResponse } from 'node:http';
-import { getAccountPersistenceStore } from '../_lib/accountPersistence.js';
-import { AccountRequestError, handleAccountRouteError, queryValue, requireAccount, sendAccountJson, type VercelAccountRequest } from '../_lib/accountHttp.js';
+import { getAccountPersistenceStore } from '../../_lib/accountPersistence.js';
+import { AccountRequestError, handleAccountRouteError, queryValue, requireAccount, sendAccountJson, type VercelAccountRequest } from '../../_lib/accountHttp.js';
 
 function scanId(req: VercelAccountRequest) {
   const direct = queryValue(req, 'scanId');

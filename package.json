@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "npm run check:functions",
     "build": "vite build",
     "build:report": "node scripts/report-bundle.mjs",
     "build:dev": "vite build --mode development",
@@ -14,6 +15,7 @@
     "intelligence:smoke": "vitest run scripts/intelligence-smoke.ts",
     "db:migrate": "node scripts/migrate-account.mjs",
     "db:migrate:test": "node scripts/test-account-migration.mjs",
+    "check:functions": "node scripts/check-vercel-functions.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },

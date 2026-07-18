@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { createGitHubInstallationClient, type GitHubInstallationClient } from '../_lib/githubAppClient.js';
-import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../_lib/githubAppTypes.js';
+import { createGitHubInstallationClient, type GitHubInstallationClient } from '../../_lib/githubAppClient.js';
+import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../../_lib/githubAppTypes.js';
 import {
   buildRepositoryIntelligenceGithubApplyPlan,
   validateRepositoryIntelligenceGithubApplyRequest,
@@ -8,7 +8,7 @@ import {
   type RepositoryIntelligenceApplyIssue,
   type RepositoryIntelligenceCurrentFileState,
   type RepositoryIntelligenceGithubApplyRequest,
-} from '../../src/lib/repositoryIntelligence/repositoryIntelligenceApply.js';
+} from '../../../src/lib/repositoryIntelligence/repositoryIntelligenceApply.js';
 
 const MAX_BODY_BYTES = 900 * 1024;
 type VercelLikeRequest = IncomingMessage & { body?: unknown };

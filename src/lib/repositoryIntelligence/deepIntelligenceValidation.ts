@@ -1,6 +1,6 @@
-import { normalizeEvidencePath, type RepositoryResponsibility } from './evidence';
-import { stableContextFingerprint } from './contextSelection';
-import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest';
+import { normalizeEvidencePath, type RepositoryResponsibility } from './evidence.js';
+import { stableContextFingerprint } from './contextSelection.js';
+import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
 import {
   REPOSITORY_DEEP_INTELLIGENCE_RESULT_VERSION,
   REPOSITORY_DEEP_INTELLIGENCE_VALIDATOR_VERSION,
@@ -14,7 +14,7 @@ import {
   type RepositoryDeepIntelligenceValidatedFinding,
   type RepositoryDeepIntelligenceValidatedRelationship,
   type RepositoryDeepIntelligenceValidatedResult,
-} from './deepIntelligenceSchema';
+} from './deepIntelligenceSchema.js';
 
 export interface ValidateRepositoryDeepIntelligenceResponseInput {
   request: RepositoryDeepIntelligenceRequest;
@@ -193,7 +193,7 @@ function validateFinding(
     return { originalProviderFindingId: finding.id, category: finding.category, state: 'unavailable', reasonCodes: ['provider-unavailable'], validationMessages: ['Provider marked the conclusion unavailable.'] };
   }
   const paths = normalizeFindingPaths(finding.referencedPaths, indexes.knownPaths);
-  if (!paths.success) return rejection(finding.id, finding.category, ['invalid-path'], paths.message);
+  if (paths.success === false) return rejection(finding.id, finding.category, ['invalid-path'], paths.message);
   const evidenceIds = sortedUnique(finding.referencedEvidenceIds);
   if (!evidenceIds.length) return rejection(finding.id, finding.category, ['missing-evidence'], 'Repository-specific finding did not cite deterministic evidence.');
   if (evidenceIds.some(id => !indexes.evidenceById.has(id))) {
@@ -235,7 +235,10 @@ function validateFinding(
     : finding.inferenceType === 'model-inference' || limitations.length || confidenceDowngraded || command === 'inferred'
       ? 'accepted-with-limitations' as const
       : 'accepted' as const;
-  const referencedSymbols = sortedSymbols(finding.referencedSymbols || [], paths.paths, indexes);
+  const providerSymbols = (finding.referencedSymbols || []).filter((symbol): symbol is { path: string; name: string } => (
+    typeof symbol.path === 'string' && typeof symbol.name === 'string'
+  ));
+  const referencedSymbols = sortedSymbols(providerSymbols, paths.paths, indexes);
   const removedFields = referencedSymbols.length === (finding.referencedSymbols?.length || 0) ? [] : ['referencedSymbols'];
   if (removedFields.length) validationMessages.push('Uncorroborated symbol references were removed.');
   validationMessages.sort();
@@ -361,7 +364,7 @@ function validateRelationships(finding: RepositoryDeepIntelligenceRawFinding, ev
   const messages: string[] = [];
   for (const claim of finding.relationshipClaims || []) {
     const paths = normalizeFindingPaths([claim.sourcePath, claim.targetPath], indexes.knownPaths);
-    if (!paths.success) return { valid: false, message: paths.message, messages, relationships: validated };
+    if (paths.success === false) return { valid: false, message: paths.message, messages, relationships: validated };
     const sourcePath = normalizeEvidencePath(claim.sourcePath);
     const targetPath = normalizeEvidencePath(claim.targetPath);
     const claimEvidence = sortedUnique(claim.evidenceIds);

@@ -1,4 +1,4 @@
-import type { ScanSummary } from './types';
+import type { ScanSummary } from './types.js';
 
 export const SCANNER_LIMITS = {
   maxZipSizeBytes: 25 * 1024 * 1024,

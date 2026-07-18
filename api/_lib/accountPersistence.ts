@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import postgres, { type Sql } from 'postgres';
+import postgres, { type JSONValue, type Sql } from 'postgres';
 import {
   PERSISTENCE_SCHEMA_VERSION,
   SCAN_SNAPSHOT_SCHEMA_VERSION,
@@ -8,6 +8,8 @@ import {
   persistedScanSummarySchema,
   persistedUserSchema,
   scanSnapshotSchema,
+  validateSafeDerivedJson,
+  type SafeDerivedJson,
   type PersistedProject,
   type PersistedScanSnapshot,
   type PersistedScanSummary,
@@ -71,6 +73,28 @@ function asDate(value: unknown) {
 
 function nullable(value: unknown) {
   return value === null || value === undefined ? null : String(value);
+}
+
+function databaseIdentifier(value: unknown, label: string) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{20,80}$/.test(value)) {
+    throw new PersistenceConflictError(`Stored ${label} identifier is invalid.`);
+  }
+  return value;
+}
+
+export function serializeSafeDatabaseJson(value: unknown): JSONValue {
+  if (!validateSafeDerivedJson(value)) {
+    throw new PersistenceConflictError('Persistence snapshot contains a value that cannot be stored safely.');
+  }
+  return serializeValidatedJson(value);
+}
+
+function serializeValidatedJson(value: SafeDerivedJson): JSONValue {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') return value;
+  if (Array.isArray(value)) return value.map(serializeValidatedJson);
+  const serialized: Record<string, JSONValue> = {};
+  for (const [key, item] of Object.entries(value)) serialized[key] = serializeValidatedJson(item);
+  return serialized;
 }
 
 function mapUser(row: Record<string, unknown>): PersistedUser {
@@ -179,11 +203,12 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
         limit 1
       `;
       if (existing[0]?.saved_scan_id) {
-        const saved = await transaction<Record<string, unknown>[]>`select * from shipseal_scans where id = ${existing[0].saved_scan_id}`;
+        const savedScanId = databaseIdentifier(existing[0].saved_scan_id, 'scan');
+        const saved = await transaction<Record<string, unknown>[]>`select * from shipseal_scans where id = ${savedScanId}`;
         return { project: mapProject(existing[0]), scan: mapScan(saved[0]) };
       }
 
-      const projectId = existing[0] ? String(existing[0].id) : createPublicId('prj');
+      const projectId = existing[0] ? databaseIdentifier(existing[0].id, 'project') : createPublicId('prj');
       const now = new Date().toISOString();
       const [projectRow] = await transaction<Record<string, unknown>[]>`
         insert into shipseal_projects (
@@ -202,6 +227,7 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
           last_scan_at = excluded.last_scan_at
         returning *
       `;
+      const storedProjectId = databaseIdentifier(projectRow.id, 'project');
       const scanId = createPublicId('scn');
       const verificationState = input.scan.verificationRelationship?.state || 'not-started';
       const [scanRow] = await transaction<Record<string, unknown>[]>`
@@ -211,12 +237,12 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
           deterministic_request_fingerprint, discovered_files, analyzed_files, ignored_files, intelligence_mode,
           verification_state, baseline_scan_id, safe_failure_category, snapshot
         ) values (
-          ${scanId}, ${projectRow.id}, ${userId}, ${PERSISTENCE_SCHEMA_VERSION}, ${SCAN_SNAPSHOT_SCHEMA_VERSION}, ${input.idempotencyKey},
+          ${scanId}, ${storedProjectId}, ${userId}, ${PERSISTENCE_SCHEMA_VERSION}, ${SCAN_SNAPSHOT_SCHEMA_VERSION}, ${input.idempotencyKey},
           ${input.scan.sourceType}, ${input.scan.repositoryOwner}, ${input.scan.repositoryName}, ${input.scan.branch}, ${input.scan.status},
           ${input.scan.startedAt}, ${input.scan.completedAt}, ${input.scan.scannerVersion}, ${input.scan.deterministicRequestFingerprint},
           ${input.scan.discoveredFiles}, ${input.scan.analyzedFiles}, ${input.scan.ignoredFiles}, ${input.scan.intelligenceMode},
           ${verificationState}, ${input.scan.verificationRelationship?.baselineScanId || null}, ${input.scan.safeFailureCategory},
-          ${this.sql.json(input.scan.snapshot)}
+          ${this.sql.json(serializeSafeDatabaseJson(input.scan.snapshot))}
         ) returning *
       `;
       if (input.scan.verificationRelationship) {
@@ -224,10 +250,10 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
           id, owner_user_id, project_id, baseline_scan_id, rescan_id, schema_version, algorithm_version,
           state, verified_at, expected_artifact_ids, created_at
         ) values (
-          ${createPublicId('ver')}, ${userId}, ${projectRow.id}, ${input.scan.verificationRelationship.baselineScanId}, ${scanId},
+          ${createPublicId('ver')}, ${userId}, ${storedProjectId}, ${input.scan.verificationRelationship.baselineScanId}, ${scanId},
           ${VERIFICATION_RELATIONSHIP_SCHEMA_VERSION}, ${input.scan.verificationRelationship.algorithmVersion},
           ${input.scan.verificationRelationship.state}, ${input.scan.verificationRelationship.verifiedAt},
-          ${this.sql.json(input.scan.verificationRelationship.expectedArtifactIds)}, ${now}
+          ${this.sql.json(serializeSafeDatabaseJson(input.scan.verificationRelationship.expectedArtifactIds))}, ${now}
         )`;
       }
       return { project: mapProject({ ...projectRow, last_scan_at: input.scan.completedAt }), scan: mapScan(scanRow) };
@@ -296,11 +322,12 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
         where s.id = ${scanId} and s.owner_user_id = ${userId} and p.owner_user_id = ${userId} and p.deleted_at is null for update
       `;
       if (!rows[0]) return false;
+      const projectId = databaseIdentifier(rows[0].project_id, 'project');
       await transaction`delete from shipseal_verification_relationships where owner_user_id = ${userId} and (baseline_scan_id = ${scanId} or rescan_id = ${scanId})`;
       await transaction`delete from shipseal_scans where id = ${scanId} and owner_user_id = ${userId}`;
       await transaction`update shipseal_projects set last_scan_at = (
-        select max(completed_at) from shipseal_scans where project_id = ${rows[0].project_id}
-      ), updated_at = now() where id = ${rows[0].project_id} and owner_user_id = ${userId}`;
+        select max(completed_at) from shipseal_scans where project_id = ${projectId}
+      ), updated_at = now() where id = ${projectId} and owner_user_id = ${userId}`;
       return true;
     });
   }

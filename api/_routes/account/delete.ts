@@ -1,8 +1,8 @@
 import type { ServerResponse } from 'node:http';
 import { z } from 'zod';
-import { getAccountPersistenceStore } from '../_lib/accountPersistence.js';
-import { handleAccountRouteError, readJsonBody, requireAccount, sendAccountJson, type VercelAccountRequest } from '../_lib/accountHttp.js';
-import { revokeAccountSession } from '../_lib/accountSession.js';
+import { getAccountPersistenceStore } from '../../_lib/accountPersistence.js';
+import { handleAccountRouteError, readJsonBody, requireAccount, sendAccountJson, type VercelAccountRequest } from '../../_lib/accountHttp.js';
+import { revokeAccountSession } from '../../_lib/accountSession.js';
 
 const bodySchema = z.object({ confirmation: z.literal('DELETE MY SHIPSEAL ACCOUNT') }).strict();
 

@@ -1,12 +1,12 @@
-import { normalizeZipPath } from '../scannerLimits';
-import type { RepoScanInput } from '../types';
+import { normalizeZipPath } from '../scannerLimits.js';
+import type { RepoScanInput } from '../types.js';
 import type {
   FileResponsibilityRecord,
   RepositoryIntelligenceEvidenceModel,
   RepositoryRelationship,
   RepositoryResponsibility,
   RepositorySymbol,
-} from './evidence';
+} from './evidence.js';
 import {
   REPOSITORY_CONTEXT_BUNDLE_VERSION,
   REPOSITORY_CONTEXT_SELECTION_POLICY_VERSION,
@@ -21,7 +21,7 @@ import {
   type RepositoryContextSelectionState,
   type RepositoryContextSourceCategory,
   type RepositoryContextUncoveredArea,
-} from './contextSelection';
+} from './contextSelection.js';
 
 export interface RepositoryContextStructuralOutline {
   primaryResponsibility: RepositoryResponsibility;

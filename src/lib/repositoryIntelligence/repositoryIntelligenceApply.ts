@@ -1,11 +1,11 @@
-import { normalizeZipPath } from '../scannerLimits';
-import { stableContextFingerprint } from './contextSelection';
+import { normalizeZipPath } from '../scannerLimits.js';
+import { stableContextFingerprint } from './contextSelection.js';
 import {
   REPOSITORY_INTELLIGENCE_SELECTED_PAYLOAD_VERSION,
   type RepositoryIntelligenceAnalysisMode,
   type RepositoryIntelligenceExpectedFileState,
   type RepositoryIntelligenceSelectedArtifactPayload,
-} from './repositoryIntelligenceReview';
+} from './repositoryIntelligenceApplyContract.js';
 
 export const REPOSITORY_INTELLIGENCE_APPLY_SCHEMA_VERSION = 'shipseal.repository-intelligence-github-apply.v1' as const;
 export const REPOSITORY_INTELLIGENCE_APPLY_POLICY_VERSION = 'shipseal.repository-intelligence-github-apply-policy.v1' as const;
@@ -264,7 +264,7 @@ function prepareOperation(
   }
   if (artifact.operation === 'strengthen') {
     const merged = strengthenHandwrittenContent(normalizedCurrent, artifact.content);
-    if (!merged.ok) return { issue: issue('handwritten-preservation-conflict', merged.message, 'Repair the managed markers or rescan before retrying.', artifact.targetPath) };
+    if (merged.ok === false) return { issue: issue('handwritten-preservation-conflict', merged.message, 'Repair the managed markers or rescan before retrying.', artifact.targetPath) };
     finalContent = merged.content;
   }
   return { file: {

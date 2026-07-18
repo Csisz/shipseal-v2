@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { sendAccountJson, handleAccountRouteError } from '../_lib/accountHttp.js';
-import { readAccountSession } from '../_lib/accountSession.js';
+import { sendAccountJson, handleAccountRouteError } from '../../_lib/accountHttp.js';
+import { readAccountSession } from '../../_lib/accountSession.js';
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   try {
@@ -9,4 +9,3 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendAccountJson(res, 200, { user: session?.user || null });
   } catch (error) { handleAccountRouteError(res, error); }
 }
-

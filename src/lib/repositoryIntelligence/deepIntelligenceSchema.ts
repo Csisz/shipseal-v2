@@ -4,7 +4,7 @@ import type {
   FutureArtifactCategory,
   RepositoryRelationshipType,
   RepositoryResponsibility,
-} from './evidence';
+} from './evidence.js';
 
 export const REPOSITORY_DEEP_INTELLIGENCE_REQUEST_VERSION = 'shipseal.deep-intelligence-request.v1' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION = 'shipseal.deep-intelligence-response.v1' as const;

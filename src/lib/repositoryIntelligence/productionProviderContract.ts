@@ -1,5 +1,5 @@
-import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest';
-import type { RepositoryDeepIntelligenceValidatedResult } from './deepIntelligenceSchema';
+import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
+import type { RepositoryDeepIntelligenceValidatedResult } from './deepIntelligenceSchema.js';
 
 export const REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION = 'shipseal.repository-intelligence-provider-api.v1' as const;
 

@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { prepareOrApplyRepositoryIntelligencePr } from '../../api/github-app/create-repository-intelligence-pr';
+import { prepareOrApplyRepositoryIntelligencePr } from '../../api/_routes/github-app/create-repository-intelligence-pr';
 import {
   REPOSITORY_INTELLIGENCE_APPLY_SCHEMA_VERSION,
   REPOSITORY_INTELLIGENCE_ARTIFACT_SCHEMA_VERSION,

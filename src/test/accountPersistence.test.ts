@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, afterEach, vi } from 'vitest';
-import sessionHandler from '../../api/account/session';
-import projectsHandler from '../../api/projects/index';
-import projectHandler from '../../api/projects/[projectId]';
-import scanHandler from '../../api/scans/[scanId]';
-import logoutHandler from '../../api/account/logout';
+import sessionHandler from '../../api/_routes/account/session';
+import projectsHandler from '../../api/_routes/projects/index';
+import projectHandler from '../../api/_routes/projects/[projectId]';
+import scanHandler from '../../api/_routes/scans/[scanId]';
+import logoutHandler from '../../api/_routes/account/logout';
 import { InMemoryAccountPersistenceStore } from '../../api/_lib/inMemoryAccountPersistence';
 import { createAccountSession, hashSessionToken } from '../../api/_lib/accountSession';
-import { setAccountPersistenceStoreForTests } from '../../api/_lib/accountPersistence';
+import { serializeSafeDatabaseJson, setAccountPersistenceStoreForTests } from '../../api/_lib/accountPersistence';
 import { buildSampleReport } from '@/lib/readiness';
 import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
 import { buildSaveProjectRequest } from '@/lib/persistence/buildSnapshot';
@@ -196,6 +196,17 @@ describe('Omega 18.1 deletion and safety', () => {
     secretReport.report.contextPack = `github_pat_${'x'.repeat(30)}`;
     expect(() => scanSnapshotSchema.parse(secretReport)).toThrow();
     expect(() => saveProjectRequestSchema.parse({ ...valid, project: { ...valid.project, displayName: 'x'.repeat(500) } })).toThrow();
+  });
+
+  it('serializes validated persistence JSON without retaining unsupported or sensitive values', () => {
+    const safe = { version: 'snapshot.v1', counts: [1, 2], nested: { ready: true, note: null } };
+    expect(serializeSafeDatabaseJson(safe)).toEqual(safe);
+    expect(() => serializeSafeDatabaseJson({ missing: undefined })).toThrow(/cannot be stored safely/i);
+    expect(() => serializeSafeDatabaseJson({ callback: () => true })).toThrow(/cannot be stored safely/i);
+    expect(() => serializeSafeDatabaseJson({ createdAt: new Date() })).toThrow(/cannot be stored safely/i);
+    expect(() => serializeSafeDatabaseJson({ access_token: 'not-persisted' })).toThrow(/cannot be stored safely/i);
+    expect(() => serializeSafeDatabaseJson({ provider_raw: { response: 'not-persisted' } })).toThrow(/cannot be stored safely/i);
+    expect(() => serializeSafeDatabaseJson({ token: `github_pat_${'x'.repeat(30)}` })).toThrow(/cannot be stored safely/i);
   });
 
   it('keeps server database and auth markers outside client modules and browser configuration', () => {

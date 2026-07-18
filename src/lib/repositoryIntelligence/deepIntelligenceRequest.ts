@@ -1,16 +1,16 @@
-import type { RepositoryIntelligenceContextBundle, PreparedRepositoryContextItem } from './contextPreparation';
+import type { RepositoryIntelligenceContextBundle, PreparedRepositoryContextItem } from './contextPreparation.js';
 import {
   REPOSITORY_CONTEXT_BUNDLE_VERSION,
   REPOSITORY_CONTEXT_SELECTION_POLICY_VERSION,
   stableContextFingerprint,
-} from './contextSelection';
+} from './contextSelection.js';
 import {
   REPOSITORY_EVIDENCE_SCHEMA_VERSION,
   normalizeEvidencePath,
   type RepositoryIntelligenceEvidenceModel,
   type RepositoryRelationship,
   type RepositoryResponsibility,
-} from './evidence';
+} from './evidence.js';
 import {
   REPOSITORY_DEEP_INTELLIGENCE_CAPABILITIES,
   REPOSITORY_DEEP_INTELLIGENCE_PROMPT_CONTRACT_VERSION,
@@ -21,7 +21,7 @@ import {
   type RepositoryDeepIntelligenceEvidenceReference,
   type RepositoryDeepIntelligenceResultPolicy,
   type RepositoryDeepIntelligenceResultPolicyOverride,
-} from './deepIntelligenceSchema';
+} from './deepIntelligenceSchema.js';
 
 export interface RepositoryDeepIntelligenceRequestContextItem {
   path: string;

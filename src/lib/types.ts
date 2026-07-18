@@ -1,4 +1,4 @@
-import type { HealthConfidence, RepositoryHealthModel, RepositoryHealthStatus } from './repositoryHealth';
+import type { HealthConfidence, RepositoryHealthModel, RepositoryHealthStatus } from './repositoryHealth/types.js';
 
 // Core types for AgentReady
 

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { consumeOAuthState, createAccountSession, revokeAccountSession } from '../_lib/accountSession.js';
-import { getAccountPersistenceStore } from '../_lib/accountPersistence.js';
+import { consumeOAuthState, createAccountSession, revokeAccountSession } from '../../_lib/accountSession.js';
+import { getAccountPersistenceStore } from '../../_lib/accountPersistence.js';
 
 interface GitHubUser { id?: number; login?: string; name?: string | null; email?: string | null; avatar_url?: string | null }
 

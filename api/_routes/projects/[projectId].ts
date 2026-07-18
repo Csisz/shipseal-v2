@@ -1,7 +1,7 @@
 import type { ServerResponse } from 'node:http';
-import { getAccountPersistenceStore } from '../_lib/accountPersistence.js';
-import { AccountRequestError, handleAccountRouteError, queryValue, requireAccount, sendAccountJson, type VercelAccountRequest } from '../_lib/accountHttp.js';
-import { readJsonBody } from '../_lib/accountHttp.js';
+import { getAccountPersistenceStore } from '../../_lib/accountPersistence.js';
+import { AccountRequestError, handleAccountRouteError, queryValue, requireAccount, sendAccountJson, type VercelAccountRequest } from '../../_lib/accountHttp.js';
+import { readJsonBody } from '../../_lib/accountHttp.js';
 import { z } from 'zod';
 
 const updateSchema = z.object({ displayName: z.string().trim().min(1).max(200).optional(), defaultBranch: z.string().trim().max(250).nullable().optional(), archived: z.boolean().optional() }).strict().refine(value => Object.keys(value).length > 0);

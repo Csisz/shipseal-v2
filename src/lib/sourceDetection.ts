@@ -1,5 +1,5 @@
-import { isBinaryLikePath, isGeneratedOrVendorPath, normalizeZipPath } from './scannerLimits';
-import type { RepoScanInput } from './types';
+import { isBinaryLikePath, isGeneratedOrVendorPath, normalizeZipPath } from './scannerLimits.js';
+import type { RepoScanInput } from './types.js';
 
 const SOURCE_EXT_RE = /\.(tsx?|jsx?|mjs|cjs|py|go|rs|java|kt|cs|php|rb|swift|scala|vue|svelte)$/i;
 const PY_SOURCE_RE = /\.py$/i;

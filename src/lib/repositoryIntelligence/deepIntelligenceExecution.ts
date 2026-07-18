@@ -1,12 +1,12 @@
 import {
   resolveRepositoryDeepIntelligenceResultPolicy,
-} from './deepIntelligenceSchema';
+} from './deepIntelligenceSchema.js';
 import type {
   RepositoryDeepIntelligenceExecutionResult,
   RunRepositoryDeepIntelligenceInput,
-} from './deepIntelligenceProvider';
-import { RepositoryDeepIntelligenceProviderError } from './deepIntelligenceProvider';
-import { validateRepositoryDeepIntelligenceResponse } from './deepIntelligenceValidation';
+} from './deepIntelligenceProvider.js';
+import { RepositoryDeepIntelligenceProviderError } from './deepIntelligenceProvider.js';
+import { validateRepositoryDeepIntelligenceResponse } from './deepIntelligenceValidation.js';
 
 const MAXIMUM_TIMEOUT_MS = 300_000;
 type ProviderOutcome =

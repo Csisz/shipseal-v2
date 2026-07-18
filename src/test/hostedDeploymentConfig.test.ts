@@ -21,7 +21,12 @@ describe('hosted deployment configuration', () => {
     expect(config.devCommand).toContain('--port $PORT');
     expect(config.routes).toBeUndefined();
     expect(config.rewrites).toEqual([
-      { source: '/api/(.*)', destination: '/api/$1' },
+      { source: '/api/account/:route(login|callback|session|logout|delete)', destination: '/api/account-router?route=:route' },
+      { source: '/api/projects/:projectId/scans', destination: '/api/persistence-router?route=project-scans&projectId=:projectId' },
+      { source: '/api/projects/:projectId', destination: '/api/persistence-router?route=project&projectId=:projectId' },
+      { source: '/api/projects', destination: '/api/persistence-router?route=projects' },
+      { source: '/api/scans/:scanId', destination: '/api/persistence-router?route=scan&scanId=:scanId' },
+      { source: '/api/github-app/:route(archive|callback|create-readiness-pr|create-repository-intelligence-pr|installations|login|oauth-callback|repositories|start)', destination: '/api/github-app-router?route=:route' },
       { source: '/(.*)', destination: '/index.html' },
     ]);
   });

@@ -1,11 +1,10 @@
-import type { RepoScanInput } from '../types';
-import type { RepositoryOptimizationAction } from '../workspace/repositoryOptimizationPlan';
-import type { RepositoryIntelligenceContextBundle } from './contextPreparation';
-import type { RepositoryIntelligenceEvidenceModel } from './evidence';
+import type { RepoScanInput } from '../types.js';
+import type { RepositoryIntelligenceContextBundle } from './contextPreparation.js';
+import type { RepositoryIntelligenceEvidenceModel } from './evidence.js';
 import type {
   RepositoryDeepIntelligenceConfidence,
   RepositoryDeepIntelligenceValidatedResult,
-} from './deepIntelligenceSchema';
+} from './deepIntelligenceSchema.js';
 
 export const REPOSITORY_INTELLIGENCE_ARTIFACT_SCHEMA_VERSION = 'shipseal.repository-intelligence-artifacts.v1' as const;
 export const REPOSITORY_INTELLIGENCE_ARTIFACT_POLICY_VERSION = 'shipseal.repository-intelligence-artifact-policy.v1' as const;
@@ -23,7 +22,7 @@ export type RepositoryIntelligenceArtifactCategory =
   | 'evidence-manifest';
 
 /** Reuses Optimization Plan action names and adds explicit non-output states required by this boundary. */
-export type RepositoryIntelligenceArtifactOperation = RepositoryOptimizationAction | 'skip';
+export type RepositoryIntelligenceArtifactOperation = 'create' | 'update' | 'strengthen' | 'unavailable' | 'skip';
 export type RepositoryIntelligenceArtifactReviewState = 'ready-for-review' | 'requires-human-review' | 'blocked' | 'unavailable';
 export type RepositoryIntelligenceExistingFileState =
   | 'missing'

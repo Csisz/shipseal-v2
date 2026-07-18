@@ -1,12 +1,12 @@
-import { isBinaryLikePath, isGeneratedOrVendorPath, normalizeZipPath } from '../scannerLimits';
-import type { RepoScanInput } from '../types';
+import { isBinaryLikePath, isGeneratedOrVendorPath, normalizeZipPath } from '../scannerLimits.js';
+import type { RepoScanInput } from '../types.js';
 import type {
   FileResponsibilityRecord,
   RepositoryEvidence,
   RepositoryIntelligenceEvidenceModel,
   RepositoryRelationship,
   RepositoryResponsibility,
-} from './evidence';
+} from './evidence.js';
 
 export const REPOSITORY_CONTEXT_BUNDLE_VERSION = 'shipseal.repository-context.v1' as const;
 export const REPOSITORY_CONTEXT_SELECTION_POLICY_VERSION = 'shipseal.context-selection-policy.v1' as const;
