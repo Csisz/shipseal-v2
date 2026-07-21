@@ -39,7 +39,32 @@ export interface RepositoryUniverseDiagnosticsSnapshot {
   canvasHeight: number;
   devicePixelRatio: number;
   programmaticCameraMotionActive: boolean;
+  visualMotionActive: boolean;
+  activeVisualInterpolationCount: number;
   settlementState: RepositoryUniverseSettlementState;
+}
+
+export type RepositoryUniverseLabelDistanceBand = 'near' | 'medium' | 'far';
+
+export interface RepositoryUniverseNodeVisualPriority {
+  visible: boolean;
+  selected: boolean;
+  hovered: boolean;
+  matched: boolean;
+  routeHighlighted: boolean;
+  connected: boolean;
+  quiet: boolean;
+  suppressed: boolean;
+  importance: 'primary' | 'supporting' | 'background';
+}
+
+export interface RepositoryUniverseEdgeVisualPriority {
+  visible: boolean;
+  directlySelected: boolean;
+  focused: boolean;
+  relationship: string;
+  evidenceType: string;
+  contextualFocusActive: boolean;
 }
 
 export interface RepositoryUniverseDiagnosticsChannel {
@@ -68,6 +93,26 @@ export const REPOSITORY_UNIVERSE_IDLE_RADIANS_PER_SECOND = 0.042;
 
 /** Consecutive converged frames prevent a single lucky frame from reporting settlement. */
 export const REPOSITORY_UNIVERSE_SETTLED_FRAME_COUNT = 4;
+
+/** Named per-second rates keep U2B interaction timing intentional and frame-rate independent. */
+export const REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES = Object.freeze({
+  hover: 22,
+  selection: 16,
+  dimIn: 13,
+  dimOut: 9,
+  emissive: 18,
+  haloIn: 24,
+  haloOut: 12,
+  edge: 14,
+  proposal: 15,
+  clusterRing: 11,
+  label: 20,
+});
+
+export const REPOSITORY_UNIVERSE_VISUAL_SETTLEMENT_EPSILON = 0.001;
+export const REPOSITORY_UNIVERSE_LABEL_FAR_RADIUS = 720;
+export const REPOSITORY_UNIVERSE_LABEL_MEDIUM_RADIUS = 420;
+export const REPOSITORY_UNIVERSE_LABEL_BAND_HYSTERESIS = 12;
 
 export const REPOSITORY_UNIVERSE_CAMERA_SETTLEMENT_TOLERANCE: RepositoryUniverseCameraSettlementTolerance = {
   targetDistance: 0.2,
@@ -104,6 +149,111 @@ export function exponentialDampingAlpha(ratePerSecond: number, deltaSeconds: num
 
 export function dampScalar(current: number, desired: number, ratePerSecond: number, deltaSeconds: number) {
   return current + (desired - current) * exponentialDampingAlpha(ratePerSecond, deltaSeconds);
+}
+
+export function stepRepositoryUniverseVisualScalar(
+  current: number,
+  desired: number,
+  ratePerSecond: number,
+  deltaSeconds: number,
+  reducedMotion = false,
+  epsilon = REPOSITORY_UNIVERSE_VISUAL_SETTLEMENT_EPSILON,
+) {
+  if (reducedMotion || Math.abs(desired - current) <= epsilon) return desired;
+  const next = dampScalar(current, desired, ratePerSecond, deltaSeconds);
+  return Math.abs(desired - next) <= epsilon ? desired : next;
+}
+
+export function repositoryUniverseVisualScalarActive(
+  current: number,
+  desired: number,
+  epsilon = REPOSITORY_UNIVERSE_VISUAL_SETTLEMENT_EPSILON,
+) {
+  return Math.abs(desired - current) > epsilon;
+}
+
+export function repositoryUniverseOpacityVisible(
+  targetVisible: boolean,
+  currentOpacity: number,
+  epsilon = REPOSITORY_UNIVERSE_VISUAL_SETTLEMENT_EPSILON,
+) {
+  return targetVisible || currentOpacity > epsilon;
+}
+
+/** Reveal owns spatial position in U2A; this multiplier composes any base scale with U2B emphasis. */
+export function composeRepositoryUniverseVisualScale(baseScale: number, emphasisScale: number) {
+  return baseScale * emphasisScale;
+}
+
+export function repositoryUniverseNodeOpacityTarget(state: RepositoryUniverseNodeVisualPriority) {
+  if (!state.visible) return 0;
+  if (state.selected) return 1;
+  if (state.hovered || state.matched) return 0.98;
+  if (state.routeHighlighted) return 0.96;
+  if (state.connected) return 0.92;
+  if (state.quiet || state.suppressed) return 0.3;
+  return state.importance === 'background' ? 0.58 : 0.86;
+}
+
+export function repositoryUniverseNodeScaleTarget(state: RepositoryUniverseNodeVisualPriority) {
+  if (state.selected) return 2.18;
+  if (state.hovered) return 1.58;
+  if (state.matched) return 1.48;
+  if (state.routeHighlighted) return 1.38;
+  if (state.connected) return 1.32;
+  return state.importance === 'primary' ? 1.08 : 1;
+}
+
+export function repositoryUniverseNodeEmissiveTarget(state: RepositoryUniverseNodeVisualPriority) {
+  if (state.selected) return 1.25;
+  if (state.hovered || state.matched) return 0.78;
+  if (state.routeHighlighted) return 0.64;
+  if (state.connected) return 0.54;
+  return state.importance === 'primary' ? 0.32 : 0.09;
+}
+
+export function repositoryUniverseNodeHaloOpacityTarget(state: RepositoryUniverseNodeVisualPriority) {
+  if (!state.visible) return 0;
+  if (state.selected) return 0.58;
+  if (state.hovered) return 0.25;
+  if (state.matched) return 0.22;
+  if (state.routeHighlighted) return 0.18;
+  if (state.connected) return 0.13;
+  return 0;
+}
+
+export function repositoryUniverseNodeHaloScaleTarget(state: RepositoryUniverseNodeVisualPriority) {
+  if (state.selected) return 1.5;
+  if (state.routeHighlighted) return 1.22;
+  if (state.connected) return 1.16;
+  return 1;
+}
+
+export function repositoryUniverseEdgeOpacityTarget(state: RepositoryUniverseEdgeVisualPriority) {
+  if (!state.visible) return 0;
+  if (state.directlySelected) return state.evidenceType === 'heuristic' ? 0.38 : 0.56;
+  if (state.focused) return 0.25;
+  if (state.relationship === 'contains') return state.contextualFocusActive ? 0.035 : 0.05;
+  return state.contextualFocusActive ? 0.08 : 0.12;
+}
+
+export function repositoryUniverseLabelDistanceBand(
+  cameraRadius: number,
+  previous: RepositoryUniverseLabelDistanceBand = cameraRadius > REPOSITORY_UNIVERSE_LABEL_FAR_RADIUS
+    ? 'far'
+    : cameraRadius > REPOSITORY_UNIVERSE_LABEL_MEDIUM_RADIUS
+      ? 'medium'
+      : 'near',
+): RepositoryUniverseLabelDistanceBand {
+  if (previous === 'far') {
+    return cameraRadius < REPOSITORY_UNIVERSE_LABEL_FAR_RADIUS - REPOSITORY_UNIVERSE_LABEL_BAND_HYSTERESIS ? 'medium' : 'far';
+  }
+  if (previous === 'near') {
+    return cameraRadius > REPOSITORY_UNIVERSE_LABEL_MEDIUM_RADIUS + REPOSITORY_UNIVERSE_LABEL_BAND_HYSTERESIS ? 'medium' : 'near';
+  }
+  if (cameraRadius > REPOSITORY_UNIVERSE_LABEL_FAR_RADIUS + REPOSITORY_UNIVERSE_LABEL_BAND_HYSTERESIS) return 'far';
+  if (cameraRadius < REPOSITORY_UNIVERSE_LABEL_MEDIUM_RADIUS - REPOSITORY_UNIVERSE_LABEL_BAND_HYSTERESIS) return 'near';
+  return 'medium';
 }
 
 export function dampVectorComponents(

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposalModel, RepositoryUniverseCluster, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
 import {
+  REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES,
+  composeRepositoryUniverseVisualScale,
   createRepositoryUniverseDiagnosticsChannel,
   createRepositoryUniverseFocusRequest,
   idleRotationDelta,
@@ -11,9 +13,20 @@ import {
   repositoryUniverseCameraTargetMatches,
   repositoryUniverseFocusCanSettle,
   repositoryUniverseFrameDelta,
+  repositoryUniverseEdgeOpacityTarget,
+  repositoryUniverseLabelDistanceBand,
+  repositoryUniverseNodeEmissiveTarget,
+  repositoryUniverseNodeHaloOpacityTarget,
+  repositoryUniverseNodeHaloScaleTarget,
+  repositoryUniverseNodeOpacityTarget,
+  repositoryUniverseNodeScaleTarget,
+  repositoryUniverseOpacityVisible,
+  repositoryUniverseVisualScalarActive,
   repositoryUniverseVectorDistance,
   stepRepositoryUniverseCamera,
+  stepRepositoryUniverseVisualScalar,
   type RepositoryUniverseFocusRequest,
+  type RepositoryUniverseLabelDistanceBand,
   type RepositoryUniverseSettlementState,
 } from '@/lib/workspace/repositoryUniverseMotion';
 import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, softenClusterColor, blendHex } from '@/lib/workspace/repositoryUniverseVisual';
@@ -52,6 +65,11 @@ interface RepositoryUniverse3DProps {
 
 type PointerMode = 'orbit' | 'pan';
 
+interface VisualScalarMotion {
+  current: number;
+  target: number;
+}
+
 interface NodeRenderItem {
   node: RepositoryUniverseNode;
   mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
@@ -61,16 +79,28 @@ interface NodeRenderItem {
   labelTexture: THREE.CanvasTexture;
   baseRadius: number;
   position: THREE.Vector3;
+  opacityMotion: VisualScalarMotion;
+  scaleMotion: VisualScalarMotion;
+  emissiveMotion: VisualScalarMotion;
+  haloOpacityMotion: VisualScalarMotion;
+  haloScaleMotion: VisualScalarMotion;
+  labelOpacityMotion: VisualScalarMotion;
+  meshTargetVisible: boolean;
+  haloTargetVisible: boolean;
+  labelTargetVisible: boolean;
 }
 
 interface EdgeRenderItem {
   edge: RepositoryUniverseEdge;
   line: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  opacityMotion: VisualScalarMotion;
+  targetVisible: boolean;
 }
 
 interface ClusterRenderItem {
   cluster: RepositoryUniverseCluster;
   ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
+  opacityMotion: VisualScalarMotion;
 }
 
 interface ProposalRenderItem {
@@ -82,18 +112,25 @@ interface ProposalRenderItem {
   labelMaterial: THREE.SpriteMaterial;
   labelTexture: THREE.CanvasTexture;
   position: THREE.Vector3;
+  opacityMotion: VisualScalarMotion;
+  scaleMotion: VisualScalarMotion;
+  haloOpacityMotion: VisualScalarMotion;
+  labelOpacityMotion: VisualScalarMotion;
+  meshTargetVisible: boolean;
+  haloTargetVisible: boolean;
+  labelTargetVisible: boolean;
 }
 
 interface ProposalEdgeRenderItem {
   proposalId: string;
   domain: string;
   line: THREE.Line<THREE.BufferGeometry, THREE.LineDashedMaterial>;
+  opacityMotion: VisualScalarMotion;
+  targetVisible: boolean;
 }
 
 const INITIAL_APPEARANCE_MS = 1400;
 const IDLE_ROTATION_DELAY_MS = 3600;
-const LABEL_FAR_RADIUS = 720;
-const LABEL_MEDIUM_RADIUS = 420;
 const LAYOUT_SPREAD_XZ = 0.96;
 const LAYOUT_SPREAD_Y = 0.78;
 
@@ -281,23 +318,42 @@ export default function RepositoryUniverse3D({
     let pendingFocusRequest: RepositoryUniverseFocusRequest | null = null;
     let pendingFocusTarget: UniverseCameraState | null = null;
     let focusSettlementState: RepositoryUniverseSettlementState = 'idle';
+    let labelDistanceBand: RepositoryUniverseLabelDistanceBand = repositoryUniverseLabelDistanceBand(cameraStateRef.current.radius);
+    let activeVisualInterpolationCount = 0;
     const startedAt = performance.now();
 
     renderer.setClearColor(0x050914, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, fullscreenRef.current ? 1.5 : 1.35));
-    const diagnostics = createRepositoryUniverseDiagnosticsChannel(import.meta.env.DEV, window, {
-      renderCalls: 0,
-      triangles: 0,
-      lines: 0,
-      approximateFps: 0,
-      visibleNodeCount: visibleNodeSetRef.current.size,
-      visibleEdgeCount: visibleEdgeSetRef.current.size,
-      canvasWidth: canvas.width,
-      canvasHeight: canvas.height,
-      devicePixelRatio: renderer.getPixelRatio(),
-      programmaticCameraMotionActive: false,
-      settlementState: focusSettlementState,
-    });
+    const diagnostics = import.meta.env.DEV
+      ? createRepositoryUniverseDiagnosticsChannel(true, window, {
+        renderCalls: 0,
+        triangles: 0,
+        lines: 0,
+        approximateFps: 0,
+        visibleNodeCount: visibleNodeSetRef.current.size,
+        visibleEdgeCount: visibleEdgeSetRef.current.size,
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+        devicePixelRatio: renderer.getPixelRatio(),
+        programmaticCameraMotionActive: false,
+        visualMotionActive: false,
+        activeVisualInterpolationCount: 0,
+        settlementState: focusSettlementState,
+      })
+      : undefined;
+
+    let currentAnimationDeltaSeconds = 0;
+    const visualScalar = (initial: number): VisualScalarMotion => ({ current: initial, target: initial });
+    const stepVisualScalar = (motion: VisualScalarMotion, rate: number) => {
+      motion.current = stepRepositoryUniverseVisualScalar(
+        motion.current,
+        motion.target,
+        rate,
+        currentAnimationDeltaSeconds,
+        reducedMotionRef.current,
+      );
+      return repositoryUniverseVisualScalarActive(motion.current, motion.target);
+    };
 
     scene.add(new THREE.AmbientLight(0x8fb9ff, 1.25));
     const directional = new THREE.DirectionalLight(0xd8f7ff, 1.65);
@@ -349,7 +405,7 @@ export default function RepositoryUniverse3D({
       ring.position.set(position.x, position.y - 10, position.z);
       ring.rotation.x = Math.PI / 2;
       scene.add(ring);
-      clusterItems.set(cluster.id, { cluster, ring });
+      clusterItems.set(cluster.id, { cluster, ring, opacityMotion: visualScalar(material.opacity) });
     }
 
     for (const edge of model.edges) {
@@ -364,7 +420,7 @@ export default function RepositoryUniverse3D({
       });
       const geometry = new THREE.BufferGeometry().setFromPoints([source, target]);
       const line = new THREE.Line(geometry, material);
-      edgeItems.set(edge.id, { edge, line });
+      edgeItems.set(edge.id, { edge, line, opacityMotion: visualScalar(material.opacity), targetVisible: true });
       scene.add(line);
       addRelatedNode(edge.source, edge.target);
       addRelatedNode(edge.target, edge.source);
@@ -388,6 +444,7 @@ export default function RepositoryUniverse3D({
         mesh.position.copy(position);
         mesh.userData.proposalId = proposal.id;
         scene.add(mesh);
+        mesh.visible = false;
 
         const haloMaterial = new THREE.MeshBasicMaterial({
           color: baseColor,
@@ -399,13 +456,31 @@ export default function RepositoryUniverse3D({
         const halo = new THREE.Mesh(sphereFor(13.4), haloMaterial);
         halo.position.copy(position);
         scene.add(halo);
+        halo.visible = false;
 
         const { sprite: label, material: labelMaterial, texture } = labelSprite('Proposed', '#e0faff');
         label.position.set(position.x, position.y + 12, position.z);
         label.scale.set(44, 13, 1);
         scene.add(label);
+        label.visible = false;
 
-        proposalItems.set(proposal.id, { proposalId: proposal.id, domain: proposal.domain, mesh, halo, label, labelMaterial, labelTexture: texture, position });
+        proposalItems.set(proposal.id, {
+          proposalId: proposal.id,
+          domain: proposal.domain,
+          mesh,
+          halo,
+          label,
+          labelMaterial,
+          labelTexture: texture,
+          position,
+          opacityMotion: visualScalar(material.opacity),
+          scaleMotion: visualScalar(1),
+          haloOpacityMotion: visualScalar(haloMaterial.opacity),
+          labelOpacityMotion: visualScalar(labelMaterial.opacity),
+          meshTargetVisible: false,
+          haloTargetVisible: false,
+          labelTargetVisible: false,
+        });
       }
 
       for (const edge of proposal.graphChanges.proposedEdges) {
@@ -425,7 +500,14 @@ export default function RepositoryUniverse3D({
         const line = new THREE.Line(geometry, material);
         line.computeLineDistances();
         scene.add(line);
-        proposalEdgeItems.set(edge.id, { proposalId: proposal.id, domain: proposal.domain, line });
+        line.visible = false;
+        proposalEdgeItems.set(edge.id, {
+          proposalId: proposal.id,
+          domain: proposal.domain,
+          line,
+          opacityMotion: visualScalar(material.opacity),
+          targetVisible: false,
+        });
       }
     }
 
@@ -458,13 +540,33 @@ export default function RepositoryUniverse3D({
       const halo = new THREE.Mesh(sphereFor(baseRadius * 2.25), haloMaterial);
       halo.position.copy(mesh.position);
       scene.add(halo);
+      halo.visible = false;
 
       const { sprite: label, material: labelMaterial, texture } = labelSprite(shortLabel(displayLabel), labelColorForNode(node));
       label.position.set(position.x, position.y + baseRadius + 5, position.z);
       label.scale.set(node.kind === 'repository' ? 70 : 42, node.kind === 'repository' ? 20 : 14, 1);
       scene.add(label);
+      label.visible = false;
 
-      nodeItems.set(node.id, { node, mesh, halo, label, labelMaterial, labelTexture: texture, baseRadius, position });
+      nodeItems.set(node.id, {
+        node,
+        mesh,
+        halo,
+        label,
+        labelMaterial,
+        labelTexture: texture,
+        baseRadius,
+        position,
+        opacityMotion: visualScalar(material.opacity),
+        scaleMotion: visualScalar(1),
+        emissiveMotion: visualScalar(material.emissiveIntensity),
+        haloOpacityMotion: visualScalar(haloMaterial.opacity),
+        haloScaleMotion: visualScalar(1),
+        labelOpacityMotion: visualScalar(labelMaterial.opacity),
+        meshTargetVisible: true,
+        haloTargetVisible: false,
+        labelTargetVisible: false,
+      });
     }
 
     const resize = () => {
@@ -693,6 +795,8 @@ export default function RepositoryUniverse3D({
 
     let selectedRelatedCacheKey = '';
     let selectedRelatedCache = new Set<string>();
+    let selectedRelatedClusterCacheKey = '';
+    const selectedRelatedClusterCache = new Set<string>();
     const relatedNodeIdsForSelection = (selectedId?: string) => {
       const cacheKey = selectedId || '';
       if (cacheKey === selectedRelatedCacheKey) return selectedRelatedCache;
@@ -709,6 +813,18 @@ export default function RepositoryUniverse3D({
       return related;
     };
 
+    const relatedClusterIdsForSelection = (selectedId: string | undefined, relatedNodeIds: Set<string>) => {
+      const cacheKey = selectedId || '';
+      if (cacheKey === selectedRelatedClusterCacheKey) return selectedRelatedClusterCache;
+      selectedRelatedClusterCache.clear();
+      for (const nodeId of relatedNodeIds) {
+        const clusterId = nodeItems.get(nodeId)?.node.clusterId;
+        if (clusterId) selectedRelatedClusterCache.add(clusterId);
+      }
+      selectedRelatedClusterCacheKey = cacheKey;
+      return selectedRelatedClusterCache;
+    };
+
     const updateVisualState = () => {
       const selectedId = selectedNodeIdRef.current;
       const focusedCluster = focusedClusterIdRef.current;
@@ -722,25 +838,23 @@ export default function RepositoryUniverse3D({
       const selectedProposal = selectedProposalIdRef.current;
       const excludedProposals = excludedProposalSetRef.current;
       const selectedRelated = relatedNodeIdsForSelection(selectedId);
-
       const selectedClusterId = selectedId ? nodeItems.get(selectedId)?.node.clusterId : null;
-      const selectedRelatedClusterIds = new Set<string>();
-      for (const nodeId of selectedRelated) {
-        const clusterId = nodeItems.get(nodeId)?.node.clusterId;
-        if (clusterId) selectedRelatedClusterIds.add(clusterId);
-      }
+      const selectedRelatedClusterIds = relatedClusterIdsForSelection(selectedId, selectedRelated);
+      let interpolationCount = 0;
 
       for (const item of clusterItems.values()) {
         const active = Boolean(focusedCluster && item.cluster.id === focusedCluster) || item.cluster.id === selectedClusterId;
         const related = selectedRelatedClusterIds.has(item.cluster.id);
         item.ring.visible = true;
-        item.ring.material.opacity = active
+        item.opacityMotion.target = active
           ? 0.09
           : related
             ? 0.045
             : focusedCluster || selectedId
               ? 0.012
               : 0.022;
+        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.clusterRing)) interpolationCount += 1;
+        item.ring.material.opacity = item.opacityMotion.current;
         item.ring.material.color.setHex(colorForCluster(item.cluster, active, related));
       }
 
@@ -749,16 +863,18 @@ export default function RepositoryUniverse3D({
         const directlySelected = Boolean(selectedId && (edge.source === selectedId || edge.target === selectedId));
         const focused = Boolean(focusedCluster && nodeById.get(edge.source)?.clusterId === focusedCluster && nodeById.get(edge.target)?.clusterId === focusedCluster);
         const visible = visibleEdges.has(edge.id);
-        line.visible = visible;
-        line.material.opacity = !visible
-          ? 0
-          : directlySelected
-            ? edge.evidenceType === 'heuristic' ? 0.38 : 0.56
-            : focused
-              ? 0.25
-              : edge.relationship === 'contains'
-                ? selectedId || focusedCluster ? 0.035 : 0.05
-                : selectedId || focusedCluster ? 0.08 : 0.12;
+        item.targetVisible = visible;
+        item.opacityMotion.target = repositoryUniverseEdgeOpacityTarget({
+          visible,
+          directlySelected,
+          focused,
+          relationship: edge.relationship,
+          evidenceType: edge.evidenceType,
+          contextualFocusActive: Boolean(selectedId || focusedCluster),
+        });
+        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.edge)) interpolationCount += 1;
+        line.material.opacity = item.opacityMotion.current;
+        line.visible = repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
         line.material.color.setHex(colorForEdge(edge, directlySelected, focused));
       }
 
@@ -766,12 +882,16 @@ export default function RepositoryUniverse3D({
         const visible = mode === 'with-shipseal' && (domain === 'all' || item.domain === domain);
         const selected = selectedProposal === item.proposalId;
         const excluded = excludedProposals.has(item.proposalId);
-        item.line.visible = visible;
-        item.line.material.opacity = !visible ? 0 : excluded ? 0.09 : selected ? 0.56 : 0.26;
+        item.targetVisible = visible;
+        item.opacityMotion.target = !visible ? 0 : excluded ? 0.09 : selected ? 0.56 : 0.26;
+        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.edge)) interpolationCount += 1;
+        item.line.material.opacity = item.opacityMotion.current;
+        item.line.visible = repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
         item.line.material.color.setHex(selected ? 0xe0faff : 0x9bdcf3);
       }
 
       const radius = cameraStateRef.current.radius;
+      labelDistanceBand = repositoryUniverseLabelDistanceBand(radius, labelDistanceBand);
       for (const item of nodeItems.values()) {
         const { node, mesh, halo, label, labelMaterial, baseRadius } = item;
         const visible = visibleNodes.has(node.id);
@@ -783,21 +903,56 @@ export default function RepositoryUniverse3D({
         const focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
         const quiet = Boolean((selectedId || routeActive) && !selected && !connected && !matched && !routeHighlighted && node.id !== model.rootNodeId);
         const suppressed = Boolean(focusedCluster && !focused && !selected && !matched && !routeHighlighted);
-        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.98 : routeHighlighted ? 0.96 : connected ? 0.92 : quiet || suppressed ? 0.3 : node.importance === 'background' ? 0.58 : 0.86;
-        const scale = selected ? 2.18 : hovered ? 1.58 : matched ? 1.48 : routeHighlighted ? 1.38 : connected ? 1.32 : node.importance === 'primary' ? 1.08 : 1;
+        const priority = {
+          visible,
+          selected,
+          hovered,
+          matched,
+          routeHighlighted,
+          connected,
+          quiet,
+          suppressed,
+          importance: node.importance,
+        };
+        item.meshTargetVisible = visible;
+        item.opacityMotion.target = repositoryUniverseNodeOpacityTarget(priority);
+        item.scaleMotion.target = repositoryUniverseNodeScaleTarget(priority);
+        item.emissiveMotion.target = repositoryUniverseNodeEmissiveTarget(priority);
+        item.haloOpacityMotion.target = repositoryUniverseNodeHaloOpacityTarget(priority);
+        item.haloScaleMotion.target = repositoryUniverseNodeHaloScaleTarget(priority);
+        item.haloTargetVisible = item.haloOpacityMotion.target > 0;
 
-        mesh.visible = opacity > 0.02;
-        mesh.material.opacity = opacity;
+        let itemInterpolating = false;
+        const opacityRate = item.opacityMotion.target >= item.opacityMotion.current
+          ? REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.dimIn
+          : REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.dimOut;
+        const scaleRate = Math.max(item.scaleMotion.current, item.scaleMotion.target) >= 2
+          ? REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.selection
+          : REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.hover;
+        itemInterpolating = stepVisualScalar(item.opacityMotion, opacityRate) || itemInterpolating;
+        itemInterpolating = stepVisualScalar(item.scaleMotion, scaleRate) || itemInterpolating;
+        itemInterpolating = stepVisualScalar(item.emissiveMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.emissive) || itemInterpolating;
+        itemInterpolating = stepVisualScalar(
+          item.haloOpacityMotion,
+          item.haloOpacityMotion.target > item.haloOpacityMotion.current
+            ? REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.haloIn
+            : REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.haloOut,
+        ) || itemInterpolating;
+        itemInterpolating = stepVisualScalar(item.haloScaleMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.haloIn) || itemInterpolating;
+
+        mesh.material.opacity = item.opacityMotion.current;
+        mesh.visible = repositoryUniverseOpacityVisible(item.meshTargetVisible, item.opacityMotion.current);
         mesh.material.color.setHex(colorForNode(node, selected, matched || routeHighlighted, hovered, connected));
         mesh.material.emissive.setHex(emissiveForNode(node, selected, matched || routeHighlighted, hovered));
-        mesh.material.emissiveIntensity = selected ? 1.25 : hovered || matched ? 0.78 : routeHighlighted ? 0.64 : connected ? 0.54 : node.importance === 'primary' ? 0.32 : 0.09;
+        mesh.material.emissiveIntensity = item.emissiveMotion.current;
         mesh.material.wireframe = node.evidenceType === 'missing' || node.kind === 'recommendation';
-        mesh.scale.setScalar(scale);
+        // U2A reveal owns radial position; U2B emphasis owns object scale, composed independently.
+        mesh.scale.setScalar(composeRepositoryUniverseVisualScale(1, item.scaleMotion.current));
 
-        halo.visible = visible && (selected || hovered || matched || routeHighlighted || connected);
-        halo.material.opacity = selected ? 0.58 : hovered ? 0.25 : matched ? 0.22 : routeHighlighted ? 0.18 : connected ? 0.13 : 0;
+        halo.material.opacity = item.haloOpacityMotion.current;
+        halo.visible = repositoryUniverseOpacityVisible(item.haloTargetVisible, item.haloOpacityMotion.current);
         halo.material.color.setHex(selected ? 0xe0faff : routeHighlighted ? 0xa7f3ff : connected ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16) : 0x67e8f9);
-        halo.scale.setScalar(selected ? 1.5 : routeHighlighted ? 1.22 : connected ? 1.16 : 1);
+        halo.scale.setScalar(item.haloScaleMotion.current);
 
         const labelVisible = visible && shouldRenderLabel(node, {
           selected,
@@ -808,13 +963,18 @@ export default function RepositoryUniverse3D({
           focusedClusterId: focusedCluster,
           hasSelection: Boolean(selectedId),
           cameraRadius: radius,
+          distanceBand: labelDistanceBand,
         });
-        label.visible = labelVisible;
-        labelMaterial.opacity = labelVisible ? labelOpacity(node, radius, selected, hovered, matched, connected) : 0;
-        label.position.set(item.position.x, item.position.y + baseRadius * scale + 5, item.position.z);
-        const labelScale = labelScaleForNode(node, radius, selected || hovered || matched);
+        item.labelTargetVisible = labelVisible;
+        item.labelOpacityMotion.target = labelVisible ? labelOpacity(node, labelDistanceBand, selected, hovered, matched, connected) : 0;
+        itemInterpolating = stepVisualScalar(item.labelOpacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.label) || itemInterpolating;
+        labelMaterial.opacity = item.labelOpacityMotion.current;
+        label.visible = repositoryUniverseOpacityVisible(item.labelTargetVisible, item.labelOpacityMotion.current);
+        label.position.set(item.position.x, item.position.y + baseRadius * item.scaleMotion.current + 5, item.position.z);
+        const labelScale = labelScaleForNode(node, labelDistanceBand, selected || hovered || matched);
         label.scale.set(labelScale.width, labelScale.height, 1);
         label.lookAt(camera.position);
+        if (itemInterpolating) interpolationCount += 1;
       }
 
       for (const item of proposalItems.values()) {
@@ -822,22 +982,42 @@ export default function RepositoryUniverse3D({
         const selected = selectedProposal === item.proposalId;
         const excluded = excludedProposals.has(item.proposalId);
         const opacity = !visible ? 0 : excluded ? 0.24 : selected ? 0.92 : 0.66;
-        item.mesh.visible = opacity > 0.02;
-        item.mesh.material.opacity = opacity;
-        item.mesh.scale.setScalar(selected ? 1.34 : 1);
-        item.halo.visible = visible && !excluded;
-        item.halo.material.opacity = selected ? 0.26 : 0.12;
-        item.label.visible = visible;
-        item.labelMaterial.opacity = visible ? excluded ? 0.34 : selected ? 0.94 : 0.7 : 0;
-        item.label.position.set(item.position.x, item.position.y + (selected ? 16 : 12), item.position.z);
+        item.meshTargetVisible = visible;
+        item.haloTargetVisible = visible && !excluded;
+        item.labelTargetVisible = visible;
+        item.opacityMotion.target = opacity;
+        item.scaleMotion.target = selected ? 1.34 : 1;
+        item.haloOpacityMotion.target = item.haloTargetVisible ? selected ? 0.26 : 0.12 : 0;
+        item.labelOpacityMotion.target = visible ? excluded ? 0.34 : selected ? 0.94 : 0.7 : 0;
+        let itemInterpolating = false;
+        itemInterpolating = stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.proposal) || itemInterpolating;
+        itemInterpolating = stepVisualScalar(item.scaleMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.proposal) || itemInterpolating;
+        itemInterpolating = stepVisualScalar(
+          item.haloOpacityMotion,
+          item.haloOpacityMotion.target > item.haloOpacityMotion.current
+            ? REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.haloIn
+            : REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.haloOut,
+        ) || itemInterpolating;
+        itemInterpolating = stepVisualScalar(item.labelOpacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.label) || itemInterpolating;
+        item.mesh.material.opacity = item.opacityMotion.current;
+        item.mesh.visible = repositoryUniverseOpacityVisible(item.meshTargetVisible, item.opacityMotion.current);
+        item.mesh.scale.setScalar(item.scaleMotion.current);
+        item.halo.material.opacity = item.haloOpacityMotion.current;
+        item.halo.visible = repositoryUniverseOpacityVisible(item.haloTargetVisible, item.haloOpacityMotion.current);
+        item.labelMaterial.opacity = item.labelOpacityMotion.current;
+        item.label.visible = repositoryUniverseOpacityVisible(item.labelTargetVisible, item.labelOpacityMotion.current);
+        item.label.position.set(item.position.x, item.position.y + 12 + (item.scaleMotion.current - 1) * 12, item.position.z);
         item.label.lookAt(camera.position);
+        if (itemInterpolating) interpolationCount += 1;
       }
+      return interpolationCount;
     };
 
     const animate = (timestamp: number) => {
       if (disposed) return;
       const now = timestamp;
       const { animationDeltaSeconds } = repositoryUniverseFrameDelta(lastFrameTimestamp, timestamp);
+      currentAnimationDeltaSeconds = animationDeltaSeconds;
       lastFrameTimestamp = timestamp;
       const elapsed = now - startedAt;
       if (!reducedMotionRef.current && animateInRef.current && elapsed > INITIAL_APPEARANCE_MS && !localSettled) {
@@ -864,7 +1044,11 @@ export default function RepositoryUniverse3D({
       }
       const { desired, next } = applyCamera(animationDeltaSeconds);
       updateFocusSettlement(desired, next);
-      updateVisualState();
+      activeVisualInterpolationCount = updateVisualState();
+      diagnostics?.update({
+        visualMotionActive: activeVisualInterpolationCount > 0,
+        activeVisualInterpolationCount,
+      });
       renderer.render(scene, camera);
       fpsWindowStartedAt ??= timestamp;
       fpsWindowFrameCount += 1;
@@ -1038,28 +1222,29 @@ function shouldRenderLabel(node: RepositoryUniverseNode, state: {
   focusedClusterId?: string | null;
   hasSelection?: boolean;
   cameraRadius: number;
+  distanceBand: RepositoryUniverseLabelDistanceBand;
 }) {
   if (state.selected || state.hovered || state.matched) return true;
   if (node.kind === 'repository') return true;
   if (state.connected && (state.cameraRadius < 980 || node.importance !== 'background')) return true;
   if (state.hasSelection && !state.connected && node.importance === 'background') return false;
-  if (state.cameraRadius > LABEL_FAR_RADIUS) return node.kind === 'folder' && node.importance === 'supporting';
-  if (state.cameraRadius > LABEL_MEDIUM_RADIUS) {
+  if (state.distanceBand === 'far') return node.kind === 'folder' && node.importance === 'supporting';
+  if (state.distanceBand === 'medium') {
     return node.kind === 'folder' || node.importance === 'primary' || Boolean(state.connected && node.importance !== 'background');
   }
   if (state.focusedClusterId && state.focused && node.importance !== 'background') return true;
   return node.kind === 'folder' || node.importance !== 'background' || Boolean(state.connected);
 }
 
-function labelOpacity(node: RepositoryUniverseNode, cameraRadius: number, selected?: boolean, hovered?: boolean, matched?: boolean, connected?: boolean) {
+function labelOpacity(node: RepositoryUniverseNode, distanceBand: RepositoryUniverseLabelDistanceBand, selected?: boolean, hovered?: boolean, matched?: boolean, connected?: boolean) {
   if (selected || hovered || matched) return 1;
   if (connected) return 0.78;
-  if (cameraRadius > LABEL_FAR_RADIUS) return node.kind === 'repository' ? 0.86 : 0.58;
+  if (distanceBand === 'far') return node.kind === 'repository' ? 0.86 : 0.58;
   return node.importance === 'background' ? 0.44 : 0.68;
 }
 
-function labelScaleForNode(node: RepositoryUniverseNode, cameraRadius: number, priority?: boolean) {
-  const zoomBoost = cameraRadius < LABEL_MEDIUM_RADIUS ? 1.08 : cameraRadius > LABEL_FAR_RADIUS ? 0.82 : 0.94;
+function labelScaleForNode(node: RepositoryUniverseNode, distanceBand: RepositoryUniverseLabelDistanceBand, priority?: boolean) {
+  const zoomBoost = distanceBand === 'near' ? 1.08 : distanceBand === 'far' ? 0.82 : 0.94;
   const baseWidth = node.kind === 'repository' ? 66 : priority ? 50 : 36;
   const baseHeight = node.kind === 'repository' ? 18 : priority ? 16 : 12;
   return { width: baseWidth * zoomBoost, height: baseHeight * zoomBoost };
