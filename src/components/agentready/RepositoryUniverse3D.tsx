@@ -1,6 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposalModel, RepositoryUniverseCluster, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
+import {
+  createRepositoryUniverseDiagnosticsChannel,
+  createRepositoryUniverseFocusRequest,
+  idleRotationDelta,
+  nextRepositoryUniverseSettledFrameCount,
+  repositoryUniverseCameraConverged,
+  repositoryUniverseCameraPosition,
+  repositoryUniverseCameraTargetMatches,
+  repositoryUniverseFocusCanSettle,
+  repositoryUniverseFrameDelta,
+  repositoryUniverseVectorDistance,
+  stepRepositoryUniverseCamera,
+  type RepositoryUniverseFocusRequest,
+  type RepositoryUniverseSettlementState,
+} from '@/lib/workspace/repositoryUniverseMotion';
 import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, softenClusterColor, blendHex } from '@/lib/workspace/repositoryUniverseVisual';
 
 export interface UniverseCameraState {
@@ -258,10 +273,31 @@ export default function RepositoryUniverse3D({
     let userInteractedAt = performance.now();
     let localSettled = reducedMotionRef.current || !animateInRef.current;
     let lastPublishedCamera = cameraStateRef.current;
+    let lastFrameTimestamp: number | null = null;
+    let fpsWindowStartedAt: number | null = null;
+    let fpsWindowFrameCount = 0;
+    let approximateFps = 0;
+    let lastFocusRequest: RepositoryUniverseFocusRequest | null = null;
+    let pendingFocusRequest: RepositoryUniverseFocusRequest | null = null;
+    let pendingFocusTarget: UniverseCameraState | null = null;
+    let focusSettlementState: RepositoryUniverseSettlementState = 'idle';
     const startedAt = performance.now();
 
     renderer.setClearColor(0x050914, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, fullscreenRef.current ? 1.5 : 1.35));
+    const diagnostics = createRepositoryUniverseDiagnosticsChannel(import.meta.env.DEV, window, {
+      renderCalls: 0,
+      triangles: 0,
+      lines: 0,
+      approximateFps: 0,
+      visibleNodeCount: visibleNodeSetRef.current.size,
+      visibleEdgeCount: visibleEdgeSetRef.current.size,
+      canvasWidth: canvas.width,
+      canvasHeight: canvas.height,
+      devicePixelRatio: renderer.getPixelRatio(),
+      programmaticCameraMotionActive: false,
+      settlementState: focusSettlementState,
+    });
 
     scene.add(new THREE.AmbientLight(0x8fb9ff, 1.25));
     const directional = new THREE.DirectionalLight(0xd8f7ff, 1.65);
@@ -438,6 +474,11 @@ export default function RepositoryUniverse3D({
       renderer.setSize(width, height, false);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
+      diagnostics?.update({
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+        devicePixelRatio: renderer.getPixelRatio(),
+      });
     };
 
     const resizeObserver = new ResizeObserver(resize);
@@ -450,34 +491,69 @@ export default function RepositoryUniverse3D({
       const distance = Math.abs(clamped.radius - lastPublishedCamera.radius)
         + Math.abs(clamped.theta - lastPublishedCamera.theta) * 100
         + Math.abs(clamped.phi - lastPublishedCamera.phi) * 100
-        + vectorDistance(clamped.target, lastPublishedCamera.target);
+        + repositoryUniverseVectorDistance(clamped.target, lastPublishedCamera.target);
       if (force || distance > 5) {
         lastPublishedCamera = clamped;
         onCameraStateChangeRef.current(clamped);
       }
     };
 
-    const applyCamera = () => {
+    const applyCamera = (deltaSeconds: number) => {
       const desired = clampCameraState(cameraStateRef.current);
       const current = renderCameraStateRef.current;
-      const damping = reducedMotionRef.current ? 1 : 0.18;
-      const next = {
-        theta: lerpAngle(current.theta, desired.theta, damping),
-        phi: current.phi + (desired.phi - current.phi) * damping,
-        radius: current.radius + (desired.radius - current.radius) * damping,
-        target: {
-          x: current.target.x + (desired.target.x - current.target.x) * damping,
-          y: current.target.y + (desired.target.y - current.target.y) * damping,
-          z: current.target.z + (desired.target.z - current.target.z) * damping,
-        },
-      };
+      const next = stepRepositoryUniverseCamera(current, desired, deltaSeconds, reducedMotionRef.current);
       renderCameraStateRef.current = next;
-      const phi = Math.max(0.18, Math.min(Math.PI - 0.18, next.phi));
-      const x = next.target.x + next.radius * Math.sin(phi) * Math.cos(next.theta);
-      const y = next.target.y + next.radius * Math.cos(phi);
-      const z = next.target.z + next.radius * Math.sin(phi) * Math.sin(next.theta);
-      camera.position.set(x, y, z);
+      const position = repositoryUniverseCameraPosition(next);
+      camera.position.set(position.x, position.y, position.z);
       camera.lookAt(next.target.x, next.target.y, next.target.z);
+      return { desired, next };
+    };
+
+    const updateFocusSettlement = (desired: UniverseCameraState, next: UniverseCameraState) => {
+      const request = pendingFocusRequest;
+      if (!request) return;
+
+      if (!pendingFocusTarget || !repositoryUniverseCameraTargetMatches(desired, pendingFocusTarget)) {
+        pendingFocusRequest = null;
+        pendingFocusTarget = null;
+        focusSettlementState = 'interrupted';
+        diagnostics?.update({
+          programmaticCameraMotionActive: false,
+          settlementState: focusSettlementState,
+        });
+        return;
+      }
+
+      if (reducedMotionRef.current) {
+        request.consecutiveSettledFrames = Number.POSITIVE_INFINITY;
+      } else {
+        const converged = repositoryUniverseCameraConverged(next, desired);
+        request.consecutiveSettledFrames = nextRepositoryUniverseSettledFrameCount(request.consecutiveSettledFrames, converged);
+        focusSettlementState = converged ? 'converging' : 'moving';
+      }
+
+      if (!repositoryUniverseFocusCanSettle(request, lastFocusRequest?.generation || 0)) return;
+      pendingFocusRequest = null;
+      pendingFocusTarget = null;
+      focusSettlementState = 'settled';
+      diagnostics?.update({
+        programmaticCameraMotionActive: false,
+        settlementState: focusSettlementState,
+      });
+      onFocusNodeSettledRef.current?.(request.nodeId);
+    };
+
+    const interruptProgrammaticCameraMotion = () => {
+      if (!pendingFocusRequest) return;
+      pendingFocusRequest = null;
+      pendingFocusTarget = null;
+      focusSettlementState = 'interrupted';
+      const current = clampCameraState(renderCameraStateRef.current);
+      publishCamera(current, true);
+      diagnostics?.update({
+        programmaticCameraMotionActive: false,
+        settlementState: focusSettlementState,
+      });
     };
 
     const setPointer = (event: Pick<PointerEvent | MouseEvent, 'clientX' | 'clientY'>) => {
@@ -547,6 +623,7 @@ export default function RepositoryUniverse3D({
 
     function handlePointerDown(event: PointerEvent) {
       if (event.button !== 0 && event.button !== 2) return;
+      interruptProgrammaticCameraMotion();
       setPointer(event);
       canvas.setPointerCapture?.(event.pointerId);
       pointerMode = event.button === 2 ? 'pan' : 'orbit';
@@ -574,6 +651,7 @@ export default function RepositoryUniverse3D({
     }
 
     const handleWheel = (event: WheelEvent) => {
+      interruptProgrammaticCameraMotion();
       const state = cameraStateRef.current;
       const factor = Math.exp(event.deltaY * (fullscreenRef.current ? 0.0009 : 0.00068));
       const nextRadius = Math.max(150, Math.min(1500, state.radius * factor));
@@ -592,13 +670,25 @@ export default function RepositoryUniverse3D({
       const node = nodeId ? nodeById.get(nodeId) : undefined;
       if (!node) return;
       const target = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
-      publishCamera({
+      const focusTarget = clampCameraState({
         ...cameraStateRef.current,
         radius: node.kind === 'file' ? 220 : 300,
         target,
-      }, true);
+      });
+      publishCamera(focusTarget, true);
+      pendingFocusRequest = createRepositoryUniverseFocusRequest(lastFocusRequest, node.id);
+      pendingFocusTarget = focusTarget;
+      lastFocusRequest = pendingFocusRequest;
+      focusSettlementState = 'moving';
+      diagnostics?.update({
+        programmaticCameraMotionActive: true,
+        settlementState: focusSettlementState,
+      });
       onSelectNodeRef.current(node.id);
-      onFocusNodeSettledRef.current?.(node.id);
+      if (reducedMotionRef.current) {
+        const { desired, next } = applyCamera(0);
+        updateFocusSettlement(desired, next);
+      }
     };
 
     let selectedRelatedCacheKey = '';
@@ -744,9 +834,11 @@ export default function RepositoryUniverse3D({
       }
     };
 
-    const animate = () => {
+    const animate = (timestamp: number) => {
       if (disposed) return;
-      const now = performance.now();
+      const now = timestamp;
+      const { animationDeltaSeconds } = repositoryUniverseFrameDelta(lastFrameTimestamp, timestamp);
+      lastFrameTimestamp = timestamp;
       const elapsed = now - startedAt;
       if (!reducedMotionRef.current && animateInRef.current && elapsed > INITIAL_APPEARANCE_MS && !localSettled) {
         localSettled = true;
@@ -755,7 +847,7 @@ export default function RepositoryUniverse3D({
       }
       if (!reducedMotionRef.current && !rotationPausedRef.current && elapsed > INITIAL_APPEARANCE_MS && now - userInteractedAt > IDLE_ROTATION_DELAY_MS) {
         const state = cameraStateRef.current;
-        cameraStateRef.current = { ...state, theta: state.theta + 0.0007 };
+        cameraStateRef.current = { ...state, theta: state.theta + idleRotationDelta(animationDeltaSeconds) };
       }
       const appearance = reducedMotionRef.current || !animateInRef.current ? 1 : easeOutCubic(Math.min(1, elapsed / INITIAL_APPEARANCE_MS));
       for (const item of nodeItems.values()) {
@@ -770,9 +862,31 @@ export default function RepositoryUniverse3D({
         item.label.position.x = item.mesh.position.x;
         item.label.position.z = item.mesh.position.z;
       }
-      applyCamera();
+      const { desired, next } = applyCamera(animationDeltaSeconds);
+      updateFocusSettlement(desired, next);
       updateVisualState();
       renderer.render(scene, camera);
+      fpsWindowStartedAt ??= timestamp;
+      fpsWindowFrameCount += 1;
+      const fpsWindowDurationMs = timestamp - fpsWindowStartedAt;
+      if (fpsWindowDurationMs >= 500) {
+        approximateFps = fpsWindowFrameCount * 1000 / fpsWindowDurationMs;
+        fpsWindowStartedAt = timestamp;
+        fpsWindowFrameCount = 0;
+        diagnostics?.update({
+          renderCalls: renderer.info.render.calls,
+          triangles: renderer.info.render.triangles,
+          lines: renderer.info.render.lines,
+          approximateFps,
+          visibleNodeCount: visibleNodeSetRef.current.size,
+          visibleEdgeCount: visibleEdgeSetRef.current.size,
+          canvasWidth: canvas.width,
+          canvasHeight: canvas.height,
+          devicePixelRatio: renderer.getPixelRatio(),
+          programmaticCameraMotionActive: Boolean(pendingFocusRequest),
+          settlementState: focusSettlementState,
+        });
+      }
       frameId = requestAnimationFrame(animate);
     };
     frameId = requestAnimationFrame(animate);
@@ -806,6 +920,7 @@ export default function RepositoryUniverse3D({
       nodeItems.forEach(item => item.labelTexture.dispose());
       proposalItems.forEach(item => item.labelTexture.dispose());
       sphereGeometryCache.forEach(geometry => geometry.dispose());
+      diagnostics?.dispose();
       renderer.dispose();
     };
   }, [model, transformation]);
@@ -1011,17 +1126,6 @@ function clampCameraState(state: UniverseCameraState): UniverseCameraState {
       z: Math.max(-900, Math.min(900, state.target.z)),
     },
   };
-}
-
-function vectorDistance(first: RepositoryUniversePosition, second: RepositoryUniversePosition) {
-  return Math.hypot(first.x - second.x, first.y - second.y, first.z - second.z);
-}
-
-function lerpAngle(current: number, desired: number, amount: number) {
-  let delta = desired - current;
-  while (delta > Math.PI) delta -= Math.PI * 2;
-  while (delta < -Math.PI) delta += Math.PI * 2;
-  return current + delta * amount;
 }
 
 function easeOutCubic(value: number) {
