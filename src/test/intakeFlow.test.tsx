@@ -40,7 +40,7 @@ vi.mock('@/hooks/useRepoScan', async () => {
         error: null,
         errorCategory: null,
         report: null,
-        steps: ['Reading repository structure'],
+        steps: ['Reading repository'],
         startScan: scanMocks.startScan.mockImplementation(() => {
           setStatus('scanning');
           return Promise.resolve(null);

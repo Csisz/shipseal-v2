@@ -149,7 +149,7 @@ describe('deep-intelligence request construction', () => {
     unknownEvidence.items[0].supportingEvidenceIds.push('evidence:missing');
     expect(() => buildRepositoryDeepIntelligenceRequest({ contextBundle: unknownEvidence, evidenceResult, requestedCapabilities: ['structured-output'] })).toThrow(/unknown evidence/i);
 
-    const incompatible = structuredClone(contextBundle) as RepositoryIntelligenceContextBundle & { version: string };
+    const incompatible = structuredClone(contextBundle) as Omit<RepositoryIntelligenceContextBundle, 'version'> & { version: string };
     incompatible.version = 'unsupported';
     expect(() => buildRepositoryDeepIntelligenceRequest({ contextBundle: incompatible as RepositoryIntelligenceContextBundle, evidenceResult, requestedCapabilities: ['structured-output'] })).toThrow(/incompatible/i);
 

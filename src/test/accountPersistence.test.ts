@@ -9,7 +9,6 @@ import { InMemoryAccountPersistenceStore } from '../../api/_lib/inMemoryAccountP
 import { createAccountSession, hashSessionToken } from '../../api/_lib/accountSession';
 import { serializeSafeDatabaseJson, setAccountPersistenceStoreForTests } from '../../api/_lib/accountPersistence';
 import { buildSampleReport } from '@/lib/readiness';
-import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
 import { buildSaveProjectRequest } from '@/lib/persistence/buildSnapshot';
 import { saveProjectRequestSchema, scanSnapshotSchema } from '@/lib/persistence';
 
@@ -38,7 +37,7 @@ function request(cookie?: string, method = 'GET', body?: unknown, url = '/') {
 }
 
 function saveFixture(idempotencyKey = `save_${'a'.repeat(32)}`) {
-  return buildSaveProjectRequest({ report: buildSampleReport(SAMPLE_PROJECT_REPO_INPUT), idempotencyKey });
+  return buildSaveProjectRequest({ report: buildSampleReport(), idempotencyKey });
 }
 
 afterEach(() => setAccountPersistenceStoreForTests(null));

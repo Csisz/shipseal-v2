@@ -1,5 +1,6 @@
 ﻿import type { ClientReportHtmlInput, ClientReportSummary } from './types';
 import type { ReadinessReport } from '../types';
+import { displayReadinessLevel } from '../uiCopy';
 
 const LEGAL_DISCLAIMER = 'ShipSeal does not provide legal advice. This report is a technical, product-side and preliminary readiness assessment. It is not a formal legal opinion, production security audit or compliance certification.';
 const HU_DISCLAIMER = 'A ShipSeal nem nyújt jogi tanácsadást. Ez a riport technikai, termékoldali és előzetes readiness értékelés.';
@@ -639,7 +640,7 @@ function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
     generatedDate: generatedAt.toLocaleDateString('en-GB'),
     generatedTimestamp: formatTimestamp(generatedAt),
     score: input.report ? `${input.report.score}/100` : typeof score.score === 'number' ? `${score.score}/100` : 'Not detected',
-    status: input.report ? input.report.level : stringValue(score.status) || 'Not detected',
+    status: input.report ? displayReadinessLevel(input.report.level) : displaySerializedReadinessLevel(score.status),
     goNoGo,
     repositoryHealthScore: repositoryHealthScore(repositoryHealth),
     repositoryHealthStatus: repositoryHealthStatus(repositoryHealth),
@@ -1293,6 +1294,11 @@ function arrayValue(value: unknown): unknown[] {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function displaySerializedReadinessLevel(value: unknown) {
+  const status = stringValue(value) || 'Not detected';
+  return status === 'AgentReady Certified' ? 'AI Coding Ready' : status;
 }
 
 function numeric(value: unknown): number {

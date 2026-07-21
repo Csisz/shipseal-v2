@@ -1,4 +1,5 @@
 import type { RepoFileSummary, RepoScanInput, ScanSummary } from './types';
+import { loadJSZip } from './jszipLoader';
 import {
   SCANNER_LIMITS,
   ScannerValidationError,
@@ -32,8 +33,6 @@ type ZipEntryWithSize = {
     uncompressedSize?: number;
   };
 };
-
-type ZipModule = typeof import('jszip');
 
 const TEXT_CONFIG_FILES = [
   'package.json', 'tsconfig.json', 'vite.config.ts', 'vite.config.js',
@@ -206,7 +205,7 @@ export async function scanZipFile(file: File, source?: RepoScanInput['source']):
   const archiveDiagnostics = inspectArchiveBytes(file, raw, source);
   assertZipDiagnostics(archiveDiagnostics);
 
-  const JSZip = (await import('jszip') as ZipModule).default;
+  const JSZip = await loadJSZip();
   let zip: Awaited<ReturnType<typeof JSZip.loadAsync>>;
   try {
     zip = await JSZip.loadAsync(raw);

@@ -3,7 +3,6 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AccountProvider } from '@/components/account/AccountProvider';
 import { buildSampleReport } from '@/lib/readiness';
-import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
 import { buildSaveProjectRequest } from '@/lib/persistence/buildSnapshot';
 import { PERSISTENCE_SCHEMA_VERSION } from '@/lib/persistence';
 
@@ -23,7 +22,7 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('Omega 18.1 saved scan restoration', () => {
   it('validates and restores a snapshot without scanner, provider, or GitHub requests', async () => {
-    const snapshot = buildSaveProjectRequest({ report: buildSampleReport(SAMPLE_PROJECT_REPO_INPUT) }).scan.snapshot;
+    const snapshot = buildSaveProjectRequest({ report: buildSampleReport() }).scan.snapshot;
     const scan = {
       version: PERSISTENCE_SCHEMA_VERSION, id: scanId, projectId, sourceType: 'github-public', repositoryOwner: 'Csisz', repositoryName: 'shipseal-v2',
       branch: 'main', status: 'completed', startedAt: '2026-07-17T08:00:00.000Z', completedAt: '2026-07-17T08:00:00.000Z',

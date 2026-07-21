@@ -19,19 +19,10 @@ function throwIfCancelled(signal?: AbortSignal) {
   }
 }
 
-async function yieldToUi() {
-  await new Promise(resolve => window.setTimeout(resolve, 80));
-}
-
 export class LocalScanEngine implements ScanEngine {
   async scan(input: ScanInput, callbacks: ScanProgressCallbacks = {}): Promise<ReadinessReport> {
     if (input.mode !== 'local' && input.mode !== 'github-public') {
       throw new Error('Only local and public GitHub scan modes are available in this prototype.');
-    }
-
-    const validation = validateZipUpload(input.file);
-    if (!validation.valid) {
-      throw new ScannerValidationError(validation.error || 'This file cannot be scanned.');
     }
 
     let scanInput: RepoScanInput | null = null;
@@ -42,7 +33,6 @@ export class LocalScanEngine implements ScanEngine {
       const step = SCAN_ENGINE_STEPS[index];
       callbacks.onStepStart?.(step, index);
       callbacks.onProgress?.(Math.round((index / SCAN_ENGINE_STEPS.length) * 100));
-      await yieldToUi();
       await work?.();
       throwIfCancelled(input.signal);
       callbacks.onStepComplete?.(step, index);
@@ -50,6 +40,11 @@ export class LocalScanEngine implements ScanEngine {
     };
 
     try {
+      const validation = validateZipUpload(input.file);
+      if (!validation.valid) {
+        throw new ScannerValidationError(validation.error || 'This file cannot be scanned.');
+      }
+
       await runStep(0, async () => {
         try {
           scanInput = await scanZipFile(input.file, input.source);
@@ -59,7 +54,6 @@ export class LocalScanEngine implements ScanEngine {
           if (input.source?.githubOwner && input.source.githubRepo) {
             scanInput.repoName = `${input.source.githubOwner}/${input.source.githubRepo}`;
           }
-          if (scanInput.scanSummary) callbacks.onScanSummary?.(scanInput.scanSummary);
         } catch (error) {
           if (error instanceof ScannerValidationError) {
             throw error;
@@ -74,19 +68,17 @@ export class LocalScanEngine implements ScanEngine {
           if (input.source?.githubOwner && input.source.githubRepo) {
             scanInput.repoName = `${input.source.githubOwner}/${input.source.githubRepo}`;
           }
-          if (scanInput.scanSummary) callbacks.onScanSummary?.(scanInput.scanSummary);
         }
-        if (scanInput) callbacks.onScanInput?.(scanInput);
       });
 
-      await runStep(1);
-      await runStep(2);
-      await runStep(3);
-      await runStep(4);
-      await runStep(5);
-      await runStep(6, () => {
+      await runStep(1, () => {
         if (!scanInput) throw new Error('Scan input was not prepared.');
         report = buildReport(scanInput);
+      });
+      await runStep(2, () => {
+        if (!scanInput) throw new Error('Scan input was not prepared.');
+        if (scanInput.scanSummary) callbacks.onScanSummary?.(scanInput.scanSummary);
+        callbacks.onScanInput?.(scanInput);
       });
 
       if (!report) throw new Error('Scan did not produce a report.');

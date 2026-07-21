@@ -18,7 +18,7 @@ const scanInput: RepoScanInput = {
   source: { sourceType: 'zip-upload' },
   files: [{ path: 'AGENTS.md', size: 28 }],
   textContents: { 'AGENTS.md': '# Repository instructions\n' },
-  scanSummary: { scanMode: 'full', limited: false, totalFilesFound: 1, filesAnalyzed: 1, filesExcluded: 0, filesSkippedByLimit: 0, readableTextBytesAnalyzed: 28, warnings: [] },
+  scanSummary: { scanMode: 'full', limited: false, totalFilesFound: 1, filesAnalyzed: 1, filesIgnored: 0, generatedVendorFilesIgnored: 0, binaryFilesIgnored: 0, readableTextBytesAnalyzed: 28, ignoredGeneratedFolders: [], warnings: [], limits: { maxZipSizeBytes: 1, maxFileCount: 1, maxReadableTextFileSizeBytes: 1, maxTotalReadableTextBytes: 1, maxPathLength: 1, maxGeneratedFolderDepth: 1 } },
 };
 
 const baseline: RepositoryIntelligenceVerificationBaseline = {

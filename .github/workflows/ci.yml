@@ -24,6 +24,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run TypeScript release gate
+        run: npm run typecheck
+
       - name: Run tests
         # Accepted local validation command: npm run test
         run: npm test

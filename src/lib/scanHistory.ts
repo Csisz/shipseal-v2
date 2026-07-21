@@ -18,7 +18,7 @@ function safeParse(value: string | null): ScanHistoryItem[] {
         typeof item?.mcpScore === 'number' &&
         typeof item?.mcpStatus === 'string'
       )
-      .map(item => ({
+      .map<ScanHistoryItem>(item => ({
         repositoryName: item.repositoryName,
         timestamp: item.timestamp,
         sourceType: item.sourceType === 'github-app' ? 'github-app' : item.sourceType === 'github-url' ? 'github-url' : item.sourceType === 'github-public' ? 'github-public' : item.sourceType === 'zip-upload' ? 'zip-upload' : undefined,

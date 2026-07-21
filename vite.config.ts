@@ -18,4 +18,15 @@ export default defineConfig(() => ({
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // The browser AST extractor intentionally uses TypeScript. Keep that optional compiler payload
+        // separate from verification/review code so it is cached and loaded only with repository review.
+        manualChunks(id) {
+          return id.includes('/node_modules/typescript/') ? 'typescript-compiler' : undefined;
+        },
+      },
+    },
+  },
 }));

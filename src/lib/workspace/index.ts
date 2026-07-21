@@ -3,6 +3,9 @@ export {
   AI_WORKSPACE_TERM_IDS,
   AI_WORKSPACE_TERMS,
   FUTURE_AI_WORKSPACE_NAVIGATION,
+  WORKSPACE_STATE_TERM_IDS,
+  WORKSPACE_STATE_TERMS,
+  workspaceStateLabel,
 } from './terminology';
 
 export {
@@ -31,6 +34,7 @@ export {
 
 export {
   buildRepositoryTransformationProposalModel,
+  repositoryTransformationAffectedEntityCount,
   repositoryTransformationDomainCounts,
   transformationDomainLabel,
 } from './repositoryTransformation';
@@ -80,6 +84,8 @@ export type {
   IntelligenceRevealSignal,
   IntelligenceRevealSignalKind,
 } from './intelligenceReveal';
+
+export type { WorkspaceStateTermId } from './terminology';
 
 export type {
   RepositoryUniverseCluster,

@@ -6,7 +6,6 @@ import { SaveProjectControl } from '@/components/account/SaveProjectControl';
 import Projects from '@/pages/Projects';
 import Project from '@/pages/Project';
 import { buildSampleReport } from '@/lib/readiness';
-import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
 import { PERSISTENCE_SCHEMA_VERSION } from '@/lib/persistence';
 
 const user = { id: `usr_${'a'.repeat(24)}`, email: 'owner@example.test', displayName: 'Repository Owner', avatarUrl: null };
@@ -33,7 +32,7 @@ describe('Omega 18.1 account and persistence UI', () => {
   it('keeps an anonymous scan open and requests sign-in only when Save project is chosen', async () => {
     vi.stubGlobal('fetch', vi.fn(() => json({ user: null })));
     const open = vi.spyOn(window, 'open').mockReturnValue({} as Window);
-    const report = buildSampleReport(SAMPLE_PROJECT_REPO_INPUT);
+    const report = buildSampleReport();
     render(<AccountProvider><SaveProjectControl report={report} /></AccountProvider>);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
@@ -50,7 +49,7 @@ describe('Omega 18.1 account and persistence UI', () => {
       return json({ error: { code: 'not_found', message: 'not found' } }, 404);
     });
     vi.stubGlobal('fetch', fetcher);
-    render(<AccountProvider><SaveProjectControl report={buildSampleReport(SAMPLE_PROJECT_REPO_INPUT)} /></AccountProvider>);
+    render(<AccountProvider><SaveProjectControl report={buildSampleReport()} /></AccountProvider>);
     await waitFor(() => expect(screen.getByText('My projects')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
     await waitFor(() => expect(screen.getByText('Project and scan history saved privately.')).toBeInTheDocument());
@@ -89,7 +88,7 @@ describe('Omega 18.1 account and persistence UI', () => {
 
   it('keeps persistence failure recoverable without removing the current scan action', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => String(input) === '/api/account/session' ? json({ user }) : json({ error: { code: 'unavailable', message: 'unavailable' } }, 503)));
-    render(<AccountProvider><SaveProjectControl report={buildSampleReport(SAMPLE_PROJECT_REPO_INPUT)} /></AccountProvider>);
+    render(<AccountProvider><SaveProjectControl report={buildSampleReport()} /></AccountProvider>);
     await waitFor(() => expect(screen.getByText('My projects')).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
     expect(await screen.findByText(/current scan remains usable and was not rerun/i)).toBeInTheDocument();

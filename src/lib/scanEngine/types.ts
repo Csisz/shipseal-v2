@@ -29,22 +29,15 @@ export interface ScanEngine {
 }
 
 export const SCAN_ENGINE_STEPS = [
-  'Reading repository structure',
-  'Detecting stack and package files',
-  'Checking build/test/lint signals',
-  'Checking agent instruction files',
-  'Checking security and secret risks',
-  'Building Repo Context Pack',
-  'Generating Agent Pack',
+  'Reading repository',
+  'Building repository intelligence',
+  'Preparing workspace',
 ] as const;
 
 export const GITHUB_PUBLIC_SCAN_STEPS = [
   'Connecting to GitHub',
   'Downloading repository archive',
-  'Reading repository structure',
-  'Detecting stack and project signals',
-  'Checking tests, docs, CI and security signals',
-  'Preparing Delivery Pack',
+  ...SCAN_ENGINE_STEPS,
 ] as const;
 
 export const GITHUB_APP_SCAN_STEPS = GITHUB_PUBLIC_SCAN_STEPS;

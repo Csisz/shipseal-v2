@@ -98,3 +98,24 @@ export const FUTURE_AI_WORKSPACE_NAVIGATION = [
   'Timeline',
   'Delivery Outputs',
 ] as const;
+
+export const WORKSPACE_STATE_TERM_IDS = [
+  'current', 'proposed', 'applied', 'verified', 'ready', 'limited', 'evidence-backed', 'heuristic',
+] as const;
+
+export type WorkspaceStateTermId = typeof WORKSPACE_STATE_TERM_IDS[number];
+
+export const WORKSPACE_STATE_TERMS: Record<WorkspaceStateTermId, { label: string; definition: string }> = {
+  current: { label: 'Current', definition: 'Observed in the present scan.' },
+  proposed: { label: 'Proposed', definition: 'Generated or recommended by ShipSeal, but not yet written to the repository.' },
+  applied: { label: 'Applied', definition: 'Written or included through an export or repository mutation, but not yet confirmed by a later scan.' },
+  verified: { label: 'Verified', definition: 'Confirmed by rescan evidence or another explicitly implemented verification mechanism.' },
+  ready: { label: 'Ready', definition: 'Eligible for the named next action; this does not itself mean applied or verified.' },
+  limited: { label: 'Limited', definition: 'The scan or comparison has an explicit evidence or coverage boundary.' },
+  'evidence-backed': { label: 'Evidence-backed', definition: 'Supported by concrete repository evidence.' },
+  heuristic: { label: 'Heuristic', definition: 'An inference with bounded confidence, not direct evidence.' },
+};
+
+export function workspaceStateLabel(state: WorkspaceStateTermId) {
+  return WORKSPACE_STATE_TERMS[state].label;
+}

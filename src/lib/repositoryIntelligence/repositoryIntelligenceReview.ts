@@ -244,7 +244,7 @@ export function buildRepositoryIntelligenceArtifactReview(
   return { evidenceResult, contextBundle, artifactSet, artifactValidation, review };
 }
 
-function buildArtifactSet(input: GenerateRepositoryIntelligenceArtifactsInput & {
+function buildArtifactSet(input: Omit<GenerateRepositoryIntelligenceArtifactsInput, 'artifactPlan'> & {
   scanInput: RepoScanInput;
   contextBundle: RepositoryIntelligenceContextBundle;
   policy?: RepositoryIntelligenceArtifactPolicyOverride;
@@ -717,7 +717,7 @@ function eligibilityFor(
   validation: RepositoryIntelligenceArtifactValidationResult,
   items: RepositoryIntelligenceArtifactReviewItem[],
 ): RepositoryIntelligenceArtifactReview['eligibility'] {
-  const limited = Boolean(scanInput.scanSummary?.limited || scanInput.scanSummary?.limitedScanBlocker || scanInput.scanSummary?.scanMode === 'limited-fallback');
+  const limited = Boolean(scanInput.scanSummary?.limited || scanInput.scanSummary?.scanMode === 'limited-fallback');
   if (!validation.valid) return { state: 'validation-failed', explanation: 'One or more generated artifacts failed provenance or safety validation. Invalid items remain unselectable.' };
   if (!items.some(item => item.selectable)) return { state: 'artifact-generation-unavailable', explanation: 'The available evidence did not support a safely selectable repository artifact.' };
   if (evidence.summary.eligibleJsTsFiles === 0) return { state: 'unsupported-stack', explanation: 'Deep Repository Intelligence review currently requires readable JavaScript or TypeScript repository evidence.' };

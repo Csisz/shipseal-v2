@@ -216,6 +216,7 @@ describe('SuggestedReadinessFixPack', () => {
           appName: 'ShipSeal Demo',
           appSlug: 'shipseal-demo',
           installUrl: 'https://github.com/apps/shipseal-demo/installations/new',
+          loginUrl: '/api/github-app/login',
           isConfigured: true,
         }}
       />

@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const assetsDirectory = fileURLToPath(new URL('../dist/assets/', import.meta.url));
+const maximumAssetBytes = 1200 * 1024;
+const maximumTypeScriptCompilerBytes = 3700 * 1024;
 const entries = await readdir(assetsDirectory);
 const javascriptAssets = [];
 const forbiddenProviderMarkers = [
@@ -43,6 +45,14 @@ console.table(javascriptAssets.map(asset => ({
   raw: format(asset.bytes),
   gzip: format(asset.gzipBytes),
 })));
+
+const oversizedAssets = javascriptAssets.filter(asset => {
+  const budget = asset.name.startsWith('typescript-compiler-') ? maximumTypeScriptCompilerBytes : maximumAssetBytes;
+  return asset.bytes > budget;
+});
+if (oversizedAssets.length) {
+  throw new Error(`Bundle budget exceeded: ${oversizedAssets.map(asset => `${asset.name} ${format(asset.bytes)}`).join(', ')}`);
+}
 
 function format(bytes) {
   return `${(bytes / 1024).toFixed(2)} KiB`;

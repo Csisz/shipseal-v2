@@ -149,7 +149,7 @@ const Index = () => {
   }, [isScanning]);
 
   const prepareSampleRepositoryIntelligenceReview = useCallback(async () => {
-    const { buildRepositoryIntelligenceArtifactReview } = await import('@/lib/repositoryIntelligence');
+    const { buildRepositoryIntelligenceArtifactReview } = await import('@/lib/repositoryIntelligence/repositoryIntelligenceReview');
     const result = buildRepositoryIntelligenceArtifactReview({ scanInput: SAMPLE_PROJECT_REPO_INPUT });
     return { artifactSet: result.artifactSet, review: result.review };
   }, []);

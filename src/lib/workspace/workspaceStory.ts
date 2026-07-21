@@ -138,7 +138,7 @@ export interface RepositoryAtlasModel {
 
 interface StoryCandidate {
   id: WorkspaceStoryChapterId;
-  revealSignalIds: string[];
+  revealSignalIds: Array<ReturnType<typeof buildIntelligenceRevealModel>['signals'][number]['id']>;
   label: string;
   shortLabel: string;
   summary: string;

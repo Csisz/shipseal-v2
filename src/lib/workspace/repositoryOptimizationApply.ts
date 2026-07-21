@@ -7,8 +7,7 @@ import type {
   RepositoryOptimizationPlanItem,
   RepositoryOptimizationReadiness,
 } from './repositoryOptimizationPlan';
-
-type ZipModule = typeof import('jszip');
+import { loadJSZip } from '../jszipLoader';
 
 export type OptimizationApplyReadiness = 'ready' | 'review-required' | 'blocked';
 
@@ -180,7 +179,7 @@ export function optimizationPackZipFiles(input: {
 }
 
 export async function buildOptimizationPackZipBlob(applyPlan: OptimizationApplyPlan): Promise<Blob> {
-  const JSZip = (await import('jszip') as ZipModule).default;
+  const JSZip = await loadJSZip();
   const zip = new JSZip();
   for (const file of optimizationPackZipFiles(applyPlan)) {
     zip.file(file.path, file.content);

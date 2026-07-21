@@ -54,7 +54,7 @@ export async function submitRepositoryIntelligencePrRequest(
   try { payload = await response.json(); } catch { payload = null; }
   if (!response.ok) {
     const errorValue = payload && typeof payload === 'object' && 'error' in payload ? (payload as { error?: unknown }).error : undefined;
-    const issue = errorValue && typeof errorValue === 'object' ? errorValue as RepositoryIntelligenceApplyIssue : {
+    const issue: RepositoryIntelligenceApplyIssue = errorValue && typeof errorValue === 'object' ? errorValue as RepositoryIntelligenceApplyIssue : {
       code: 'github-unavailable',
       message: 'GitHub could not prepare the Repository Intelligence Pull Request.',
       nextAction: 'Retry or reconnect GitHub.',

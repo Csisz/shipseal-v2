@@ -2,16 +2,11 @@ import {
   Archive,
   CheckCircle2,
   Circle,
-  FileText,
-  GitBranch,
   Github,
-  KeyRound,
   Layers,
   Network,
   ShieldCheck,
   Sparkles,
-  TestTube2,
-  Workflow,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -42,9 +37,9 @@ export function ScanProgress({
   onCancel,
 }: Props) {
   const safeProgress = Math.min(100, Math.max(0, Math.round(progress)));
-  const understanding = repositoryUnderstandingLevel(safeProgress, discoveredFileCount, analyzedFileCount);
+  const understanding = repositoryUnderstandingLevel(safeProgress, steps, currentStepIndex);
   const skippedFiles = skippedFileCount(discoveredFileCount, analyzedFileCount);
-  const livingSignals = buildLivingSignals(safeProgress, steps, currentStepIndex, skippedFiles);
+  const livingSignals = buildLivingSignals(safeProgress, steps, currentStepIndex);
   const activeSignal = livingSignals.find(signal => signal.active) || livingSignals.filter(signal => signal.done).at(-1) || livingSignals[0];
   const finalReveal = safeProgress >= 96;
 
@@ -134,7 +129,7 @@ export function ScanProgress({
             <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
               <ProgressMetric label="Files found" value={discoveredFileCount == null ? 'Reading' : discoveredFileCount.toLocaleString()} />
               <ProgressMetric label="Files analyzed" value={analyzedFileCount == null ? 'Pending' : analyzedFileCount.toLocaleString()} />
-              <ProgressMetric label="Context skipped" value={skippedFiles == null ? 'Heuristic' : skippedFiles.toLocaleString()} />
+              <ProgressMetric label="Context skipped" value={skippedFiles == null ? 'Pending' : skippedFiles.toLocaleString()} />
             </div>
           </aside>
         </div>
@@ -171,8 +166,7 @@ function ProgressMetric({ label, value }: { label: string; value: string }) {
 interface LivingSignal {
   label: string;
   detail: string;
-  source: 'Evidence' | 'Heuristic';
-  threshold: number;
+  source: 'Evidence';
   icon: LucideIcon;
   done: boolean;
   active: boolean;
@@ -299,13 +293,9 @@ function SignalPill({ signal }: { signal: LivingSignal }) {
   );
 }
 
-function repositoryUnderstandingLevel(progress: number, discoveredFileCount?: number | null, analyzedFileCount?: number | null) {
-  if (progress >= 96) return 'High';
-  if (progress >= 74) return 'Workspace map forming';
-  if (progress >= 52) return 'Architecture emerging';
-  if (progress >= 28) return 'Project shape detected';
-  if (discoveredFileCount || analyzedFileCount) return 'Repository opened';
-  return 'Connecting signals';
+function repositoryUnderstandingLevel(progress: number, steps: readonly string[], currentStepIndex: number) {
+  if (progress >= 96) return 'Workspace ready';
+  return steps[currentStepIndex] || 'Reading repository';
 }
 
 function skippedFileCount(discoveredFileCount?: number | null, analyzedFileCount?: number | null) {
@@ -313,75 +303,19 @@ function skippedFileCount(discoveredFileCount?: number | null, analyzedFileCount
   return Math.max(0, discoveredFileCount - analyzedFileCount);
 }
 
-function buildLivingSignals(progress: number, steps: readonly string[], currentStepIndex: number, skippedFiles?: number | null): LivingSignal[] {
-  const activeStep = steps[currentStepIndex] || 'Finalizing scan';
-  const signals = [
-    {
-      label: 'Structure',
-      detail: `Evidence from the live scanner: ${activeStep}.`,
-      source: 'Evidence' as const,
-      icon: Layers,
-      threshold: 5,
-    },
-    {
-      label: 'Architecture',
-      detail: 'Inferring module boundaries from repository structure until architecture files are available in the completed report.',
-      source: 'Heuristic' as const,
-      icon: Network,
-      threshold: 20,
-    },
-    {
-      label: 'Business domains',
-      detail: 'Looking for concentrated feature areas, source folders and domain-style naming patterns.',
-      source: 'Heuristic' as const,
-      icon: GitBranch,
-      threshold: 34,
-    },
-    {
-      label: 'Authentication',
-      detail: 'Searching for auth and access-control signals; this is estimated during scan and confirmed after analysis.',
-      source: 'Heuristic' as const,
-      icon: KeyRound,
-      threshold: 48,
-    },
-    {
-      label: 'AI instructions',
-      detail: 'Looking for AGENTS.md, CLAUDE.md, Cursor rules and other agent onboarding anchors.',
-      source: 'Heuristic' as const,
-      icon: FileText,
-      threshold: 60,
-    },
-    {
-      label: 'Tests',
-      detail: 'Looking for test files and verification commands that can guide safe AI edits.',
-      source: 'Heuristic' as const,
-      icon: TestTube2,
-      threshold: 72,
-    },
-    {
-      label: 'CI pipeline',
-      detail: 'Checking for workflow and build automation signals.',
-      source: 'Heuristic' as const,
-      icon: Workflow,
-      threshold: 84,
-    },
-    {
-      label: 'Context compression',
-      detail: skippedFiles == null
-        ? 'Estimating generated/vendor context until file counts are available.'
-        : `Evidence from scan counters: ${skippedFiles} files can stay outside the first-pass context.`,
-      source: skippedFiles == null ? 'Heuristic' as const : 'Evidence' as const,
-      icon: Archive,
-      threshold: 92,
-    },
+function buildLivingSignals(progress: number, steps: readonly string[], currentStepIndex: number): LivingSignal[] {
+  const details = [
+    'Reading and validating the repository archive, then indexing the files allowed by scanner limits.',
+    'Building the deterministic report and repository intelligence from the indexed evidence.',
+    'Publishing scan counters and preparing bounded workspace and verification inputs.',
   ];
-
-  return signals.map((signal, index) => {
-    const nextThreshold = signals[index + 1]?.threshold ?? 101;
-    return {
-      ...signal,
-      done: progress >= signal.threshold,
-      active: progress >= signal.threshold && progress < nextThreshold,
-    };
-  });
+  const icons: LucideIcon[] = [Archive, Network, Layers];
+  return steps.map((label, index) => ({
+    label,
+    detail: details[index] || 'Completing the current repository operation.',
+    source: 'Evidence',
+    icon: icons[index] || Layers,
+    done: progress >= 96 || index < currentStepIndex,
+    active: progress < 96 && index === currentStepIndex,
+  }));
 }

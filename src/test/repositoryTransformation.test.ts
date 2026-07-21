@@ -4,6 +4,7 @@ import {
   buildRepositoryAtlasModel,
   buildRepositoryTransformationProposalModel,
   buildRepositoryUniverseModel,
+  repositoryTransformationAffectedEntityCount,
 } from '@/lib/workspace';
 
 function transformationFor(report: ReturnType<typeof buildReport>) {
@@ -145,5 +146,22 @@ describe('Repository Transformation Preview model', () => {
     expect(transformation.proposals.length).toBeGreaterThan(0);
     expect(transformation.proposals.every(proposal => proposal.sourceEvidence.length > 0)).toBe(true);
     expect(transformation.proposals.every(proposal => proposal.graphChanges.proposedEdges.length > 0)).toBe(true);
+  });
+
+  it('counts unique affected current entities for every transformation variant', () => {
+    const { transformation } = transformationFor(modestReport());
+
+    expect(transformation.proposals.length).toBeGreaterThanOrEqual(3);
+    for (const proposal of transformation.proposals) {
+      const count = repositoryTransformationAffectedEntityCount(proposal);
+      expect(Number.isFinite(count)).toBe(true);
+      expect(Number.isNaN(count)).toBe(false);
+      expect(count).toBe(new Set(proposal.graphChanges.affectedExistingNodeIds).size);
+      expect(count).toBeGreaterThan(0);
+      expect(['high', 'medium', 'low']).toContain(proposal.confidence);
+    }
+
+    // Folder routing requires at least one affected entity; this would be medium when the old object `.length` bug returned undefined.
+    expect(transformation.proposals.find(proposal => proposal.id === 'agent-routing-folder-agents')?.confidence).toBe('high');
   });
 });

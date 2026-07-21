@@ -8,8 +8,7 @@ import type { PartialProjectIntake } from './intake';
 import { DEFAULT_AGENT_OPERATING_MODE, buildAgentOperatingModeSummary, resolveAgentOperatingMode } from './agentOperatingMode';
 import type { AgentOperatingModeId } from './types';
 import { buildToolingRecommendationBundle } from './toolingRecommendations';
-
-type ZipModule = typeof import('jszip');
+import { loadJSZip } from './jszipLoader';
 
 export const REQUIRED_AGENT_PACK_FILES = [
   'AGENTS.md',
@@ -201,7 +200,7 @@ export async function buildAgentPackZipBlob(
   contextFiles?: { markdown: string; json: unknown },
   options: BuildAgentPackZipOptions = {}
 ): Promise<Blob> {
-  const JSZip = (await import('jszip') as ZipModule).default;
+  const JSZip = await loadJSZip();
   const zip = new JSZip();
   const deliveryFiles = buildDeliveryPackFiles({
     agentFiles: files,

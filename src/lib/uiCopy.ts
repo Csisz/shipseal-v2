@@ -8,7 +8,8 @@ export function criticalBlockersEmptyStateText(isReady: boolean) {
 }
 
 export function displayReadinessLevel(level: ReadinessLevel): string {
-  return level === 'AgentReady Certified' ? 'ShipSeal Certified' : level;
+  // Keep the legacy serialized value compatible while avoiding an unsupported certification claim in display copy.
+  return level === 'AgentReady Certified' ? 'AI Coding Ready' : level;
 }
 
 const DEFAULT_ALMOST_THERE_MESSAGE = 'Almost there - improve a few areas to reach AI Coding Ready.';

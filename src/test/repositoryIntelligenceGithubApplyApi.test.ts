@@ -65,6 +65,8 @@ describe('Repository Intelligence GitHub App mutation boundary', () => {
   it('creates the branch, writes exactly selected files, then opens one PR after confirmation', async () => {
     const mock = githubMock();
     const result = await prepareOrApplyRepositoryIntelligencePr(makeRequest('apply'), mock.options);
+    expect(result.mode).toBe('apply');
+    if (result.mode !== 'apply') throw new Error('Expected apply response.');
     expect(result).toMatchObject({ mode: 'apply', ok: true, prUrl: 'https://github.com/acme/demo/pull/7', selectedArtifactCount: 1 });
     expect(validateRepositoryIntelligenceVerificationBaseline(result.baseline).valid).toBe(true);
     const mutationCalls = mock.calls.filter(call => ['POST', 'PUT'].includes(call.method) && !call.url.endsWith('/access_tokens'));

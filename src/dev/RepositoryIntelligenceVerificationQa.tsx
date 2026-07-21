@@ -7,6 +7,7 @@ import type { RepoScanInput } from '@/lib/types';
 import type { RepositoryIntelligencePrPreviewResponse } from '@/lib/github/write';
 import type {
   RepositoryIntelligenceArtifactVerification,
+  RepositoryIntelligenceArtifactOperation,
   RepositoryIntelligenceArtifactVerificationState,
   RepositoryIntelligenceOverallVerificationState,
   RepositoryIntelligenceProviderStatus,
@@ -18,6 +19,10 @@ import type {
 const states: RepositoryIntelligenceOverallVerificationState[] = [
   'fully-verified', 'partially-verified', 'changes-detected', 'verification-blocked', 'unavailable',
 ];
+
+function isApplicableOperation(operation: RepositoryIntelligenceArtifactOperation): operation is 'create' | 'update' | 'strengthen' {
+  return operation === 'create' || operation === 'update' || operation === 'strengthen';
+}
 
 function prPreviewFixture() {
   const textContents: Record<string, string> = {
@@ -100,11 +105,12 @@ function fixture(overallState: RepositoryIntelligenceOverallVerificationState): 
   const baseline: RepositoryIntelligenceVerificationBaseline = {
     schemaVersion: 'shipseal.repository-intelligence-verification-baseline.v1', applySchemaVersion: 'shipseal.repository-intelligence-github-apply.v1', pathPolicyVersion: 'shipseal.repository-path-policy.v1',
     repository: { owner: 'shipseal-qa', repo: 'repository-intelligence-fixture' }, baseBranch: 'main', prBranch: 'shipseal/repository-intelligence-qa', selectedPlanFingerprint: 'ctx:qa-plan:100',
+    prUrl: 'https://github.com/shipseal-qa/repository-intelligence-fixture/pull/1',
     artifacts: artifacts.map(item => ({ artifactId: item.artifactId, category: item.category, artifactFingerprint: item.baselineArtifactFingerprint, targetPath: item.targetPath, operation: item.operation, finalContentFingerprint: item.expectedAppliedContentFingerprint, expectedManagedSectionFingerprint: item.expectedManagedSectionFingerprint, expectedPreservationFingerprint: item.operation === 'strengthen' ? 'ctx:qa-preservation:100' : undefined, preservedLineFingerprints: [], humanReviewRequired: item.humanReviewRequired, statements: [] })),
   };
   return { baseline, result: {
     version: 'shipseal.repository-intelligence-verification-result.v1', baselineFingerprint: 'ctx:qa-baseline:100', currentScanFingerprint: 'ctx:qa-scan:100',
-    identity: { state: overallState === 'verification-blocked' ? 'blocked' : 'verified-compatible', repositoryMatches: overallState !== 'verification-blocked', branchCompatible: overallState !== 'verification-blocked', reasons: overallState === 'verification-blocked' ? ['Repository or branch lineage is incompatible with this baseline.'] : [] },
+    identity: { state: overallState === 'verification-blocked' ? 'branch-mismatch' : 'verified-compatible', repositoryMatches: true, branchCompatible: overallState !== 'verification-blocked', reasons: overallState === 'verification-blocked' ? ['Repository or branch lineage is incompatible with this baseline.'] : [] },
     lifecycle: overallState === 'fully-verified' ? 'verified' : overallState === 'verification-blocked' ? 'incompatible-baseline' : overallState === 'unavailable' ? 'verification-unavailable' : 'eligible-for-verification',
     overallState, artifacts, counts, statementCounts,
     quality: { dimensions: [
@@ -115,7 +121,7 @@ function fixture(overallState: RepositoryIntelligenceOverallVerificationState): 
     comparison: { exactArtifacts: 2, modifiedArtifacts: 2, missingArtifacts: 1, conflictingArtifacts: 1, unavailableArtifacts: 1, newlyCorroboratedStatements: 2, inferredStatements: 1, contradictedStatements: 1, humanReviewItemsOpen: 1 },
     openWork: [
       { id: 'qa-work:missing', artifactId: 'qa-artifact:3', path: 'AGENT_MEMORY/qa-artifact-3.md', reason: 'Applied artifact is missing from the complete rescan.', evidence: ['Target path was not found in complete scanner coverage.'], priority: 'high', nextAction: 'Restore the reviewed artifact, then rescan.', actionType: 'regenerate' },
-      { id: 'qa-work:command', artifactId: 'qa-artifact:2', path: 'package.json', reason: 'The reviewed command mapping no longer matches current deterministic evidence.', evidence: ['Referenced command is absent.'], priority: 'medium', nextAction: 'Regenerate the command map and review the change.', actionType: 'review' },
+      { id: 'qa-work:command', artifactId: 'qa-artifact:2', path: 'package.json', reason: 'The reviewed command mapping no longer matches current deterministic evidence.', evidence: ['Referenced command is absent.'], priority: 'medium', nextAction: 'Regenerate the command map and review the change.', actionType: 'human-review' },
     ],
     limitations: ['One target was unavailable in the current limited scan.'], fingerprint: `ctx:qa-result-${overallState}:100`,
   } };
@@ -135,7 +141,7 @@ export default function RepositoryIntelligenceVerificationQa() {
       repository: { owner: 'shipseal-qa', repo: 'repository-intelligence-fixture' },
       baseBranch: 'main', baseCommit: 'abcdef123456', proposedBranchName: 'shipseal/repository-intelligence-qa',
       pullRequestTitle: 'ShipSeal: improve AI repository intelligence', selectedPlanFingerprint: prData.review.selectedPlanFingerprint,
-      files: prData.review.items.filter(item => item.selected).map(item => ({ path: item.targetPath, operation: item.operation, artifactId: item.artifactId, finalContentFingerprint: item.artifactFingerprint, humanReviewAcknowledged: item.humanReviewAcknowledged })),
+      files: prData.review.items.filter(item => item.selected && isApplicableOperation(item.operation)).map(item => ({ path: item.targetPath, operation: item.operation as 'create' | 'update' | 'strengthen', artifactId: item.artifactId, finalContentFingerprint: item.artifactFingerprint, humanReviewAcknowledged: item.humanReviewAcknowledged })),
       operationCounts: prData.review.summary.selectedOperationCounts,
       warnings: ['Preview fixture only: the apply action is intentionally unavailable during acceptance QA.'], applyReady: true, fingerprint: 'ctx:qa-preview:100',
     },
@@ -153,10 +159,10 @@ export default function RepositoryIntelligenceVerificationQa() {
         <div className="mb-3 flex flex-wrap gap-2" aria-label="Provider acceptance states">
           <button type="button" onClick={() => setProviderStatus({ state: 'deterministic', message: 'Deterministic Repository Intelligence is ready for review.', retryable: false })} className="rounded-full border border-border px-3 py-2 text-xs">Provider deterministic</button>
           <button type="button" onClick={() => setProviderStatus({ state: 'preparing', message: 'Preparing bounded optional enhancement.', retryable: false })} className="rounded-full border border-border px-3 py-2 text-xs">Provider preparing</button>
-          <button type="button" onClick={() => setProviderStatus({ state: 'enhanced', message: 'Validated provider findings enhanced this review.', retryable: false })} className="rounded-full border border-border px-3 py-2 text-xs">Provider enhanced</button>
+          <button type="button" onClick={() => setProviderStatus({ state: 'enhanced', message: 'Validated provider findings enhanced this review.', retryable: false, providerId: 'qa-fixture' })} className="rounded-full border border-border px-3 py-2 text-xs">Provider enhanced</button>
           <button type="button" onClick={() => setProviderStatus({ state: 'fallback', category: 'provider_unavailable', message: 'Enhanced intelligence was unavailable; deterministic artifacts remain ready.', retryable: true })} className="rounded-full border border-border px-3 py-2 text-xs">Provider fallback</button>
         </div>
-        <RepositoryIntelligenceReviewSurface artifactSet={prData.artifactSet} review={qaReview} providerStatus={providerStatus} prepareEnhancement={async () => setProviderStatus({ state: 'enhanced', message: 'Validated provider findings enhanced this review.', retryable: false })} onReviewChange={setQaReview} />
+        <RepositoryIntelligenceReviewSurface artifactSet={prData.artifactSet} review={qaReview} providerStatus={providerStatus} prepareEnhancement={async () => setProviderStatus({ state: 'enhanced', message: 'Validated provider findings enhanced this review.', retryable: false, providerId: 'qa-fixture' })} onReviewChange={setQaReview} />
       </>}
       {view === 'pr-preview' && <RepositoryIntelligencePrApply artifactSet={prData.artifactSet} review={prData.review} connection={{ connectionStatus: 'connected', sourceMode: 'github-app', owner: 'shipseal-qa', repo: 'repository-intelligence-fixture', defaultBranch: 'main', installationId: 'qa-installation', canCreatePullRequest: true, canListRepositories: true }} submitRequest={previewRequest} />}
     </div>

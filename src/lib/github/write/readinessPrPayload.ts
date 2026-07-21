@@ -5,6 +5,7 @@ import { buildReadinessPrPlan } from '@/lib/readinessPr';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack/goalMapping';
 import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
+import { displayReadinessLevel } from '@/lib/uiCopy';
 import type { CreateGitHubAppReadinessPrPayload, CreateReadinessPrFilePayload, CreateReadinessPrPayload } from './types';
 
 export const ACTIVE_CI_WORKFLOW_PATH = '.github/workflows/ci.yml';
@@ -118,7 +119,7 @@ export function buildReadinessPrBody(report: ReadinessReport, files: CreateReadi
     `Full package focus: ${focus.packageSummary}`,
     'This PR adds a safe reviewed subset of the selected ShipSeal package. The downloadable Delivery Pack contains the full package outputs.',
     `Readiness score: ${report.score}/100`,
-    `Readiness status: ${report.level}`,
+    `Readiness status: ${displayReadinessLevel(report.level)}`,
     `Repository scanned: ${report.repoName}`,
     '',
     'Files added:',

@@ -21,7 +21,7 @@ export async function createReadinessPr(payload: CreateReadinessPrPayload): Prom
   const data = await readJson(response);
 
   if (!response.ok) {
-    throw new CreateReadinessPrClientError(data?.error || 'Create Readiness PR failed.', response.status);
+    throw new CreateReadinessPrClientError(errorMessage(data) || 'Create Readiness PR failed.', response.status);
   }
 
   return data as CreateReadinessPrResponse;
@@ -36,10 +36,14 @@ export async function createGitHubAppReadinessPr(payload: CreateGitHubAppReadine
   const data = await readJson(response);
 
   if (!response.ok) {
-    throw new CreateReadinessPrClientError(data?.error || 'Create Readiness PR failed.', response.status);
+    throw new CreateReadinessPrClientError(errorMessage(data) || 'Create Readiness PR failed.', response.status);
   }
 
   return data as CreateGitHubAppReadinessPrResponse;
+}
+
+function errorMessage(data: Awaited<ReturnType<typeof readJson>>) {
+  return data && 'error' in data && typeof data.error === 'string' ? data.error : undefined;
 }
 
 async function readJson(response: Response): Promise<{ error?: string } | CreateReadinessPrResponse | CreateGitHubAppReadinessPrResponse | null> {

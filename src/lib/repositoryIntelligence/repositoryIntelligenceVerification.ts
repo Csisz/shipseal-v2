@@ -79,7 +79,7 @@ export const DEFAULT_REPOSITORY_INTELLIGENCE_VERIFICATION_POLICY: RepositoryInte
   maximumReadableContentCharacters: 300 * 1024,
   maximumPreservedLineFingerprints: 500,
   acceptedBaselineVersions: [REPOSITORY_INTELLIGENCE_VERIFICATION_BASELINE_VERSION],
-  acceptedMarkerVersions: ['shipseal:repository-intelligence:v1'],
+  acceptedMarkerVersions: ['shipseal:repository-intelligence:v1'] as ['shipseal:repository-intelligence:v1'],
   exactMatchRequiredForExactState: true,
   modificationClassification: 'structural-and-fingerprint',
   preservationComparisonMode: 'ordered-original-line-fingerprints',

@@ -43,8 +43,6 @@ interface PreparedRepositoryIntelligenceVerification {
   error: string | null;
 }
 
-const MIN_SCAN_VISIBLE_MS = 900;
-
 const initialState: RepoScanState = {
   selectedFile: null,
   status: 'idle',
@@ -74,13 +72,6 @@ function applyScanSummary(summary: ScanSummary) {
     discoveredFileCount: summary.totalFilesFound,
     analyzedFileCount: summary.filesAnalyzed,
   };
-}
-
-async function waitForMinimumVisibleDuration(startedAt: number) {
-  const remaining = MIN_SCAN_VISIBLE_MS - (Date.now() - startedAt);
-  if (remaining > 0) {
-    await new Promise(resolve => window.setTimeout(resolve, remaining));
-  }
 }
 
 export function useRepoScan(repositoryIntelligenceVerificationBaseline?: RepositoryIntelligenceVerificationBaseline | null) {
@@ -128,7 +119,6 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
   useEffect(() => () => providerAbortRef.current?.abort(), []);
 
   const startScan = useCallback(async (file: File) => {
-    const startedAt = Date.now();
     const token = scanTokenRef.current + 1;
     scanTokenRef.current = token;
     providerAbortRef.current?.abort();
@@ -181,8 +171,6 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       );
 
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
-      await waitForMinimumVisibleDuration(startedAt);
-      if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       const verification = verificationPromise ? await verificationPromise : { result: null, error: null };
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({
@@ -220,7 +208,6 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
   }, [repositoryIntelligenceVerificationBaseline]);
 
   const startGitHubScan = useCallback(async (url: string, branch?: string, sourceOverride: Partial<ScanSourceMetadata> = {}) => {
-    const startedAt = Date.now();
     const token = scanTokenRef.current + 1;
     scanTokenRef.current = token;
     providerAbortRef.current?.abort();
@@ -260,7 +247,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       setState(current => ({ ...current, selectedFile: imported.file }));
 
-      const localToGitHubStepIndex = [2, 3, 4, 4, 4, 5, 5];
+      const localToGitHubStepIndex = [2, 3, 4];
       const report = await localScanEngine.scan(
         { file: imported.file, mode: 'github-public', source: { ...imported.source, ...sourceOverride }, signal: controller.signal },
         {
@@ -294,8 +281,6 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         }
       );
 
-      if (scanTokenRef.current !== token || controller.signal.aborted) return null;
-      await waitForMinimumVisibleDuration(startedAt);
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       const verification = verificationPromise ? await verificationPromise : { result: null, error: null };
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
@@ -341,7 +326,6 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
   }, [repositoryIntelligenceVerificationBaseline]);
 
   const startGitHubAppScan = useCallback(async (input: { installationId: string; owner: string; repo: string; ref?: string }) => {
-    const startedAt = Date.now();
     const token = scanTokenRef.current + 1;
     scanTokenRef.current = token;
     providerAbortRef.current?.abort();
@@ -374,7 +358,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         {
           onStepStart: (step, index) => {
             if (scanTokenRef.current !== token) return;
-            const adjustedIndex = [2, 3, 4, 4, 4, 5, 5][index] ?? GITHUB_APP_SCAN_STEPS.length - 1;
+            const adjustedIndex = [2, 3, 4][index] ?? GITHUB_APP_SCAN_STEPS.length - 1;
             setState(current => ({
               ...current,
               currentStep: GITHUB_APP_SCAN_STEPS[adjustedIndex] || step,
@@ -402,8 +386,6 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         }
       );
 
-      if (scanTokenRef.current !== token || controller.signal.aborted) return null;
-      await waitForMinimumVisibleDuration(startedAt);
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       const verification = verificationPromise ? await verificationPromise : { result: null, error: null };
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
@@ -455,11 +437,14 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         repositoryIntelligenceProviderStatus: { state: 'preparing', message: 'Preparing optional enhanced intelligence from bounded repository context.', retryable: false },
       }));
       try {
-        const {
-          buildRepositoryDeepIntelligenceRequest,
-          buildRepositoryIntelligenceArtifactReview,
-          requestRepositoryIntelligenceEnhancement,
-        } = await import('@/lib/repositoryIntelligence');
+        const [requestModule, reviewModule, clientModule] = await Promise.all([
+          import('@/lib/repositoryIntelligence/deepIntelligenceRequest'),
+          import('@/lib/repositoryIntelligence/repositoryIntelligenceReview'),
+          import('@/lib/repositoryIntelligence/deepIntelligenceClient'),
+        ]);
+        const { buildRepositoryDeepIntelligenceRequest } = requestModule;
+        const { buildRepositoryIntelligenceArtifactReview } = reviewModule;
+        const { requestRepositoryIntelligenceEnhancement } = clientModule;
         const request = buildRepositoryDeepIntelligenceRequest({
           contextBundle: preparation.contextBundle,
           evidenceResult: preparation.evidenceResult,
@@ -528,7 +513,7 @@ async function prepareRepositoryIntelligenceVerification(
 ): Promise<PreparedRepositoryIntelligenceVerification> {
   if (!baseline) return { result: null, error: null };
   try {
-    const { verifyRepositoryIntelligenceArtifacts } = await import('@/lib/repositoryIntelligence');
+    const { verifyRepositoryIntelligenceArtifacts } = await import('@/lib/repositoryIntelligence/repositoryIntelligenceVerification');
     return { result: verifyRepositoryIntelligenceArtifacts({ baseline, currentScan: scanInput }), error: null };
   } catch {
     return { result: null, error: 'Repository Intelligence verification could not be completed safely. The previous valid result was preserved.' };
@@ -543,7 +528,7 @@ async function setRepositoryIntelligenceReview(
 ) {
   setState(current => ({ ...current, repositoryIntelligenceReviewPreparing: true, repositoryIntelligenceReviewError: null }));
   try {
-    const { buildRepositoryIntelligenceArtifactReview } = await import('@/lib/repositoryIntelligence');
+    const { buildRepositoryIntelligenceArtifactReview } = await import('@/lib/repositoryIntelligence/repositoryIntelligenceReview');
     if (!isCurrent()) return;
     const result = buildRepositoryIntelligenceArtifactReview({ scanInput });
     if (!isCurrent()) return;

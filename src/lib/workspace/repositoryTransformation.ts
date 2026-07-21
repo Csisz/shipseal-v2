@@ -130,6 +130,11 @@ export function repositoryTransformationDomainCounts(proposals: RepositoryTransf
   });
 }
 
+/** Number of unique current repository entities connected to a proposal. */
+export function repositoryTransformationAffectedEntityCount(proposal: RepositoryTransformationProposal) {
+  return new Set(proposal.graphChanges.affectedExistingNodeIds).size;
+}
+
 function supportedGeneratedOutputs(report: ReadinessReport): GeneratedOutput[] {
   const scoreJson = buildScoreJson(report, { selectedPackages: ['agent-readiness', 'testing-red-team'] });
   const files = buildDeliveryPackFiles({
@@ -177,7 +182,7 @@ function projectMemoryProposal(
     ],
     expectedAgent: 'An AI coding agent would read the proposed instruction layer before opening broad repository context.',
     expectedMeaning: 'Project memory becomes explicit instead of depending on chat history or repeated rediscovery.',
-    confidence: confidenceFor(report, affected.length >= 2),
+    confidence: confidenceFor(report, affectedNodeCount(affected) >= 2),
     relationship: 'connects-to-evidence',
   });
 }
@@ -210,7 +215,7 @@ function projectContextProposal(
     ],
     expectedAgent: 'An agent would use this compact memory before opening many source files.',
     expectedMeaning: 'The repository gains a reusable explanation of structure and boundaries.',
-    confidence: confidenceFor(report, affected.length >= 3),
+    confidence: confidenceFor(report, affectedNodeCount(affected) >= 3),
     relationship: 'connects-to-evidence',
   });
 }
@@ -241,7 +246,7 @@ function taskRouterProposal(
     ],
     expectedAgent: 'An agent would choose a starting area before reading broad repository context.',
     expectedMeaning: 'Navigation becomes task-oriented rather than folder-name guessing.',
-    confidence: confidenceFor(report, affected.length >= 2),
+    confidence: confidenceFor(report, affectedNodeCount(affected) >= 2),
     relationship: 'routes-to',
   });
 }
@@ -270,7 +275,7 @@ function folderRoutingProposal(
     evidence: folderOutputs.slice(0, 4).map(output => evidence(output.path, 'Supported generated folder instruction output', 'evidence')),
     expectedAgent: 'An agent working inside a folder would get local rules, scope and verification guidance.',
     expectedMeaning: 'Local context becomes scoped, so the workspace can guide agents without making every task global.',
-    confidence: confidenceFor(report, affected.length >= 1),
+    confidence: confidenceFor(report, affectedNodeCount(affected) >= 1),
     relationship: 'routes-to',
   });
 }
@@ -442,6 +447,11 @@ function affectedNodes(universe: RepositoryUniverseModel, atlas: RepositoryAtlas
     universe: fallback,
     atlas: fallback.map(node => atlasNodeForUniverseNode(node, atlas)).filter(Boolean) as RepositoryAtlasNode[],
   };
+}
+
+/** Counts unique current repository entities across the 3D Universe and 2D Atlas projections. */
+function affectedNodeCount(affected: { universe: RepositoryUniverseNode[]; atlas: RepositoryAtlasNode[] }) {
+  return new Set([...affected.universe.map(node => node.id), ...affected.atlas.map(node => node.id)]).size;
 }
 
 function atlasNodeForUniverseNode(node: RepositoryUniverseNode, atlas: RepositoryAtlasModel) {

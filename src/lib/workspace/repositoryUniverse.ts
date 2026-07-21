@@ -148,7 +148,6 @@ type KnowledgeMetadata = RepositoryUniverseFileRecord & {
 };
 
 const DISALLOWED_TECHNICAL_RELATIONSHIPS = new Set<RepositoryUniverseRelationship>([
-  'imports',
   'tests',
   'documents',
   'configures',

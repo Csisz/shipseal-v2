@@ -241,10 +241,10 @@ To demo the offer, open the sample project, load the demo intake, review the con
 ## Validate Locally
 
 ```bash
-npm run test
-npm run build
-npm run lint
+npm run validate
 ```
+
+This is the canonical release gate: lint, referenced-project TypeScript checking, the full test suite, production build, and bundle budget. `npm run build` also runs typecheck before Vite.
 
 Known non-blocking lint warnings: shadcn/ui fast-refresh warnings in shared UI component files.
 

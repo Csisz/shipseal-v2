@@ -1,4 +1,5 @@
 export interface GitHubAppEnv {
+  [key: string]: unknown;
   VITE_GITHUB_APP_SLUG?: string;
   VITE_GITHUB_APP_NAME?: string;
   VITE_GITHUB_APP_INSTALL_URL?: string;
