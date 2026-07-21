@@ -2,12 +2,28 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposalModel, RepositoryUniverseCluster, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
 import {
+  REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP,
   REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES,
+  activateRepositoryUniverseVisualMotion,
+  clearRepositoryUniversePointerHover,
+  clearRepositoryUniverseRaycastCache,
   composeRepositoryUniverseVisualScale,
+  completeRepositoryUniverseVisualMotionFrame,
   createRepositoryUniverseDiagnosticsChannel,
   createRepositoryUniverseFocusRequest,
+  createRepositoryUniversePointerPickState,
+  createRepositoryUniverseRaycastCache,
+  createRepositoryUniverseVisualMotionState,
+  createRepositoryUniverseVisualTargetDirtyState,
+  consumeRepositoryUniverseHoverRaycast,
+  consumeRepositoryUniverseVisualTargetGroups,
   idleRotationDelta,
+  markRepositoryUniverseRaycastCacheDirty,
+  markRepositoryUniverseVisualTargetsDirty,
   nextRepositoryUniverseSettledFrameCount,
+  prepareRepositoryUniverseImmediatePick,
+  queueRepositoryUniversePointerMove,
+  rebuildRepositoryUniverseRaycastCache,
   repositoryUniverseCameraConverged,
   repositoryUniverseCameraPosition,
   repositoryUniverseCameraTargetMatches,
@@ -21,6 +37,7 @@ import {
   repositoryUniverseNodeOpacityTarget,
   repositoryUniverseNodeScaleTarget,
   repositoryUniverseOpacityVisible,
+  repositoryUniverseVisualTargetGroupsForDependency,
   repositoryUniverseVisualScalarActive,
   repositoryUniverseVectorDistance,
   stepRepositoryUniverseCamera,
@@ -88,6 +105,17 @@ interface NodeRenderItem {
   meshTargetVisible: boolean;
   haloTargetVisible: boolean;
   labelTargetVisible: boolean;
+  meshColorTarget: number;
+  emissiveColorTarget: number;
+  haloColorTarget: number;
+  labelScaleWidthTarget: number;
+  labelScaleHeightTarget: number;
+  selected: boolean;
+  hovered: boolean;
+  matched: boolean;
+  routeHighlighted: boolean;
+  connected: boolean;
+  focused: boolean;
 }
 
 interface EdgeRenderItem {
@@ -95,12 +123,14 @@ interface EdgeRenderItem {
   line: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   opacityMotion: VisualScalarMotion;
   targetVisible: boolean;
+  colorTarget: number;
 }
 
 interface ClusterRenderItem {
   cluster: RepositoryUniverseCluster;
   ring: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
   opacityMotion: VisualScalarMotion;
+  colorTarget: number;
 }
 
 interface ProposalRenderItem {
@@ -127,6 +157,7 @@ interface ProposalEdgeRenderItem {
   line: THREE.Line<THREE.BufferGeometry, THREE.LineDashedMaterial>;
   opacityMotion: VisualScalarMotion;
   targetVisible: boolean;
+  colorTarget: number;
 }
 
 const INITIAL_APPEARANCE_MS = 1400;
@@ -176,6 +207,7 @@ export default function RepositoryUniverse3D({
   const transformationDomainRef = useRef(transformationDomain);
   const selectedProposalIdRef = useRef(selectedProposalId);
   const excludedProposalSetRef = useRef(new Set(excludedProposalIds));
+  const visualTargetDirtyStateRef = useRef(createRepositoryUniverseVisualTargetDirtyState());
   const onCameraStateChangeRef = useRef(onCameraStateChange);
   const onSelectNodeRef = useRef(onSelectNode);
   const onSelectProposalRef = useRef(onSelectProposal);
@@ -193,26 +225,51 @@ export default function RepositoryUniverse3D({
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('selected-node'),
+    );
   }, [selectedNodeId]);
 
   useEffect(() => {
     focusedClusterIdRef.current = focusedClusterId;
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('focused-cluster'),
+    );
   }, [focusedClusterId]);
 
   useEffect(() => {
     routeNodeIdSetRef.current = new Set(routeNodeIds);
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('route-membership'),
+    );
   }, [routeNodeIds]);
 
   useEffect(() => {
     searchMatchSetRef.current = new Set(searchMatchIds);
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('search-membership'),
+    );
   }, [searchMatchIds]);
 
   useEffect(() => {
     visibleNodeSetRef.current = visibleNodeSet;
+    // Filter changes reach the renderer through the canonical visible-node membership.
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('visible-node-membership'),
+    );
   }, [visibleNodeSet]);
 
   useEffect(() => {
     visibleEdgeSetRef.current = visibleEdgeSet;
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('visible-edge-membership'),
+    );
   }, [visibleEdgeSet]);
 
   useEffect(() => {
@@ -221,6 +278,10 @@ export default function RepositoryUniverse3D({
 
   useEffect(() => {
     reducedMotionRef.current = reducedMotion;
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('reduced-motion'),
+    );
     if (reducedMotion) setSettled(true);
   }, [reducedMotion]);
 
@@ -230,23 +291,44 @@ export default function RepositoryUniverse3D({
 
   useEffect(() => {
     animateInRef.current = animateIn;
+    // Reveal currently owns spatial position, but remains an explicit all-target dependency.
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('initial-reveal'),
+    );
     if (!animateIn) setSettled(true);
   }, [animateIn]);
 
   useEffect(() => {
     transformationModeRef.current = transformationMode;
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('proposal-visibility'),
+    );
   }, [transformationMode]);
 
   useEffect(() => {
     transformationDomainRef.current = transformationDomain;
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('proposal-visibility'),
+    );
   }, [transformationDomain]);
 
   useEffect(() => {
     selectedProposalIdRef.current = selectedProposalId;
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('proposal-selection'),
+    );
   }, [selectedProposalId]);
 
   useEffect(() => {
     excludedProposalSetRef.current = new Set(excludedProposalIds);
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('proposal-selection'),
+    );
   }, [excludedProposalIds]);
 
   useEffect(() => {
@@ -300,13 +382,18 @@ export default function RepositoryUniverse3D({
     const proposalItems = new Map<string, ProposalRenderItem>();
     const proposalEdgeItems = new Map<string, ProposalEdgeRenderItem>();
     const sphereGeometryCache = new Map<number, THREE.SphereGeometry>();
+    const raycastCandidates: THREE.Object3D[] = [];
+    const raycastCache = createRepositoryUniverseRaycastCache<THREE.Object3D>();
+    const pointerPickState = createRepositoryUniversePointerPickState();
+    const visualMotionState = createRepositoryUniverseVisualMotionState(true);
+    const visualTargetDirtyState = createRepositoryUniverseVisualTargetDirtyState();
+    visualTargetDirtyStateRef.current = visualTargetDirtyState;
     let frameId = 0;
     let disposed = false;
     let pointerMode: PointerMode | null = null;
     let pointerStart = { x: 0, y: 0 };
     let pointerLast = { x: 0, y: 0 };
     let pointerMoved = false;
-    let hoveredNodeId: string | null = null;
     let userInteractedAt = performance.now();
     let localSettled = reducedMotionRef.current || !animateInRef.current;
     let lastPublishedCamera = cameraStateRef.current;
@@ -320,6 +407,11 @@ export default function RepositoryUniverse3D({
     let focusSettlementState: RepositoryUniverseSettlementState = 'idle';
     let labelDistanceBand: RepositoryUniverseLabelDistanceBand = repositoryUniverseLabelDistanceBand(cameraStateRef.current.radius);
     let activeVisualInterpolationCount = 0;
+    let targetRecalculationWindowStartedAt: number | null = null;
+    let targetRecalculationsAtWindowStart = 0;
+    let hoverRaycastsAtWindowStart = 0;
+    let visualTargetRecalculationsPerSecond = 0;
+    let hoverRaycastsPerSecond = 0;
     const startedAt = performance.now();
 
     renderer.setClearColor(0x050914, 1);
@@ -338,6 +430,15 @@ export default function RepositoryUniverse3D({
         programmaticCameraMotionActive: false,
         visualMotionActive: false,
         activeVisualInterpolationCount: 0,
+        visualTargetRecalculationCount: 0,
+        visualTargetRecalculationsPerSecond: 0,
+        pointerMoveEventCount: 0,
+        hoverRaycastCount: 0,
+        hoverRaycastsPerSecond: 0,
+        cachedRaycastObjectCount: 0,
+        raycastCacheRebuildCount: 0,
+        visualTargetsDirty: true,
+        hoverRaycastPending: false,
         settlementState: focusSettlementState,
       })
       : undefined;
@@ -405,7 +506,12 @@ export default function RepositoryUniverse3D({
       ring.position.set(position.x, position.y - 10, position.z);
       ring.rotation.x = Math.PI / 2;
       scene.add(ring);
-      clusterItems.set(cluster.id, { cluster, ring, opacityMotion: visualScalar(material.opacity) });
+      clusterItems.set(cluster.id, {
+        cluster,
+        ring,
+        opacityMotion: visualScalar(material.opacity),
+        colorTarget: colorForCluster(cluster),
+      });
     }
 
     for (const edge of model.edges) {
@@ -420,7 +526,13 @@ export default function RepositoryUniverse3D({
       });
       const geometry = new THREE.BufferGeometry().setFromPoints([source, target]);
       const line = new THREE.Line(geometry, material);
-      edgeItems.set(edge.id, { edge, line, opacityMotion: visualScalar(material.opacity), targetVisible: true });
+      edgeItems.set(edge.id, {
+        edge,
+        line,
+        opacityMotion: visualScalar(material.opacity),
+        targetVisible: true,
+        colorTarget: colorForEdge(edge),
+      });
       scene.add(line);
       addRelatedNode(edge.source, edge.target);
       addRelatedNode(edge.target, edge.source);
@@ -445,6 +557,7 @@ export default function RepositoryUniverse3D({
         mesh.userData.proposalId = proposal.id;
         scene.add(mesh);
         mesh.visible = false;
+        raycastCandidates.push(mesh);
 
         const haloMaterial = new THREE.MeshBasicMaterial({
           color: baseColor,
@@ -507,6 +620,7 @@ export default function RepositoryUniverse3D({
           line,
           opacityMotion: visualScalar(material.opacity),
           targetVisible: false,
+          colorTarget: 0x9bdcf3,
         });
       }
     }
@@ -529,6 +643,7 @@ export default function RepositoryUniverse3D({
       mesh.position.copy(position);
       mesh.userData.nodeId = node.id;
       scene.add(mesh);
+      raycastCandidates.push(mesh);
 
       const haloMaterial = new THREE.MeshBasicMaterial({
         color: 0x67e8f9,
@@ -566,6 +681,17 @@ export default function RepositoryUniverse3D({
         meshTargetVisible: true,
         haloTargetVisible: false,
         labelTargetVisible: false,
+        meshColorTarget: colorForNode(node),
+        emissiveColorTarget: emissiveForNode(node),
+        haloColorTarget: 0x67e8f9,
+        labelScaleWidthTarget: node.kind === 'repository' ? 70 : 42,
+        labelScaleHeightTarget: node.kind === 'repository' ? 20 : 14,
+        selected: false,
+        hovered: false,
+        matched: false,
+        routeHighlighted: false,
+        connected: false,
+        focused: true,
       });
     }
 
@@ -664,13 +790,17 @@ export default function RepositoryUniverse3D({
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
     };
 
-    const intersectEntity = () => {
+    const rebuildRaycastCacheIfNeeded = () => rebuildRepositoryUniverseRaycastCache(
+      raycastCache,
+      raycastCandidates,
+      object => !disposed && object.visible && object.parent === scene,
+    );
+
+    const intersectEntity = (x = pointer.x, y = pointer.y) => {
+      pointer.set(x, y);
+      rebuildRaycastCacheIfNeeded();
       raycaster.setFromCamera(pointer, camera);
-      const meshes = [
-        ...[...nodeItems.values()].filter(item => item.mesh.visible).map(item => item.mesh),
-        ...[...proposalItems.values()].filter(item => item.mesh.visible).map(item => item.mesh),
-      ];
-      const intersect = raycaster.intersectObjects(meshes, false)[0];
+      const intersect = raycaster.intersectObjects(raycastCache.objects, false)[0];
       if (!intersect) return {};
       return {
         nodeId: intersect.object.userData.nodeId as string | undefined,
@@ -714,7 +844,18 @@ export default function RepositoryUniverse3D({
     const handleCanvasPointerMove = (event: PointerEvent) => {
       if (pointerMode) return;
       setPointer(event);
-      hoveredNodeId = intersectEntity().nodeId || null;
+      queueRepositoryUniversePointerMove(pointerPickState, pointer.x, pointer.y);
+    };
+
+    const clearPointerHover = () => {
+      const hadHoveredNode = pointerPickState.hoveredNodeId !== null;
+      clearRepositoryUniversePointerHover(pointerPickState);
+      if (hadHoveredNode) {
+        markRepositoryUniverseVisualTargetsDirty(
+          visualTargetDirtyState,
+          repositoryUniverseVisualTargetGroupsForDependency('hovered-node'),
+        );
+      }
     };
 
     const cleanupDocumentDrag = () => {
@@ -727,6 +868,7 @@ export default function RepositoryUniverse3D({
       if (event.button !== 0 && event.button !== 2) return;
       interruptProgrammaticCameraMotion();
       setPointer(event);
+      prepareRepositoryUniverseImmediatePick(pointerPickState, pointer.x, pointer.y);
       canvas.setPointerCapture?.(event.pointerId);
       pointerMode = event.button === 2 ? 'pan' : 'orbit';
       pointerStart = { x: event.clientX, y: event.clientY };
@@ -745,7 +887,8 @@ export default function RepositoryUniverse3D({
       cleanupDocumentDrag();
       if (mode === 'orbit' && !pointerMoved) {
         setPointer(event);
-        const { nodeId, proposalId } = intersectEntity();
+        const coordinates = prepareRepositoryUniverseImmediatePick(pointerPickState, pointer.x, pointer.y);
+        const { nodeId, proposalId } = intersectEntity(coordinates.x, coordinates.y);
         if (nodeId) onSelectNodeRef.current(nodeId);
         if (proposalId) onSelectProposalRef.current?.(proposalId);
       }
@@ -764,7 +907,8 @@ export default function RepositoryUniverse3D({
 
     const handleDoubleClick = (event: MouseEvent) => {
       setPointer(event);
-      const { nodeId, proposalId } = intersectEntity();
+      const coordinates = prepareRepositoryUniverseImmediatePick(pointerPickState, pointer.x, pointer.y);
+      const { nodeId, proposalId } = intersectEntity(coordinates.x, coordinates.y);
       if (proposalId) {
         onSelectProposalRef.current?.(proposalId);
         return;
@@ -825,7 +969,7 @@ export default function RepositoryUniverse3D({
       return selectedRelatedClusterCache;
     };
 
-    const updateVisualState = () => {
+    const recalculateVisualTargets = (dirtyGroups: number) => {
       const selectedId = selectedNodeIdRef.current;
       const focusedCluster = focusedClusterIdRef.current;
       const routeNodeIds = routeNodeIdSetRef.current;
@@ -840,88 +984,149 @@ export default function RepositoryUniverse3D({
       const selectedRelated = relatedNodeIdsForSelection(selectedId);
       const selectedClusterId = selectedId ? nodeItems.get(selectedId)?.node.clusterId : null;
       const selectedRelatedClusterIds = relatedClusterIdsForSelection(selectedId, selectedRelated);
-      let interpolationCount = 0;
 
-      for (const item of clusterItems.values()) {
-        const active = Boolean(focusedCluster && item.cluster.id === focusedCluster) || item.cluster.id === selectedClusterId;
-        const related = selectedRelatedClusterIds.has(item.cluster.id);
-        item.ring.visible = true;
-        item.opacityMotion.target = active
-          ? 0.09
-          : related
-            ? 0.045
-            : focusedCluster || selectedId
-              ? 0.012
-              : 0.022;
-        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.clusterRing)) interpolationCount += 1;
-        item.ring.material.opacity = item.opacityMotion.current;
-        item.ring.material.color.setHex(colorForCluster(item.cluster, active, related));
+      if (dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.clusters) {
+        for (const item of clusterItems.values()) {
+          const active = Boolean(focusedCluster && item.cluster.id === focusedCluster) || item.cluster.id === selectedClusterId;
+          const related = selectedRelatedClusterIds.has(item.cluster.id);
+          item.opacityMotion.target = active
+            ? 0.09
+            : related
+              ? 0.045
+              : focusedCluster || selectedId
+                ? 0.012
+                : 0.022;
+          item.colorTarget = colorForCluster(item.cluster, active, related);
+        }
       }
 
-      for (const item of edgeItems.values()) {
-        const { edge, line } = item;
-        const directlySelected = Boolean(selectedId && (edge.source === selectedId || edge.target === selectedId));
-        const focused = Boolean(focusedCluster && nodeById.get(edge.source)?.clusterId === focusedCluster && nodeById.get(edge.target)?.clusterId === focusedCluster);
-        const visible = visibleEdges.has(edge.id);
-        item.targetVisible = visible;
-        item.opacityMotion.target = repositoryUniverseEdgeOpacityTarget({
-          visible,
-          directlySelected,
-          focused,
-          relationship: edge.relationship,
-          evidenceType: edge.evidenceType,
-          contextualFocusActive: Boolean(selectedId || focusedCluster),
-        });
-        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.edge)) interpolationCount += 1;
-        line.material.opacity = item.opacityMotion.current;
-        line.visible = repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
-        line.material.color.setHex(colorForEdge(edge, directlySelected, focused));
+      if (dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryEdges) {
+        for (const item of edgeItems.values()) {
+          const { edge } = item;
+          const directlySelected = Boolean(selectedId && (edge.source === selectedId || edge.target === selectedId));
+          const focused = Boolean(focusedCluster && nodeById.get(edge.source)?.clusterId === focusedCluster && nodeById.get(edge.target)?.clusterId === focusedCluster);
+          const visible = visibleEdges.has(edge.id);
+          item.targetVisible = visible;
+          item.opacityMotion.target = repositoryUniverseEdgeOpacityTarget({
+            visible,
+            directlySelected,
+            focused,
+            relationship: edge.relationship,
+            evidenceType: edge.evidenceType,
+            contextualFocusActive: Boolean(selectedId || focusedCluster),
+          });
+          item.colorTarget = colorForEdge(edge, directlySelected, focused);
+        }
       }
 
-      for (const item of proposalEdgeItems.values()) {
-        const visible = mode === 'with-shipseal' && (domain === 'all' || item.domain === domain);
-        const selected = selectedProposal === item.proposalId;
-        const excluded = excludedProposals.has(item.proposalId);
-        item.targetVisible = visible;
-        item.opacityMotion.target = !visible ? 0 : excluded ? 0.09 : selected ? 0.56 : 0.26;
-        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.edge)) interpolationCount += 1;
-        item.line.material.opacity = item.opacityMotion.current;
-        item.line.visible = repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
-        item.line.material.color.setHex(selected ? 0xe0faff : 0x9bdcf3);
+      if (dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.proposalEdges) {
+        for (const item of proposalEdgeItems.values()) {
+          const visible = mode === 'with-shipseal' && (domain === 'all' || item.domain === domain);
+          const selected = selectedProposal === item.proposalId;
+          const excluded = excludedProposals.has(item.proposalId);
+          item.targetVisible = visible;
+          item.opacityMotion.target = !visible ? 0 : excluded ? 0.09 : selected ? 0.56 : 0.26;
+          item.colorTarget = selected ? 0xe0faff : 0x9bdcf3;
+        }
       }
 
       const radius = cameraStateRef.current.radius;
-      labelDistanceBand = repositoryUniverseLabelDistanceBand(radius, labelDistanceBand);
-      for (const item of nodeItems.values()) {
-        const { node, mesh, halo, label, labelMaterial, baseRadius } = item;
-        const visible = visibleNodes.has(node.id);
-        const selected = node.id === selectedId;
-        const hovered = node.id === hoveredNodeId;
-        const matched = searchMatches.has(node.id);
-        const routeHighlighted = routeNodeIds.has(node.id);
-        const connected = selectedRelated.has(node.id);
-        const focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
-        const quiet = Boolean((selectedId || routeActive) && !selected && !connected && !matched && !routeHighlighted && node.id !== model.rootNodeId);
-        const suppressed = Boolean(focusedCluster && !focused && !selected && !matched && !routeHighlighted);
-        const priority = {
-          visible,
-          selected,
-          hovered,
-          matched,
-          routeHighlighted,
-          connected,
-          quiet,
-          suppressed,
-          importance: node.importance,
-        };
-        item.meshTargetVisible = visible;
-        item.opacityMotion.target = repositoryUniverseNodeOpacityTarget(priority);
-        item.scaleMotion.target = repositoryUniverseNodeScaleTarget(priority);
-        item.emissiveMotion.target = repositoryUniverseNodeEmissiveTarget(priority);
-        item.haloOpacityMotion.target = repositoryUniverseNodeHaloOpacityTarget(priority);
-        item.haloScaleMotion.target = repositoryUniverseNodeHaloScaleTarget(priority);
-        item.haloTargetVisible = item.haloOpacityMotion.target > 0;
+      const updateNodeTargets = Boolean(dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryNodes);
+      const updateLabelTargets = Boolean(dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.nodeLabels);
+      if (updateNodeTargets || updateLabelTargets) {
+        for (const item of nodeItems.values()) {
+          const { node } = item;
+          const visible = visibleNodes.has(node.id);
+          if (updateNodeTargets) {
+            item.selected = node.id === selectedId;
+            item.hovered = node.id === pointerPickState.hoveredNodeId;
+            item.matched = searchMatches.has(node.id);
+            item.routeHighlighted = routeNodeIds.has(node.id);
+            item.connected = selectedRelated.has(node.id);
+            item.focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
+            const quiet = Boolean((selectedId || routeActive) && !item.selected && !item.connected && !item.matched && !item.routeHighlighted && node.id !== model.rootNodeId);
+            const suppressed = Boolean(focusedCluster && !item.focused && !item.selected && !item.matched && !item.routeHighlighted);
+            const priority = {
+              visible,
+              selected: item.selected,
+              hovered: item.hovered,
+              matched: item.matched,
+              routeHighlighted: item.routeHighlighted,
+              connected: item.connected,
+              quiet,
+              suppressed,
+              importance: node.importance,
+            };
+            item.meshTargetVisible = visible;
+            item.opacityMotion.target = repositoryUniverseNodeOpacityTarget(priority);
+            item.scaleMotion.target = repositoryUniverseNodeScaleTarget(priority);
+            item.emissiveMotion.target = repositoryUniverseNodeEmissiveTarget(priority);
+            item.haloOpacityMotion.target = repositoryUniverseNodeHaloOpacityTarget(priority);
+            item.haloScaleMotion.target = repositoryUniverseNodeHaloScaleTarget(priority);
+            item.haloTargetVisible = item.haloOpacityMotion.target > 0;
+            item.meshColorTarget = colorForNode(node, item.selected, item.matched || item.routeHighlighted, item.hovered, item.connected);
+            item.emissiveColorTarget = emissiveForNode(node, item.selected, item.matched || item.routeHighlighted, item.hovered);
+            item.haloColorTarget = item.selected
+              ? 0xe0faff
+              : item.routeHighlighted
+                ? 0xa7f3ff
+                : item.connected
+                  ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16)
+                  : 0x67e8f9;
+          }
 
+          if (updateLabelTargets) {
+            const labelVisible = visible && shouldRenderLabel(node, {
+              selected: item.selected,
+              hovered: item.hovered,
+              matched: item.matched || item.routeHighlighted,
+              connected: item.connected || item.routeHighlighted,
+              focused: item.focused,
+              focusedClusterId: focusedCluster,
+              hasSelection: Boolean(selectedId),
+              cameraRadius: radius,
+              distanceBand: labelDistanceBand,
+            });
+            item.labelTargetVisible = labelVisible;
+            item.labelOpacityMotion.target = labelVisible
+              ? labelOpacity(node, labelDistanceBand, item.selected, item.hovered, item.matched, item.connected)
+              : 0;
+            const labelScale = labelScaleForNode(node, labelDistanceBand, item.selected || item.hovered || item.matched);
+            item.labelScaleWidthTarget = labelScale.width;
+            item.labelScaleHeightTarget = labelScale.height;
+          }
+        }
+      }
+
+      if (dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.proposalNodes) {
+        for (const item of proposalItems.values()) {
+          const visible = mode === 'with-shipseal' && (domain === 'all' || item.domain === domain);
+          const selected = selectedProposal === item.proposalId;
+          const excluded = excludedProposals.has(item.proposalId);
+          const opacity = !visible ? 0 : excluded ? 0.24 : selected ? 0.92 : 0.66;
+          item.meshTargetVisible = visible;
+          item.haloTargetVisible = visible && !excluded;
+          item.labelTargetVisible = visible;
+          item.opacityMotion.target = opacity;
+          item.scaleMotion.target = selected ? 1.34 : 1;
+          item.haloOpacityMotion.target = item.haloTargetVisible ? selected ? 0.26 : 0.12 : 0;
+          item.labelOpacityMotion.target = visible ? excluded ? 0.34 : selected ? 0.94 : 0.7 : 0;
+        }
+      }
+    };
+
+    const interpolateVisualValues = () => {
+      let interpolationCount = 0;
+      for (const item of clusterItems.values()) {
+        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.clusterRing)) interpolationCount += 1;
+      }
+      for (const item of edgeItems.values()) {
+        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.edge)) interpolationCount += 1;
+      }
+      for (const item of proposalEdgeItems.values()) {
+        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.edge)) interpolationCount += 1;
+      }
+      for (const item of nodeItems.values()) {
         let itemInterpolating = false;
         const opacityRate = item.opacityMotion.target >= item.opacityMotion.current
           ? REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.dimIn
@@ -939,56 +1144,11 @@ export default function RepositoryUniverse3D({
             : REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.haloOut,
         ) || itemInterpolating;
         itemInterpolating = stepVisualScalar(item.haloScaleMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.haloIn) || itemInterpolating;
-
-        mesh.material.opacity = item.opacityMotion.current;
-        mesh.visible = repositoryUniverseOpacityVisible(item.meshTargetVisible, item.opacityMotion.current);
-        mesh.material.color.setHex(colorForNode(node, selected, matched || routeHighlighted, hovered, connected));
-        mesh.material.emissive.setHex(emissiveForNode(node, selected, matched || routeHighlighted, hovered));
-        mesh.material.emissiveIntensity = item.emissiveMotion.current;
-        mesh.material.wireframe = node.evidenceType === 'missing' || node.kind === 'recommendation';
-        // U2A reveal owns radial position; U2B emphasis owns object scale, composed independently.
-        mesh.scale.setScalar(composeRepositoryUniverseVisualScale(1, item.scaleMotion.current));
-
-        halo.material.opacity = item.haloOpacityMotion.current;
-        halo.visible = repositoryUniverseOpacityVisible(item.haloTargetVisible, item.haloOpacityMotion.current);
-        halo.material.color.setHex(selected ? 0xe0faff : routeHighlighted ? 0xa7f3ff : connected ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16) : 0x67e8f9);
-        halo.scale.setScalar(item.haloScaleMotion.current);
-
-        const labelVisible = visible && shouldRenderLabel(node, {
-          selected,
-          hovered,
-          matched: matched || routeHighlighted,
-          connected: connected || routeHighlighted,
-          focused,
-          focusedClusterId: focusedCluster,
-          hasSelection: Boolean(selectedId),
-          cameraRadius: radius,
-          distanceBand: labelDistanceBand,
-        });
-        item.labelTargetVisible = labelVisible;
-        item.labelOpacityMotion.target = labelVisible ? labelOpacity(node, labelDistanceBand, selected, hovered, matched, connected) : 0;
         itemInterpolating = stepVisualScalar(item.labelOpacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.label) || itemInterpolating;
-        labelMaterial.opacity = item.labelOpacityMotion.current;
-        label.visible = repositoryUniverseOpacityVisible(item.labelTargetVisible, item.labelOpacityMotion.current);
-        label.position.set(item.position.x, item.position.y + baseRadius * item.scaleMotion.current + 5, item.position.z);
-        const labelScale = labelScaleForNode(node, labelDistanceBand, selected || hovered || matched);
-        label.scale.set(labelScale.width, labelScale.height, 1);
-        label.lookAt(camera.position);
         if (itemInterpolating) interpolationCount += 1;
       }
 
       for (const item of proposalItems.values()) {
-        const visible = mode === 'with-shipseal' && (domain === 'all' || item.domain === domain);
-        const selected = selectedProposal === item.proposalId;
-        const excluded = excludedProposals.has(item.proposalId);
-        const opacity = !visible ? 0 : excluded ? 0.24 : selected ? 0.92 : 0.66;
-        item.meshTargetVisible = visible;
-        item.haloTargetVisible = visible && !excluded;
-        item.labelTargetVisible = visible;
-        item.opacityMotion.target = opacity;
-        item.scaleMotion.target = selected ? 1.34 : 1;
-        item.haloOpacityMotion.target = item.haloTargetVisible ? selected ? 0.26 : 0.12 : 0;
-        item.labelOpacityMotion.target = visible ? excluded ? 0.34 : selected ? 0.94 : 0.7 : 0;
         let itemInterpolating = false;
         itemInterpolating = stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.proposal) || itemInterpolating;
         itemInterpolating = stepVisualScalar(item.scaleMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.proposal) || itemInterpolating;
@@ -999,8 +1159,57 @@ export default function RepositoryUniverse3D({
             : REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.haloOut,
         ) || itemInterpolating;
         itemInterpolating = stepVisualScalar(item.labelOpacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.label) || itemInterpolating;
+        if (itemInterpolating) interpolationCount += 1;
+      }
+      return interpolationCount;
+    };
+
+    const applyVisualProperties = () => {
+      for (const item of clusterItems.values()) {
+        item.ring.visible = true;
+        item.ring.material.opacity = item.opacityMotion.current;
+        item.ring.material.color.setHex(item.colorTarget);
+      }
+      for (const item of edgeItems.values()) {
+        item.line.material.opacity = item.opacityMotion.current;
+        item.line.visible = repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
+        item.line.material.color.setHex(item.colorTarget);
+      }
+      for (const item of proposalEdgeItems.values()) {
+        item.line.material.opacity = item.opacityMotion.current;
+        item.line.visible = repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
+        item.line.material.color.setHex(item.colorTarget);
+      }
+      for (const item of nodeItems.values()) {
+        const { mesh, halo, label, labelMaterial, baseRadius } = item;
+        const meshVisible = repositoryUniverseOpacityVisible(item.meshTargetVisible, item.opacityMotion.current);
+        if (mesh.visible !== meshVisible) {
+          mesh.visible = meshVisible;
+          markRepositoryUniverseRaycastCacheDirty(raycastCache);
+        }
+        mesh.material.opacity = item.opacityMotion.current;
+        mesh.material.color.setHex(item.meshColorTarget);
+        mesh.material.emissive.setHex(item.emissiveColorTarget);
+        mesh.material.emissiveIntensity = item.emissiveMotion.current;
+        // U2A reveal owns radial position; U2B emphasis owns object scale, composed independently.
+        mesh.scale.setScalar(composeRepositoryUniverseVisualScale(1, item.scaleMotion.current));
+        halo.material.opacity = item.haloOpacityMotion.current;
+        halo.visible = repositoryUniverseOpacityVisible(item.haloTargetVisible, item.haloOpacityMotion.current);
+        halo.material.color.setHex(item.haloColorTarget);
+        halo.scale.setScalar(item.haloScaleMotion.current);
+        labelMaterial.opacity = item.labelOpacityMotion.current;
+        label.visible = repositoryUniverseOpacityVisible(item.labelTargetVisible, item.labelOpacityMotion.current);
+        label.position.set(item.position.x, item.position.y + baseRadius * item.scaleMotion.current + 5, item.position.z);
+        label.scale.set(item.labelScaleWidthTarget, item.labelScaleHeightTarget, 1);
+        label.lookAt(camera.position);
+      }
+      for (const item of proposalItems.values()) {
+        const meshVisible = repositoryUniverseOpacityVisible(item.meshTargetVisible, item.opacityMotion.current);
+        if (item.mesh.visible !== meshVisible) {
+          item.mesh.visible = meshVisible;
+          markRepositoryUniverseRaycastCacheDirty(raycastCache);
+        }
         item.mesh.material.opacity = item.opacityMotion.current;
-        item.mesh.visible = repositoryUniverseOpacityVisible(item.meshTargetVisible, item.opacityMotion.current);
         item.mesh.scale.setScalar(item.scaleMotion.current);
         item.halo.material.opacity = item.haloOpacityMotion.current;
         item.halo.visible = repositoryUniverseOpacityVisible(item.haloTargetVisible, item.haloOpacityMotion.current);
@@ -1008,9 +1217,28 @@ export default function RepositoryUniverse3D({
         item.label.visible = repositoryUniverseOpacityVisible(item.labelTargetVisible, item.labelOpacityMotion.current);
         item.label.position.set(item.position.x, item.position.y + 12 + (item.scaleMotion.current - 1) * 12, item.position.z);
         item.label.lookAt(camera.position);
-        if (itemInterpolating) interpolationCount += 1;
       }
-      return interpolationCount;
+    };
+
+    const consumeAndRecalculateVisualTargets = () => {
+      const dirtyGroups = consumeRepositoryUniverseVisualTargetGroups(visualTargetDirtyState);
+      if (!dirtyGroups) return false;
+      recalculateVisualTargets(dirtyGroups);
+      activateRepositoryUniverseVisualMotion(visualMotionState);
+      return true;
+    };
+
+    const processPendingHoverRaycast = () => {
+      if (pointerMode) return;
+      const coordinates = consumeRepositoryUniverseHoverRaycast(pointerPickState);
+      if (!coordinates) return;
+      const nextHoveredNodeId = intersectEntity(coordinates.x, coordinates.y).nodeId || null;
+      if (nextHoveredNodeId === pointerPickState.hoveredNodeId) return;
+      pointerPickState.hoveredNodeId = nextHoveredNodeId;
+      markRepositoryUniverseVisualTargetsDirty(
+        visualTargetDirtyState,
+        repositoryUniverseVisualTargetGroupsForDependency('hovered-node'),
+      );
     };
 
     const animate = (timestamp: number) => {
@@ -1044,10 +1272,49 @@ export default function RepositoryUniverse3D({
       }
       const { desired, next } = applyCamera(animationDeltaSeconds);
       updateFocusSettlement(desired, next);
-      activeVisualInterpolationCount = updateVisualState();
+
+      const nextLabelDistanceBand = repositoryUniverseLabelDistanceBand(cameraStateRef.current.radius, labelDistanceBand);
+      if (nextLabelDistanceBand !== labelDistanceBand) {
+        labelDistanceBand = nextLabelDistanceBand;
+        markRepositoryUniverseVisualTargetsDirty(
+          visualTargetDirtyState,
+          repositoryUniverseVisualTargetGroupsForDependency('camera-label-band'),
+        );
+      }
+      consumeAndRecalculateVisualTargets();
+      processPendingHoverRaycast();
+      consumeAndRecalculateVisualTargets();
+
+      if (visualMotionState.active) {
+        activeVisualInterpolationCount = interpolateVisualValues();
+        applyVisualProperties();
+        completeRepositoryUniverseVisualMotionFrame(visualMotionState, activeVisualInterpolationCount);
+      } else {
+        activeVisualInterpolationCount = 0;
+      }
+      rebuildRaycastCacheIfNeeded();
+
+      targetRecalculationWindowStartedAt ??= timestamp;
+      const counterWindowDurationMs = timestamp - targetRecalculationWindowStartedAt;
+      if (counterWindowDurationMs >= 1000) {
+        visualTargetRecalculationsPerSecond = (visualTargetDirtyState.recalculationCount - targetRecalculationsAtWindowStart) * 1000 / counterWindowDurationMs;
+        hoverRaycastsPerSecond = (pointerPickState.hoverRaycastCount - hoverRaycastsAtWindowStart) * 1000 / counterWindowDurationMs;
+        targetRecalculationsAtWindowStart = visualTargetDirtyState.recalculationCount;
+        hoverRaycastsAtWindowStart = pointerPickState.hoverRaycastCount;
+        targetRecalculationWindowStartedAt = timestamp;
+      }
       diagnostics?.update({
-        visualMotionActive: activeVisualInterpolationCount > 0,
+        visualMotionActive: visualMotionState.active,
         activeVisualInterpolationCount,
+        visualTargetRecalculationCount: visualTargetDirtyState.recalculationCount,
+        visualTargetRecalculationsPerSecond,
+        pointerMoveEventCount: pointerPickState.pointerMoveEventCount,
+        hoverRaycastCount: pointerPickState.hoverRaycastCount,
+        hoverRaycastsPerSecond,
+        cachedRaycastObjectCount: raycastCache.objects.length,
+        raycastCacheRebuildCount: raycastCache.rebuildCount,
+        visualTargetsDirty: visualTargetDirtyState.groups !== REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.none,
+        hoverRaycastPending: pointerPickState.pending,
       });
       renderer.render(scene, camera);
       fpsWindowStartedAt ??= timestamp;
@@ -1077,6 +1344,7 @@ export default function RepositoryUniverse3D({
 
     canvas.addEventListener('pointerdown', handlePointerDown);
     canvas.addEventListener('pointermove', handleCanvasPointerMove);
+    canvas.addEventListener('pointerleave', clearPointerHover);
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     canvas.addEventListener('dblclick', handleDoubleClick);
     canvas.addEventListener('contextmenu', preventDefault);
@@ -1088,6 +1356,7 @@ export default function RepositoryUniverse3D({
       resizeObserver.disconnect();
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointermove', handleCanvasPointerMove);
+      canvas.removeEventListener('pointerleave', clearPointerHover);
       canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('dblclick', handleDoubleClick);
       canvas.removeEventListener('contextmenu', preventDefault);
@@ -1104,6 +1373,8 @@ export default function RepositoryUniverse3D({
       nodeItems.forEach(item => item.labelTexture.dispose());
       proposalItems.forEach(item => item.labelTexture.dispose());
       sphereGeometryCache.forEach(geometry => geometry.dispose());
+      clearRepositoryUniverseRaycastCache(raycastCache);
+      raycastCandidates.length = 0;
       diagnostics?.dispose();
       renderer.dispose();
     };

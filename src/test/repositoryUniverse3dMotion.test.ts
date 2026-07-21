@@ -2,13 +2,29 @@ import { describe, expect, it } from 'vitest';
 import {
   REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY,
   REPOSITORY_UNIVERSE_IDLE_RADIANS_PER_SECOND,
+  REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP,
   REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES,
   REPOSITORY_UNIVERSE_SETTLED_FRAME_COUNT,
+  activateRepositoryUniverseVisualMotion,
+  clearRepositoryUniversePointerHover,
+  clearRepositoryUniverseRaycastCache,
   composeRepositoryUniverseVisualScale,
+  completeRepositoryUniverseVisualMotionFrame,
   createRepositoryUniverseDiagnosticsChannel,
   createRepositoryUniverseFocusRequest,
+  createRepositoryUniversePointerPickState,
+  createRepositoryUniverseRaycastCache,
+  createRepositoryUniverseVisualMotionState,
+  createRepositoryUniverseVisualTargetDirtyState,
+  consumeRepositoryUniverseHoverRaycast,
+  consumeRepositoryUniverseVisualTargetGroups,
   idleRotationDelta,
+  markRepositoryUniverseRaycastCacheDirty,
+  markRepositoryUniverseVisualTargetsDirty,
   nextRepositoryUniverseSettledFrameCount,
+  prepareRepositoryUniverseImmediatePick,
+  queueRepositoryUniversePointerMove,
+  rebuildRepositoryUniverseRaycastCache,
   repositoryUniverseFocusCanSettle,
   repositoryUniverseCameraTargetMatches,
   repositoryUniverseFrameDelta,
@@ -18,6 +34,7 @@ import {
   repositoryUniverseNodeOpacityTarget,
   repositoryUniverseNodeScaleTarget,
   repositoryUniverseOpacityVisible,
+  repositoryUniverseVisualTargetGroupsForDependency,
   repositoryUniverseVisualScalarActive,
   shortestAngleDelta,
   stepRepositoryUniverseCamera,
@@ -63,6 +80,15 @@ function emptyDiagnostics(): Omit<RepositoryUniverseDiagnosticsSnapshot, 'render
     programmaticCameraMotionActive: false,
     visualMotionActive: false,
     activeVisualInterpolationCount: 0,
+    visualTargetRecalculationCount: 0,
+    visualTargetRecalculationsPerSecond: 0,
+    pointerMoveEventCount: 0,
+    hoverRaycastCount: 0,
+    hoverRaycastsPerSecond: 0,
+    cachedRaycastObjectCount: 0,
+    raycastCacheRebuildCount: 0,
+    visualTargetsDirty: false,
+    hoverRaycastPending: false,
     settlementState: 'idle',
   };
 }
@@ -103,6 +129,60 @@ describe('Repository Universe 3D motion', () => {
     const delta = repositoryUniverseFrameDelta(1_000, 6_000);
     expect(delta.deltaSeconds).toBe(5);
     expect(delta.animationDeltaSeconds).toBeCloseTo(0.05, 10);
+  });
+
+  it('calculates initial visual targets once', () => {
+    const dirty = createRepositoryUniverseVisualTargetDirtyState();
+    expect(consumeRepositoryUniverseVisualTargetGroups(dirty)).toBe(REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.all);
+    expect(dirty.recalculationCount).toBe(1);
+  });
+
+  it('does not recalculate visual targets on an unchanged idle frame', () => {
+    const dirty = createRepositoryUniverseVisualTargetDirtyState();
+    consumeRepositoryUniverseVisualTargetGroups(dirty);
+    expect(consumeRepositoryUniverseVisualTargetGroups(dirty)).toBe(REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.none);
+    expect(dirty.recalculationCount).toBe(1);
+  });
+
+  it('marks only node and label targets dirty for hover and search changes', () => {
+    const expected = REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryNodes
+      | REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.nodeLabels;
+    expect(repositoryUniverseVisualTargetGroupsForDependency('hovered-node')).toBe(expected);
+    expect(repositoryUniverseVisualTargetGroupsForDependency('search-membership')).toBe(expected);
+  });
+
+  it('marks cluster, edge, node and label targets dirty for selection and cluster focus', () => {
+    const expected = REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.clusters
+      | REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryEdges
+      | REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryNodes
+      | REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.nodeLabels;
+    expect(repositoryUniverseVisualTargetGroupsForDependency('selected-node')).toBe(expected);
+    expect(repositoryUniverseVisualTargetGroupsForDependency('focused-cluster')).toBe(expected);
+  });
+
+  it('marks route-node and route-edge dependent targets dirty together', () => {
+    const routeGroups = repositoryUniverseVisualTargetGroupsForDependency('route-membership');
+    expect(routeGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryEdges).not.toBe(0);
+    expect(routeGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryNodes).not.toBe(0);
+    expect(routeGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.nodeLabels).not.toBe(0);
+  });
+
+  it('marks proposal nodes and edges dirty for mode, domain, selection and exclusion changes', () => {
+    const expected = REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.proposalEdges
+      | REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.proposalNodes;
+    expect(repositoryUniverseVisualTargetGroupsForDependency('proposal-visibility')).toBe(expected);
+    expect(repositoryUniverseVisualTargetGroupsForDependency('proposal-selection')).toBe(expected);
+  });
+
+  it('accumulates explicit dirty groups without opaque state comparison', () => {
+    const dirty = createRepositoryUniverseVisualTargetDirtyState(REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.none);
+    markRepositoryUniverseVisualTargetsDirty(dirty, repositoryUniverseVisualTargetGroupsForDependency('visible-node-membership'));
+    markRepositoryUniverseVisualTargetsDirty(dirty, repositoryUniverseVisualTargetGroupsForDependency('visible-edge-membership'));
+    expect(consumeRepositoryUniverseVisualTargetGroups(dirty)).toBe(
+      REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryNodes
+      | REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.nodeLabels
+      | REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryEdges,
+    );
   });
 
   it('takes the shortest angle path across negative and positive pi', () => {
@@ -208,6 +288,9 @@ describe('Repository Universe 3D motion', () => {
   });
 
   it('applies final visual values immediately for reduced motion', () => {
+    const dirty = createRepositoryUniverseVisualTargetDirtyState(REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.none);
+    markRepositoryUniverseVisualTargetsDirty(dirty, repositoryUniverseVisualTargetGroupsForDependency('reduced-motion'));
+    expect(consumeRepositoryUniverseVisualTargetGroups(dirty)).toBe(REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.all);
     expect(stepRepositoryUniverseVisualScalar(0.3, 1, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.selection, 0, true)).toBe(1);
     expect(repositoryUniverseVisualScalarActive(1, 1)).toBe(false);
   });
@@ -244,6 +327,86 @@ describe('Repository Universe 3D motion', () => {
     expect(movement(120)).toBeCloseTo(movement(30), 12);
   });
 
+  it('coalesces multiple pointer moves into one hover raycast using the latest coordinates', () => {
+    const pointer = createRepositoryUniversePointerPickState();
+    queueRepositoryUniversePointerMove(pointer, -0.8, 0.6);
+    queueRepositoryUniversePointerMove(pointer, 0.1, -0.2);
+    queueRepositoryUniversePointerMove(pointer, 0.75, -0.45);
+
+    expect(consumeRepositoryUniverseHoverRaycast(pointer)).toEqual({ x: 0.75, y: -0.45 });
+    expect(consumeRepositoryUniverseHoverRaycast(pointer)).toBeNull();
+    expect(pointer.pointerMoveEventCount).toBe(3);
+    expect(pointer.hoverRaycastCount).toBe(1);
+  });
+
+  it('clears a pending hover and current hovered node on pointer leave', () => {
+    const pointer = createRepositoryUniversePointerPickState();
+    pointer.hoveredNodeId = 'file:hovered';
+    queueRepositoryUniversePointerMove(pointer, 0.4, 0.2);
+
+    expect(clearRepositoryUniversePointerHover(pointer)).toBe(true);
+    expect(pointer.pending).toBe(false);
+    expect(pointer.hoveredNodeId).toBeNull();
+  });
+
+  it('uses an immediate click position and cancels a stale pending hover pick', () => {
+    const pointer = createRepositoryUniversePointerPickState();
+    queueRepositoryUniversePointerMove(pointer, -0.9, -0.9);
+
+    expect(prepareRepositoryUniverseImmediatePick(pointer, 0.3, 0.5)).toEqual({ x: 0.3, y: 0.5 });
+    expect(pointer.pending).toBe(false);
+    expect(consumeRepositoryUniverseHoverRaycast(pointer)).toBeNull();
+  });
+
+  it('rebuilds the raycast cache when visibility membership changes', () => {
+    const first = { id: 'first', visible: true, disposed: false };
+    const second = { id: 'second', visible: false, disposed: false };
+    const candidates = [first, second];
+    const cache = createRepositoryUniverseRaycastCache<(typeof candidates)[number]>();
+    const eligible = (candidate: (typeof candidates)[number]) => candidate.visible && !candidate.disposed;
+
+    expect(rebuildRepositoryUniverseRaycastCache(cache, candidates, eligible)).toBe(true);
+    expect(cache.objects.map(candidate => candidate.id)).toEqual(['first']);
+    second.visible = true;
+    markRepositoryUniverseRaycastCacheDirty(cache);
+    expect(rebuildRepositoryUniverseRaycastCache(cache, candidates, eligible)).toBe(true);
+    expect(cache.objects.map(candidate => candidate.id)).toEqual(['first', 'second']);
+  });
+
+  it('does not rebuild the raycast cache when eligibility is unchanged', () => {
+    const candidates = [{ id: 'node', visible: true, disposed: false }];
+    const cache = createRepositoryUniverseRaycastCache<(typeof candidates)[number]>();
+    const eligible = (candidate: (typeof candidates)[number]) => candidate.visible && !candidate.disposed;
+    rebuildRepositoryUniverseRaycastCache(cache, candidates, eligible);
+
+    expect(rebuildRepositoryUniverseRaycastCache(cache, candidates, eligible)).toBe(false);
+    expect(cache.rebuildCount).toBe(1);
+  });
+
+  it('does not retain hidden or disposed objects in the raycast cache and clears on disposal', () => {
+    const candidates = [
+      { id: 'visible', visible: true, disposed: false },
+      { id: 'hidden', visible: false, disposed: false },
+      { id: 'disposed', visible: true, disposed: true },
+    ];
+    const cache = createRepositoryUniverseRaycastCache<(typeof candidates)[number]>();
+    rebuildRepositoryUniverseRaycastCache(cache, candidates, candidate => candidate.visible && !candidate.disposed);
+    expect(cache.objects.map(candidate => candidate.id)).toEqual(['visible']);
+
+    clearRepositoryUniverseRaycastCache(cache);
+    expect(cache.objects).toEqual([]);
+  });
+
+  it('deactivates visual interpolation after convergence and reactivates for a new target', () => {
+    const visualMotion = createRepositoryUniverseVisualMotionState(true);
+    expect(completeRepositoryUniverseVisualMotionFrame(visualMotion, 0)).toBe(false);
+    expect(visualMotion.active).toBe(false);
+
+    activateRepositoryUniverseVisualMotion(visualMotion);
+    expect(visualMotion.active).toBe(true);
+    expect(completeRepositoryUniverseVisualMotionFrame(visualMotion, 4)).toBe(true);
+  });
+
   it('does not install diagnostics outside development mode', () => {
     const host = {};
     expect(createRepositoryUniverseDiagnosticsChannel(false, host, emptyDiagnostics())).toBeUndefined();
@@ -253,11 +416,31 @@ describe('Repository Universe 3D motion', () => {
   it('exposes frozen diagnostic snapshots and removes them on disposal', () => {
     const host = {} as Record<string, unknown>;
     const channel = createRepositoryUniverseDiagnosticsChannel(true, host, emptyDiagnostics());
-    channel?.update({ renderCalls: 3, triangles: 42, activeVisualInterpolationCount: 7, visualMotionActive: true, settlementState: 'moving' });
+    channel?.update({
+      renderCalls: 3,
+      triangles: 42,
+      activeVisualInterpolationCount: 7,
+      visualMotionActive: true,
+      pointerMoveEventCount: 12,
+      hoverRaycastCount: 3,
+      visualTargetRecalculationCount: 5,
+      cachedRaycastObjectCount: 18,
+      settlementState: 'moving',
+    });
 
     const snapshot = host[REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY] as RepositoryUniverseDiagnosticsSnapshot;
     expect(Object.isFrozen(snapshot)).toBe(true);
-    expect(snapshot).toMatchObject({ renderCalls: 3, triangles: 42, activeVisualInterpolationCount: 7, visualMotionActive: true, settlementState: 'moving' });
+    expect(snapshot).toMatchObject({
+      renderCalls: 3,
+      triangles: 42,
+      activeVisualInterpolationCount: 7,
+      visualMotionActive: true,
+      pointerMoveEventCount: 12,
+      hoverRaycastCount: 3,
+      visualTargetRecalculationCount: 5,
+      cachedRaycastObjectCount: 18,
+      settlementState: 'moving',
+    });
     expect(() => { (snapshot as { renderCalls: number }).renderCalls = 99; }).toThrow();
     expect((host[REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY] as RepositoryUniverseDiagnosticsSnapshot).renderCalls).toBe(3);
 

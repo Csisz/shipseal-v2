@@ -41,7 +41,67 @@ export interface RepositoryUniverseDiagnosticsSnapshot {
   programmaticCameraMotionActive: boolean;
   visualMotionActive: boolean;
   activeVisualInterpolationCount: number;
+  visualTargetRecalculationCount: number;
+  visualTargetRecalculationsPerSecond: number;
+  pointerMoveEventCount: number;
+  hoverRaycastCount: number;
+  hoverRaycastsPerSecond: number;
+  cachedRaycastObjectCount: number;
+  raycastCacheRebuildCount: number;
+  visualTargetsDirty: boolean;
+  hoverRaycastPending: boolean;
   settlementState: RepositoryUniverseSettlementState;
+}
+
+export const REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP = Object.freeze({
+  none: 0,
+  clusters: 1 << 0,
+  repositoryEdges: 1 << 1,
+  repositoryNodes: 1 << 2,
+  nodeLabels: 1 << 3,
+  proposalEdges: 1 << 4,
+  proposalNodes: 1 << 5,
+  all: (1 << 6) - 1,
+});
+
+export type RepositoryUniverseVisualTargetDirtyDependency =
+  | 'initial-scene'
+  | 'hovered-node'
+  | 'selected-node'
+  | 'focused-cluster'
+  | 'search-membership'
+  | 'visible-node-membership'
+  | 'visible-edge-membership'
+  | 'route-membership'
+  | 'proposal-visibility'
+  | 'proposal-selection'
+  | 'camera-label-band'
+  | 'reduced-motion'
+  | 'initial-reveal';
+
+export interface RepositoryUniverseVisualTargetDirtyState {
+  groups: number;
+  version: number;
+  recalculationCount: number;
+}
+
+export interface RepositoryUniversePointerPickState {
+  x: number;
+  y: number;
+  pending: boolean;
+  hoveredNodeId: string | null;
+  pointerMoveEventCount: number;
+  hoverRaycastCount: number;
+}
+
+export interface RepositoryUniverseRaycastCache<T> {
+  readonly objects: T[];
+  dirty: boolean;
+  rebuildCount: number;
+}
+
+export interface RepositoryUniverseVisualMotionState {
+  active: boolean;
 }
 
 export type RepositoryUniverseLabelDistanceBand = 'near' | 'medium' | 'far';
@@ -125,6 +185,163 @@ export const REPOSITORY_UNIVERSE_CAMERA_SETTLEMENT_TOLERANCE: RepositoryUniverse
 export const REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY = '__SHIPSEAL_REPOSITORY_UNIVERSE_DIAGNOSTICS__' as const;
 
 let rendererCreationCount = 0;
+
+/**
+ * U3A dirty-dependency contract:
+ * - hover and search membership affect repository nodes and labels;
+ * - selection and cluster focus also affect cluster rings and repository edges;
+ * - filters arrive as visible-node/visible-edge membership changes;
+ * - flight-path route-node membership also owns the derived route-edge dependency;
+ * - Current/With ShipSeal mode and domain own proposal visibility;
+ * - proposal selection and exclusion own proposal-node/proposal-edge emphasis;
+ * - camera motion dirties labels only when the hysteretic distance band changes;
+ * - reduced motion, initial scene creation, and reveal-mode changes refresh all targets.
+ * Fullscreen, camera angle, and ordinary reveal progress do not derive visual targets.
+ */
+export function repositoryUniverseVisualTargetGroupsForDependency(
+  dependency: RepositoryUniverseVisualTargetDirtyDependency,
+) {
+  const groups = REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP;
+  switch (dependency) {
+    case 'hovered-node':
+    case 'search-membership':
+      return groups.repositoryNodes | groups.nodeLabels;
+    case 'selected-node':
+    case 'focused-cluster':
+      return groups.clusters | groups.repositoryEdges | groups.repositoryNodes | groups.nodeLabels;
+    case 'visible-node-membership':
+      return groups.repositoryNodes | groups.nodeLabels;
+    case 'visible-edge-membership':
+      return groups.repositoryEdges;
+    case 'route-membership':
+      // Route edges do not currently have a distinct style, but keeping the edge group
+      // dirty here makes the route-node/route-edge dependency explicit and future-safe.
+      return groups.repositoryEdges | groups.repositoryNodes | groups.nodeLabels;
+    case 'proposal-visibility':
+    case 'proposal-selection':
+      return groups.proposalEdges | groups.proposalNodes;
+    case 'camera-label-band':
+      return groups.nodeLabels;
+    case 'initial-scene':
+    case 'reduced-motion':
+    case 'initial-reveal':
+      return groups.all;
+  }
+}
+
+export function createRepositoryUniverseVisualTargetDirtyState(
+  initialGroups = REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.all,
+): RepositoryUniverseVisualTargetDirtyState {
+  return { groups: initialGroups, version: initialGroups ? 1 : 0, recalculationCount: 0 };
+}
+
+export function markRepositoryUniverseVisualTargetsDirty(
+  state: RepositoryUniverseVisualTargetDirtyState,
+  groups: number,
+) {
+  if (!groups) return;
+  state.groups |= groups;
+  state.version += 1;
+}
+
+export function consumeRepositoryUniverseVisualTargetGroups(state: RepositoryUniverseVisualTargetDirtyState) {
+  const groups = state.groups;
+  if (!groups) return REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.none;
+  state.groups = REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.none;
+  state.recalculationCount += 1;
+  return groups;
+}
+
+export function createRepositoryUniversePointerPickState(): RepositoryUniversePointerPickState {
+  return {
+    x: 0,
+    y: 0,
+    pending: false,
+    hoveredNodeId: null,
+    pointerMoveEventCount: 0,
+    hoverRaycastCount: 0,
+  };
+}
+
+export function queueRepositoryUniversePointerMove(
+  state: RepositoryUniversePointerPickState,
+  x: number,
+  y: number,
+) {
+  state.x = x;
+  state.y = y;
+  state.pending = true;
+  state.pointerMoveEventCount += 1;
+}
+
+export function consumeRepositoryUniverseHoverRaycast(state: RepositoryUniversePointerPickState) {
+  if (!state.pending) return null;
+  state.pending = false;
+  state.hoverRaycastCount += 1;
+  return { x: state.x, y: state.y };
+}
+
+export function prepareRepositoryUniverseImmediatePick(
+  state: RepositoryUniversePointerPickState,
+  x: number,
+  y: number,
+) {
+  state.x = x;
+  state.y = y;
+  state.pending = false;
+  return { x, y };
+}
+
+export function clearRepositoryUniversePointerHover(state: RepositoryUniversePointerPickState) {
+  const changed = state.pending || state.hoveredNodeId !== null;
+  state.pending = false;
+  state.hoveredNodeId = null;
+  return changed;
+}
+
+export function createRepositoryUniverseRaycastCache<T>(): RepositoryUniverseRaycastCache<T> {
+  return { objects: [], dirty: true, rebuildCount: 0 };
+}
+
+export function markRepositoryUniverseRaycastCacheDirty<T>(cache: RepositoryUniverseRaycastCache<T>) {
+  cache.dirty = true;
+}
+
+export function rebuildRepositoryUniverseRaycastCache<T>(
+  cache: RepositoryUniverseRaycastCache<T>,
+  candidates: Iterable<T>,
+  eligible: (candidate: T) => boolean,
+) {
+  if (!cache.dirty) return false;
+  cache.objects.length = 0;
+  for (const candidate of candidates) {
+    if (eligible(candidate)) cache.objects.push(candidate);
+  }
+  cache.dirty = false;
+  cache.rebuildCount += 1;
+  return true;
+}
+
+export function clearRepositoryUniverseRaycastCache<T>(cache: RepositoryUniverseRaycastCache<T>) {
+  cache.objects.length = 0;
+  cache.dirty = false;
+}
+
+export function createRepositoryUniverseVisualMotionState(initialActive = false): RepositoryUniverseVisualMotionState {
+  return { active: initialActive };
+}
+
+export function activateRepositoryUniverseVisualMotion(state: RepositoryUniverseVisualMotionState) {
+  state.active = true;
+}
+
+export function completeRepositoryUniverseVisualMotionFrame(
+  state: RepositoryUniverseVisualMotionState,
+  activeInterpolationCount: number,
+) {
+  state.active = activeInterpolationCount > 0;
+  return state.active;
+}
 
 export function repositoryUniverseFrameDelta(
   previousTimestampMs: number | null,
