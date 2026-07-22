@@ -107,6 +107,18 @@ function emptyDiagnostics(): Omit<RepositoryUniverseDiagnosticsSnapshot, 'render
     visualTargetsDirty: false,
     hoverRaycastPending: false,
     settlementState: 'idle',
+    baseEdgeBatchCount: 0,
+    baseEdgeSegmentCount: 0,
+    overlayBatchCount: 0,
+    activeOverlaySegmentCount: 0,
+    edgeBatchRebuildCount: 0,
+    edgeBufferUpdateCount: 0,
+    individualCanonicalEdgeObjectCount: 0,
+    ownedGeometryCount: 0,
+    ownedMaterialCount: 0,
+    geometryDisposalCount: 0,
+    materialDisposalCount: 0,
+    duplicateDisposalDetectionCount: 0,
   };
 }
 

@@ -82,6 +82,18 @@ export interface RepositoryUniverseDiagnosticsSnapshot {
   visualTargetsDirty: boolean;
   hoverRaycastPending: boolean;
   settlementState: RepositoryUniverseSettlementState;
+  baseEdgeBatchCount: number;
+  baseEdgeSegmentCount: number;
+  overlayBatchCount: number;
+  activeOverlaySegmentCount: number;
+  edgeBatchRebuildCount: number;
+  edgeBufferUpdateCount: number;
+  individualCanonicalEdgeObjectCount: number;
+  ownedGeometryCount: number;
+  ownedMaterialCount: number;
+  geometryDisposalCount: number;
+  materialDisposalCount: number;
+  duplicateDisposalDetectionCount: number;
 }
 
 export const REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP = Object.freeze({

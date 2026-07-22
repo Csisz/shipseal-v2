@@ -127,7 +127,7 @@ vi.mock('@/lib/github/write', async () => {
 import { ResultDashboard } from '@/components/agentready/ResultDashboard';
 
 function switchToAtlas2D() {
-  const atlasButton = screen.getByRole('button', { name: /Atlas 2D/i });
+  const atlasButton = screen.getByRole('button', { name: /^Atlas 2D$/i });
   if (atlasButton.getAttribute('aria-pressed') !== 'true') {
     fireEvent.click(atlasButton);
   }

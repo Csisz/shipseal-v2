@@ -29,7 +29,6 @@ import {
   repositoryUniverseCameraTargetMatches,
   repositoryUniverseFocusCanSettle,
   repositoryUniverseFrameDelta,
-  repositoryUniverseEdgeOpacityTarget,
   repositoryUniverseLabelDistanceBand,
   repositoryUniverseNodeEmissiveTarget,
   repositoryUniverseNodeHaloOpacityTarget,
@@ -49,6 +48,13 @@ import {
   type RepositoryUniverseSettlementState,
 } from '@/lib/workspace/repositoryUniverseMotion';
 import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, softenClusterColor, blendHex } from '@/lib/workspace/repositoryUniverseVisual';
+import {
+  REPOSITORY_UNIVERSE_BASE_EDGE_BATCH_IDS,
+  buildRepositoryUniverseEdgeBatchPlan,
+  buildRepositoryUniverseEdgeOverlayPlan,
+  type RepositoryUniverseBaseEdgeBatchId,
+  type RepositoryUniverseEdgeOverlayId,
+} from '@/lib/workspace/repositoryUniverseRenderBatches';
 
 export interface UniverseCameraState {
   theta: number;
@@ -120,12 +126,20 @@ interface NodeRenderItem {
   focused: boolean;
 }
 
-interface EdgeRenderItem {
-  edge: RepositoryUniverseEdge;
-  line: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+interface EdgeBatchRenderItem {
+  id: RepositoryUniverseBaseEdgeBatchId;
+  line: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  position: THREE.BufferAttribute;
   opacityMotion: VisualScalarMotion;
   targetVisible: boolean;
-  colorTarget: number;
+}
+
+interface EdgeOverlayRenderItem {
+  id: RepositoryUniverseEdgeOverlayId;
+  line: THREE.LineSegments<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  position: THREE.BufferAttribute;
+  opacityMotion: VisualScalarMotion;
+  targetVisible: boolean;
 }
 
 interface ClusterRenderItem {
@@ -382,7 +396,8 @@ export default function RepositoryUniverse3D({
     raycaster.params.Line.threshold = 3;
     const pointer = new THREE.Vector2();
     const nodeItems = new Map<string, NodeRenderItem>();
-    const edgeItems = new Map<string, EdgeRenderItem>();
+    const edgeBatchItems = new Map<RepositoryUniverseBaseEdgeBatchId, EdgeBatchRenderItem>();
+    const edgeOverlayItems = new Map<RepositoryUniverseEdgeOverlayId, EdgeOverlayRenderItem>();
     const clusterItems = new Map<string, ClusterRenderItem>();
     const proposalItems = new Map<string, ProposalRenderItem>();
     const proposalEdgeItems = new Map<string, ProposalEdgeRenderItem>();
@@ -417,6 +432,26 @@ export default function RepositoryUniverse3D({
     let hoverRaycastsAtWindowStart = 0;
     let visualTargetRecalculationsPerSecond = 0;
     let hoverRaycastsPerSecond = 0;
+    let edgeBatchRebuildCount = 0;
+    let edgeBufferUpdateCount = 0;
+    const ownedGeometries = new Set<THREE.BufferGeometry>();
+    const ownedMaterials = new Set<THREE.Material>();
+    const ownedTextures = new Set<THREE.Texture>();
+    let geometryDisposalCount = 0;
+    let materialDisposalCount = 0;
+    let duplicateDisposalDetectionCount = 0;
+    const ownGeometry = <T extends THREE.BufferGeometry>(geometry: T) => {
+      ownedGeometries.add(geometry);
+      return geometry;
+    };
+    const ownMaterial = <T extends THREE.Material>(material: T) => {
+      ownedMaterials.add(material);
+      return material;
+    };
+    const ownTexture = <T extends THREE.Texture>(texture: T) => {
+      ownedTextures.add(texture);
+      return texture;
+    };
     const startedAt = performance.now();
 
     renderer.setClearColor(0x050914, 1);
@@ -460,6 +495,18 @@ export default function RepositoryUniverse3D({
         visualTargetsDirty: true,
         hoverRaycastPending: false,
         settlementState: focusSettlementState,
+        baseEdgeBatchCount: 0,
+        baseEdgeSegmentCount: 0,
+        overlayBatchCount: 0,
+        activeOverlaySegmentCount: 0,
+        edgeBatchRebuildCount: 0,
+        edgeBufferUpdateCount: 0,
+        individualCanonicalEdgeObjectCount: 0,
+        ownedGeometryCount: 0,
+        ownedMaterialCount: 0,
+        geometryDisposalCount: 0,
+        materialDisposalCount: 0,
+        duplicateDisposalDetectionCount: 0,
       })
       : undefined;
 
@@ -489,7 +536,7 @@ export default function RepositoryUniverse3D({
       const existing = sphereGeometryCache.get(rounded);
       if (existing) return existing;
       const segments = rounded > 5 ? 20 : 14;
-      const geometry = new THREE.SphereGeometry(rounded, segments, Math.max(10, segments - 4));
+      const geometry = ownGeometry(new THREE.SphereGeometry(rounded, segments, Math.max(10, segments - 4)));
       sphereGeometryCache.set(rounded, geometry);
       return geometry;
     };
@@ -512,15 +559,15 @@ export default function RepositoryUniverse3D({
     for (const cluster of model.clusters) {
       if (cluster.id === 'cluster:repository') continue;
       const ringRadius = Math.max(48, Math.min(190, cluster.radius * 0.94));
-      const geometry = new THREE.RingGeometry(ringRadius * 0.82, ringRadius, 96);
-      const material = new THREE.MeshBasicMaterial({
+      const geometry = ownGeometry(new THREE.RingGeometry(ringRadius * 0.82, ringRadius, 96));
+      const material = ownMaterial(new THREE.MeshBasicMaterial({
         color: colorForCluster(cluster),
         transparent: true,
         opacity: 0.018,
         depthWrite: false,
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
-      });
+      }));
       const ring = new THREE.Mesh(geometry, material);
       const position = visualPositionFor(cluster.position);
       ring.position.set(position.x, position.y - 10, position.z);
@@ -534,35 +581,107 @@ export default function RepositoryUniverse3D({
       });
     }
 
+    const canonicalEdgeById = new Map(model.edges.map(edge => [edge.id, edge]));
     for (const edge of model.edges) {
-      const source = visualPositionByNodeId.get(edge.source);
-      const target = visualPositionByNodeId.get(edge.target);
-      if (!source || !target) continue;
-      const material = new THREE.LineBasicMaterial({
-        color: colorForEdge(edge),
-        transparent: true,
-        opacity: 0.1,
-        depthWrite: false,
-      });
-      const geometry = new THREE.BufferGeometry().setFromPoints([source, target]);
-      const line = new THREE.Line(geometry, material);
-      edgeItems.set(edge.id, {
-        edge,
-        line,
-        opacityMotion: visualScalar(material.opacity),
-        targetVisible: true,
-        colorTarget: colorForEdge(edge),
-      });
-      scene.add(line);
       addRelatedNode(edge.source, edge.target);
       addRelatedNode(edge.target, edge.source);
     }
+
+    const createEdgeSegments = (color: number) => {
+      const geometry = ownGeometry(new THREE.BufferGeometry());
+      const position = new THREE.BufferAttribute(new Float32Array(Math.max(1, model.edges.length) * 6), 3);
+      position.setUsage(THREE.DynamicDrawUsage);
+      geometry.setAttribute('position', position);
+      geometry.setDrawRange(0, 0);
+      const material = ownMaterial(new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0, depthWrite: false }));
+      const line = new THREE.LineSegments(geometry, material);
+      line.visible = false;
+      scene.add(line);
+      return { geometry, position, material, line };
+    };
+    for (const id of REPOSITORY_UNIVERSE_BASE_EDGE_BATCH_IDS) {
+      const resource = createEdgeSegments(colorForEdgeBatch(id));
+      edgeBatchItems.set(id, {
+        id,
+        line: resource.line,
+        position: resource.position,
+        opacityMotion: visualScalar(resource.material.opacity),
+        targetVisible: false,
+      });
+    }
+    const overlayColors: Record<RepositoryUniverseEdgeOverlayId, number> = {
+      selection: 0xe0faff,
+      hover: 0xfef3c7,
+      focus: 0x7dd3fc,
+      route: 0xa7f3ff,
+    };
+    (Object.keys(overlayColors) as RepositoryUniverseEdgeOverlayId[]).forEach(id => {
+      const resource = createEdgeSegments(overlayColors[id]);
+      edgeOverlayItems.set(id, {
+        id,
+        line: resource.line,
+        position: resource.position,
+        opacityMotion: visualScalar(resource.material.opacity),
+        targetVisible: false,
+      });
+    });
+
+    const writeEdgeSegments = (item: EdgeBatchRenderItem | EdgeOverlayRenderItem, edgeIds: readonly string[]) => {
+      const positions = item.position.array as Float32Array;
+      let segmentCount = 0;
+      for (const edgeId of edgeIds) {
+        const edge = canonicalEdgeById.get(edgeId);
+        const source = edge && visualPositionByNodeId.get(edge.source);
+        const target = edge && visualPositionByNodeId.get(edge.target);
+        if (!edge || !source || !target) continue;
+        const offset = segmentCount * 6;
+        positions[offset] = source.x;
+        positions[offset + 1] = source.y;
+        positions[offset + 2] = source.z;
+        positions[offset + 3] = target.x;
+        positions[offset + 4] = target.y;
+        positions[offset + 5] = target.z;
+        segmentCount += 1;
+      }
+      item.line.geometry.setDrawRange(0, segmentCount * 2);
+      item.position.needsUpdate = true;
+      item.line.geometry.computeBoundingSphere();
+      item.targetVisible = segmentCount > 0;
+      edgeBufferUpdateCount += 1;
+      return segmentCount;
+    };
+    let edgeBatchPlan = buildRepositoryUniverseEdgeBatchPlan(model.edges, visibleEdgeSetRef.current);
+    let visibleEdgeSignature = [...visibleEdgeSetRef.current].sort().join('|');
+    const rebuildCanonicalEdgeBatches = (visibleEdges: ReadonlySet<string>) => {
+      edgeBatchPlan = buildRepositoryUniverseEdgeBatchPlan(model.edges, visibleEdges);
+      for (const batch of edgeBatchPlan.batches) {
+        const item = edgeBatchItems.get(batch.id);
+        if (item) writeEdgeSegments(item, batch.edgeIds);
+      }
+      edgeBatchRebuildCount += 1;
+    };
+    const rebuildEdgeOverlays = (selectedNodeId: string | null | undefined, hoveredNodeId: string | null, focusedClusterId: string | null | undefined, routeNodeIds: ReadonlySet<string>, visibleEdges: ReadonlySet<string>) => {
+      const overlayPlan = buildRepositoryUniverseEdgeOverlayPlan({
+        edges: model.edges,
+        visibleEdgeIds: visibleEdges,
+        selectedNodeId,
+        hoveredNodeId,
+        focusedClusterId,
+        nodeClusterIdByNodeId: new Map(model.nodes.map(node => [node.id, node.clusterId])),
+        routeNodeIds,
+      });
+      (Object.keys(overlayPlan) as RepositoryUniverseEdgeOverlayId[]).forEach(id => {
+        const item = edgeOverlayItems.get(id);
+        if (item) writeEdgeSegments(item, overlayPlan[id]);
+      });
+    };
+    rebuildCanonicalEdgeBatches(visibleEdgeSetRef.current);
 
     for (const proposal of transformation?.proposals || []) {
       for (const proposedNode of proposal.graphChanges.proposedNodes) {
         const position = visualPositionFor(proposedNode.position);
         const baseColor = repositoryUniverseClusterToken(proposedNode.clusterId).hex;
-        const material = new THREE.MeshStandardMaterial({
+        const material = ownMaterial(new THREE.MeshStandardMaterial({
           color: brightenClusterColor(baseColor, 0.2),
           emissive: baseColor,
           emissiveIntensity: 0.38,
@@ -571,7 +690,7 @@ export default function RepositoryUniverse3D({
           transparent: true,
           opacity: 0,
           wireframe: true,
-        });
+        }));
         const mesh = new THREE.Mesh(sphereFor(5.3), material);
         mesh.position.copy(position);
         mesh.userData.proposalId = proposal.id;
@@ -579,19 +698,21 @@ export default function RepositoryUniverse3D({
         mesh.visible = false;
         raycastCandidates.push(mesh);
 
-        const haloMaterial = new THREE.MeshBasicMaterial({
+        const haloMaterial = ownMaterial(new THREE.MeshBasicMaterial({
           color: baseColor,
           transparent: true,
           opacity: 0,
           depthWrite: false,
           blending: THREE.AdditiveBlending,
-        });
+        }));
         const halo = new THREE.Mesh(sphereFor(13.4), haloMaterial);
         halo.position.copy(position);
         scene.add(halo);
         halo.visible = false;
 
         const { sprite: label, material: labelMaterial, texture } = labelSprite('Proposed', '#e0faff');
+        ownMaterial(labelMaterial);
+        ownTexture(texture);
         label.position.set(position.x, position.y + 12, position.z);
         label.scale.set(44, 13, 1);
         scene.add(label);
@@ -621,15 +742,15 @@ export default function RepositoryUniverse3D({
         const target = visualPositionByNodeId.get(edge.target);
         if (!source || !target) continue;
         const sourcePosition = visualPositionFor(source.position);
-        const material = new THREE.LineDashedMaterial({
+        const material = ownMaterial(new THREE.LineDashedMaterial({
           color: 0x9bdcf3,
           transparent: true,
           opacity: 0,
           dashSize: 9,
           gapSize: 7,
           depthWrite: false,
-        });
-        const geometry = new THREE.BufferGeometry().setFromPoints([sourcePosition, target]);
+        }));
+        const geometry = ownGeometry(new THREE.BufferGeometry().setFromPoints([sourcePosition, target]));
         const line = new THREE.Line(geometry, material);
         line.computeLineDistances();
         scene.add(line);
@@ -649,7 +770,7 @@ export default function RepositoryUniverse3D({
       const displayLabel = repositoryUniverseNodeDisplayLabel(node);
       const baseRadius = nodeRadius(node);
       const position = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
-      const material = new THREE.MeshStandardMaterial({
+      const material = ownMaterial(new THREE.MeshStandardMaterial({
         color: colorForNode(node),
         emissive: emissiveForNode(node),
         emissiveIntensity: node.importance === 'primary' ? 0.38 : 0.11,
@@ -658,26 +779,28 @@ export default function RepositoryUniverse3D({
         transparent: true,
         opacity: 0.9,
         wireframe: node.evidenceType === 'missing' || node.kind === 'recommendation',
-      });
+      }));
       const mesh = new THREE.Mesh(sphereFor(baseRadius), material);
       mesh.position.copy(position);
       mesh.userData.nodeId = node.id;
       scene.add(mesh);
       raycastCandidates.push(mesh);
 
-      const haloMaterial = new THREE.MeshBasicMaterial({
+      const haloMaterial = ownMaterial(new THREE.MeshBasicMaterial({
         color: 0x67e8f9,
         transparent: true,
         opacity: 0,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-      });
+      }));
       const halo = new THREE.Mesh(sphereFor(baseRadius * 2.25), haloMaterial);
       halo.position.copy(mesh.position);
       scene.add(halo);
       halo.visible = false;
 
       const { sprite: label, material: labelMaterial, texture } = labelSprite(shortLabel(displayLabel), labelColorForNode(node));
+      ownMaterial(labelMaterial);
+      ownTexture(texture);
       label.position.set(position.x, position.y + baseRadius + 5, position.z);
       label.scale.set(node.kind === 'repository' ? 70 : 42, node.kind === 'repository' ? 20 : 14, 1);
       scene.add(label);
@@ -1048,21 +1171,23 @@ export default function RepositoryUniverse3D({
       }
 
       if (dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryEdges) {
-        for (const item of edgeItems.values()) {
-          const { edge } = item;
-          const directlySelected = Boolean(selectedId && (edge.source === selectedId || edge.target === selectedId));
-          const focused = Boolean(focusedCluster && nodeById.get(edge.source)?.clusterId === focusedCluster && nodeById.get(edge.target)?.clusterId === focusedCluster);
-          const visible = visibleEdges.has(edge.id);
-          item.targetVisible = visible;
-          item.opacityMotion.target = repositoryUniverseEdgeOpacityTarget({
-            visible,
-            directlySelected,
-            focused,
-            relationship: edge.relationship,
-            evidenceType: edge.evidenceType,
-            contextualFocusActive: Boolean(selectedId || focusedCluster),
-          });
-          item.colorTarget = colorForEdge(edge, directlySelected, focused);
+        const nextVisibleEdgeSignature = [...visibleEdges].sort().join('|');
+        if (nextVisibleEdgeSignature !== visibleEdgeSignature) {
+          rebuildCanonicalEdgeBatches(visibleEdges);
+          visibleEdgeSignature = nextVisibleEdgeSignature;
+        }
+        for (const item of edgeBatchItems.values()) {
+          item.opacityMotion.target = repositoryUniverseBaseBatchOpacity(item.id, Boolean(selectedId || focusedCluster));
+        }
+        rebuildEdgeOverlays(selectedId, pointerPickState.hoveredNodeId, focusedCluster, routeNodeIds, visibleEdges);
+        for (const [id, item] of edgeOverlayItems) {
+          item.opacityMotion.target = id === 'selection'
+            ? selectedId ? 0.5 : 0
+            : id === 'hover'
+              ? pointerPickState.hoveredNodeId ? 0.36 : 0
+              : id === 'focus'
+                ? focusedCluster ? 0.25 : 0
+                : routeActive ? 0.34 : 0;
         }
       }
 
@@ -1167,7 +1292,10 @@ export default function RepositoryUniverse3D({
       for (const item of clusterItems.values()) {
         if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.clusterRing)) interpolationCount += 1;
       }
-      for (const item of edgeItems.values()) {
+      for (const item of edgeBatchItems.values()) {
+        if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.edge)) interpolationCount += 1;
+      }
+      for (const item of edgeOverlayItems.values()) {
         if (stepVisualScalar(item.opacityMotion, REPOSITORY_UNIVERSE_VISUAL_MOTION_RATES.edge)) interpolationCount += 1;
       }
       for (const item of proposalEdgeItems.values()) {
@@ -1217,10 +1345,13 @@ export default function RepositoryUniverse3D({
         item.ring.material.opacity = item.opacityMotion.current;
         item.ring.material.color.setHex(item.colorTarget);
       }
-      for (const item of edgeItems.values()) {
+      for (const item of edgeBatchItems.values()) {
         item.line.material.opacity = item.opacityMotion.current;
         item.line.visible = repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
-        item.line.material.color.setHex(item.colorTarget);
+      }
+      for (const item of edgeOverlayItems.values()) {
+        item.line.material.opacity = item.opacityMotion.current;
+        item.line.visible = repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
       }
       for (const item of proposalEdgeItems.values()) {
         item.line.material.opacity = item.opacityMotion.current;
@@ -1362,6 +1493,18 @@ export default function RepositoryUniverse3D({
         raycastCacheRebuildCount: raycastCache.rebuildCount,
         visualTargetsDirty: visualTargetDirtyState.groups !== REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.none,
         hoverRaycastPending: pointerPickState.pending,
+        baseEdgeBatchCount: edgeBatchItems.size,
+        baseEdgeSegmentCount: edgeBatchPlan.batches.reduce((count, batch) => count + batch.edgeIds.length, 0),
+        overlayBatchCount: edgeOverlayItems.size,
+        activeOverlaySegmentCount: [...edgeOverlayItems.values()].reduce((count, item) => count + item.line.geometry.drawRange.count / 2, 0),
+        edgeBatchRebuildCount,
+        edgeBufferUpdateCount,
+        individualCanonicalEdgeObjectCount: 0,
+        ownedGeometryCount: ownedGeometries.size,
+        ownedMaterialCount: ownedMaterials.size,
+        geometryDisposalCount,
+        materialDisposalCount,
+        duplicateDisposalDetectionCount,
         fullscreen: fullscreenRef.current,
         selectedNodeId: selectedNodeIdRef.current || null,
         cameraTheta: renderCameraStateRef.current.theta,
@@ -1417,19 +1560,36 @@ export default function RepositoryUniverse3D({
       canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('dblclick', handleDoubleClick);
       canvas.removeEventListener('contextmenu', preventDefault);
-      scene.traverse(object => {
-        if ('geometry' in object && object.geometry) {
-          (object.geometry as THREE.BufferGeometry).dispose();
-        }
-        if ('material' in object && object.material) {
-          const material = object.material as THREE.Material | THREE.Material[];
-          if (Array.isArray(material)) material.forEach(item => item.dispose());
-          else material.dispose();
+      const disposedGeometries = new Set<THREE.BufferGeometry>();
+      const disposedMaterials = new Set<THREE.Material>();
+      const disposedTextures = new Set<THREE.Texture>();
+      ownedTextures.forEach(texture => {
+        if (disposedTextures.has(texture)) duplicateDisposalDetectionCount += 1;
+        else {
+          disposedTextures.add(texture);
+          texture.dispose();
         }
       });
-      nodeItems.forEach(item => item.labelTexture.dispose());
-      proposalItems.forEach(item => item.labelTexture.dispose());
-      sphereGeometryCache.forEach(geometry => geometry.dispose());
+      ownedMaterials.forEach(material => {
+        if (disposedMaterials.has(material)) duplicateDisposalDetectionCount += 1;
+        else {
+          disposedMaterials.add(material);
+          material.dispose();
+          materialDisposalCount += 1;
+        }
+      });
+      ownedGeometries.forEach(geometry => {
+        if (disposedGeometries.has(geometry)) duplicateDisposalDetectionCount += 1;
+        else {
+          disposedGeometries.add(geometry);
+          geometry.dispose();
+          geometryDisposalCount += 1;
+        }
+      });
+      ownedTextures.clear();
+      ownedMaterials.clear();
+      ownedGeometries.clear();
+      sphereGeometryCache.clear();
       clearRepositoryUniverseRaycastCache(raycastCache);
       raycastCandidates.length = 0;
       diagnostics?.dispose();
@@ -1530,12 +1690,15 @@ function emissiveForNode(node: RepositoryUniverseNode, selected?: boolean, match
   return 0x0f172a;
 }
 
-function colorForEdge(edge: RepositoryUniverseEdge, selected?: boolean, focused?: boolean) {
-  if (selected) return edge.evidenceType === 'heuristic' ? 0x94a3b8 : 0x9bdcf3;
-  if (focused) return 0x7dd3fc;
-  if (edge.evidenceType === 'heuristic') return 0x94a3b8;
-  if (edge.relationship === 'contains') return 0x38bdf8;
+function colorForEdgeBatch(batchId: RepositoryUniverseBaseEdgeBatchId) {
+  if (batchId.endsWith('heuristic')) return 0x94a3b8;
+  if (batchId.startsWith('contains')) return 0x38bdf8;
   return 0x5eead4;
+}
+
+function repositoryUniverseBaseBatchOpacity(batchId: RepositoryUniverseBaseEdgeBatchId, contextualFocusActive: boolean) {
+  if (batchId.startsWith('contains')) return contextualFocusActive ? 0.035 : 0.05;
+  return contextualFocusActive ? 0.08 : 0.12;
 }
 
 function colorForCluster(cluster: RepositoryUniverseCluster, active?: boolean, related?: boolean) {
