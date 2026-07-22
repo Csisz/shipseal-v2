@@ -57,6 +57,9 @@ import {
 } from '@/lib/workspace/repositoryUniverseRenderBatches';
 import { buildRepositoryUniverseRevealSchedule, repositoryUniverseRevealProgress, type RepositoryUniverseRevealPhase } from '@/lib/workspace/repositoryUniverseReveal';
 import { buildRepositoryUniverseLabelPlan } from '@/lib/workspace/repositoryUniverseLabels';
+import { repositoryUniverseHeatmapValue, type RepositoryUniverseHeatmapDimension } from '@/lib/workspace/repositoryUniverseHeatmap';
+import { resolveRepositoryUniverseVisualPriority } from '@/lib/workspace/repositoryUniverseVisualPriority';
+import { buildRepositoryUniverseRouteEnergyPulses, repositoryUniverseRouteEnergyOscillation, repositoryUniverseRouteEnergyPulseCap, type RepositoryUniverseRouteEnergyPulse } from '@/lib/workspace/repositoryUniverseRouteEnergy';
 
 export interface UniverseCameraState {
   theta: number;
@@ -83,6 +86,7 @@ interface RepositoryUniverse3DProps {
   selectedProposalId?: string | null;
   excludedProposalIds?: string[];
   transformation?: RepositoryTransformationProposalModel;
+  heatmapDimension?: RepositoryUniverseHeatmapDimension | null;
   onCameraStateChange: (state: UniverseCameraState) => void;
   onSelectNode: (nodeId: string) => void;
   onSelectProposal?: (proposalId: string) => void;
@@ -201,6 +205,7 @@ export default function RepositoryUniverse3D({
   selectedProposalId,
   excludedProposalIds = [],
   transformation,
+  heatmapDimension = null,
   onCameraStateChange,
   onSelectNode,
   onSelectProposal,
@@ -226,6 +231,7 @@ export default function RepositoryUniverse3D({
   const transformationDomainRef = useRef(transformationDomain);
   const selectedProposalIdRef = useRef(selectedProposalId);
   const excludedProposalSetRef = useRef(new Set(excludedProposalIds));
+  const heatmapDimensionRef = useRef(heatmapDimension);
   const visualTargetDirtyStateRef = useRef(createRepositoryUniverseVisualTargetDirtyState());
   const onCameraStateChangeRef = useRef(onCameraStateChange);
   const onSelectNodeRef = useRef(onSelectNode);
@@ -351,6 +357,10 @@ export default function RepositoryUniverse3D({
       repositoryUniverseVisualTargetGroupsForDependency('proposal-selection'),
     );
   }, [excludedProposalIds]);
+  useEffect(() => {
+    heatmapDimensionRef.current = heatmapDimension;
+    markRepositoryUniverseVisualTargetsDirty(visualTargetDirtyStateRef.current, REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryNodes);
+  }, [heatmapDimension]);
 
   useEffect(() => {
     onCameraStateChangeRef.current = onCameraStateChange;
@@ -540,6 +550,34 @@ export default function RepositoryUniverse3D({
         revealedNodeCount: reducedMotionRef.current || !animateInRef.current ? model.nodes.length : 1,
         revealedEdgeCount: 0,
         revealScheduleGenerationCount: 1,
+        activeHeatmapDimension: heatmapDimensionRef.current?.id ?? null,
+        heatmappedNodeCount: 0,
+        missingHeatmapValueCount: 0,
+        heatmapSourceMin: null,
+        heatmapSourceMax: null,
+        heatmapInterpolationActive: false,
+        heatmapModelGenerationCount: heatmapDimensionRef.current ? 1 : 0,
+        heatmapTargetRecalculationCount: 0,
+        heatmapLegendLow: heatmapDimensionRef.current?.lowLabel ?? null,
+        heatmapLegendHigh: heatmapDimensionRef.current?.highLabel ?? null,
+        routeNodeCount: routeNodeIdSetRef.current.size,
+        routeEdgeCount: 0,
+        routeEnergyEligibleEdgeCount: 0,
+        routeEnergyPulseCapacity: repositoryUniverseRouteEnergyPulseCap(host.getBoundingClientRect().width),
+        routeEnergyPulseCount: 0,
+        routeEnergyGeometryRebuildCount: 0,
+        routeEnergyBufferUpdateCount: 0,
+        routeEnergyAllocationCount: 0,
+        routeEnergyDisposalCount: 0,
+        routeEnergyMotionActive: false,
+        routeEnergyReducedMotion: reducedMotionRef.current,
+        selectedVisualCount: 0,
+        hoveredVisualCount: 0,
+        searchVisualCount: 0,
+        routeVisualCount: 0,
+        heatmapVisualCount: 0,
+        revealAccentCount: 0,
+        visualPriorityResolutionCount: 0,
       })
       : undefined;
 
@@ -658,6 +696,21 @@ export default function RepositoryUniverse3D({
         targetVisible: false,
       });
     });
+    const routeEnergyGeometry = ownGeometry(new THREE.BufferGeometry());
+    const routeEnergyPosition = new THREE.BufferAttribute(new Float32Array(8 * 3), 3);
+    routeEnergyGeometry.setAttribute('position', routeEnergyPosition);
+    routeEnergyGeometry.setDrawRange(0, 0);
+    const routeEnergyMaterial = ownMaterial(new THREE.PointsMaterial({ color: 0xd9faff, size: 8, transparent: true, opacity: 0.72, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const routeEnergyPoints = new THREE.Points(routeEnergyGeometry, routeEnergyMaterial);
+    routeEnergyPoints.visible = false;
+    scene.add(routeEnergyPoints);
+    let routeEnergyPulses: RepositoryUniverseRouteEnergyPulse[] = [];
+    let routeEnergySignature = '';
+    let routeEnergyGeometryRebuildCount = 0;
+    let routeEnergyBufferUpdateCount = 0;
+    const routeEnergyAllocationCount = 1;
+    let routeEnergyDisposalCount = 0;
+    let visualPriorityResolutionCount = 0;
 
     const writeEdgeSegments = (item: EdgeBatchRenderItem | EdgeOverlayRenderItem, edgeIds: readonly string[]) => {
       const positions = item.position.array as Float32Array;
@@ -707,6 +760,19 @@ export default function RepositoryUniverse3D({
         const item = edgeOverlayItems.get(id);
         if (item) writeEdgeSegments(item, overlayPlan[id]);
       });
+      // Pulse planning follows route/graph visibility only. Overlay changes caused
+      // by selection or hover must not recreate route resources or plans.
+      const routeSignature = `${[...routeNodeIds].sort().join('|')}::${[...visibleEdges].sort().join('|')}`;
+      if (routeSignature !== routeEnergySignature) {
+        routeEnergyPulses = buildRepositoryUniverseRouteEnergyPulses(
+          model.edges,
+          routeNodeIds,
+          visibleEdges,
+          host.getBoundingClientRect().width,
+        );
+        routeEnergySignature = routeSignature;
+        routeEnergyGeometryRebuildCount += 1;
+      }
     };
     rebuildCanonicalEdgeBatches(visibleEdgeSetRef.current);
 
@@ -1238,6 +1304,7 @@ export default function RepositoryUniverse3D({
       }
 
       const radius = cameraStateRef.current.radius;
+      const activeHeatmap = heatmapDimensionRef.current;
       const updateNodeTargets = Boolean(dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.repositoryNodes);
       const updateLabelTargets = Boolean(dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.nodeLabels);
       if (updateNodeTargets || updateLabelTargets) {
@@ -1264,6 +1331,17 @@ export default function RepositoryUniverse3D({
               suppressed,
               importance: node.importance,
             };
+            const resolvedPriority = resolveRepositoryUniverseVisualPriority({
+              visible,
+              selected: item.selected,
+              hovered: item.hovered,
+              matched: item.matched,
+              focused: item.focused,
+              route: item.routeHighlighted,
+              heatmapValue: activeHeatmap ? repositoryUniverseHeatmapValue(activeHeatmap, node.id) : null,
+              reveal: false,
+            });
+            visualPriorityResolutionCount += 1;
             item.meshTargetVisible = visible;
             item.opacityMotion.target = repositoryUniverseNodeOpacityTarget(priority);
             item.scaleMotion.target = repositoryUniverseNodeScaleTarget(priority);
@@ -1271,7 +1349,10 @@ export default function RepositoryUniverse3D({
             item.haloOpacityMotion.target = repositoryUniverseNodeHaloOpacityTarget(priority);
             item.haloScaleMotion.target = repositoryUniverseNodeHaloScaleTarget(priority);
             item.haloTargetVisible = item.haloOpacityMotion.target > 0;
-            item.meshColorTarget = colorForNode(node, item.selected, item.matched || item.routeHighlighted, item.hovered, item.connected);
+            const baseColor = colorForNode(node, item.selected, item.matched || item.routeHighlighted, item.hovered, item.connected);
+            item.meshColorTarget = resolvedPriority.heatmapFill == null
+              ? baseColor
+              : blendHex(baseColor, resolvedPriority.heatmapFill > .66 ? 0xf0abfc : resolvedPriority.heatmapFill > .33 ? 0x67e8f9 : 0x60a5fa, .46);
             item.emissiveColorTarget = emissiveForNode(node, item.selected, item.matched || item.routeHighlighted, item.hovered);
             item.haloColorTarget = item.selected
               ? 0xe0faff
@@ -1532,6 +1613,30 @@ export default function RepositoryUniverse3D({
         );
       }
       consumeAndRecalculateVisualTargets();
+
+      if (routeEnergyPulses.length && !reducedMotionRef.current) {
+        const positions = routeEnergyPosition.array as Float32Array;
+        const elapsedSeconds = elapsed / 1000;
+        let pulseCount = 0;
+        for (const pulse of routeEnergyPulses) {
+          const edge = canonicalEdgeById.get(pulse.edgeId);
+          const source = edge && visualPositionByNodeId.get(edge.source);
+          const target = edge && visualPositionByNodeId.get(edge.target);
+          if (!source || !target) continue;
+          const progress = repositoryUniverseRouteEnergyOscillation(elapsedSeconds, pulse.phaseOffset);
+          const offset = pulseCount * 3;
+          positions[offset] = source.x + (target.x - source.x) * progress;
+          positions[offset + 1] = source.y + (target.y - source.y) * progress;
+          positions[offset + 2] = source.z + (target.z - source.z) * progress;
+          pulseCount += 1;
+        }
+        routeEnergyGeometry.setDrawRange(0, pulseCount);
+        routeEnergyPosition.needsUpdate = true;
+        routeEnergyPoints.visible = pulseCount > 0;
+        routeEnergyBufferUpdateCount += 1;
+      } else {
+        routeEnergyPoints.visible = false;
+      }
       processPendingHoverRaycast();
       consumeAndRecalculateVisualTargets();
 
@@ -1553,6 +1658,7 @@ export default function RepositoryUniverse3D({
         hoverRaycastsAtWindowStart = pointerPickState.hoverRaycastCount;
         targetRecalculationWindowStartedAt = timestamp;
       }
+      const diagnosticHeatmap = heatmapDimensionRef.current;
       diagnostics?.update({
         visualMotionActive: visualMotionState.active,
         activeVisualInterpolationCount,
@@ -1601,6 +1707,34 @@ export default function RepositoryUniverse3D({
         revealedNodeCount: reveal.visibleNodes.length,
         revealedEdgeCount: reveal.visibleEdges.length,
         revealScheduleGenerationCount: 1,
+        activeHeatmapDimension: diagnosticHeatmap?.id ?? null,
+        heatmappedNodeCount: diagnosticHeatmap ? [...nodeItems.keys()].filter(nodeId => diagnosticHeatmap.values.has(nodeId)).length : 0,
+        missingHeatmapValueCount: diagnosticHeatmap ? [...nodeItems.keys()].filter(nodeId => !diagnosticHeatmap.values.has(nodeId)).length : 0,
+        heatmapSourceMin: diagnosticHeatmap?.minimum ?? null,
+        heatmapSourceMax: diagnosticHeatmap?.maximum ?? null,
+        heatmapInterpolationActive: Boolean(diagnosticHeatmap && visualMotionState.active),
+        heatmapModelGenerationCount: diagnosticHeatmap ? 1 : 0,
+        heatmapTargetRecalculationCount: diagnosticHeatmap ? visualTargetDirtyState.recalculationCount : 0,
+        heatmapLegendLow: diagnosticHeatmap?.lowLabel ?? null,
+        heatmapLegendHigh: diagnosticHeatmap?.highLabel ?? null,
+        routeNodeCount: routeNodeIdSetRef.current.size,
+        routeEdgeCount: routeEnergyPulses.length,
+        routeEnergyEligibleEdgeCount: routeEnergyPulses.length,
+        routeEnergyPulseCapacity: repositoryUniverseRouteEnergyPulseCap(host.getBoundingClientRect().width),
+        routeEnergyPulseCount: routeEnergyPoints.visible ? routeEnergyGeometry.drawRange.count : 0,
+        routeEnergyGeometryRebuildCount,
+        routeEnergyBufferUpdateCount,
+        routeEnergyAllocationCount,
+        routeEnergyDisposalCount,
+        routeEnergyMotionActive: routeEnergyPoints.visible && !reducedMotionRef.current,
+        routeEnergyReducedMotion: reducedMotionRef.current,
+        selectedVisualCount: [...nodeItems.values()].filter(item => item.selected).length,
+        hoveredVisualCount: [...nodeItems.values()].filter(item => item.hovered).length,
+        searchVisualCount: [...nodeItems.values()].filter(item => item.matched).length,
+        routeVisualCount: [...nodeItems.values()].filter(item => item.routeHighlighted).length,
+        heatmapVisualCount: diagnosticHeatmap ? [...nodeItems.keys()].filter(nodeId => diagnosticHeatmap.values.has(nodeId)).length : 0,
+        revealAccentCount: 0,
+        visualPriorityResolutionCount,
         fullscreen: fullscreenRef.current,
         selectedNodeId: selectedNodeIdRef.current || null,
         cameraTheta: renderCameraStateRef.current.theta,
@@ -1666,6 +1800,7 @@ export default function RepositoryUniverse3D({
           texture.dispose();
         }
       });
+      routeEnergyDisposalCount += 1;
       ownedMaterials.forEach(material => {
         if (disposedMaterials.has(material)) duplicateDisposalDetectionCount += 1;
         else {

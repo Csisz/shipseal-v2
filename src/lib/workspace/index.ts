@@ -74,6 +74,10 @@ export {
   repositoryUniverseRevealProgress,
 } from './repositoryUniverseReveal';
 
+export { buildRepositoryUniverseHeatmapDimensions, repositoryUniverseHeatmapValue } from './repositoryUniverseHeatmap';
+export { resolveRepositoryUniverseVisualPriority } from './repositoryUniverseVisualPriority';
+export { buildRepositoryUniverseRouteEnergyPulses, repositoryUniverseRouteEnergyOscillation, repositoryUniverseRouteEnergyPulseCap } from './repositoryUniverseRouteEnergy';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,

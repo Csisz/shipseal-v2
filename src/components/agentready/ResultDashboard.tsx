@@ -34,6 +34,7 @@ import {
   buildRepositoryVerificationBaseline,
   buildRepositoryVerificationResult,
   buildRepositoryUniverseModel,
+  buildRepositoryUniverseHeatmapDimensions,
   buildWorkspaceStory,
   chapterForDnaDimension,
   chapterForMentalModelNode,
@@ -71,6 +72,7 @@ import {
   type WorkspaceStoryDnaDimensionId,
   type WorkspaceStoryMentalNodeId,
 } from '@/lib/workspace';
+import type { RepositoryUniverseHeatmapDimension, RepositoryUniverseHeatmapDimensionId } from '@/lib/workspace/repositoryUniverseHeatmap';
 import { repositoryUniverseClusterLegend } from '@/lib/workspace/repositoryUniverseVisual';
 import type { UniverseCameraState } from './RepositoryUniverse3D';
 import type { RepositoryIntelligenceReviewUiSession } from './RepositoryIntelligenceReviewPanel';
@@ -1142,6 +1144,7 @@ function RepositoryAtlasVisualization({
   const [agentFlightPathTask, setAgentFlightPathTask] = useState('');
   const [agentFlightPath, setAgentFlightPath] = useState<RepositoryAgentFlightPath | null>(null);
   const [agentFlightPathCopied, setAgentFlightPathCopied] = useState(false);
+  const [activeHeatmapDimensionId, setActiveHeatmapDimensionId] = useState<RepositoryUniverseHeatmapDimensionId | null>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
   const exitFullscreen = useCallback(() => {
     if (document.fullscreenElement && document.exitFullscreen) {
@@ -1189,6 +1192,11 @@ function RepositoryAtlasVisualization({
   const universeSearchMatches = useMemo(() => matchingUniverseNodeIds(universe, query), [universe, query]);
   const universeFilterCounts = useMemo(() => repositoryUniverseFilterCounts(universe), [universe]);
   const universeClusterLegend = useMemo(() => repositoryUniverseClusterLegend(universe.clusters), [universe.clusters]);
+  const heatmapDimensions = useMemo(() => buildRepositoryUniverseHeatmapDimensions(universe), [universe]);
+  const activeHeatmapDimension = useMemo<RepositoryUniverseHeatmapDimension | null>(
+    () => heatmapDimensions.find(item => item.id === activeHeatmapDimensionId) || null,
+    [activeHeatmapDimensionId, heatmapDimensions],
+  );
   const hasVerifiedRescanComparison = verificationResult?.status === 'matched-rescan';
   const verifiedDestinationPaths = useMemo(() => new Set((verificationResult?.artifacts || [])
     .filter(artifact => artifact.state === 'verified-file-presence' || artifact.state === 'verified-content-match')
@@ -1264,6 +1272,7 @@ function RepositoryAtlasVisualization({
     setAgentFlightPathTask('');
     setAgentFlightPath(null);
     setAgentFlightPathCopied(false);
+    setActiveHeatmapDimensionId(null);
   }, [report.repoName, report.scannedAt, initialUniverseCamera, prefersReducedMotion]);
 
   useEffect(() => {
@@ -1641,6 +1650,16 @@ function RepositoryAtlasVisualization({
           {inspectorCollapsed ? 'Expand inspector' : 'Collapse inspector'}
         </Button>
       )}
+      {viewMode === 'universe3d' && (
+        <div className="flex shrink-0 rounded-full border border-border/60 bg-background/25 p-1" aria-label="Repository heatmap">
+          <button type="button" aria-pressed={!activeHeatmapDimensionId} onClick={() => setActiveHeatmapDimensionId(null)} className={`rounded-full px-2.5 py-1.5 text-xs ${!activeHeatmapDimensionId ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground'}`}>Off</button>
+          {heatmapDimensions.map(dimension => (
+            <button key={dimension.id} type="button" aria-pressed={activeHeatmapDimensionId === dimension.id} title={dimension.description} onClick={() => setActiveHeatmapDimensionId(dimension.id)} className={`rounded-full px-2.5 py-1.5 text-xs ${activeHeatmapDimensionId === dimension.id ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground'}`}>
+              {dimension.id === 'importance' ? 'Importance' : 'Connections'}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 
@@ -1649,6 +1668,14 @@ function RepositoryAtlasVisualization({
       <Minimize2 className="mr-1.5 h-3.5 w-3.5" /> Exit fullscreen
     </Button>
   );
+
+  const heatmapLegend = activeHeatmapDimension && viewMode === 'universe3d' ? (
+    <div className="flex min-w-0 items-center gap-2 rounded-xl border border-primary/20 bg-background/35 px-3 py-2 text-xs text-muted-foreground" aria-label={`${activeHeatmapDimension.label} heatmap legend`}>
+      <span className="shrink-0 font-medium text-foreground">{activeHeatmapDimension.label}</span>
+      <span className="truncate">{activeHeatmapDimension.lowLabel} → {activeHeatmapDimension.highLabel}</span>
+      <span className="sr-only">Colors represent the existing deterministic repository value.</span>
+    </div>
+  ) : null;
 
   const atlasFilters = (
     <div className="flex flex-wrap gap-2" aria-label="Repository Atlas filters">
@@ -2066,6 +2093,7 @@ function RepositoryAtlasVisualization({
             transformationDomain={transformationDomain}
             selectedProposalId={selectedProposalId}
             excludedProposalIds={excludedProposalIdList}
+            heatmapDimension={activeHeatmapDimension}
             onCameraStateChange={setUniverseCamera}
             onSelectNode={handleUniverseSelectNode}
             onSelectProposal={handleUniverseSelectProposal}
@@ -2171,7 +2199,7 @@ function RepositoryAtlasVisualization({
             {resultChapterSummary}
           </p>
         </div>
-        {!fullscreen && showUniverseWorkspace && atlasToolbar}
+        {!fullscreen && showUniverseWorkspace && <div className="space-y-2">{atlasToolbar}{heatmapLegend}</div>}
       </div>
 
       {!fullscreen && (
@@ -2251,7 +2279,7 @@ function RepositoryAtlasVisualization({
                   <h2 className="mt-1 font-display text-lg font-semibold sm:text-2xl">Fullscreen exploration</h2>
                   <p className="repository-universe-fullscreen-description mt-1 hidden text-sm text-muted-foreground sm:block">{viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to exit fullscreen</p>
                 </div>
-                <div className="repository-universe-fullscreen-toolbar col-span-2 row-start-2 min-w-0 xl:col-span-1 xl:col-start-2 xl:row-start-1">{atlasToolbar}</div>
+                <div className="repository-universe-fullscreen-toolbar col-span-2 row-start-2 min-w-0 space-y-2 xl:col-span-1 xl:col-start-2 xl:row-start-1">{atlasToolbar}{heatmapLegend}</div>
                 <div className="repository-universe-fullscreen-exit col-start-2 row-start-1 xl:col-start-3">{fullscreenExitButton}</div>
               </div>
               <div data-testid="repository-universe-fullscreen-controls" className="mb-3 max-h-[clamp(3.5rem,16dvh,10rem)] min-w-0 shrink-0 overflow-y-auto overscroll-contain pr-1 xl:mb-4 xl:max-h-none xl:overflow-visible xl:pr-0">

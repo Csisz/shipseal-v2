@@ -118,6 +118,34 @@ export interface RepositoryUniverseDiagnosticsSnapshot {
   revealedNodeCount: number;
   revealedEdgeCount: number;
   revealScheduleGenerationCount: number;
+  activeHeatmapDimension: string | null;
+  heatmappedNodeCount: number;
+  missingHeatmapValueCount: number;
+  heatmapSourceMin: number | null;
+  heatmapSourceMax: number | null;
+  heatmapInterpolationActive: boolean;
+  heatmapModelGenerationCount: number;
+  heatmapTargetRecalculationCount: number;
+  heatmapLegendLow: string | null;
+  heatmapLegendHigh: string | null;
+  routeNodeCount: number;
+  routeEdgeCount: number;
+  routeEnergyEligibleEdgeCount: number;
+  routeEnergyPulseCapacity: number;
+  routeEnergyPulseCount: number;
+  routeEnergyGeometryRebuildCount: number;
+  routeEnergyBufferUpdateCount: number;
+  routeEnergyAllocationCount: number;
+  routeEnergyDisposalCount: number;
+  routeEnergyMotionActive: boolean;
+  routeEnergyReducedMotion: boolean;
+  selectedVisualCount: number;
+  hoveredVisualCount: number;
+  searchVisualCount: number;
+  routeVisualCount: number;
+  heatmapVisualCount: number;
+  revealAccentCount: number;
+  visualPriorityResolutionCount: number;
 }
 
 export const REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP = Object.freeze({
