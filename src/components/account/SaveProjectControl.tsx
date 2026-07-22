@@ -38,9 +38,7 @@ export function SaveProjectControl({ report, providerStatus }: { report: Readine
         {account.user && <a className="text-xs text-primary-glow underline-offset-4 hover:underline" href="/projects">My projects</a>}
         {state === 'failed' && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />}
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-        {message || (account.user ? 'Stores derived intelligence and safe metadata—not the repository archive.' : 'An account is needed only to preserve this result and its history.')}
-      </p>
+      {message && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{message}</p>}
       {savedProject && <a className="mt-1 block break-all text-xs text-primary-glow underline-offset-4 hover:underline" href={`/projects/${savedProject.id}`}>Open saved project</a>}
     </div>
   );

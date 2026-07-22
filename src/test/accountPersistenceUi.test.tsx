@@ -35,6 +35,7 @@ describe('Omega 18.1 account and persistence UI', () => {
     const report = buildSampleReport();
     render(<AccountProvider><SaveProjectControl report={report} /></AccountProvider>);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled());
+    expect(screen.queryByText(/An account is needed only/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
     expect(open).toHaveBeenCalledWith(expect.stringContaining('/api/account/login'), 'shipseal-account', expect.any(String));
     expect(screen.getByText(/This scan remains open/i)).toBeInTheDocument();

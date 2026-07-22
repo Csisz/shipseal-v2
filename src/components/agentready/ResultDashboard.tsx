@@ -353,7 +353,7 @@ export function ResultDashboard({
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
 
-      <PostScanOverview
+      {(activeResultChapter !== 'understand' || repositoryHealth.overall.score === null) && <PostScanOverview
         report={report}
         limitedScanReason={limitedScanReason}
         frictions={repositoryFrictions}
@@ -362,13 +362,13 @@ export function ResultDashboard({
         onReset={onReset}
         onReplayReveal={onReplayReveal}
         persistenceControl={persistenceControl}
-      />
+      />}
 
-      <ResultChapterNav
+      {(!['understand', 'improve'].includes(activeResultChapter) || repositoryHealth.overall.score === null) && <ResultChapterNav
         activeChapter={activeResultChapter}
         statuses={chapterStatuses}
         onChange={handleResultChapterChange}
-      />
+      />}
 
       <div ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} className="relative left-1/2 min-h-[calc(100dvh-5rem)] w-screen -translate-x-1/2 scroll-mt-20 overflow-hidden bg-background focus:outline-none">
         {workspaceHeroRequested ? <AiWorkspaceHero
@@ -379,6 +379,23 @@ export function ResultDashboard({
           onActiveStoryChapterChange={handleActiveStoryChapterChange}
           activeResultChapter={activeResultChapter}
           onResultChapterChange={handleResultChapterChange}
+          repositoryContextOverlay={<PostScanOverview
+            report={report}
+            limitedScanReason={limitedScanReason}
+            frictions={repositoryFrictions}
+            onReviewRepositoryIntelligence={handleReviewRepositoryIntelligence}
+            onPlanAgentTask={handlePlanAgentTask}
+            onReset={onReset}
+            onReplayReveal={onReplayReveal}
+            persistenceControl={persistenceControl}
+            variant="stage"
+          />}
+          chapterNavOverlay={<ResultChapterNav
+            activeChapter={activeResultChapter}
+            statuses={chapterStatuses}
+            onChange={handleResultChapterChange}
+            variant="overlay"
+          />}
           flightPathRequested={flightPathRequested}
           onFlightPathRequested={() => setFlightPathRequested(false)}
           onPlanReviewed={() => setPlanReviewed(true)}
@@ -910,6 +927,8 @@ function AiWorkspaceHero({
   onActiveStoryChapterChange,
   activeResultChapter,
   onResultChapterChange,
+  repositoryContextOverlay,
+  chapterNavOverlay,
   flightPathRequested,
   onFlightPathRequested,
   onPlanReviewed,
@@ -927,6 +946,8 @@ function AiWorkspaceHero({
   onActiveStoryChapterChange?: (chapterId: WorkspaceStoryChapterId | null) => void;
   activeResultChapter: ResultChapterId;
   onResultChapterChange: (chapter: ResultChapterId) => void;
+  repositoryContextOverlay: ReactNode;
+  chapterNavOverlay: ReactNode;
   flightPathRequested: boolean;
   onFlightPathRequested: () => void;
   onPlanReviewed: () => void;
@@ -971,7 +992,9 @@ function AiWorkspaceHero({
   };
 
   return (
-    <section className="mb-6 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-3 shadow-glow md:p-5 animate-fade-in-up" aria-label="Repository Intelligence">
+    <section className={activeResultChapter === 'understand'
+      ? 'mb-6 overflow-hidden border-y border-primary/25 bg-[hsl(225_28%_7%)] shadow-glow animate-fade-in-up'
+      : 'mb-6 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-3 shadow-glow md:p-5 animate-fade-in-up'} aria-label="Repository Intelligence">
       <div className="relative">
         <div className="absolute inset-0 -m-10 bg-[radial-gradient(circle_at_24%_18%,hsl(var(--primary)/0.22),transparent_34%),radial-gradient(circle_at_78%_26%,hsl(var(--accent)/0.13),transparent_32%),linear-gradient(180deg,hsl(var(--background)/0),hsl(var(--background)/0.2))] pointer-events-none" />
         {unavailable ? (
@@ -991,6 +1014,8 @@ function AiWorkspaceHero({
               onSelectChapter={selectStoryChapter}
               activeResultChapter={activeResultChapter}
               onResultChapterChange={onResultChapterChange}
+              repositoryContextOverlay={repositoryContextOverlay}
+              chapterNavOverlay={chapterNavOverlay}
               flightPathRequested={flightPathRequested}
               onFlightPathRequested={onFlightPathRequested}
               onPlanReviewed={onPlanReviewed}
@@ -1088,6 +1113,8 @@ function RepositoryAtlasVisualization({
   onSelectChapter,
   activeResultChapter,
   onResultChapterChange,
+  repositoryContextOverlay,
+  chapterNavOverlay,
   flightPathRequested,
   onFlightPathRequested,
   onPlanReviewed,
@@ -1104,6 +1131,8 @@ function RepositoryAtlasVisualization({
   onSelectChapter: (chapterId: WorkspaceStoryChapterId) => void;
   activeResultChapter: ResultChapterId;
   onResultChapterChange: (chapter: ResultChapterId) => void;
+  repositoryContextOverlay: ReactNode;
+  chapterNavOverlay: ReactNode;
   flightPathRequested: boolean;
   onFlightPathRequested: () => void;
   onPlanReviewed: () => void;
@@ -1591,7 +1620,7 @@ function RepositoryAtlasVisualization({
   };
 
   const atlasToolbar = (
-    <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
+    <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 md:overflow-visible md:pb-0">
       <label className="relative min-w-[180px] flex-1 xl:w-[220px] xl:flex-none">
         <span className="sr-only">Search repository atlas or universe</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -2163,8 +2192,8 @@ function RepositoryAtlasVisualization({
   const showPlanReview = optimizationPlanReview && (activeResultChapter === 'improve' || activeResultChapter === 'verify');
 
   return (
-    <section ref={atlasRootRef} className="relative border-y border-primary/20 bg-[hsl(224_31%_6%)] px-2 py-2 md:px-3" aria-labelledby="repository-atlas-heading">
-      <div className="mb-2 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+    <section ref={atlasRootRef} className={`relative border-y border-primary/20 bg-[hsl(224_31%_6%)] ${activeResultChapter === 'understand' ? '' : 'px-2 py-2 md:px-3'}`} aria-labelledby="repository-atlas-heading">
+      <div className={activeResultChapter === 'understand' ? 'sr-only' : 'mb-2 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between'}>
         <div>
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{resultChapterEyebrow}</div>
           <h2 id="repository-atlas-heading" className="font-display text-lg font-semibold">{resultChapterTitle}</h2>
@@ -2172,13 +2201,12 @@ function RepositoryAtlasVisualization({
             {resultChapterSummary}
           </p>
         </div>
-        {!fullscreen && showUniverseWorkspace && atlasToolbar}
       </div>
 
       {!fullscreen && (
         <>
           {showUniverseWorkspace && (
-            <div id="repository-atlas-navigation-status" className="mb-2 text-xs text-muted-foreground" aria-live="polite">
+            <div id="repository-atlas-navigation-status" className={activeResultChapter === 'understand' ? 'sr-only' : 'mb-2 text-xs text-muted-foreground'} aria-live="polite">
               {atlasNavigationActive ? `${viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to release` : 'Click to explore - Scroll to zoom - Drag to move'}
             </div>
           )}
@@ -2206,9 +2234,22 @@ function RepositoryAtlasVisualization({
       )}
 
       {!fullscreen && showUniverseWorkspace && (
-        <div className={`grid gap-2 ${inspectorVisible ? 'xl:grid-cols-[minmax(0,1fr)_280px]' : ''}`}>
-          {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
-          {inspectorVisible ? inspector : <div className="pointer-events-none absolute bottom-4 right-4 rounded-full border border-border/50 bg-background/75 px-3 py-1.5 text-xs text-muted-foreground">Select a node to inspect evidence</div>}
+        <div data-testid="repository-universe-workspace-stage" className="relative min-h-[calc(100dvh-9rem)] overflow-hidden">
+          <div className="absolute inset-0 [&>*]:h-full">{viewMode === 'universe3d' ? universeCanvas : atlasCanvas}</div>
+          <div className="pointer-events-none absolute inset-x-2 top-2 z-20 grid min-w-0 gap-2 lg:grid-cols-[minmax(18rem,23rem)_minmax(0,1fr)] lg:items-start">
+            <div data-testid="repository-context-overlay" className={activeResultChapter === 'understand' ? 'min-w-0' : 'hidden'}>
+              {activeResultChapter === 'understand' ? repositoryContextOverlay : null}
+            </div>
+            <div data-testid="repository-toolbar-overlay" className="pointer-events-auto min-w-0 max-w-full rounded-xl border border-border/60 bg-background/80 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md lg:col-start-2 lg:justify-self-end">
+              {atlasToolbar}
+            </div>
+            <div data-testid="result-chapter-rail-overlay" className="min-w-0 md:mx-auto md:w-[min(46rem,calc(100%-2rem))] lg:col-span-2">
+              {chapterNavOverlay}
+            </div>
+          </div>
+          {inspectorVisible
+            ? <aside className={`absolute bottom-3 right-3 z-30 max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-auto lg:bottom-auto ${activeResultChapter === 'understand' ? 'lg:top-[17rem] lg:max-h-[calc(100%-18rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}>{inspector}</aside>
+            : <div className="pointer-events-none absolute bottom-4 right-4 z-10 rounded-full border border-border/50 bg-background/75 px-3 py-1.5 text-xs text-muted-foreground">Select a node to inspect evidence</div>}
         </div>
       )}
 

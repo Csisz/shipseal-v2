@@ -14,6 +14,7 @@ export function PostScanOverview({
   onReset,
   onReplayReveal,
   persistenceControl,
+  variant = 'document',
 }: {
   report: ReadinessReport;
   limitedScanReason?: string;
@@ -23,6 +24,7 @@ export function PostScanOverview({
   onReset: () => void;
   onReplayReveal?: () => void;
   persistenceControl?: ReactNode;
+  variant?: 'document' | 'stage';
 }) {
   const limited = report.repositoryHealth.overall.score === null
     || report.scanSummary.limited
@@ -37,32 +39,35 @@ export function PostScanOverview({
   const branch = githubSource
     ? report.source.githubBranch || report.source.githubDefaultBranch || report.scanEvidence.branchOrRef || 'Branch unavailable'
     : 'Uploaded archive';
+  const stageOverlay = variant === 'stage';
 
   return (
-    <section className="mb-2 rounded-2xl border border-primary/20 bg-card/60 px-4 py-3 shadow-sm shadow-primary/10 md:px-5" aria-labelledby="workspace-result-heading">
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+    <section className={stageOverlay
+      ? 'pointer-events-auto rounded-2xl border border-primary/25 bg-background/80 px-3 py-3 shadow-xl shadow-black/20 backdrop-blur-md'
+      : 'mb-2 rounded-2xl border border-primary/20 bg-card/60 px-4 py-3 shadow-sm shadow-primary/10 md:px-5'} aria-labelledby="workspace-result-heading">
+      <div className={stageOverlay ? 'flex flex-col gap-2' : 'flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between'}>
         <div className="min-w-0 max-w-4xl">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="border-primary/45 text-primary-glow">Repository Intelligence</Badge>
             <span className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">{repositoryIdentity}</span>
             <span className="text-muted-foreground">{branch}</span>
-            <span className="text-muted-foreground">{report.stack.primary}</span>
+            {!stageOverlay && <span className="text-muted-foreground">{report.stack.primary}</span>}
           </div>
-          <h1 id="workspace-result-heading" className="mt-1 font-display text-xl font-semibold leading-tight md:text-2xl">
+          <h1 id="workspace-result-heading" className={`mt-1 font-display font-semibold leading-tight ${stageOverlay ? 'text-lg' : 'text-xl md:text-2xl'}`}>
             {limited ? 'Repository evidence is limited.' : 'Repository understood.'}
           </h1>
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+          <p className={`mt-1 max-w-3xl leading-relaxed text-muted-foreground ${stageOverlay ? 'text-xs' : 'text-sm'}`}>
             {limited
               ? `ShipSeal mapped ${fileCount.toLocaleString()} files within the available scan boundary. Conclusions remain limited.`
               : `ShipSeal mapped ${fileCount.toLocaleString()} files into a repository-specific workspace model and found ${frictions.length.toLocaleString()} areas creating agent friction.`}
           </p>
-          {limited && (
+          {limited && !stageOverlay && (
             <p className="mt-3 max-w-3xl rounded-2xl border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning/90">
               Limited scan: {limitedScanReason || 'The scanner could not fully analyze the repository, so unavailable areas are not treated as failures.'}
             </p>
           )}
         </div>
-        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+        <div className={`flex flex-wrap items-center gap-2 ${stageOverlay ? '' : 'lg:justify-end'}`}>
           <Button type="button" size="sm" onClick={onReviewRepositoryIntelligence} className="bg-primary text-primary-foreground hover:bg-primary/90">
             Review improvements <ArrowRight className="ml-2 h-4 w-4" />
           </Button>

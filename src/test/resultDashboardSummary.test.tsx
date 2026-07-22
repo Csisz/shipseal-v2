@@ -307,6 +307,21 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByRole('button', { name: /^Plan an agent task$/i })).toBeInTheDocument();
     const universe = await screen.findByRole('img', { name: /Repository Universe 3D graph/i });
     expect(universe).toBeInTheDocument();
+    const stage = screen.getByTestId('repository-universe-workspace-stage');
+    const contextOverlay = screen.getByTestId('repository-context-overlay');
+    const toolbarOverlay = screen.getByTestId('repository-toolbar-overlay');
+    expect(stage).toContainElement(contextOverlay);
+    expect(contextOverlay).toContainElement(screen.getByRole('heading', { name: /Repository understood/i }));
+    expect(stage).toContainElement(chapterNav);
+    expect(stage).toContainElement(toolbarOverlay);
+    expect(within(toolbarOverlay).getByRole('textbox', { name: /Search repository atlas or universe/i })).toBeInTheDocument();
+    expect(within(toolbarOverlay).getByRole('button', { name: /Universe 3D/i })).toBeInTheDocument();
+    expect(within(toolbarOverlay).getByRole('button', { name: /Atlas 2D/i })).toBeInTheDocument();
+    expect(within(toolbarOverlay).getByRole('button', { name: /Fullscreen/i })).toBeInTheDocument();
+    expect(within(toolbarOverlay).getByText('More controls')).toBeInTheDocument();
+    expect(screen.getAllByRole('navigation', { name: /Result chapters/i })).toHaveLength(1);
+    expect(screen.getAllByLabelText(/Search repository atlas or universe/i)).toHaveLength(1);
+    expect(screen.getAllByText('More controls')).toHaveLength(1);
     expect(screen.queryByText('Exports and reports')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Review improvements$/i }));
