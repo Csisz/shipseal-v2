@@ -2045,8 +2045,9 @@ function RepositoryAtlasVisualization({
         )}
       >
         <Suspense fallback={<RepositoryUniverseLoading onOpenAtlas={openAtlasFallback} />}>
+          {/* Repository identity and explicit recovery reconstruct the scene; fullscreen only resizes this instance. */}
           <RepositoryUniverse3D
-            key={`${report.repoName}:${report.scannedAt}:${universeRetryKey}:${fullscreen ? 'fullscreen' : 'embedded'}`}
+            key={`${report.repoName}:${report.scannedAt}:${universeRetryKey}`}
             model={universe}
             selectedNodeId={selectedUniverseNode?.id}
             focusedClusterId={focusedClusterId}
@@ -2230,10 +2231,38 @@ function RepositoryAtlasVisualization({
         </>
       )}
 
-      {!fullscreen && showUniverseWorkspace && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
-          {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
-          {inspector}
+      {showUniverseWorkspace && (
+        <div
+          ref={fullscreenLayerRef}
+          role={fullscreen ? 'dialog' : undefined}
+          aria-modal={fullscreen ? 'true' : undefined}
+          aria-label={fullscreen ? `${viewMode === 'universe3d' ? 'Repository Universe' : 'Repository Atlas'} fullscreen` : undefined}
+          data-universe-layout={fullscreen ? 'fullscreen' : 'embedded'}
+          className={fullscreen
+            ? 'fixed inset-0 z-[100] flex flex-col bg-[hsl(224_31%_5%)] p-4 text-foreground md:p-6'
+            : ''}
+        >
+          {fullscreen && (
+            <>
+              <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{viewMode === 'universe3d' ? 'Repository Universe' : 'Repository Atlas'}</div>
+                  <h2 className="mt-1 font-display text-2xl font-semibold">Fullscreen exploration</h2>
+                  <p className="mt-1 text-sm text-muted-foreground">{viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to exit fullscreen</p>
+                </div>
+                {atlasToolbar}
+              </div>
+              <div className="mb-4">{transformationControls}</div>
+              {optimizationPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
+              <div className="mb-4">{atlasFilters}</div>
+              {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
+              {searchResultList && <div className="mb-4">{searchResultList}</div>}
+            </>
+          )}
+          <div className={`grid gap-4 ${fullscreen ? `min-h-0 flex-1 ${inspectorCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_220px]' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}` : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
+            {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
+            {inspector}
+          </div>
         </div>
       )}
 
@@ -2247,33 +2276,6 @@ function RepositoryAtlasVisualization({
             : 'Repository Atlas loaded.'}
       </p>
 
-      {fullscreen && (
-        <div
-          ref={fullscreenLayerRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label={`${viewMode === 'universe3d' ? 'Repository Universe' : 'Repository Atlas'} fullscreen`}
-          className="fixed inset-0 z-[100] flex flex-col bg-[hsl(224_31%_5%)] p-4 text-foreground md:p-6"
-        >
-          <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-            <div>
-              <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{viewMode === 'universe3d' ? 'Repository Universe' : 'Repository Atlas'}</div>
-              <h2 className="mt-1 font-display text-2xl font-semibold">Fullscreen exploration</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to exit fullscreen</p>
-            </div>
-            {atlasToolbar}
-          </div>
-          <div className="mb-4">{transformationControls}</div>
-          {optimizationPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
-          <div className="mb-4">{atlasFilters}</div>
-          {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
-          {searchResultList && <div className="mb-4">{searchResultList}</div>}
-          <div className={`grid min-h-0 flex-1 gap-4 ${inspectorCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_220px]' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}`}>
-            {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
-            {inspector}
-          </div>
-        </div>
-      )}
     </section>
   );
 }

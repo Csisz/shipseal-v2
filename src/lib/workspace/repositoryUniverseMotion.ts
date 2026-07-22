@@ -12,6 +12,13 @@ export interface RepositoryUniverseFrameDelta {
   animationDeltaSeconds: number;
 }
 
+export interface RepositoryUniverseViewportMetrics {
+  width: number;
+  height: number;
+  pixelRatio: number;
+  aspect: number;
+}
+
 export interface RepositoryUniverseCameraSettlementTolerance {
   targetDistance: number;
   positionDistance: number;
@@ -29,6 +36,8 @@ export type RepositoryUniverseSettlementState = 'idle' | 'moving' | 'converging'
 
 export interface RepositoryUniverseDiagnosticsSnapshot {
   rendererCreationCount: number;
+  rendererDisposalCount: number;
+  canvasId: string;
   renderCalls: number;
   triangles: number;
   lines: number;
@@ -38,6 +47,15 @@ export interface RepositoryUniverseDiagnosticsSnapshot {
   canvasWidth: number;
   canvasHeight: number;
   devicePixelRatio: number;
+  fullscreen: boolean;
+  resizeCount: number;
+  selectedNodeId: string | null;
+  cameraTheta: number;
+  cameraPhi: number;
+  cameraRadius: number;
+  cameraTargetX: number;
+  cameraTargetY: number;
+  cameraTargetZ: number;
   programmaticCameraMotionActive: boolean;
   visualMotionActive: boolean;
   activeVisualInterpolationCount: number;
@@ -185,6 +203,7 @@ export const REPOSITORY_UNIVERSE_CAMERA_SETTLEMENT_TOLERANCE: RepositoryUniverse
 export const REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY = '__SHIPSEAL_REPOSITORY_UNIVERSE_DIAGNOSTICS__' as const;
 
 let rendererCreationCount = 0;
+let rendererDisposalCount = 0;
 
 /**
  * U3A dirty-dependency contract:
@@ -586,19 +605,38 @@ export function idleRotationDelta(deltaSeconds: number) {
   return REPOSITORY_UNIVERSE_IDLE_RADIANS_PER_SECOND * Math.max(0, deltaSeconds);
 }
 
+export function repositoryUniverseViewportMetrics(
+  width: number,
+  height: number,
+  devicePixelRatio: number,
+  fullscreen: boolean,
+): RepositoryUniverseViewportMetrics {
+  const renderedWidth = Math.max(1, Math.round(width));
+  const renderedHeight = Math.max(1, Math.round(height));
+  return {
+    width: renderedWidth,
+    height: renderedHeight,
+    pixelRatio: Math.min(devicePixelRatio || 1, fullscreen ? 1.5 : 1.35),
+    aspect: renderedWidth / renderedHeight,
+  };
+}
+
 export function createRepositoryUniverseDiagnosticsChannel(
   development: boolean,
   host: DiagnosticsHost | undefined,
-  initial: Omit<RepositoryUniverseDiagnosticsSnapshot, 'rendererCreationCount'>,
+  initial: Omit<RepositoryUniverseDiagnosticsSnapshot, 'rendererCreationCount' | 'rendererDisposalCount' | 'canvasId'>,
 ): RepositoryUniverseDiagnosticsChannel | undefined {
   if (!development || !host) return undefined;
 
   rendererCreationCount += 1;
   const state: RepositoryUniverseDiagnosticsSnapshot = {
     rendererCreationCount,
+    rendererDisposalCount,
+    canvasId: `repository-universe-canvas-${rendererCreationCount}`,
     ...initial,
   };
   const getter = () => Object.freeze({ ...state });
+  let disposed = false;
 
   Object.defineProperty(host, REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY, {
     configurable: true,
@@ -611,6 +649,10 @@ export function createRepositoryUniverseDiagnosticsChannel(
       Object.assign(state, values);
     },
     dispose() {
+      if (disposed) return;
+      disposed = true;
+      rendererDisposalCount += 1;
+      state.rendererDisposalCount = rendererDisposalCount;
       const descriptor = Object.getOwnPropertyDescriptor(host, REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY);
       if (descriptor?.get === getter) delete host[REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY];
     },

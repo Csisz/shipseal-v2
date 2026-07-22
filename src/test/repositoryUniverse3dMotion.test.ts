@@ -36,6 +36,7 @@ import {
   repositoryUniverseOpacityVisible,
   repositoryUniverseVisualTargetGroupsForDependency,
   repositoryUniverseVisualScalarActive,
+  repositoryUniverseViewportMetrics,
   shortestAngleDelta,
   stepRepositoryUniverseCamera,
   stepRepositoryUniverseVisualScalar,
@@ -66,7 +67,7 @@ function simulateCamera(frameRate: number, durationSeconds = 1) {
   return camera;
 }
 
-function emptyDiagnostics(): Omit<RepositoryUniverseDiagnosticsSnapshot, 'rendererCreationCount'> {
+function emptyDiagnostics(): Omit<RepositoryUniverseDiagnosticsSnapshot, 'rendererCreationCount' | 'rendererDisposalCount' | 'canvasId'> {
   return {
     renderCalls: 0,
     triangles: 0,
@@ -77,6 +78,15 @@ function emptyDiagnostics(): Omit<RepositoryUniverseDiagnosticsSnapshot, 'render
     canvasWidth: 0,
     canvasHeight: 0,
     devicePixelRatio: 1,
+    fullscreen: false,
+    resizeCount: 0,
+    selectedNodeId: null,
+    cameraTheta: initialCamera.theta,
+    cameraPhi: initialCamera.phi,
+    cameraRadius: initialCamera.radius,
+    cameraTargetX: initialCamera.target.x,
+    cameraTargetY: initialCamera.target.y,
+    cameraTargetZ: initialCamera.target.z,
     programmaticCameraMotionActive: false,
     visualMotionActive: false,
     activeVisualInterpolationCount: 0,
@@ -230,6 +240,27 @@ describe('Repository Universe 3D motion', () => {
 
   it('applies final camera values immediately for reduced motion', () => {
     expect(stepRepositoryUniverseCamera(initialCamera, focusedCamera, 0, true)).toEqual(focusedCamera);
+  });
+
+  it('derives renderer dimensions, camera aspect and fullscreen pixel ratio from the rendered host', () => {
+    expect(repositoryUniverseViewportMetrics(1180.4, 640.4, 2, false)).toEqual({
+      width: 1180,
+      height: 640,
+      pixelRatio: 1.35,
+      aspect: 1180 / 640,
+    });
+    expect(repositoryUniverseViewportMetrics(1440, 900, 2, true)).toEqual({
+      width: 1440,
+      height: 900,
+      pixelRatio: 1.5,
+      aspect: 1440 / 900,
+    });
+    expect(repositoryUniverseViewportMetrics(280, 440, 1, false)).toEqual({
+      width: 280,
+      height: 440,
+      pixelRatio: 1,
+      aspect: 280 / 440,
+    });
   });
 
   it('interpolates node scale toward hover emphasis without snapping', () => {
@@ -426,6 +457,10 @@ describe('Repository Universe 3D motion', () => {
       visualTargetRecalculationCount: 5,
       cachedRaycastObjectCount: 18,
       settlementState: 'moving',
+      fullscreen: true,
+      resizeCount: 3,
+      selectedNodeId: 'file:selected',
+      cameraRadius: 420,
     });
 
     const snapshot = host[REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY] as RepositoryUniverseDiagnosticsSnapshot;
@@ -440,11 +475,37 @@ describe('Repository Universe 3D motion', () => {
       visualTargetRecalculationCount: 5,
       cachedRaycastObjectCount: 18,
       settlementState: 'moving',
+      fullscreen: true,
+      resizeCount: 3,
+      selectedNodeId: 'file:selected',
+      cameraRadius: 420,
     });
     expect(() => { (snapshot as { renderCalls: number }).renderCalls = 99; }).toThrow();
     expect((host[REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY] as RepositoryUniverseDiagnosticsSnapshot).renderCalls).toBe(3);
 
     channel?.dispose();
     expect(REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY in host).toBe(false);
+  });
+
+  it('tracks renderer creation and disposal without replacing a live diagnostic channel', () => {
+    const firstHost = {} as Record<string, unknown>;
+    const firstChannel = createRepositoryUniverseDiagnosticsChannel(true, firstHost, emptyDiagnostics());
+    const initial = firstHost[REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY] as RepositoryUniverseDiagnosticsSnapshot;
+
+    firstChannel?.update({ fullscreen: true, resizeCount: 6 });
+    const afterFullscreenCycles = firstHost[REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY] as RepositoryUniverseDiagnosticsSnapshot;
+    expect(afterFullscreenCycles.rendererCreationCount).toBe(initial.rendererCreationCount);
+    expect(afterFullscreenCycles.rendererDisposalCount).toBe(initial.rendererDisposalCount);
+    expect(afterFullscreenCycles.canvasId).toBe(initial.canvasId);
+
+    firstChannel?.dispose();
+    firstChannel?.dispose();
+    const replacementHost = {} as Record<string, unknown>;
+    const replacementChannel = createRepositoryUniverseDiagnosticsChannel(true, replacementHost, emptyDiagnostics());
+    const replacement = replacementHost[REPOSITORY_UNIVERSE_DIAGNOSTIC_PROPERTY] as RepositoryUniverseDiagnosticsSnapshot;
+    expect(replacement.rendererCreationCount).toBe(initial.rendererCreationCount + 1);
+    expect(replacement.rendererDisposalCount).toBe(initial.rendererDisposalCount + 1);
+    expect(replacement.canvasId).not.toBe(initial.canvasId);
+    replacementChannel?.dispose();
   });
 });

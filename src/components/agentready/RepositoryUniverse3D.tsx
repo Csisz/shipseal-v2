@@ -40,6 +40,7 @@ import {
   repositoryUniverseVisualTargetGroupsForDependency,
   repositoryUniverseVisualScalarActive,
   repositoryUniverseVectorDistance,
+  repositoryUniverseViewportMetrics,
   stepRepositoryUniverseCamera,
   stepRepositoryUniverseVisualScalar,
   type RepositoryUniverseFocusRequest,
@@ -203,6 +204,7 @@ export default function RepositoryUniverse3D({
   const reducedMotionRef = useRef(reducedMotion);
   const animateInRef = useRef(animateIn);
   const fullscreenRef = useRef(fullscreen);
+  const resizeSceneRef = useRef<() => void>(() => undefined);
   const transformationModeRef = useRef(transformationMode);
   const transformationDomainRef = useRef(transformationDomain);
   const selectedProposalIdRef = useRef(selectedProposalId);
@@ -287,6 +289,8 @@ export default function RepositoryUniverse3D({
 
   useEffect(() => {
     fullscreenRef.current = fullscreen;
+    const frameId = requestAnimationFrame(() => resizeSceneRef.current());
+    return () => cancelAnimationFrame(frameId);
   }, [fullscreen]);
 
   useEffect(() => {
@@ -427,6 +431,15 @@ export default function RepositoryUniverse3D({
         canvasWidth: canvas.width,
         canvasHeight: canvas.height,
         devicePixelRatio: renderer.getPixelRatio(),
+        fullscreen: fullscreenRef.current,
+        resizeCount: 0,
+        selectedNodeId: selectedNodeIdRef.current || null,
+        cameraTheta: renderCameraStateRef.current.theta,
+        cameraPhi: renderCameraStateRef.current.phi,
+        cameraRadius: renderCameraStateRef.current.radius,
+        cameraTargetX: renderCameraStateRef.current.target.x,
+        cameraTargetY: renderCameraStateRef.current.target.y,
+        cameraTargetZ: renderCameraStateRef.current.target.z,
         programmaticCameraMotionActive: false,
         visualMotionActive: false,
         activeVisualInterpolationCount: 0,
@@ -695,22 +708,40 @@ export default function RepositoryUniverse3D({
       });
     }
 
+    let resizeCount = 0;
+    let lastResizeWidth = 0;
+    let lastResizeHeight = 0;
+    let lastResizePixelRatio = 0;
     const resize = () => {
       const rect = host.getBoundingClientRect();
-      const width = Math.max(320, rect.width);
-      const height = Math.max(320, rect.height);
+      const { width, height, pixelRatio, aspect } = repositoryUniverseViewportMetrics(
+        rect.width,
+        rect.height,
+        window.devicePixelRatio,
+        fullscreenRef.current,
+      );
+      if (width === lastResizeWidth && height === lastResizeHeight && pixelRatio === lastResizePixelRatio) return;
+
+      if (pixelRatio !== lastResizePixelRatio) renderer.setPixelRatio(pixelRatio);
       renderer.setSize(width, height, false);
-      camera.aspect = width / height;
+      camera.aspect = aspect;
       camera.updateProjectionMatrix();
+      lastResizeWidth = width;
+      lastResizeHeight = height;
+      lastResizePixelRatio = pixelRatio;
+      resizeCount += 1;
       diagnostics?.update({
         canvasWidth: canvas.width,
         canvasHeight: canvas.height,
         devicePixelRatio: renderer.getPixelRatio(),
+        fullscreen: fullscreenRef.current,
+        resizeCount,
       });
     };
 
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(host);
+    resizeSceneRef.current = resize;
     resize();
 
     const publishCamera = (state: UniverseCameraState, force = false) => {
@@ -1315,6 +1346,14 @@ export default function RepositoryUniverse3D({
         raycastCacheRebuildCount: raycastCache.rebuildCount,
         visualTargetsDirty: visualTargetDirtyState.groups !== REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.none,
         hoverRaycastPending: pointerPickState.pending,
+        fullscreen: fullscreenRef.current,
+        selectedNodeId: selectedNodeIdRef.current || null,
+        cameraTheta: renderCameraStateRef.current.theta,
+        cameraPhi: renderCameraStateRef.current.phi,
+        cameraRadius: renderCameraStateRef.current.radius,
+        cameraTargetX: renderCameraStateRef.current.target.x,
+        cameraTargetY: renderCameraStateRef.current.target.y,
+        cameraTargetZ: renderCameraStateRef.current.target.z,
       });
       renderer.render(scene, camera);
       fpsWindowStartedAt ??= timestamp;
@@ -1354,6 +1393,7 @@ export default function RepositoryUniverse3D({
       cleanupDocumentDrag();
       cancelAnimationFrame(frameId);
       resizeObserver.disconnect();
+      resizeSceneRef.current = () => undefined;
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointermove', handleCanvasPointerMove);
       canvas.removeEventListener('pointerleave', clearPointerHover);

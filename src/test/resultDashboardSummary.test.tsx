@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { useEffect, useRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildReport, buildSampleReport } from '@/lib/readiness';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
@@ -18,6 +19,9 @@ const universeMockState = vi.hoisted(() => ({
   selectedNodeIds: [] as Array<string | undefined>,
   cameraRadii: [] as number[],
   visibleNodeCounts: [] as number[],
+  mountCount: 0,
+  unmountCount: 0,
+  nextInstanceId: 1,
   shouldThrow: false,
 }));
 
@@ -61,7 +65,7 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
 }));
 
 vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
-  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode }: {
+  default: function MockRepositoryUniverse3D({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode }: {
     model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string }[] };
     selectedNodeId?: string;
     rotationPaused?: boolean;
@@ -72,7 +76,15 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
     cameraState: { radius: number };
     animateIn?: boolean;
     onSelectNode: (nodeId: string) => void;
-  }) => {
+  }) {
+    const instanceId = useRef<number | null>(null);
+    if (instanceId.current === null) instanceId.current = universeMockState.nextInstanceId++;
+    useEffect(() => {
+      universeMockState.mountCount += 1;
+      return () => {
+        universeMockState.unmountCount += 1;
+      };
+    }, []);
     if (universeMockState.shouldThrow) {
       throw new Error('Simulated Repository Universe render failure');
     }
@@ -94,6 +106,7 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
         data-camera-radius={cameraState.radius}
         data-animate-in={animateIn ? 'true' : 'false'}
         data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}
+        data-instance-id={instanceId.current}
       >
         <button type="button" onClick={() => model.nodes[1] && onSelectNode(model.nodes[1].id)}>
           Select universe node
@@ -206,6 +219,9 @@ describe('ResultDashboard summary copy', () => {
     universeMockState.selectedNodeIds = [];
     universeMockState.cameraRadii = [];
     universeMockState.visibleNodeCounts = [];
+    universeMockState.mountCount = 0;
+    universeMockState.unmountCount = 0;
+    universeMockState.nextInstanceId = 1;
     universeMockState.shouldThrow = false;
     githubWriteMock.createGitHubAppReadinessPr.mockReset();
     githubWriteMock.createGitHubAppReadinessPr.mockResolvedValue({
@@ -909,7 +925,7 @@ describe('ResultDashboard summary copy', () => {
     expect(onDiscardVerificationBaseline).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves Repository Universe selection and camera state in fullscreen', async () => {
+  it('keeps one Repository Universe instance across repeated fullscreen entry and exit', async () => {
     const requestFullscreen = vi.fn().mockResolvedValue(undefined);
     const exitFullscreen = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
@@ -921,7 +937,7 @@ describe('ResultDashboard summary copy', () => {
       value: exitFullscreen,
     });
 
-    render(
+    const rendered = render(
       <ResultDashboard
         report={buildSampleReport()}
         history={[]}
@@ -930,24 +946,55 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
+    fireEvent.change(screen.getByLabelText(/Search repository atlas or universe/i), { target: { value: 'README' } });
+    fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'Improve repository documentation' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+    switchResultChapter('Improve');
+    fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
     fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
     fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
     const selectedNodeId = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-selected-node');
     const cameraRadius = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-radius');
+    const routeNodeCount = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-route-node-count');
+    const initialUniverse = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+    const instanceId = initialUniverse.getAttribute('data-instance-id');
+    await waitFor(() => expect(universeMockState.mountCount).toBe(1));
 
-    fireEvent.click(screen.getByRole('button', { name: /Fullscreen/i }));
+    for (let cycle = 0; cycle < 5; cycle += 1) {
+      fireEvent.click(screen.getByRole('button', { name: /Fullscreen/i }));
 
-    const dialog = await screen.findByRole('dialog', { name: /Repository Universe fullscreen/i });
-    const fullscreenUniverse = within(dialog).getByRole('img', { name: /Repository Universe 3D graph/i });
-    expect(requestFullscreen).toHaveBeenCalled();
-    expect(fullscreenUniverse).toHaveAttribute('data-selected-node', selectedNodeId || '');
-    expect(fullscreenUniverse).toHaveAttribute('data-camera-radius', cameraRadius || '');
+      const dialog = await screen.findByRole('dialog', { name: /Repository Universe fullscreen/i });
+      const fullscreenUniverse = within(dialog).getByRole('img', { name: /Repository Universe 3D graph/i });
+      expect(fullscreenUniverse).toBe(initialUniverse);
+      expect(fullscreenUniverse).toHaveAttribute('data-instance-id', instanceId || '');
+      expect(fullscreenUniverse).toHaveAttribute('data-selected-node', selectedNodeId || '');
+      expect(fullscreenUniverse).toHaveAttribute('data-camera-radius', cameraRadius || '');
+      expect(fullscreenUniverse).toHaveAttribute('data-route-node-count', routeNodeCount || '');
+      expect(within(dialog).getByLabelText(/Search repository atlas or universe/i)).toHaveValue('README');
+      expect(within(dialog).getByRole('button', { name: /With ShipSeal/i })).toHaveAttribute('aria-pressed', 'true');
+      expect(universeMockState.mountCount).toBe(1);
+      expect(universeMockState.unmountCount).toBe(0);
 
-    fireEvent.keyDown(document, { key: 'Escape' });
+      fireEvent.keyDown(document, { key: 'Escape' });
 
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: /Repository Universe fullscreen/i })).not.toBeInTheDocument());
-    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-selected-node', selectedNodeId || '');
-  });
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: /Repository Universe fullscreen/i })).not.toBeInTheDocument());
+      expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toBe(initialUniverse);
+      expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-selected-node', selectedNodeId || '');
+      expect(screen.getByLabelText(/Search repository atlas or universe/i)).toHaveValue('README');
+      expect(screen.getByRole('button', { name: /With ShipSeal/i })).toHaveAttribute('aria-pressed', 'true');
+    }
+
+    expect(requestFullscreen).toHaveBeenCalledTimes(5);
+    expect(universeMockState.mountCount).toBe(1);
+    expect(universeMockState.unmountCount).toBe(0);
+
+    switchToAtlas2D();
+    await waitFor(() => expect(universeMockState.unmountCount).toBe(1));
+    fireEvent.click(screen.getByRole('button', { name: /Universe 3D/i }));
+    await waitFor(() => expect(universeMockState.mountCount).toBe(2));
+    rendered.unmount();
+    expect(universeMockState.unmountCount).toBe(2);
+  }, 30_000);
 
   it('contains Repository Universe render failures and keeps Atlas 2D accessible', async () => {
     const onReset = vi.fn();
