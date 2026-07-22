@@ -33,7 +33,7 @@ export default function PostScanOverviewQa() {
           limitedScanReason={report.scanEvidence.limitationReason}
           frictions={selectRepositoryFrictions(report.repositoryHealth)}
           onReviewRepositoryIntelligence={() => undefined}
-          onExploreRepositoryUniverse={() => undefined}
+          onPlanAgentTask={() => undefined}
           onReset={() => undefined}
         />
       </div>
