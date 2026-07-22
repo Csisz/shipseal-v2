@@ -370,7 +370,7 @@ export function ResultDashboard({
         onChange={handleResultChapterChange}
       />
 
-      <div ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} className="scroll-mt-24 focus:outline-none">
+      <div ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} className="relative left-1/2 min-h-[calc(100dvh-5rem)] w-screen -translate-x-1/2 scroll-mt-20 overflow-hidden bg-background focus:outline-none">
         {workspaceHeroRequested ? <AiWorkspaceHero
           report={report}
           limitationReason={limitedScanReason}
