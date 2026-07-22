@@ -183,9 +183,8 @@ describe('ShipSeal pre-scan intake flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 
-    expect(await screen.findByRole('heading', { name: /Explore the repository map/i }, { timeout: 15000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 15000 })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Replay reveal/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Prepare Repository Universe/i }));
     fireEvent.click(await screen.findByText(/Workspace story and evidence/i, undefined, { timeout: 15000 }));
     fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
     expect(screen.getByRole('heading', { name: /Knowledge and docs/i })).toBeInTheDocument();
@@ -194,7 +193,7 @@ describe('ShipSeal pre-scan intake flow', () => {
     expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 
-    fireEvent.click(await screen.findByRole('button', { name: /Prepare Repository Universe/i }, { timeout: 15000 }));
+    expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 15000 })).toBeInTheDocument();
     fireEvent.click(await screen.findByText(/Workspace story and evidence/i, undefined, { timeout: 15000 }));
     expect(await screen.findByRole('heading', { name: /Knowledge and docs/i }, { timeout: 5000 })).toBeInTheDocument();
   }, 30000);
