@@ -61,6 +61,19 @@ export {
   buildRepositoryAgentFlightPath,
 } from './repositoryAgentFlightPath';
 
+export {
+  buildRepositoryUniverseLabelPlan,
+  repositoryUniverseBackgroundLabelCap,
+  repositoryUniverseLabelPriority,
+  RepositoryUniverseLabelAssetCache,
+} from './repositoryUniverseLabels';
+
+export {
+  buildRepositoryUniverseRevealSchedule,
+  repositoryUniverseRevealDuration,
+  repositoryUniverseRevealProgress,
+} from './repositoryUniverseReveal';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,

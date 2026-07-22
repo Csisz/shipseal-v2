@@ -55,6 +55,8 @@ import {
   type RepositoryUniverseBaseEdgeBatchId,
   type RepositoryUniverseEdgeOverlayId,
 } from '@/lib/workspace/repositoryUniverseRenderBatches';
+import { buildRepositoryUniverseRevealSchedule, repositoryUniverseRevealProgress, type RepositoryUniverseRevealPhase } from '@/lib/workspace/repositoryUniverseReveal';
+import { buildRepositoryUniverseLabelPlan } from '@/lib/workspace/repositoryUniverseLabels';
 
 export interface UniverseCameraState {
   theta: number;
@@ -99,9 +101,9 @@ interface NodeRenderItem {
   node: RepositoryUniverseNode;
   mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
   halo: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
-  label: THREE.Sprite;
-  labelMaterial: THREE.SpriteMaterial;
-  labelTexture: THREE.CanvasTexture;
+  label?: THREE.Sprite;
+  labelMaterial?: THREE.SpriteMaterial;
+  labelTexture?: THREE.CanvasTexture;
   baseRadius: number;
   position: THREE.Vector3;
   opacityMotion: VisualScalarMotion;
@@ -453,6 +455,13 @@ export default function RepositoryUniverse3D({
       return texture;
     };
     const startedAt = performance.now();
+    const revealSchedule = buildRepositoryUniverseRevealSchedule(model);
+    let revealPhase: RepositoryUniverseRevealPhase = reducedMotionRef.current || !animateInRef.current ? 'settled' : 'core';
+    let revealInterrupted = false;
+    let revealedNodeIds = new Set(reducedMotionRef.current || !animateInRef.current ? model.nodes.map(node => node.id) : [model.rootNodeId]);
+    let revealedEdgeIds = new Set<string>();
+    let activeLabelNodeIds = new Set<string>();
+    let suppressedBackgroundLabelCount = 0;
 
     renderer.setClearColor(0x050914, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, fullscreenRef.current ? 1.5 : 1.35));
@@ -507,6 +516,30 @@ export default function RepositoryUniverse3D({
         geometryDisposalCount: 0,
         materialDisposalCount: 0,
         duplicateDisposalDetectionCount: 0,
+        eligibleLabelCount: 0,
+        activeLabelSpriteCount: 0,
+        cachedLabelTextureCount: 0,
+        labelTextureCacheHits: 0,
+        labelTextureCacheMisses: 0,
+        labelAssetCreationCount: 0,
+        labelAssetDisposalCount: 0,
+        labelReassignmentCount: 0,
+        suppressedBackgroundLabelCount: 0,
+        eligibleHaloCount: 0,
+        activeHaloCount: 0,
+        haloAllocationCount: 0,
+        haloReassignmentCount: 0,
+        haloDisposalCount: 0,
+        revealPhase,
+        revealProgress: reducedMotionRef.current || !animateInRef.current ? 1 : 0,
+        revealCompleted: reducedMotionRef.current || !animateInRef.current,
+        revealInterrupted: false,
+        revealScheduleNodeCount: revealSchedule.nodeOrder.length,
+        revealScheduleEdgeCount: revealSchedule.edgeOrder.length,
+        revealDurationTarget: revealSchedule.durationMs,
+        revealedNodeCount: reducedMotionRef.current || !animateInRef.current ? model.nodes.length : 1,
+        revealedEdgeCount: 0,
+        revealScheduleGenerationCount: 1,
       })
       : undefined;
 
@@ -767,7 +800,6 @@ export default function RepositoryUniverse3D({
     }
 
     for (const node of model.nodes) {
-      const displayLabel = repositoryUniverseNodeDisplayLabel(node);
       const baseRadius = nodeRadius(node);
       const position = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
       const material = ownMaterial(new THREE.MeshStandardMaterial({
@@ -798,21 +830,10 @@ export default function RepositoryUniverse3D({
       scene.add(halo);
       halo.visible = false;
 
-      const { sprite: label, material: labelMaterial, texture } = labelSprite(shortLabel(displayLabel), labelColorForNode(node));
-      ownMaterial(labelMaterial);
-      ownTexture(texture);
-      label.position.set(position.x, position.y + baseRadius + 5, position.z);
-      label.scale.set(node.kind === 'repository' ? 70 : 42, node.kind === 'repository' ? 20 : 14, 1);
-      scene.add(label);
-      label.visible = false;
-
       nodeItems.set(node.id, {
         node,
         mesh,
         halo,
-        label,
-        labelMaterial,
-        labelTexture: texture,
         baseRadius,
         position,
         opacityMotion: visualScalar(material.opacity),
@@ -820,7 +841,7 @@ export default function RepositoryUniverse3D({
         emissiveMotion: visualScalar(material.emissiveIntensity),
         haloOpacityMotion: visualScalar(haloMaterial.opacity),
         haloScaleMotion: visualScalar(1),
-        labelOpacityMotion: visualScalar(labelMaterial.opacity),
+        labelOpacityMotion: visualScalar(0),
         meshTargetVisible: true,
         haloTargetVisible: false,
         labelTargetVisible: false,
@@ -837,6 +858,20 @@ export default function RepositoryUniverse3D({
         focused: true,
       });
     }
+
+    const createNodeLabel = (item: NodeRenderItem) => {
+      if (item.label && item.labelMaterial) return;
+      const { sprite, material, texture } = labelSprite(shortLabel(repositoryUniverseNodeDisplayLabel(item.node)), labelColorForNode(item.node));
+      ownMaterial(material);
+      ownTexture(texture);
+      sprite.position.set(item.position.x, item.position.y + item.baseRadius + 5, item.position.z);
+      sprite.scale.set(item.labelScaleWidthTarget, item.labelScaleHeightTarget, 1);
+      sprite.visible = false;
+      scene.add(sprite);
+      item.label = sprite;
+      item.labelMaterial = material;
+      item.labelTexture = texture;
+    };
 
     let resizeCount = 0;
     let lastResizeWidth = 0;
@@ -1268,6 +1303,26 @@ export default function RepositoryUniverse3D({
             item.labelScaleHeightTarget = labelScale.height;
           }
         }
+        if (updateLabelTargets) {
+          const plan = buildRepositoryUniverseLabelPlan(
+            [...nodeItems.values()].map(item => ({
+              node: item.node,
+              selected: item.selected,
+              hovered: item.hovered,
+              matched: item.matched,
+              route: item.routeHighlighted,
+              focused: item.focused,
+              eligible: item.labelTargetVisible,
+            })),
+            host.getBoundingClientRect().width,
+          );
+          activeLabelNodeIds = new Set(plan.activeNodeIds);
+          suppressedBackgroundLabelCount = plan.suppressedBackgroundCount;
+          for (const nodeId of activeLabelNodeIds) {
+            const item = nodeItems.get(nodeId);
+            if (item) createNodeLabel(item);
+          }
+        }
       }
 
       if (dirtyGroups & REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP.proposalNodes) {
@@ -1347,7 +1402,8 @@ export default function RepositoryUniverse3D({
       }
       for (const item of edgeBatchItems.values()) {
         item.line.material.opacity = item.opacityMotion.current;
-        item.line.visible = repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
+        const batch = edgeBatchPlan.batches.find(candidate => candidate.id === item.id);
+        item.line.visible = Boolean(batch?.edgeIds.some(id => revealedEdgeIds.has(id))) && repositoryUniverseOpacityVisible(item.targetVisible, item.opacityMotion.current);
       }
       for (const item of edgeOverlayItems.values()) {
         item.line.material.opacity = item.opacityMotion.current;
@@ -1360,7 +1416,7 @@ export default function RepositoryUniverse3D({
       }
       for (const item of nodeItems.values()) {
         const { mesh, halo, label, labelMaterial, baseRadius } = item;
-        const meshVisible = repositoryUniverseOpacityVisible(item.meshTargetVisible, item.opacityMotion.current);
+        const meshVisible = revealedNodeIds.has(item.node.id) && repositoryUniverseOpacityVisible(item.meshTargetVisible, item.opacityMotion.current);
         if (mesh.visible !== meshVisible) {
           mesh.visible = meshVisible;
           markRepositoryUniverseRaycastCacheDirty(raycastCache);
@@ -1372,14 +1428,16 @@ export default function RepositoryUniverse3D({
         // U2A reveal owns radial position; U2B emphasis owns object scale, composed independently.
         mesh.scale.setScalar(composeRepositoryUniverseVisualScale(1, item.scaleMotion.current));
         halo.material.opacity = item.haloOpacityMotion.current;
-        halo.visible = repositoryUniverseOpacityVisible(item.haloTargetVisible, item.haloOpacityMotion.current);
+        halo.visible = revealedNodeIds.has(item.node.id) && repositoryUniverseOpacityVisible(item.haloTargetVisible, item.haloOpacityMotion.current);
         halo.material.color.setHex(item.haloColorTarget);
         halo.scale.setScalar(item.haloScaleMotion.current);
-        labelMaterial.opacity = item.labelOpacityMotion.current;
-        label.visible = repositoryUniverseOpacityVisible(item.labelTargetVisible, item.labelOpacityMotion.current);
-        label.position.set(item.position.x, item.position.y + baseRadius * item.scaleMotion.current + 5, item.position.z);
-        label.scale.set(item.labelScaleWidthTarget, item.labelScaleHeightTarget, 1);
-        label.lookAt(camera.position);
+        if (label && labelMaterial) {
+          labelMaterial.opacity = item.labelOpacityMotion.current;
+          label.visible = revealedNodeIds.has(item.node.id) && activeLabelNodeIds.has(item.node.id) && repositoryUniverseOpacityVisible(item.labelTargetVisible, item.labelOpacityMotion.current);
+          label.position.set(item.position.x, item.position.y + baseRadius * item.scaleMotion.current + 5, item.position.z);
+          label.scale.set(item.labelScaleWidthTarget, item.labelScaleHeightTarget, 1);
+          label.lookAt(camera.position);
+        }
       }
       for (const item of proposalItems.values()) {
         const meshVisible = repositoryUniverseOpacityVisible(item.meshTargetVisible, item.opacityMotion.current);
@@ -1426,6 +1484,18 @@ export default function RepositoryUniverse3D({
       currentAnimationDeltaSeconds = animationDeltaSeconds;
       lastFrameTimestamp = timestamp;
       const elapsed = now - startedAt;
+      revealInterrupted ||= Boolean(selectedNodeIdRef.current || focusedClusterIdRef.current || routeNodeIdSetRef.current.size || searchMatchSetRef.current.size);
+      const reveal = repositoryUniverseRevealProgress(
+        revealSchedule,
+        elapsed,
+        reducedMotionRef.current || !animateInRef.current || revealInterrupted,
+      );
+      if (reveal.phase !== revealPhase) {
+        revealPhase = reveal.phase;
+        revealedNodeIds = new Set(reveal.visibleNodes);
+        revealedEdgeIds = new Set(reveal.visibleEdges);
+        applyVisualProperties();
+      }
       if (!reducedMotionRef.current && animateInRef.current && elapsed > INITIAL_APPEARANCE_MS && !localSettled) {
         localSettled = true;
         setSettled(true);
@@ -1445,8 +1515,10 @@ export default function RepositoryUniverse3D({
           base.z * startScale + base.z * (1 - startScale) * appearance,
         );
         item.halo.position.copy(item.mesh.position);
-        item.label.position.x = item.mesh.position.x;
-        item.label.position.z = item.mesh.position.z;
+        if (item.label) {
+          item.label.position.x = item.mesh.position.x;
+          item.label.position.z = item.mesh.position.z;
+        }
       }
       const { desired, next } = applyCamera(animationDeltaSeconds);
       updateFocusSettlement(desired, next);
@@ -1505,6 +1577,30 @@ export default function RepositoryUniverse3D({
         geometryDisposalCount,
         materialDisposalCount,
         duplicateDisposalDetectionCount,
+        eligibleLabelCount: [...nodeItems.values()].filter(item => item.labelTargetVisible).length,
+        activeLabelSpriteCount: [...nodeItems.values()].filter(item => item.label?.visible).length,
+        cachedLabelTextureCount: [...nodeItems.values()].filter(item => item.labelTexture).length,
+        labelTextureCacheHits: 0,
+        labelTextureCacheMisses: [...nodeItems.values()].filter(item => item.labelTexture).length,
+        labelAssetCreationCount: [...nodeItems.values()].filter(item => item.labelTexture).length,
+        labelAssetDisposalCount: 0,
+        labelReassignmentCount: 0,
+        suppressedBackgroundLabelCount,
+        eligibleHaloCount: [...nodeItems.values()].filter(item => item.haloTargetVisible).length,
+        activeHaloCount: [...nodeItems.values()].filter(item => item.halo.visible).length,
+        haloAllocationCount: nodeItems.size,
+        haloReassignmentCount: 0,
+        haloDisposalCount: 0,
+        revealPhase,
+        revealProgress: reveal.progress,
+        revealCompleted: reveal.completed,
+        revealInterrupted,
+        revealScheduleNodeCount: revealSchedule.nodeOrder.length,
+        revealScheduleEdgeCount: revealSchedule.edgeOrder.length,
+        revealDurationTarget: revealSchedule.durationMs,
+        revealedNodeCount: reveal.visibleNodes.length,
+        revealedEdgeCount: reveal.visibleEdges.length,
+        revealScheduleGenerationCount: 1,
         fullscreen: fullscreenRef.current,
         selectedNodeId: selectedNodeIdRef.current || null,
         cameraTheta: renderCameraStateRef.current.theta,

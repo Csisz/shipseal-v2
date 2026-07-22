@@ -94,6 +94,30 @@ export interface RepositoryUniverseDiagnosticsSnapshot {
   geometryDisposalCount: number;
   materialDisposalCount: number;
   duplicateDisposalDetectionCount: number;
+  eligibleLabelCount: number;
+  activeLabelSpriteCount: number;
+  cachedLabelTextureCount: number;
+  labelTextureCacheHits: number;
+  labelTextureCacheMisses: number;
+  labelAssetCreationCount: number;
+  labelAssetDisposalCount: number;
+  labelReassignmentCount: number;
+  suppressedBackgroundLabelCount: number;
+  eligibleHaloCount: number;
+  activeHaloCount: number;
+  haloAllocationCount: number;
+  haloReassignmentCount: number;
+  haloDisposalCount: number;
+  revealPhase: 'core' | 'clusters' | 'important' | 'relationships' | 'supporting' | 'settled';
+  revealProgress: number;
+  revealCompleted: boolean;
+  revealInterrupted: boolean;
+  revealScheduleNodeCount: number;
+  revealScheduleEdgeCount: number;
+  revealDurationTarget: number;
+  revealedNodeCount: number;
+  revealedEdgeCount: number;
+  revealScheduleGenerationCount: number;
 }
 
 export const REPOSITORY_UNIVERSE_VISUAL_TARGET_GROUP = Object.freeze({
