@@ -1143,6 +1143,7 @@ function RepositoryAtlasVisualization({
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [agentFlightPathTask, setAgentFlightPathTask] = useState('');
   const [agentFlightPath, setAgentFlightPath] = useState<RepositoryAgentFlightPath | null>(null);
+  const [isAgentFlightPathVisible, setIsAgentFlightPathVisible] = useState(false);
   const [agentFlightPathCopied, setAgentFlightPathCopied] = useState(false);
   const [activeHeatmapDimensionId, setActiveHeatmapDimensionId] = useState<RepositoryUniverseHeatmapDimensionId | null>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
@@ -1236,7 +1237,10 @@ function RepositoryAtlasVisualization({
   const atlasNavigationActive = navigationActive || fullscreen;
   const planReadyForChapter = activeResultChapter === 'verify';
   const flightPathUniverseNodeIds = useMemo(() => agentFlightPath?.routeNodeIds.universeNodeIds || [], [agentFlightPath]);
-  const flightPathAtlasNodeIdSet = useMemo(() => new Set(agentFlightPath?.routeNodeIds.atlasNodeIds || []), [agentFlightPath]);
+  const flightPathAtlasNodeIdSet = useMemo(
+    () => new Set(isAgentFlightPathVisible ? agentFlightPath?.routeNodeIds.atlasNodeIds || [] : []),
+    [agentFlightPath, isAgentFlightPathVisible],
+  );
 
   useEffect(() => {
     setSelectedNodeId(current => {
@@ -1271,6 +1275,7 @@ function RepositoryAtlasVisualization({
     setSelectedOptimizationItemId(null);
     setAgentFlightPathTask('');
     setAgentFlightPath(null);
+    setIsAgentFlightPathVisible(false);
     setAgentFlightPathCopied(false);
     setActiveHeatmapDimensionId(null);
   }, [report.repoName, report.scannedAt, initialUniverseCamera, prefersReducedMotion]);
@@ -1467,8 +1472,14 @@ function RepositoryAtlasVisualization({
       atlas,
     });
     setAgentFlightPath(next);
+    setIsAgentFlightPathVisible(true);
     setAgentFlightPathCopied(false);
   }, [agentFlightPathTask, atlas, report, universe]);
+
+  const toggleAgentFlightPathVisibility = useCallback(() => {
+    if (!agentFlightPath?.metadata.routeNodeCount) return;
+    setIsAgentFlightPathVisible(current => !current);
+  }, [agentFlightPath?.metadata.routeNodeCount]);
 
   const copyAgentFlightPathPrompt = useCallback(async () => {
     if (!agentFlightPath?.prompt) return;
@@ -2080,6 +2091,7 @@ function RepositoryAtlasVisualization({
             selectedNodeId={selectedUniverseNode?.id}
             focusedClusterId={focusedClusterId}
             routeNodeIds={flightPathUniverseNodeIds}
+            routeActive={isAgentFlightPathVisible}
             searchMatchIds={universeSearchMatchIdList}
             visibleNodeIds={visibleUniverseNodeIdList}
             visibleEdgeIds={visibleUniverseEdgeIdList}
@@ -2226,11 +2238,13 @@ function RepositoryAtlasVisualization({
               <AgentFlightPathPanel
                 task={agentFlightPathTask}
                 flightPath={agentFlightPath}
+                routeVisible={isAgentFlightPathVisible}
                 copied={agentFlightPathCopied}
                 onTaskChange={setAgentFlightPathTask}
                 onGenerate={generateAgentFlightPath}
                 onCopyPrompt={copyAgentFlightPathPrompt}
                 onFocusRoute={focusAgentFlightPathRoute}
+                onToggleRouteVisibility={toggleAgentFlightPathVisibility}
               />
             </div>
           )}
@@ -2322,19 +2336,23 @@ function RepositoryAtlasVisualization({
 function AgentFlightPathPanel({
   task,
   flightPath,
+  routeVisible,
   copied,
   onTaskChange,
   onGenerate,
   onCopyPrompt,
   onFocusRoute,
+  onToggleRouteVisibility,
 }: {
   task: string;
   flightPath: RepositoryAgentFlightPath | null;
+  routeVisible: boolean;
   copied: boolean;
   onTaskChange: (task: string) => void;
   onGenerate: () => void;
   onCopyPrompt: () => void;
   onFocusRoute: () => void;
+  onToggleRouteVisibility: () => void;
 }) {
   const routeNodeCount = flightPath?.metadata.routeNodeCount || 0;
 
@@ -2399,10 +2417,22 @@ function AgentFlightPathPanel({
                   <Copy className="mr-1.5 h-3.5 w-3.5" />
                   {copied ? 'Prompt copied' : 'Copy prompt'}
                 </Button>
-                <Button type="button" variant="outline" size="sm" disabled={routeNodeCount === 0} onClick={onFocusRoute} className="border-border/60 bg-background/25">
+                <Button type="button" variant="outline" size="sm" disabled={routeNodeCount === 0 || !routeVisible} onClick={onFocusRoute} className="border-border/60 bg-background/25">
                   <Crosshair className="mr-1.5 h-3.5 w-3.5" />
                   Focus route
                 </Button>
+                {routeNodeCount > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-pressed={routeVisible}
+                    onClick={onToggleRouteVisibility}
+                    className="border-border/60 bg-background/25"
+                  >
+                    {routeVisible ? 'Hide route' : 'Show route'}
+                  </Button>
+                )}
               </div>
             </div>
 

@@ -15,6 +15,7 @@ describe('Repository Universe route energy', () => {
     expect(buildRepositoryUniverseRouteEnergyPulses(edges, route, visible, 1440)).toEqual(buildRepositoryUniverseRouteEnergyPulses(edges, route, visible, 1440));
     expect(buildRepositoryUniverseRouteEnergyPulses(edges, route, visible, 1440).map(item => item.edgeId)).toEqual(['a-b', 'b-c']);
     expect(repositoryUniverseRouteEnergyPulseCap(390)).toBeLessThan(repositoryUniverseRouteEnergyPulseCap(1440));
+    expect(repositoryUniverseRouteEnergyPulseCap(844, 390)).toBe(repositoryUniverseRouteEnergyPulseCap(390, 844));
   });
   it('uses a symmetric oscillation rather than directional traversal', () => {
     const phase = 1.2;

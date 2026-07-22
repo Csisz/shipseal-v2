@@ -130,6 +130,9 @@ export interface RepositoryUniverseDiagnosticsSnapshot {
   heatmapLegendHigh: string | null;
   routeNodeCount: number;
   routeEdgeCount: number;
+  routeActive: boolean;
+  activeRouteNodeCount: number;
+  activeRouteEdgeCount: number;
   routeEnergyEligibleEdgeCount: number;
   routeEnergyPulseCapacity: number;
   routeEnergyPulseCount: number;

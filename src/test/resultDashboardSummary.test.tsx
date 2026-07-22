@@ -65,12 +65,13 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
 }));
 
 vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
-  default: function MockRepositoryUniverse3D({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode }: {
+  default: function MockRepositoryUniverse3D({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], routeActive = true, visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode }: {
     model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string }[] };
     selectedNodeId?: string;
     rotationPaused?: boolean;
     reducedMotion?: boolean;
     routeNodeIds?: string[];
+    routeActive?: boolean;
     visibleNodeIds: string[];
     visibleEdgeIds: string[];
     cameraState: { radius: number };
@@ -102,6 +103,8 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
         data-visible-node-count={visibleNodeIds.length}
         data-visible-edge-count={visibleEdgeIds.length}
         data-route-node-count={routeNodeIds.length}
+        data-route-active={routeActive && routeNodeIds.length ? 'true' : 'false'}
+        data-active-route-node-count={routeActive ? routeNodeIds.length : 0}
         data-selected-node={selectedNodeId}
         data-camera-radius={cameraState.radius}
         data-animate-in={animateIn ? 'true' : 'false'}
@@ -599,6 +602,50 @@ describe('ResultDashboard summary copy', () => {
     await waitFor(() => expect(screen.getByTestId('repository-universe-canvas')).toBeInTheDocument());
     expect(Number(screen.getByTestId('repository-universe-canvas').getAttribute('data-route-node-count'))).toBeGreaterThan(0);
     expect(within(panel).queryByText(/guaranteed correct route|will fix the issue|productivity guaranteed/i)).not.toBeInTheDocument();
+  });
+
+  it('toggles cached Agent Flight Path visualization without recreating the Universe', async () => {
+    const report = optimizationDashboardReportWithFiles([
+      'README.md',
+      'AGENTS.md',
+      'package.json',
+      'src/components/PricingPanel.tsx',
+      'src/styles/theme.css',
+      'src/__tests__/pricing.test.tsx',
+    ], 'flight-path-visibility-dashboard');
+    render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Hide route' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show route' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'Fix the mobile pricing layout' } });
+    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+
+    const universe = screen.getByTestId('repository-universe-canvas');
+    const routeNodeCount = universe.getAttribute('data-route-node-count');
+    const instanceId = universe.getAttribute('data-instance-id');
+    expect(Number(routeNodeCount)).toBeGreaterThan(0);
+    expect(universe).toHaveAttribute('data-route-active', 'true');
+    expect(universe).toHaveAttribute('data-active-route-node-count', routeNodeCount || '');
+    expect(screen.getByRole('button', { name: 'Hide route' })).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hide route' }));
+    expect(screen.getByRole('button', { name: 'Show route' })).toHaveAttribute('aria-pressed', 'false');
+    expect(universe).toHaveAttribute('data-route-node-count', routeNodeCount || '');
+    expect(universe).toHaveAttribute('data-route-active', 'false');
+    expect(universe).toHaveAttribute('data-active-route-node-count', '0');
+    expect(screen.getByPlaceholderText(/Describe what your AI agent should do/i)).toHaveValue('Fix the mobile pricing layout');
+    expect(screen.getByRole('button', { name: 'Focus route' })).toBeDisabled();
+    expect(universe).toHaveAttribute('data-instance-id', instanceId || '');
+    expect(universeMockState.mountCount).toBe(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show route' }));
+    expect(screen.getByRole('button', { name: 'Hide route' })).toHaveAttribute('aria-pressed', 'true');
+    expect(universe).toHaveAttribute('data-route-active', 'true');
+    expect(universe).toHaveAttribute('data-active-route-node-count', routeNodeCount || '');
+    expect(screen.getByRole('button', { name: 'Focus route' })).toBeEnabled();
+    expect(universe).toHaveAttribute('data-instance-id', instanceId || '');
+    expect(universeMockState.mountCount).toBe(1);
   });
 
   it('shows payment review gates without inventing Stripe files', () => {

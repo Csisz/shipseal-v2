@@ -5,8 +5,8 @@ export interface RepositoryUniverseRouteEnergyPulse {
   phaseOffset: number;
 }
 
-export function repositoryUniverseRouteEnergyPulseCap(viewportWidth: number) {
-  return viewportWidth < 640 ? 4 : 8;
+export function repositoryUniverseRouteEnergyPulseCap(viewportWidth: number, viewportHeight = Number.POSITIVE_INFINITY) {
+  return Math.min(viewportWidth, viewportHeight) < 640 ? 4 : 8;
 }
 
 /** Returns only canonical edges whose two endpoints are already route members. */
@@ -15,11 +15,12 @@ export function buildRepositoryUniverseRouteEnergyPulses(
   routeNodeIds: ReadonlySet<string>,
   visibleEdgeIds: ReadonlySet<string>,
   viewportWidth: number,
+  viewportHeight?: number,
 ): RepositoryUniverseRouteEnergyPulse[] {
   return [...edges]
     .filter(edge => visibleEdgeIds.has(edge.id) && routeNodeIds.has(edge.source) && routeNodeIds.has(edge.target))
     .sort((left, right) => left.id.localeCompare(right.id))
-    .slice(0, repositoryUniverseRouteEnergyPulseCap(viewportWidth))
+    .slice(0, repositoryUniverseRouteEnergyPulseCap(viewportWidth, viewportHeight))
     .map(edge => ({ edgeId: edge.id, phaseOffset: stablePhase(edge.id) }));
 }
 

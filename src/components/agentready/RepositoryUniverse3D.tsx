@@ -73,6 +73,7 @@ interface RepositoryUniverse3DProps {
   selectedNodeId?: string;
   focusedClusterId?: string | null;
   routeNodeIds?: string[];
+  routeActive?: boolean;
   searchMatchIds: string[];
   visibleNodeIds: string[];
   visibleEdgeIds: string[];
@@ -192,6 +193,7 @@ export default function RepositoryUniverse3D({
   selectedNodeId,
   focusedClusterId,
   routeNodeIds = [],
+  routeActive = true,
   searchMatchIds,
   visibleNodeIds,
   visibleEdgeIds,
@@ -219,6 +221,7 @@ export default function RepositoryUniverse3D({
   const selectedNodeIdRef = useRef(selectedNodeId);
   const focusedClusterIdRef = useRef(focusedClusterId);
   const routeNodeIdSetRef = useRef(new Set(routeNodeIds));
+  const routeActiveRef = useRef(routeActive);
   const searchMatchSetRef = useRef(new Set(searchMatchIds));
   const visibleNodeSetRef = useRef(new Set(visibleNodeIds));
   const visibleEdgeSetRef = useRef(new Set(visibleEdgeIds));
@@ -271,6 +274,14 @@ export default function RepositoryUniverse3D({
       repositoryUniverseVisualTargetGroupsForDependency('route-membership'),
     );
   }, [routeNodeIds]);
+
+  useEffect(() => {
+    routeActiveRef.current = routeActive;
+    markRepositoryUniverseVisualTargetsDirty(
+      visualTargetDirtyStateRef.current,
+      repositoryUniverseVisualTargetGroupsForDependency('route-membership'),
+    );
+  }, [routeActive]);
 
   useEffect(() => {
     searchMatchSetRef.current = new Set(searchMatchIds);
@@ -475,6 +486,7 @@ export default function RepositoryUniverse3D({
 
     renderer.setClearColor(0x050914, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, fullscreenRef.current ? 1.5 : 1.35));
+    const initialHostBounds = host.getBoundingClientRect();
     const diagnostics = import.meta.env.DEV
       ? createRepositoryUniverseDiagnosticsChannel(true, window, {
         renderCalls: 0,
@@ -497,8 +509,8 @@ export default function RepositoryUniverse3D({
         cameraTargetZ: renderCameraStateRef.current.target.z,
         viewportWidth: window.innerWidth,
         viewportHeight: window.innerHeight,
-        canvasHostWidth: host.getBoundingClientRect().width,
-        canvasHostHeight: host.getBoundingClientRect().height,
+        canvasHostWidth: initialHostBounds.width,
+        canvasHostHeight: initialHostBounds.height,
         responsiveLayoutMode: window.innerWidth < 1280 ? 'narrow' : 'wide',
         horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
         programmaticCameraMotionActive: false,
@@ -562,8 +574,11 @@ export default function RepositoryUniverse3D({
         heatmapLegendHigh: heatmapDimensionRef.current?.highLabel ?? null,
         routeNodeCount: routeNodeIdSetRef.current.size,
         routeEdgeCount: 0,
+        routeActive: routeActiveRef.current && routeNodeIdSetRef.current.size > 0,
+        activeRouteNodeCount: routeActiveRef.current ? routeNodeIdSetRef.current.size : 0,
+        activeRouteEdgeCount: 0,
         routeEnergyEligibleEdgeCount: 0,
-        routeEnergyPulseCapacity: repositoryUniverseRouteEnergyPulseCap(host.getBoundingClientRect().width),
+        routeEnergyPulseCapacity: repositoryUniverseRouteEnergyPulseCap(initialHostBounds.width, initialHostBounds.height),
         routeEnergyPulseCount: 0,
         routeEnergyGeometryRebuildCount: 0,
         routeEnergyBufferUpdateCount: 0,
@@ -706,6 +721,7 @@ export default function RepositoryUniverse3D({
     scene.add(routeEnergyPoints);
     let routeEnergyPulses: RepositoryUniverseRouteEnergyPulse[] = [];
     let routeEnergySignature = '';
+    const inactiveRouteNodeIds = new Set<string>();
     let routeEnergyGeometryRebuildCount = 0;
     let routeEnergyBufferUpdateCount = 0;
     const routeEnergyAllocationCount = 1;
@@ -746,7 +762,14 @@ export default function RepositoryUniverse3D({
       }
       edgeBatchRebuildCount += 1;
     };
-    const rebuildEdgeOverlays = (selectedNodeId: string | null | undefined, hoveredNodeId: string | null, focusedClusterId: string | null | undefined, routeNodeIds: ReadonlySet<string>, visibleEdges: ReadonlySet<string>) => {
+    const rebuildEdgeOverlays = (
+      selectedNodeId: string | null | undefined,
+      hoveredNodeId: string | null,
+      focusedClusterId: string | null | undefined,
+      activeRouteNodeIds: ReadonlySet<string>,
+      cachedRouteNodeIds: ReadonlySet<string>,
+      visibleEdges: ReadonlySet<string>,
+    ) => {
       const overlayPlan = buildRepositoryUniverseEdgeOverlayPlan({
         edges: model.edges,
         visibleEdgeIds: visibleEdges,
@@ -754,7 +777,7 @@ export default function RepositoryUniverse3D({
         hoveredNodeId,
         focusedClusterId,
         nodeClusterIdByNodeId: new Map(model.nodes.map(node => [node.id, node.clusterId])),
-        routeNodeIds,
+        routeNodeIds: activeRouteNodeIds,
       });
       (Object.keys(overlayPlan) as RepositoryUniverseEdgeOverlayId[]).forEach(id => {
         const item = edgeOverlayItems.get(id);
@@ -762,13 +785,15 @@ export default function RepositoryUniverse3D({
       });
       // Pulse planning follows route/graph visibility only. Overlay changes caused
       // by selection or hover must not recreate route resources or plans.
-      const routeSignature = `${[...routeNodeIds].sort().join('|')}::${[...visibleEdges].sort().join('|')}`;
+      const routeSignature = `${[...cachedRouteNodeIds].sort().join('|')}::${[...visibleEdges].sort().join('|')}`;
       if (routeSignature !== routeEnergySignature) {
+        const routeEnergyBounds = host.getBoundingClientRect();
         routeEnergyPulses = buildRepositoryUniverseRouteEnergyPulses(
           model.edges,
-          routeNodeIds,
+          cachedRouteNodeIds,
           visibleEdges,
-          host.getBoundingClientRect().width,
+          routeEnergyBounds.width,
+          routeEnergyBounds.height,
         );
         routeEnergySignature = routeSignature;
         routeEnergyGeometryRebuildCount += 1;
@@ -1243,8 +1268,9 @@ export default function RepositoryUniverse3D({
     const recalculateVisualTargets = (dirtyGroups: number) => {
       const selectedId = selectedNodeIdRef.current;
       const focusedCluster = focusedClusterIdRef.current;
-      const routeNodeIds = routeNodeIdSetRef.current;
-      const routeActive = routeNodeIds.size > 0;
+      const cachedRouteNodeIds = routeNodeIdSetRef.current;
+      const routeActive = routeActiveRef.current && cachedRouteNodeIds.size > 0;
+      const activeRouteNodeIds = routeActive ? cachedRouteNodeIds : inactiveRouteNodeIds;
       const searchMatches = searchMatchSetRef.current;
       const visibleNodes = visibleNodeSetRef.current;
       const visibleEdges = visibleEdgeSetRef.current;
@@ -1280,7 +1306,7 @@ export default function RepositoryUniverse3D({
         for (const item of edgeBatchItems.values()) {
           item.opacityMotion.target = repositoryUniverseBaseBatchOpacity(item.id, Boolean(selectedId || focusedCluster));
         }
-        rebuildEdgeOverlays(selectedId, pointerPickState.hoveredNodeId, focusedCluster, routeNodeIds, visibleEdges);
+        rebuildEdgeOverlays(selectedId, pointerPickState.hoveredNodeId, focusedCluster, activeRouteNodeIds, cachedRouteNodeIds, visibleEdges);
         for (const [id, item] of edgeOverlayItems) {
           item.opacityMotion.target = id === 'selection'
             ? selectedId ? 0.5 : 0
@@ -1315,7 +1341,7 @@ export default function RepositoryUniverse3D({
             item.selected = node.id === selectedId;
             item.hovered = node.id === pointerPickState.hoveredNodeId;
             item.matched = searchMatches.has(node.id);
-            item.routeHighlighted = routeNodeIds.has(node.id);
+            item.routeHighlighted = activeRouteNodeIds.has(node.id);
             item.connected = selectedRelated.has(node.id);
             item.focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
             const quiet = Boolean((selectedId || routeActive) && !item.selected && !item.connected && !item.matched && !item.routeHighlighted && node.id !== model.rootNodeId);
@@ -1614,7 +1640,7 @@ export default function RepositoryUniverse3D({
       }
       consumeAndRecalculateVisualTargets();
 
-      if (routeEnergyPulses.length && !reducedMotionRef.current) {
+      if (routeActiveRef.current && routeEnergyPulses.length && !reducedMotionRef.current) {
         const positions = routeEnergyPosition.array as Float32Array;
         const elapsedSeconds = elapsed / 1000;
         let pulseCount = 0;
@@ -1636,6 +1662,7 @@ export default function RepositoryUniverse3D({
         routeEnergyBufferUpdateCount += 1;
       } else {
         routeEnergyPoints.visible = false;
+        routeEnergyGeometry.setDrawRange(0, 0);
       }
       processPendingHoverRaycast();
       consumeAndRecalculateVisualTargets();
@@ -1719,14 +1746,17 @@ export default function RepositoryUniverse3D({
         heatmapLegendHigh: diagnosticHeatmap?.highLabel ?? null,
         routeNodeCount: routeNodeIdSetRef.current.size,
         routeEdgeCount: routeEnergyPulses.length,
+        routeActive: routeActiveRef.current && routeNodeIdSetRef.current.size > 0,
+        activeRouteNodeCount: routeActiveRef.current ? routeNodeIdSetRef.current.size : 0,
+        activeRouteEdgeCount: routeActiveRef.current ? routeEnergyPulses.length : 0,
         routeEnergyEligibleEdgeCount: routeEnergyPulses.length,
-        routeEnergyPulseCapacity: repositoryUniverseRouteEnergyPulseCap(host.getBoundingClientRect().width),
+        routeEnergyPulseCapacity: repositoryUniverseRouteEnergyPulseCap(lastResizeWidth, lastResizeHeight),
         routeEnergyPulseCount: routeEnergyPoints.visible ? routeEnergyGeometry.drawRange.count : 0,
         routeEnergyGeometryRebuildCount,
         routeEnergyBufferUpdateCount,
         routeEnergyAllocationCount,
         routeEnergyDisposalCount,
-        routeEnergyMotionActive: routeEnergyPoints.visible && !reducedMotionRef.current,
+        routeEnergyMotionActive: routeActiveRef.current && routeEnergyPoints.visible && !reducedMotionRef.current,
         routeEnergyReducedMotion: reducedMotionRef.current,
         selectedVisualCount: [...nodeItems.values()].filter(item => item.selected).length,
         hoveredVisualCount: [...nodeItems.values()].filter(item => item.hovered).length,
@@ -1845,6 +1875,8 @@ export default function RepositoryUniverse3D({
         data-visible-node-count={visibleNodeIds.length}
         data-visible-edge-count={visibleEdgeIds.length}
         data-route-node-count={routeNodeIds.length}
+        data-route-active={routeActive && routeNodeIds.length ? 'true' : 'false'}
+        data-active-route-node-count={routeActive ? routeNodeIds.length : 0}
         data-selected-visible={!selectedNodeId || visibleNodeSet.has(selectedNodeId) ? 'true' : 'false'}
         data-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}
