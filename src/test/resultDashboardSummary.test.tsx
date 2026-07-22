@@ -996,6 +996,73 @@ describe('ResultDashboard summary copy', () => {
     expect(universeMockState.unmountCount).toBe(2);
   }, 30_000);
 
+  it('keeps the mobile Universe shrink-safe through fullscreen and orientation changes', async () => {
+    const originalInnerWidth = window.innerWidth;
+    const originalInnerHeight = window.innerHeight;
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(HTMLElement.prototype, 'requestFullscreen', {
+      configurable: true,
+      value: requestFullscreen,
+    });
+    Object.defineProperty(document, 'exitFullscreen', {
+      configurable: true,
+      value: vi.fn().mockResolvedValue(undefined),
+    });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 568 });
+    const longRepositoryName = 'workspace-with-an-intentionally-very-long-repository-name-that-must-not-expand-the-viewport';
+
+    try {
+      render(
+        <ResultDashboard
+          report={optimizationDashboardReportWithFiles(['README.md', 'package.json', 'src/App.tsx'], longRepositoryName)}
+          history={[]}
+          onReset={vi.fn()}
+          onClearHistory={vi.fn()}
+        />
+      );
+
+      const embeddedWorkspace = screen.getByTestId('repository-universe-workspace');
+      const embeddedUniverse = screen.getByTestId('repository-universe-canvas');
+      const inspectorShell = screen.getByTestId('repository-universe-inspector-shell');
+      expect(embeddedWorkspace).toHaveClass('min-w-0', 'xl:grid-cols-[minmax(0,1fr)_340px]');
+      expect(inspectorShell).toHaveClass('min-w-0', 'overflow-y-auto', 'max-h-[min(55dvh,32rem)]');
+      expect(screen.getByTestId('repository-universe-toolbar')).toHaveClass('w-full', 'min-w-0', 'flex-nowrap', 'overflow-x-auto', 'xl:flex-wrap');
+      expect(screen.getByLabelText(/Search repository atlas or universe/i).parentElement).toHaveClass('min-w-[min(13rem,70vw)]', 'shrink-0');
+      expect(screen.getAllByText(longRepositoryName).some(element => element.classList.contains('break-words'))).toBe(true);
+      expect(screen.getAllByTestId('repository-universe-canvas')).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
+      const selectedNodeId = embeddedUniverse.getAttribute('data-selected-node');
+      const cameraRadius = embeddedUniverse.getAttribute('data-camera-radius');
+      fireEvent.click(screen.getByRole('button', { name: /Fullscreen/i }));
+
+      const dialog = await screen.findByRole('dialog', { name: /Repository Universe fullscreen/i });
+      expect(dialog).toBe(screen.getByTestId('repository-universe-workspace').parentElement);
+      expect(dialog).toHaveClass('repository-universe-fullscreen', 'min-h-0', 'min-w-0', 'overflow-hidden');
+      expect(within(dialog).getByRole('button', { name: /Exit fullscreen/i })).toBeVisible();
+      expect(within(dialog).getByTestId('repository-universe-fullscreen-controls')).toHaveClass('max-h-[clamp(3.5rem,16dvh,10rem)]', 'overflow-y-auto');
+      expect(within(dialog).getByTestId('repository-universe-workspace')).toHaveClass('auto-rows-max', 'xl:auto-rows-auto', 'xl:grid-rows-[minmax(0,1fr)]');
+      expect(within(dialog).getByTestId('repository-universe-inspector-shell')).toHaveClass('max-h-[min(34dvh,18rem)]', 'overflow-y-auto');
+      expect(within(dialog).getAllByTestId('repository-universe-canvas')).toHaveLength(1);
+      expect(within(dialog).getByTestId('repository-universe-canvas')).toBe(embeddedUniverse);
+
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 844 });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 390 });
+      act(() => window.dispatchEvent(new Event('resize')));
+
+      expect(within(dialog).getByTestId('repository-universe-canvas')).toBe(embeddedUniverse);
+      expect(within(dialog).getByTestId('repository-universe-canvas')).toHaveAttribute('data-selected-node', selectedNodeId || '');
+      expect(within(dialog).getByTestId('repository-universe-canvas')).toHaveAttribute('data-camera-radius', cameraRadius || '');
+      expect(universeMockState.mountCount).toBe(1);
+      expect(universeMockState.unmountCount).toBe(0);
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth });
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: originalInnerHeight });
+    }
+  });
+
   it('contains Repository Universe render failures and keeps Atlas 2D accessible', async () => {
     const onReset = vi.fn();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);

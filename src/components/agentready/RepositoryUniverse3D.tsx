@@ -37,6 +37,7 @@ import {
   repositoryUniverseNodeOpacityTarget,
   repositoryUniverseNodeScaleTarget,
   repositoryUniverseOpacityVisible,
+  repositoryUniversePointerCoordinates,
   repositoryUniverseVisualTargetGroupsForDependency,
   repositoryUniverseVisualScalarActive,
   repositoryUniverseVectorDistance,
@@ -440,6 +441,12 @@ export default function RepositoryUniverse3D({
         cameraTargetX: renderCameraStateRef.current.target.x,
         cameraTargetY: renderCameraStateRef.current.target.y,
         cameraTargetZ: renderCameraStateRef.current.target.z,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        canvasHostWidth: host.getBoundingClientRect().width,
+        canvasHostHeight: host.getBoundingClientRect().height,
+        responsiveLayoutMode: window.innerWidth < 1280 ? 'narrow' : 'wide',
+        horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
         programmaticCameraMotionActive: false,
         visualMotionActive: false,
         activeVisualInterpolationCount: 0,
@@ -720,27 +727,36 @@ export default function RepositoryUniverse3D({
         window.devicePixelRatio,
         fullscreenRef.current,
       );
-      if (width === lastResizeWidth && height === lastResizeHeight && pixelRatio === lastResizePixelRatio) return;
+      const dimensionsChanged = width !== lastResizeWidth || height !== lastResizeHeight || pixelRatio !== lastResizePixelRatio;
 
-      if (pixelRatio !== lastResizePixelRatio) renderer.setPixelRatio(pixelRatio);
-      renderer.setSize(width, height, false);
-      camera.aspect = aspect;
-      camera.updateProjectionMatrix();
-      lastResizeWidth = width;
-      lastResizeHeight = height;
-      lastResizePixelRatio = pixelRatio;
-      resizeCount += 1;
+      if (dimensionsChanged) {
+        if (pixelRatio !== lastResizePixelRatio) renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(width, height, false);
+        camera.aspect = aspect;
+        camera.updateProjectionMatrix();
+        lastResizeWidth = width;
+        lastResizeHeight = height;
+        lastResizePixelRatio = pixelRatio;
+        resizeCount += 1;
+      }
       diagnostics?.update({
         canvasWidth: canvas.width,
         canvasHeight: canvas.height,
         devicePixelRatio: renderer.getPixelRatio(),
         fullscreen: fullscreenRef.current,
         resizeCount,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        canvasHostWidth: rect.width,
+        canvasHostHeight: rect.height,
+        responsiveLayoutMode: window.innerWidth < 1280 ? 'narrow' : 'wide',
+        horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
       });
     };
 
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(host);
+    window.addEventListener('resize', resize);
     resizeSceneRef.current = resize;
     resize();
 
@@ -817,8 +833,8 @@ export default function RepositoryUniverse3D({
 
     const setPointer = (event: Pick<PointerEvent | MouseEvent, 'clientX' | 'clientY'>) => {
       const rect = canvas.getBoundingClientRect();
-      pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      const coordinates = repositoryUniversePointerCoordinates(event.clientX, event.clientY, rect);
+      pointer.set(coordinates.x, coordinates.y);
     };
 
     const rebuildRaycastCacheIfNeeded = () => rebuildRepositoryUniverseRaycastCache(
@@ -1393,6 +1409,7 @@ export default function RepositoryUniverse3D({
       cleanupDocumentDrag();
       cancelAnimationFrame(frameId);
       resizeObserver.disconnect();
+      window.removeEventListener('resize', resize);
       resizeSceneRef.current = () => undefined;
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointermove', handleCanvasPointerMove);
@@ -1420,11 +1437,15 @@ export default function RepositoryUniverse3D({
     };
   }, [model, transformation]);
 
+  const responsiveHostSize = fullscreen
+    ? 'h-[clamp(180px,52dvh,440px)] min-h-[clamp(180px,52dvh,440px)] xl:h-full xl:min-h-0'
+    : 'h-full min-h-[420px] sm:min-h-[440px]';
+
   return (
-    <div ref={hostRef} className="relative h-full min-h-[440px] overflow-hidden rounded-[1.4rem] border border-primary/15 bg-[#050914]" data-testid="repository-universe-host">
+    <div ref={hostRef} className={`relative min-w-0 overflow-hidden rounded-[1.4rem] border border-primary/15 bg-[#050914] ${responsiveHostSize}`} data-testid="repository-universe-host">
       <canvas
         ref={canvasRef}
-        className="block h-full min-h-[440px] w-full touch-none"
+        className="block h-full min-w-0 w-full touch-none"
         role="img"
         aria-label={`Repository Universe 3D graph. ${model.summary.representedFileNodeCount} analyzed file nodes represented.`}
         data-testid="repository-universe-canvas"
@@ -1455,10 +1476,10 @@ export default function RepositoryUniverse3D({
           </div>
         </div>
       )}
-      <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-primary/20 bg-background/55 px-3 py-1.5 text-[11px] text-muted-foreground backdrop-blur">
+      <div className="pointer-events-none absolute left-4 top-4 max-w-[calc(100%-2rem)] truncate rounded-full border border-primary/20 bg-background/55 px-3 py-1.5 text-[11px] text-muted-foreground backdrop-blur">
         Drag to orbit - gentle scroll to zoom - click a node
       </div>
-      <div className="pointer-events-none absolute bottom-4 left-4 rounded-full border border-border/50 bg-background/50 px-3 py-1.5 text-[11px] text-muted-foreground backdrop-blur">
+      <div className="pointer-events-none absolute bottom-4 left-4 max-w-[calc(100%-2rem)] truncate rounded-full border border-border/50 bg-background/50 px-3 py-1.5 text-[11px] text-muted-foreground backdrop-blur">
         {visibleNodeIds.length.toLocaleString()} visible - {model.summary.representedFileNodeCount.toLocaleString()} file nodes - {model.summary.folderNodeCount.toLocaleString()} folders
       </div>
       {webglUnavailable && (

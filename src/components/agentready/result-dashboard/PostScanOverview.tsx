@@ -95,10 +95,10 @@ export function PostScanOverview({
           </ol>
         </div>
         <div className="order-1 flex min-w-0 flex-col justify-center gap-3 rounded-3xl border border-primary/25 bg-primary/5 p-4 md:p-5 lg:order-2">
-          <Button type="button" onClick={onReviewRepositoryIntelligence} className="w-full justify-between bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button type="button" onClick={onReviewRepositoryIntelligence} className="w-full min-w-0 justify-between whitespace-normal text-left bg-primary text-primary-foreground hover:bg-primary/90">
             Review Repository Intelligence PR <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
-          <Button type="button" variant="outline" onClick={onExploreRepositoryUniverse} className="w-full justify-between border-primary/35 bg-background/20 text-foreground">
+          <Button type="button" variant="outline" onClick={onExploreRepositoryUniverse} className="w-full min-w-0 justify-between whitespace-normal text-left border-primary/35 bg-background/20 text-foreground">
             Explore in Repository Universe <Orbit className="ml-2 h-4 w-4" />
           </Button>
           {persistenceControl}

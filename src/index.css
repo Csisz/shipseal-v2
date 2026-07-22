@@ -92,6 +92,43 @@
 }
 
 @layer components {
+  .repository-universe-fullscreen {
+    height: 100vh;
+    max-height: 100vh;
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+  }
+
+  @supports (height: 100dvh) {
+    .repository-universe-fullscreen {
+      height: 100dvh;
+      max-height: 100dvh;
+    }
+  }
+
+  @media (max-height: 560px) and (max-width: 1279px) {
+    .repository-universe-fullscreen-title {
+      display: none;
+    }
+
+    .repository-universe-fullscreen-header {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+    }
+
+    .repository-universe-fullscreen-toolbar {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .repository-universe-fullscreen-exit {
+      grid-column: 2;
+      grid-row: 1;
+    }
+  }
+
   .glass {
     @apply bg-card/40 backdrop-blur-xl border border-border/60;
   }

@@ -1568,8 +1568,8 @@ function RepositoryAtlasVisualization({
   };
 
   const atlasToolbar = (
-    <div className="flex flex-wrap items-center gap-2">
-      <label className="relative min-w-[220px] flex-1 xl:flex-none">
+    <div data-testid="repository-universe-toolbar" className="flex w-full min-w-0 flex-nowrap items-center justify-start gap-2 overflow-x-auto overscroll-x-contain pb-1 xl:flex-wrap xl:justify-end xl:overflow-visible xl:pb-0">
+      <label className="relative min-w-[min(13rem,70vw)] shrink-0 xl:min-w-[220px] xl:flex-1">
         <span className="sr-only">Search repository atlas or universe</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -1580,7 +1580,7 @@ function RepositoryAtlasVisualization({
           placeholder="Search files, paths, roles"
         />
       </label>
-      <div className="flex rounded-full border border-border/60 bg-background/25 p-1" aria-label="Repository view selector">
+      <div className="flex max-w-full shrink-0 rounded-full border border-border/60 bg-background/25 p-1" aria-label="Repository view selector">
         <button
           type="button"
           aria-pressed={viewMode === 'universe3d'}
@@ -1636,17 +1636,18 @@ function RepositoryAtlasVisualization({
         </Button>
       )}
       {fullscreen && (
-        <>
-          <Button type="button" variant="outline" size="sm" onClick={() => setInspectorCollapsed(current => !current)} className="border-border/60 bg-background/25">
-            {inspectorCollapsed ? <PanelRightOpen className="mr-1.5 h-3.5 w-3.5" /> : <PanelRightClose className="mr-1.5 h-3.5 w-3.5" />}
-            {inspectorCollapsed ? 'Expand inspector' : 'Collapse inspector'}
-          </Button>
-          <Button ref={exitFullscreenButtonRef} type="button" variant="outline" size="sm" onClick={exitFullscreen} className="border-primary/45 bg-primary/10 text-primary-glow hover:text-primary-glow">
-            <Minimize2 className="mr-1.5 h-3.5 w-3.5" /> Exit fullscreen
-          </Button>
-        </>
+        <Button type="button" variant="outline" size="sm" onClick={() => setInspectorCollapsed(current => !current)} className="shrink-0 border-border/60 bg-background/25">
+          {inspectorCollapsed ? <PanelRightOpen className="mr-1.5 h-3.5 w-3.5" /> : <PanelRightClose className="mr-1.5 h-3.5 w-3.5" />}
+          {inspectorCollapsed ? 'Expand inspector' : 'Collapse inspector'}
+        </Button>
       )}
     </div>
+  );
+
+  const fullscreenExitButton = fullscreen && (
+    <Button ref={exitFullscreenButtonRef} type="button" variant="outline" size="sm" onClick={exitFullscreen} className="shrink-0 border-primary/45 bg-primary/10 text-primary-glow hover:text-primary-glow">
+      <Minimize2 className="mr-1.5 h-3.5 w-3.5" /> Exit fullscreen
+    </Button>
   );
 
   const atlasFilters = (
@@ -2031,7 +2032,7 @@ function RepositoryAtlasVisualization({
   );
 
   const universeCanvas = (
-    <div className={`${fullscreen ? 'min-h-0 flex-1' : 'min-h-[560px]'}`}>
+    <div className={`min-w-0 ${fullscreen ? 'min-h-[clamp(180px,52dvh,440px)] shrink-0 xl:h-full xl:min-h-0 xl:flex-1' : 'min-h-[420px] sm:min-h-[520px] xl:min-h-[560px]'}`}>
       <RepositoryUniverseErrorBoundary
         resetKey={`${report.repoName}:${report.scannedAt}:${universeRetryKey}:universe3d`}
         fallback={(resetBoundary) => (
@@ -2161,9 +2162,9 @@ function RepositoryAtlasVisualization({
   const showPlanReview = optimizationPlanReview && (activeResultChapter === 'improve' || activeResultChapter === 'verify');
 
   return (
-    <section ref={atlasRootRef} className="relative rounded-[1.75rem] border border-primary/25 bg-[hsl(224_31%_6%)] p-4 shadow-sm shadow-primary/10 md:p-5" aria-labelledby="repository-atlas-heading">
-      <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-        <div>
+    <section ref={atlasRootRef} className="relative min-w-0 rounded-[1.75rem] border border-primary/25 bg-[hsl(224_31%_6%)] p-4 shadow-sm shadow-primary/10 md:p-5" aria-labelledby="repository-atlas-heading">
+      <div className="mb-4 flex min-w-0 flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-w-0">
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{resultChapterEyebrow}</div>
           <h2 id="repository-atlas-heading" className="mt-1 font-display text-2xl font-semibold">{resultChapterTitle}</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -2239,29 +2240,39 @@ function RepositoryAtlasVisualization({
           aria-label={fullscreen ? `${viewMode === 'universe3d' ? 'Repository Universe' : 'Repository Atlas'} fullscreen` : undefined}
           data-universe-layout={fullscreen ? 'fullscreen' : 'embedded'}
           className={fullscreen
-            ? 'fixed inset-0 z-[100] flex flex-col bg-[hsl(224_31%_5%)] p-4 text-foreground md:p-6'
-            : ''}
+            ? 'repository-universe-fullscreen fixed inset-0 z-[100] flex min-h-0 min-w-0 flex-col overflow-hidden bg-[hsl(224_31%_5%)] text-foreground'
+            : 'min-w-0'}
         >
           {fullscreen && (
             <>
-              <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
-                <div>
+              <div className="repository-universe-fullscreen-header mb-3 grid min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3 xl:mb-4 xl:grid-cols-[auto_minmax(0,1fr)_auto] xl:items-end">
+                <div className="repository-universe-fullscreen-title col-start-1 row-start-1 min-w-0">
                   <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{viewMode === 'universe3d' ? 'Repository Universe' : 'Repository Atlas'}</div>
-                  <h2 className="mt-1 font-display text-2xl font-semibold">Fullscreen exploration</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">{viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to exit fullscreen</p>
+                  <h2 className="mt-1 font-display text-lg font-semibold sm:text-2xl">Fullscreen exploration</h2>
+                  <p className="repository-universe-fullscreen-description mt-1 hidden text-sm text-muted-foreground sm:block">{viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to exit fullscreen</p>
                 </div>
-                {atlasToolbar}
+                <div className="repository-universe-fullscreen-toolbar col-span-2 row-start-2 min-w-0 xl:col-span-1 xl:col-start-2 xl:row-start-1">{atlasToolbar}</div>
+                <div className="repository-universe-fullscreen-exit col-start-2 row-start-1 xl:col-start-3">{fullscreenExitButton}</div>
               </div>
-              <div className="mb-4">{transformationControls}</div>
-              {optimizationPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
-              <div className="mb-4">{atlasFilters}</div>
-              {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
-              {searchResultList && <div className="mb-4">{searchResultList}</div>}
+              <div data-testid="repository-universe-fullscreen-controls" className="mb-3 max-h-[clamp(3.5rem,16dvh,10rem)] min-w-0 shrink-0 overflow-y-auto overscroll-contain pr-1 xl:mb-4 xl:max-h-none xl:overflow-visible xl:pr-0">
+                <div className="mb-3 xl:mb-4">{transformationControls}</div>
+                {optimizationPlanReview && <div className="mb-3 xl:mb-4">{optimizationPlanReview}</div>}
+                <div className="mb-3 xl:mb-4">{atlasFilters}</div>
+                {clusterLegend && <div className="mb-3 xl:mb-4">{clusterLegend}</div>}
+                {searchResultList && <div>{searchResultList}</div>}
+              </div>
             </>
           )}
-          <div className={`grid gap-4 ${fullscreen ? `min-h-0 flex-1 ${inspectorCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_220px]' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}` : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
+          <div data-testid="repository-universe-workspace" className={`grid min-w-0 gap-4 ${fullscreen ? `min-h-0 flex-1 auto-rows-max overflow-y-auto overscroll-contain xl:auto-rows-auto xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden ${inspectorCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_220px]' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}` : 'xl:grid-cols-[minmax(0,1fr)_340px]'}`}>
             {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
-            {inspector}
+            <div
+              data-testid="repository-universe-inspector-shell"
+              className={viewMode === 'universe3d'
+                ? `min-w-0 overflow-y-auto overscroll-contain rounded-[1.5rem] ${fullscreen ? 'max-h-[min(34dvh,18rem)] xl:h-full xl:max-h-full' : 'max-h-[min(55dvh,32rem)] xl:max-h-none xl:overflow-visible'}`
+                : 'min-w-0'}
+            >
+              {inspector}
+            </div>
           </div>
         </div>
       )}
@@ -3228,7 +3239,7 @@ function TransformationInspector({
 }) {
   if (collapsed) {
     return (
-      <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="transformation-inspector-collapsed">
+      <aside className="min-w-0 rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="transformation-inspector-collapsed">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">With ShipSeal</div>
@@ -3246,7 +3257,7 @@ function TransformationInspector({
   }
 
   return (
-    <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="transformation-inspector-heading">
+    <aside className="min-w-0 rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="transformation-inspector-heading">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className="border-primary/45 text-primary-glow">Proposed</Badge>
         <Badge variant="outline" className="border-border/60 text-muted-foreground">{transformationDomainLabel(proposal.domain)}</Badge>
@@ -3260,7 +3271,7 @@ function TransformationInspector({
         )}
       </div>
 
-      <h3 id="transformation-inspector-heading" className="mt-3 font-display text-xl font-semibold">{proposal.title}</h3>
+      <h3 id="transformation-inspector-heading" className="mt-3 break-words font-display text-xl font-semibold">{proposal.title}</h3>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{proposal.summary}</p>
       <p className="mt-3 rounded-2xl border border-primary/25 bg-primary/10 px-3 py-2 text-xs text-primary-glow">
         Status: Proposed - not yet applied. Generated after approval.
@@ -3293,7 +3304,7 @@ function TransformationInspector({
           <div className="mt-2 space-y-2">
             {proposal.artifactActions.map(action => (
               <details key={action.path} className="rounded-2xl border border-border/45 bg-background/25 px-3 py-2">
-                <summary className="cursor-pointer list-none font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <summary className="break-all cursor-pointer list-none font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   {action.action} - {action.path}
                 </summary>
                 <p className="mt-2 text-xs text-muted-foreground">{action.description}</p>
@@ -3410,7 +3421,7 @@ function UniverseInspector({
 
   if (collapsed) {
     return (
-      <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="universe-inspector-heading-collapsed">
+      <aside className="min-w-0 rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="universe-inspector-heading-collapsed">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{isRepositoryOverview ? 'Repository overview' : 'Selected entity'}</div>
@@ -3428,7 +3439,7 @@ function UniverseInspector({
   }
 
   return (
-    <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="universe-inspector-heading">
+    <aside className="min-w-0 rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="universe-inspector-heading">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={node?.evidenceType === 'evidence' ? 'border-primary/40 text-primary-glow' : node?.evidenceType === 'missing' ? 'border-warning/50 text-warning' : 'border-border/70 text-muted-foreground'}>
           {node ? evidenceStateLabel(node.evidenceType) : 'Entity'}

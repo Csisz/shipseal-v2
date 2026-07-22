@@ -19,6 +19,13 @@ export interface RepositoryUniverseViewportMetrics {
   aspect: number;
 }
 
+export interface RepositoryUniversePointerBounds {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 export interface RepositoryUniverseCameraSettlementTolerance {
   targetDistance: number;
   positionDistance: number;
@@ -56,6 +63,12 @@ export interface RepositoryUniverseDiagnosticsSnapshot {
   cameraTargetX: number;
   cameraTargetY: number;
   cameraTargetZ: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  canvasHostWidth: number;
+  canvasHostHeight: number;
+  responsiveLayoutMode: 'narrow' | 'wide';
+  horizontalOverflow: number;
   programmaticCameraMotionActive: boolean;
   visualMotionActive: boolean;
   activeVisualInterpolationCount: number;
@@ -618,6 +631,19 @@ export function repositoryUniverseViewportMetrics(
     height: renderedHeight,
     pixelRatio: Math.min(devicePixelRatio || 1, fullscreen ? 1.5 : 1.35),
     aspect: renderedWidth / renderedHeight,
+  };
+}
+
+export function repositoryUniversePointerCoordinates(
+  clientX: number,
+  clientY: number,
+  bounds: RepositoryUniversePointerBounds,
+) {
+  const width = Math.max(1, bounds.width);
+  const height = Math.max(1, bounds.height);
+  return {
+    x: ((clientX - bounds.left) / width) * 2 - 1,
+    y: -((clientY - bounds.top) / height) * 2 + 1,
   };
 }
 

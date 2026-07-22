@@ -34,6 +34,7 @@ import {
   repositoryUniverseNodeOpacityTarget,
   repositoryUniverseNodeScaleTarget,
   repositoryUniverseOpacityVisible,
+  repositoryUniversePointerCoordinates,
   repositoryUniverseVisualTargetGroupsForDependency,
   repositoryUniverseVisualScalarActive,
   repositoryUniverseViewportMetrics,
@@ -87,6 +88,12 @@ function emptyDiagnostics(): Omit<RepositoryUniverseDiagnosticsSnapshot, 'render
     cameraTargetX: initialCamera.target.x,
     cameraTargetY: initialCamera.target.y,
     cameraTargetZ: initialCamera.target.z,
+    viewportWidth: 0,
+    viewportHeight: 0,
+    canvasHostWidth: 0,
+    canvasHostHeight: 0,
+    responsiveLayoutMode: 'wide',
+    horizontalOverflow: 0,
     programmaticCameraMotionActive: false,
     visualMotionActive: false,
     activeVisualInterpolationCount: 0,
@@ -261,6 +268,17 @@ describe('Repository Universe 3D motion', () => {
       pixelRatio: 1,
       aspect: 280 / 440,
     });
+    expect(repositoryUniverseViewportMetrics(0, 0, 1, true)).toEqual({
+      width: 1,
+      height: 1,
+      pixelRatio: 1,
+      aspect: 1,
+    });
+  });
+
+  it('normalizes pointer coordinates from the current canvas bounds after a layout resize', () => {
+    expect(repositoryUniversePointerCoordinates(210, 120, { left: 10, top: 20, width: 400, height: 200 })).toEqual({ x: 0, y: 0 });
+    expect(repositoryUniversePointerCoordinates(210, 120, { left: 10, top: 20, width: 200, height: 400 })).toEqual({ x: 1, y: 0.5 });
   });
 
   it('interpolates node scale toward hover emphasis without snapping', () => {
