@@ -213,7 +213,8 @@ export function ResultDashboard({
   const [localStoryChapterId, setLocalStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
   const [activeResultChapter, setActiveResultChapter] = useState<ResultChapterId>('understand');
   const [visitedResultChapters, setVisitedResultChapters] = useState<Set<ResultChapterId>>(() => new Set(['understand']));
-  const [workspaceHeroRequested, setWorkspaceHeroRequested] = useState(false);
+  const [workspaceHeroRequested, setWorkspaceHeroRequested] = useState(true);
+  const [flightPathRequested, setFlightPathRequested] = useState(false);
   const [pendingDashboardFocus, setPendingDashboardFocus] = useState<'repository-intelligence' | 'repository-universe' | null>(null);
   const [planReviewed, setPlanReviewed] = useState(false);
   const [packagePrepared, setPackagePrepared] = useState(false);
@@ -257,7 +258,8 @@ export function ResultDashboard({
     setWasIntakeSkipped(intakeSkipped);
     setActiveResultChapter('understand');
     setVisitedResultChapters(new Set(['understand']));
-    setWorkspaceHeroRequested(false);
+    setWorkspaceHeroRequested(true);
+    setFlightPathRequested(false);
     setPendingDashboardFocus(null);
     setPlanReviewed(false);
     setPackagePrepared(false);
@@ -301,6 +303,11 @@ export function ResultDashboard({
     setWorkspaceHeroRequested(true);
     handleResultChapterChange('understand');
   };
+  const handlePlanAgentTask = () => {
+    setWorkspaceHeroRequested(true);
+    setFlightPathRequested(true);
+    handleResultChapterChange('understand');
+  };
   const clearRepositoryIntelligenceFocus = useCallback(() => setPendingDashboardFocus(current => current === 'repository-intelligence' ? null : current), []);
 
   useEffect(() => {
@@ -315,6 +322,11 @@ export function ResultDashboard({
     });
     return () => cancelAnimationFrame(frame);
   }, [activeResultChapter, focusDashboardTarget, pendingDashboardFocus, workspaceHeroRequested]);
+
+  useEffect(() => {
+    // Fetch the isolated visualization chunk once a truthful report exists; it remains lazily mounted.
+    void import('./RepositoryUniverse3D');
+  }, [report.repoName, report.scannedAt]);
 
   useEffect(() => {
     if (workspaceHeroRequested || typeof IntersectionObserver === 'undefined') return;
@@ -346,7 +358,7 @@ export function ResultDashboard({
         limitedScanReason={limitedScanReason}
         frictions={repositoryFrictions}
         onReviewRepositoryIntelligence={handleReviewRepositoryIntelligence}
-        onExploreRepositoryUniverse={handleExploreRepositoryUniverse}
+        onPlanAgentTask={handlePlanAgentTask}
         onReset={onReset}
         onReplayReveal={onReplayReveal}
         persistenceControl={persistenceControl}
@@ -357,6 +369,27 @@ export function ResultDashboard({
         statuses={chapterStatuses}
         onChange={handleResultChapterChange}
       />
+
+      <div ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} className="scroll-mt-24 focus:outline-none">
+        {workspaceHeroRequested ? <AiWorkspaceHero
+          report={report}
+          limitationReason={limitedScanReason}
+          story={workspaceStory}
+          activeStoryChapter={activeStoryChapter}
+          onActiveStoryChapterChange={handleActiveStoryChapterChange}
+          activeResultChapter={activeResultChapter}
+          onResultChapterChange={handleResultChapterChange}
+          flightPathRequested={flightPathRequested}
+          onFlightPathRequested={() => setFlightPathRequested(false)}
+          onPlanReviewed={() => setPlanReviewed(true)}
+          onPackagePrepared={() => setPackagePrepared(true)}
+          onPrCreated={() => setPrCreated(true)}
+          githubConnection={githubConnection}
+          verificationBaseline={verificationBaseline}
+          onSaveVerificationBaseline={onSaveVerificationBaseline}
+          onDiscardVerificationBaseline={onDiscardVerificationBaseline}
+        /> : null}
+      </div>
 
       {visitedResultChapters.has('understand') && (
         <ResultChapterShell chapter="understand" active={activeResultChapter === 'understand'}>
@@ -417,38 +450,11 @@ export function ResultDashboard({
         </ResultChapterShell>
       )}
 
-      <div ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} className="scroll-mt-24 focus:outline-none">
-        {workspaceHeroRequested ? <AiWorkspaceHero
-          report={report}
-          limitationReason={limitedScanReason}
-          story={workspaceStory}
-          activeStoryChapter={activeStoryChapter}
-          onActiveStoryChapterChange={handleActiveStoryChapterChange}
-          activeResultChapter={activeResultChapter}
-          onResultChapterChange={handleResultChapterChange}
-          onPlanReviewed={() => setPlanReviewed(true)}
-          onPackagePrepared={() => setPackagePrepared(true)}
-          onPrCreated={() => setPrCreated(true)}
-          githubConnection={githubConnection}
-          verificationBaseline={verificationBaseline}
-          onSaveVerificationBaseline={onSaveVerificationBaseline}
-          onDiscardVerificationBaseline={onDiscardVerificationBaseline}
-        /> : (
-          <section className="mb-8 rounded-3xl border border-primary/25 bg-primary/5 p-5 md:p-6" aria-labelledby="repository-universe-progressive-heading">
-            <div className="text-xs font-mono uppercase tracking-wider text-primary-glow">Repository Universe</div>
-            <h2 id="repository-universe-progressive-heading" className="mt-2 font-display text-2xl font-semibold">Explore the repository map</h2>
-            <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">The interactive repository model loads when this section approaches the viewport or when you choose to explore it.</p>
-            <Button type="button" variant="outline" className="mt-4" onClick={() => setWorkspaceHeroRequested(true)}>Prepare Repository Universe</Button>
-          </section>
-        )}
-      </div>
-
       {activeResultChapter === 'understand' && (
         <Disclosure title="Supporting workspace views">
           <div className="grid gap-6">
             <WorkspaceOverview report={report} />
             <LiveAgentSimulator report={report} activeChapter={activeStoryChapter} />
-            <WorkspaceModulePlaceholders />
           </div>
         </Disclosure>
       )}
@@ -904,6 +910,8 @@ function AiWorkspaceHero({
   onActiveStoryChapterChange,
   activeResultChapter,
   onResultChapterChange,
+  flightPathRequested,
+  onFlightPathRequested,
   onPlanReviewed,
   onPackagePrepared,
   onPrCreated,
@@ -919,6 +927,8 @@ function AiWorkspaceHero({
   onActiveStoryChapterChange?: (chapterId: WorkspaceStoryChapterId | null) => void;
   activeResultChapter: ResultChapterId;
   onResultChapterChange: (chapter: ResultChapterId) => void;
+  flightPathRequested: boolean;
+  onFlightPathRequested: () => void;
   onPlanReviewed: () => void;
   onPackagePrepared: () => void;
   onPrCreated: () => void;
@@ -981,6 +991,8 @@ function AiWorkspaceHero({
               onSelectChapter={selectStoryChapter}
               activeResultChapter={activeResultChapter}
               onResultChapterChange={onResultChapterChange}
+              flightPathRequested={flightPathRequested}
+              onFlightPathRequested={onFlightPathRequested}
               onPlanReviewed={onPlanReviewed}
               onPackagePrepared={onPackagePrepared}
               onPrCreated={onPrCreated}
@@ -1076,6 +1088,8 @@ function RepositoryAtlasVisualization({
   onSelectChapter,
   activeResultChapter,
   onResultChapterChange,
+  flightPathRequested,
+  onFlightPathRequested,
   onPlanReviewed,
   onPackagePrepared,
   onPrCreated,
@@ -1090,6 +1104,8 @@ function RepositoryAtlasVisualization({
   onSelectChapter: (chapterId: WorkspaceStoryChapterId) => void;
   activeResultChapter: ResultChapterId;
   onResultChapterChange: (chapter: ResultChapterId) => void;
+  flightPathRequested: boolean;
+  onFlightPathRequested: () => void;
   onPlanReviewed: () => void;
   onPackagePrepared: () => void;
   onPrCreated: () => void;
@@ -1142,6 +1158,7 @@ function RepositoryAtlasVisualization({
   const [agentFlightPathTask, setAgentFlightPathTask] = useState('');
   const [agentFlightPath, setAgentFlightPath] = useState<RepositoryAgentFlightPath | null>(null);
   const [agentFlightPathCopied, setAgentFlightPathCopied] = useState(false);
+  const [flightPathOpen, setFlightPathOpen] = useState(false);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
   const exitFullscreen = useCallback(() => {
     if (document.fullscreenElement && document.exitFullscreen) {
@@ -1361,6 +1378,12 @@ function RepositoryAtlasVisualization({
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
   }, [fullscreen]);
+
+  useEffect(() => {
+    if (!flightPathRequested) return;
+    setFlightPathOpen(true);
+    onFlightPathRequested();
+  }, [flightPathRequested, onFlightPathRequested]);
 
   useEffect(() => {
     if (fullscreen) return;
@@ -2180,31 +2203,6 @@ function RepositoryAtlasVisualization({
             </div>
           )}
 
-          {activeResultChapter === 'understand' && (
-            <div className="mb-4 grid gap-3 md:grid-cols-3">
-              {workspaceInsights(report, universe).map(insight => (
-                <div key={insight.title} className="rounded-2xl border border-border/50 bg-background/20 p-4">
-                  <div className="text-sm font-semibold text-foreground">{insight.title}</div>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{insight.detail}</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeResultChapter === 'understand' && (
-            <div className="mb-4">
-              <AgentFlightPathPanel
-                task={agentFlightPathTask}
-                flightPath={agentFlightPath}
-                copied={agentFlightPathCopied}
-                onTaskChange={setAgentFlightPathTask}
-                onGenerate={generateAgentFlightPath}
-                onCopyPrompt={copyAgentFlightPathPrompt}
-                onFocusRoute={focusAgentFlightPathRoute}
-              />
-            </div>
-          )}
-
           {showTransformationPanel && <div className="mb-4">{transformationControls}</div>}
           {showPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
           {activeResultChapter === 'improve' && !optimizationPlanOpen && (
@@ -2224,9 +2222,6 @@ function RepositoryAtlasVisualization({
               </Button>
             </div>
           )}
-          {showUniverseWorkspace && <div className="mb-4">{atlasFilters}</div>}
-          {showUniverseWorkspace && clusterLegend && <div className="mb-4">{clusterLegend}</div>}
-          {showUniverseWorkspace && searchResultList && <div className="mb-4">{searchResultList}</div>}
         </>
       )}
 
@@ -2234,6 +2229,46 @@ function RepositoryAtlasVisualization({
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
           {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
           {inspector}
+        </div>
+      )}
+
+      {!fullscreen && showUniverseWorkspace && (
+        <div className="mt-4 space-y-3">
+          {searchResultList}
+          <details className="rounded-2xl border border-border/45 bg-background/20 px-3 py-2">
+            <summary className="cursor-pointer text-sm font-medium text-foreground">Layers and filters</summary>
+            <div className="mt-3">{atlasFilters}</div>
+          </details>
+          {clusterLegend}
+          {activeResultChapter === 'understand' && (
+            <details open={flightPathOpen} onToggle={event => setFlightPathOpen(event.currentTarget.open)} className="rounded-2xl border border-border/45 bg-background/20 p-3">
+              <summary className="cursor-pointer text-sm font-medium text-foreground">Plan an agent task</summary>
+              <div className="mt-3">
+                <AgentFlightPathPanel
+                  task={agentFlightPathTask}
+                  flightPath={agentFlightPath}
+                  copied={agentFlightPathCopied}
+                  onTaskChange={setAgentFlightPathTask}
+                  onGenerate={generateAgentFlightPath}
+                  onCopyPrompt={copyAgentFlightPathPrompt}
+                  onFocusRoute={focusAgentFlightPathRoute}
+                />
+              </div>
+            </details>
+          )}
+          {activeResultChapter === 'understand' && (
+            <details className="rounded-2xl border border-border/45 bg-background/20 p-3">
+              <summary className="cursor-pointer text-sm font-medium text-foreground">Repository insights</summary>
+              <div className="mt-3 grid gap-3 md:grid-cols-3">
+                {workspaceInsights(report, universe).map(insight => (
+                  <div key={insight.title} className="rounded-2xl border border-border/50 bg-background/20 p-4">
+                    <div className="text-sm font-semibold text-foreground">{insight.title}</div>
+                    <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{insight.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       )}
 

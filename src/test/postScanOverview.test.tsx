@@ -8,13 +8,13 @@ describe('PostScanOverview', () => {
   it('leads with repository identity and actions without exposing score walls or exports', () => {
     const report = buildSampleReport();
     const onReview = vi.fn();
-    const onExplore = vi.fn();
+    const onPlan = vi.fn();
     render(
       <PostScanOverview
         report={report}
         frictions={selectRepositoryFrictions(report.repositoryHealth)}
         onReviewRepositoryIntelligence={onReview}
-        onExploreRepositoryUniverse={onExplore}
+        onPlanAgentTask={onPlan}
         onReset={vi.fn()}
       />,
     );
@@ -25,10 +25,10 @@ describe('PostScanOverview', () => {
     expect(within(overview!).getByText(report.stack.primary)).toBeInTheDocument();
     expect(within(overview!).queryByText(/\/ 100|score\.json|Delivery Pack/i)).not.toBeInTheDocument();
 
-    fireEvent.click(within(overview!).getByRole('button', { name: 'Review Repository Intelligence PR' }));
-    fireEvent.click(within(overview!).getByRole('button', { name: 'Explore in Repository Universe' }));
+    fireEvent.click(within(overview!).getByRole('button', { name: 'Review improvements' }));
+    fireEvent.click(within(overview!).getByRole('button', { name: 'Plan an agent task' }));
     expect(onReview).toHaveBeenCalledTimes(1);
-    expect(onExplore).toHaveBeenCalledTimes(1);
+    expect(onPlan).toHaveBeenCalledTimes(1);
   });
 
   it('uses a conservative headline and limitation for limited scans', () => {
@@ -40,7 +40,7 @@ describe('PostScanOverview', () => {
         limitedScanReason="Archive exceeded the bounded scan window."
         frictions={selectRepositoryFrictions(report.repositoryHealth)}
         onReviewRepositoryIntelligence={vi.fn()}
-        onExploreRepositoryUniverse={vi.fn()}
+        onPlanAgentTask={vi.fn()}
         onReset={vi.fn()}
       />,
     );

@@ -1,4 +1,4 @@
-import { ArrowRight, Orbit, RefreshCw, Sparkles } from 'lucide-react';
+import { ArrowRight, Compass, MoreHorizontal, RefreshCw, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { ReadinessReport } from '@/lib/types';
@@ -10,7 +10,7 @@ export function PostScanOverview({
   limitedScanReason,
   frictions,
   onReviewRepositoryIntelligence,
-  onExploreRepositoryUniverse,
+  onPlanAgentTask,
   onReset,
   onReplayReveal,
   persistenceControl,
@@ -19,7 +19,7 @@ export function PostScanOverview({
   limitedScanReason?: string;
   frictions: RepositoryFriction[];
   onReviewRepositoryIntelligence: () => void;
-  onExploreRepositoryUniverse: () => void;
+  onPlanAgentTask: () => void;
   onReset: () => void;
   onReplayReveal?: () => void;
   persistenceControl?: ReactNode;
@@ -39,70 +39,44 @@ export function PostScanOverview({
     : 'Uploaded archive';
 
   return (
-    <section className="mb-5 rounded-[2rem] border border-primary/20 bg-[hsl(225_28%_7%)] p-5 shadow-sm shadow-primary/10 md:p-8" aria-labelledby="workspace-result-heading">
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-        <div className="max-w-4xl">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+    <section className="mb-4 rounded-3xl border border-primary/20 bg-card/60 px-4 py-4 shadow-sm shadow-primary/10 md:px-6" aria-labelledby="workspace-result-heading">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 max-w-4xl">
+          <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="border-primary/45 text-primary-glow">Repository Intelligence</Badge>
-            <span className="min-w-0 break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{repositoryIdentity}</span>
+            <span className="min-w-0 break-words text-muted-foreground [overflow-wrap:anywhere]">{repositoryIdentity}</span>
+            <span className="text-muted-foreground">{branch}</span>
+            <span className="text-muted-foreground">{report.stack.primary}</span>
           </div>
-          <h1 id="workspace-result-heading" className="font-display text-3xl font-semibold leading-tight md:text-5xl">
+          <h1 id="workspace-result-heading" className="mt-3 font-display text-2xl font-semibold leading-tight md:text-3xl">
             {limited ? 'Repository evidence is limited.' : 'Repository understood.'}
           </h1>
-          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted-foreground md:text-base">
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
             {limited
               ? `ShipSeal mapped ${fileCount.toLocaleString()} files within the available scan boundary. Conclusions remain limited.`
-              : `ShipSeal mapped ${fileCount.toLocaleString()} files into a repository-specific workspace model.`}
+              : `ShipSeal mapped ${fileCount.toLocaleString()} files into a repository-specific workspace model and found ${frictions.length.toLocaleString()} areas creating agent friction.`}
           </p>
-          <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
-            <div><dt className="inline text-muted-foreground">Stack </dt><dd className="inline break-words font-medium text-foreground [overflow-wrap:anywhere]">{report.stack.primary}</dd></div>
-            <div><dt className="inline text-muted-foreground">Branch </dt><dd className="inline break-words font-medium text-foreground [overflow-wrap:anywhere]">{branch}</dd></div>
-          </dl>
           {limited && (
-            <p className="mt-4 max-w-3xl rounded-2xl border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning/90">
+            <p className="mt-3 max-w-3xl rounded-2xl border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning/90">
               Limited scan: {limitedScanReason || 'The scanner could not fully analyze the repository, so unavailable areas are not treated as failures.'}
             </p>
           )}
         </div>
-        <div className="flex flex-wrap gap-2 xl:max-w-xs xl:justify-end">
-          {onReplayReveal && (
-            <Button variant="outline" size="sm" onClick={onReplayReveal} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Replay reveal
-            </Button>
-          )}
-          <Button variant="outline" size="sm" onClick={onReset} className="border-border/60 bg-background/20">
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Scan another project
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-7 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.58fr)]">
-        <div className="order-2 min-w-0 lg:order-1">
-          <h2 className="font-display text-xl font-semibold">Repository frictions</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Deterministic blockers and next actions from this scan.</p>
-          <ol className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {frictions.map(friction => (
-              <li key={friction.id} className="rounded-2xl border border-border/55 bg-background/20 p-4">
-                <div className="mb-2 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                  {friction.source === 'blocker' ? 'Observed blocker' : friction.source === 'top-action' ? 'Recommended next action' : 'Evidence status'}
-                </div>
-                <div className="text-sm font-semibold text-foreground">{friction.title}</div>
-                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{friction.detail}</p>
-                {friction.evidence && <p className="mt-2 text-xs leading-relaxed text-muted-foreground"><span className="font-medium text-foreground">Evidence:</span> {friction.evidence}</p>}
-                {friction.recommendation && <p className="mt-2 text-xs leading-relaxed text-muted-foreground"><span className="font-medium text-foreground">Next step:</span> {friction.recommendation}</p>}
-              </li>
-            ))}
-          </ol>
-        </div>
-        <div className="order-1 flex min-w-0 flex-col justify-center gap-3 rounded-3xl border border-primary/25 bg-primary/5 p-4 md:p-5 lg:order-2">
+        <div className="flex flex-wrap items-center gap-2 lg:justify-end">
           <Button type="button" onClick={onReviewRepositoryIntelligence} className="w-full justify-between bg-primary text-primary-foreground hover:bg-primary/90">
-            Review Repository Intelligence PR <ArrowRight className="ml-2 h-4 w-4" />
+            Review improvements <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
-          <Button type="button" variant="outline" onClick={onExploreRepositoryUniverse} className="w-full justify-between border-primary/35 bg-background/20 text-foreground">
-            Explore in Repository Universe <Orbit className="ml-2 h-4 w-4" />
+          <Button type="button" variant="outline" size="sm" onClick={onPlanAgentTask} className="border-border/60 bg-background/20">
+            <Compass className="mr-1.5 h-3.5 w-3.5" /> Plan an agent task
           </Button>
           {persistenceControl}
-          <p className="text-xs leading-relaxed text-muted-foreground">Review prepares the existing in-memory artifact flow. It does not create or change a GitHub PR.</p>
+          <details className="relative">
+            <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full border border-border/60 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="More result actions"><MoreHorizontal className="h-4 w-4" /></summary>
+            <div className="absolute right-0 z-10 mt-2 flex w-48 flex-col gap-2 rounded-xl border border-border/60 bg-popover p-2 shadow-lg">
+              {onReplayReveal && <Button variant="ghost" size="sm" onClick={onReplayReveal} className="justify-start"><Sparkles className="mr-1.5 h-3.5 w-3.5" /> Replay reveal</Button>}
+              <Button variant="ghost" size="sm" onClick={onReset} className="justify-start"><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Scan another project</Button>
+            </div>
+          </details>
         </div>
       </div>
     </section>

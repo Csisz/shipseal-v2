@@ -256,7 +256,7 @@ describe('ResultDashboard summary copy', () => {
     expect(await screen.findByText(/Secondary repository improvements/i)).toBeInTheDocument();
   });
 
-  it('mounts chapters on first visit, retains them, and defers Repository Universe until user intent', async () => {
+  it('mounts chapters on first visit, retains them, and prepares Repository Universe immediately', async () => {
     globalThis.IntersectionObserver = class DeferredIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = '240px 0px';
@@ -272,9 +272,6 @@ describe('ResultDashboard summary copy', () => {
 
     expect(await screen.findByRole('heading', { name: /How this repository works/i }, { timeout: 10000 })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Deliver what ShipSeal learned/i })).not.toBeInTheDocument();
-    expect(universeMockState.models).toHaveLength(0);
-
-    fireEvent.click(screen.getByRole('button', { name: /^Explore in Repository Universe$/i }));
     await screen.findByRole('img', { name: /Repository Universe 3D graph/i }, { timeout: 10000 });
     expect(new Set(universeMockState.models).size).toBe(1);
 
@@ -304,15 +301,15 @@ describe('ResultDashboard summary copy', () => {
     expect(within(chapterNav).getByRole('button', { name: /Improve/i })).toBeInTheDocument();
     expect(within(chapterNav).getByRole('button', { name: /Verify/i })).toBeInTheDocument();
     expect(within(chapterNav).getByRole('button', { name: /Deliver/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Repository frictions/i })).toBeInTheDocument();
+    expect(screen.getByText(/areas creating agent friction/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Next best action/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Review Repository Intelligence PR$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Explore in Repository Universe$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Review improvements$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Plan an agent task$/i })).toBeInTheDocument();
     const universe = await screen.findByRole('img', { name: /Repository Universe 3D graph/i });
     expect(universe).toBeInTheDocument();
     expect(screen.queryByText('Exports and reports')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Review Repository Intelligence PR$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Review improvements$/i }));
 
     expect(within(chapterNav).getByRole('button', { name: /Improve/i })).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => expect(prepareRepositoryIntelligenceReview).toHaveBeenCalledTimes(1), { timeout: 10000 });
@@ -322,9 +319,9 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(/Preview what ShipSeal can prepare/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Prepare optimization package/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Explore in Repository Universe$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^Plan an agent task$/i }));
     expect(within(chapterNav).getByRole('button', { name: /Understand/i })).toHaveAttribute('aria-pressed', 'true');
-    await waitFor(() => expect(document.activeElement).toHaveAttribute('id', 'repository-universe'));
+    await waitFor(() => expect(screen.getAllByText(/^Plan an agent task$/i).find(element => element.tagName === 'SUMMARY')?.closest('details')).toHaveAttribute('open'));
   }, 20_000);
 
   it('makes visual understanding the primary dashboard summary and keeps Repository Health secondary', async () => {
@@ -379,9 +376,8 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getAllByText(`${report.repositoryHealth.overall.confidence} confidence`).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Repository Friction').length).toBeGreaterThan(0);
     expect(screen.getByText('Live Agent Simulator')).toBeInTheDocument();
-    expect(screen.getByText('Agent Heatmap')).toBeInTheDocument();
-    expect(screen.getByText('Context Timeline')).toBeInTheDocument();
-    expect(screen.getAllByText('Coming in upcoming Workspace Optimization updates.').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Agent Heatmap')).not.toBeInTheDocument();
+    expect(screen.queryByText('Context Timeline')).not.toBeInTheDocument();
     expect(screen.getAllByText('AI Development Readiness').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Agent Routing').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Delivery Confidence').length).toBeGreaterThan(0);
