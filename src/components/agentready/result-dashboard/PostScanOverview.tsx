@@ -39,8 +39,8 @@ export function PostScanOverview({
     : 'Uploaded archive';
 
   return (
-    <section className="mb-4 rounded-3xl border border-primary/20 bg-card/60 px-4 py-4 shadow-sm shadow-primary/10 md:px-6" aria-labelledby="workspace-result-heading">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <section className="mb-2 rounded-2xl border border-primary/20 bg-card/60 px-4 py-3 shadow-sm shadow-primary/10 md:px-5" aria-labelledby="workspace-result-heading">
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 max-w-4xl">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <Badge variant="outline" className="border-primary/45 text-primary-glow">Repository Intelligence</Badge>
@@ -48,10 +48,10 @@ export function PostScanOverview({
             <span className="text-muted-foreground">{branch}</span>
             <span className="text-muted-foreground">{report.stack.primary}</span>
           </div>
-          <h1 id="workspace-result-heading" className="mt-3 font-display text-2xl font-semibold leading-tight md:text-3xl">
+          <h1 id="workspace-result-heading" className="mt-1 font-display text-xl font-semibold leading-tight md:text-2xl">
             {limited ? 'Repository evidence is limited.' : 'Repository understood.'}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">
             {limited
               ? `ShipSeal mapped ${fileCount.toLocaleString()} files within the available scan boundary. Conclusions remain limited.`
               : `ShipSeal mapped ${fileCount.toLocaleString()} files into a repository-specific workspace model and found ${frictions.length.toLocaleString()} areas creating agent friction.`}
@@ -63,7 +63,7 @@ export function PostScanOverview({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-          <Button type="button" onClick={onReviewRepositoryIntelligence} className="w-full justify-between bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button type="button" size="sm" onClick={onReviewRepositoryIntelligence} className="bg-primary text-primary-foreground hover:bg-primary/90">
             Review improvements <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <Button type="button" variant="outline" size="sm" onClick={onPlanAgentTask} className="border-border/60 bg-background/20">

@@ -348,7 +348,7 @@ export function ResultDashboard({
   });
 
   return (
-    <section className="container py-12 md:py-16 animate-fade-in-up">
+    <section className="container max-w-[1480px] py-4 md:py-5 animate-fade-in-up">
       <div className="dashboard-print-warning">
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
@@ -1591,8 +1591,8 @@ function RepositoryAtlasVisualization({
   };
 
   const atlasToolbar = (
-    <div className="flex flex-wrap items-center gap-2">
-      <label className="relative min-w-[220px] flex-1 xl:flex-none">
+    <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-1">
+      <label className="relative min-w-[180px] flex-1 xl:w-[220px] xl:flex-none">
         <span className="sr-only">Search repository atlas or universe</span>
         <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
         <input
@@ -1621,38 +1621,15 @@ function RepositoryAtlasVisualization({
           Atlas 2D
         </button>
       </div>
-      {viewMode === 'universe3d' && (
-        <Button type="button" variant="outline" size="sm" onClick={() => setUniverseRotationPaused(current => !current)} className="border-border/60 bg-background/25">
-          {universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}
-        </Button>
-      )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => viewMode === 'universe3d'
-          ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) }))
-          : setScale(view.scale + 0.14)}
-        className="border-border/60 bg-background/25"
-        aria-label="Zoom in"
-      >
-        <ZoomIn className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => viewMode === 'universe3d'
-          ? setUniverseCamera(current => ({ ...current, radius: Math.min(1500, current.radius + 80) }))
-          : setScale(view.scale - 0.14)}
-        className="border-border/60 bg-background/25"
-        aria-label="Zoom out"
-      >
-        <ZoomOut className="h-3.5 w-3.5" />
-      </Button>
-      <Button type="button" variant="outline" size="sm" onClick={resetAtlas} className="border-border/60 bg-background/25">
-        <Crosshair className="mr-1.5 h-3.5 w-3.5" /> Reset view
-      </Button>
+      <details className="relative shrink-0">
+        <summary className="flex h-9 cursor-pointer list-none items-center rounded-md border border-border/60 bg-background/25 px-3 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">More controls</summary>
+        <div className="absolute right-0 z-20 mt-2 flex w-44 flex-col gap-1 rounded-xl border border-border/60 bg-popover p-2 shadow-lg">
+          {viewMode === 'universe3d' && <Button type="button" variant="ghost" size="sm" onClick={() => setUniverseRotationPaused(current => !current)} className="justify-start">{universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}</Button>}
+          <Button type="button" variant="ghost" size="sm" onClick={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) })) : setScale(view.scale + 0.14)} className="justify-start"><ZoomIn className="mr-1.5 h-3.5 w-3.5" /> Zoom in</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.min(1500, current.radius + 80) })) : setScale(view.scale - 0.14)} className="justify-start"><ZoomOut className="mr-1.5 h-3.5 w-3.5" /> Zoom out</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={resetAtlas} className="justify-start"><Crosshair className="mr-1.5 h-3.5 w-3.5" /> Reset view</Button>
+        </div>
+      </details>
       {!fullscreen && (
         <Button ref={fullscreenButtonRef} type="button" variant="outline" size="sm" onClick={enterFullscreen} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
           <Maximize2 className="mr-1.5 h-3.5 w-3.5" /> Fullscreen
@@ -2179,16 +2156,19 @@ function RepositoryAtlasVisualization({
             ? 'Verification requires a saved baseline and a later scan of the changed repository.'
             : 'Client handoff and exports remain available without changing their contents.';
   const showUniverseWorkspace = activeResultChapter === 'understand' || activeResultChapter === 'improve';
+  const inspectorVisible = viewMode === 'universe3d'
+    ? selectedUniverseNode?.id !== universe.rootNodeId || Boolean(focusedClusterId) || flightPathUniverseNodeIds.length > 0
+    : selectedNode?.id !== atlas.rootNodeId || Boolean(focusedClusterId);
   const showTransformationPanel = activeResultChapter === 'improve';
   const showPlanReview = optimizationPlanReview && (activeResultChapter === 'improve' || activeResultChapter === 'verify');
 
   return (
-    <section ref={atlasRootRef} className="relative rounded-[1.75rem] border border-primary/25 bg-[hsl(224_31%_6%)] p-4 shadow-sm shadow-primary/10 md:p-5" aria-labelledby="repository-atlas-heading">
-      <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
+    <section ref={atlasRootRef} className="relative border-y border-primary/20 bg-[hsl(224_31%_6%)] px-2 py-2 md:px-3" aria-labelledby="repository-atlas-heading">
+      <div className="mb-2 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{resultChapterEyebrow}</div>
-          <h2 id="repository-atlas-heading" className="mt-1 font-display text-2xl font-semibold">{resultChapterTitle}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <h2 id="repository-atlas-heading" className="font-display text-lg font-semibold">{resultChapterTitle}</h2>
+          <p className="hidden text-sm text-muted-foreground xl:block">
             {resultChapterSummary}
           </p>
         </div>
@@ -2198,7 +2178,7 @@ function RepositoryAtlasVisualization({
       {!fullscreen && (
         <>
           {showUniverseWorkspace && (
-            <div id="repository-atlas-navigation-status" className="mb-4 rounded-full border border-border/50 bg-background/20 px-3 py-2 text-xs text-muted-foreground" aria-live="polite">
+            <div id="repository-atlas-navigation-status" className="mb-2 text-xs text-muted-foreground" aria-live="polite">
               {atlasNavigationActive ? `${viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to release` : 'Click to explore - Scroll to zoom - Drag to move'}
             </div>
           )}
@@ -2226,9 +2206,9 @@ function RepositoryAtlasVisualization({
       )}
 
       {!fullscreen && showUniverseWorkspace && (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className={`grid gap-2 ${inspectorVisible ? 'xl:grid-cols-[minmax(0,1fr)_280px]' : ''}`}>
           {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
-          {inspector}
+          {inspectorVisible ? inspector : <div className="pointer-events-none absolute bottom-4 right-4 rounded-full border border-border/50 bg-background/75 px-3 py-1.5 text-xs text-muted-foreground">Select a node to inspect evidence</div>}
         </div>
       )}
 
