@@ -42,9 +42,9 @@
     --radius: 0.875rem;
 
     /* Repository Universe renderer surfaces; map to semantic theme tokens in Ω.17.5. */
-    --universe-stage-bg: 229 64% 3%;
-    --universe-surface: 228 42% 7%;
-    --universe-surface-raised: 228 36% 10%;
+    --universe-stage-bg: 230 76% 1.5%;
+    --universe-surface: 228 48% 5%;
+    --universe-surface-raised: 228 40% 8%;
     --universe-border-glow: 190 88% 72%;
 
     /* Gradients */

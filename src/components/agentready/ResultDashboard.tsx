@@ -2256,12 +2256,12 @@ function RepositoryAtlasVisualization({
             <div data-testid="repository-toolbar-overlay" className="pointer-events-auto min-w-0 max-w-full rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.68)] p-1.5 shadow-[0_18px_55px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl motion-safe:animate-fade-in lg:col-start-2 lg:justify-self-end">
               {atlasToolbar}
             </div>
-            <div data-testid="result-chapter-rail-overlay" className="min-w-0 md:mx-auto md:w-[min(46rem,calc(100%-2rem))] lg:col-start-2 lg:row-start-2 lg:mx-0 lg:w-[min(38rem,100%)] lg:justify-self-end">
+            <div data-testid="result-chapter-rail-overlay" className="min-w-0 md:mx-auto md:w-[min(46rem,calc(100%-2rem))] lg:col-start-1 lg:row-start-2 lg:mx-0 lg:w-full lg:max-w-[23rem] lg:justify-self-start">
               {chapterNavOverlay}
             </div>
           </div>
           {inspectorVisible
-            ? <aside className={`absolute bottom-3 right-3 z-30 max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-auto motion-safe:animate-scale-in lg:bottom-auto ${activeResultChapter === 'understand' ? 'lg:top-[7.5rem] lg:max-h-[calc(100%-8.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}>{inspector}</aside>
+            ? <aside className={`absolute bottom-3 right-3 z-30 max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-auto motion-safe:animate-scale-in lg:bottom-auto ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}>{inspector}</aside>
             : <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-center gap-2 rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.58)] px-3 py-1.5 text-xs text-muted-foreground shadow-[0_14px_44px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl"><span className="h-1.5 w-1.5 rounded-full bg-accent/70 shadow-[0_0_12px_hsl(var(--accent)/0.55)]" />Select a node to inspect evidence</div>}
         </div>
       )}

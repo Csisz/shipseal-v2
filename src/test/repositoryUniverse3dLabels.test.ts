@@ -75,7 +75,8 @@ describe('Repository Universe 3D labels', () => {
     };
 
     const revealStart = repositoryUniverseRevealStartCamera(camera);
-    expect(revealStart.radius).toBeGreaterThan(camera.radius);
+    expect(revealStart.radius).toBeGreaterThanOrEqual(camera.radius + 200);
+    expect(revealStart.radius).toBeGreaterThan(camera.radius * 1.3);
     expect(revealStart.radius).toBeLessThanOrEqual(1500);
     expect(revealStart.target).toEqual(camera.target);
     expect(revealStart.theta).not.toBe(camera.theta);

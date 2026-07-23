@@ -324,7 +324,7 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getAllByRole('navigation', { name: /Result chapters/i })).toHaveLength(1);
     expect(screen.getAllByLabelText(/Search repository atlas or universe/i)).toHaveLength(1);
     expect(screen.getAllByText('More controls')).toHaveLength(1);
-    expect(screen.getByTestId('result-chapter-rail-overlay')).toHaveClass('lg:col-start-2');
+    expect(screen.getByTestId('result-chapter-rail-overlay')).toHaveClass('lg:col-start-1', 'lg:max-w-[23rem]');
     expect(screen.queryByText('Exports and reports')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Review improvements$/i }));
