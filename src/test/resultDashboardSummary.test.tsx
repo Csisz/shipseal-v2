@@ -61,7 +61,7 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
 }));
 
 vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
-  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode }: {
+  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode, onSceneSettled }: {
     model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string }[] };
     selectedNodeId?: string;
     rotationPaused?: boolean;
@@ -72,6 +72,7 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
     cameraState: { radius: number };
     animateIn?: boolean;
     onSelectNode: (nodeId: string) => void;
+    onSceneSettled?: () => void;
   }) => {
     if (universeMockState.shouldThrow) {
       throw new Error('Simulated Repository Universe render failure');
@@ -98,6 +99,7 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
         <button type="button" onClick={() => model.nodes[1] && onSelectNode(model.nodes[1].id)}>
           Select universe node
         </button>
+        <button type="button" onClick={onSceneSettled}>Settle Universe reveal</button>
       </div>
     );
   },
@@ -322,6 +324,7 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getAllByRole('navigation', { name: /Result chapters/i })).toHaveLength(1);
     expect(screen.getAllByLabelText(/Search repository atlas or universe/i)).toHaveLength(1);
     expect(screen.getAllByText('More controls')).toHaveLength(1);
+    expect(screen.getByTestId('result-chapter-rail-overlay')).toHaveClass('lg:col-start-2');
     expect(screen.queryByText('Exports and reports')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Review improvements$/i }));
@@ -429,6 +432,26 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByRole('heading', { name: /Context and workflow/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Context Efficiency/i })).toBeInTheDocument();
     expect(screen.getAllByText(/avoid generated folders/i).length).toBeGreaterThan(0);
+  });
+
+  it('settles the cinematic reveal once and does not restart it after chapter navigation', () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-animate-in', 'true');
+    fireEvent.click(screen.getByRole('button', { name: /Settle Universe reveal/i }));
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-animate-in', 'false');
+
+    switchResultChapter('Improve');
+    switchResultChapter('Understand');
+
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-animate-in', 'false');
   });
 
   it('renders an interactive Repository Atlas and updates the inspector from real nodes', () => {
@@ -951,6 +974,7 @@ describe('ResultDashboard summary copy', () => {
     const dialog = await screen.findByRole('dialog', { name: /Repository Universe fullscreen/i });
     const fullscreenUniverse = within(dialog).getByRole('img', { name: /Repository Universe 3D graph/i });
     expect(requestFullscreen).toHaveBeenCalled();
+    expect(fullscreenUniverse).toHaveAttribute('data-animate-in', 'false');
     expect(fullscreenUniverse).toHaveAttribute('data-selected-node', selectedNodeId || '');
     expect(fullscreenUniverse).toHaveAttribute('data-camera-radius', cameraRadius || '');
 
@@ -1040,6 +1064,9 @@ describe('ResultDashboard summary copy', () => {
         />
       );
 
+      const universe = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+      expect(universe).toHaveAttribute('data-animate-in', 'false');
+      expect(universe).toHaveAttribute('data-rotation-paused', 'true');
       switchToAtlas2D();
       const atlas = screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
       expect(atlas).toHaveAttribute('data-motion', 'reduced');

@@ -20,7 +20,7 @@ export function ResultChapterNav({
 }) {
   const stageOverlay = variant === 'overlay';
   return (
-    <nav className={stageOverlay ? 'pointer-events-auto min-w-0 rounded-xl border border-border/60 bg-background/80 p-1 shadow-lg shadow-black/20 backdrop-blur-md' : 'mb-2'} aria-label="Result chapters">
+    <nav className={stageOverlay ? 'pointer-events-auto min-w-0 rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.68)] p-1 shadow-[0_18px_55px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl motion-safe:animate-fade-in' : 'mb-2'} aria-label="Result chapters">
       <div className={stageOverlay ? 'grid min-w-0 grid-cols-4 gap-1' : 'grid grid-cols-2 gap-2 sm:grid-cols-4'}>
         {RESULT_CHAPTERS.map(chapter => (
         <button
@@ -31,8 +31,12 @@ export function ResultChapterNav({
           onClick={() => onChange(chapter.id)}
           className={`min-h-11 min-w-0 rounded-lg border text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${stageOverlay ? 'px-2 py-1' : 'px-3 py-1.5'} ${
             activeChapter === chapter.id
-              ? 'border-primary/45 bg-primary/10 text-foreground shadow-sm shadow-primary/10'
-              : 'border-border/55 bg-background/20 text-muted-foreground hover:border-primary/30 hover:text-foreground'
+              ? stageOverlay
+                ? 'border-accent/30 bg-[linear-gradient(135deg,hsl(var(--primary)/0.16),hsl(var(--accent)/0.1))] text-foreground shadow-[0_0_24px_hsl(var(--accent)/0.08)]'
+                : 'border-primary/45 bg-primary/10 text-foreground shadow-sm shadow-primary/10'
+              : stageOverlay
+                ? 'border-transparent bg-transparent text-muted-foreground hover:border-primary/15 hover:bg-background/20 hover:text-foreground'
+                : 'border-border/55 bg-background/20 text-muted-foreground hover:border-primary/30 hover:text-foreground'
           }`}
         >
           <div className={`${stageOverlay ? 'text-xs' : 'text-sm'} font-semibold`}>{chapter.label}</div>

@@ -1154,6 +1154,7 @@ function RepositoryAtlasVisualization({
   const fullscreenLayerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
   const exitFullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
+  const fullscreenWasOpenRef = useRef(false);
   const initialNodeId = activeChapter?.knowledgeNodeId || atlas.rootNodeId;
   const [selectedNodeId, setSelectedNodeId] = useState(initialNodeId);
   const [focusedClusterId, setFocusedClusterId] = useState<string | null>(activeChapter ? `cluster:${activeChapter.id}` : null);
@@ -1415,7 +1416,12 @@ function RepositoryAtlasVisualization({
   }, [flightPathRequested, onFlightPathRequested]);
 
   useEffect(() => {
-    if (fullscreen) return;
+    if (fullscreen) {
+      fullscreenWasOpenRef.current = true;
+      return;
+    }
+    if (!fullscreenWasOpenRef.current) return;
+    fullscreenWasOpenRef.current = false;
     fullscreenButtonRef.current?.focus();
   }, [fullscreen]);
 
@@ -1448,6 +1454,7 @@ function RepositoryAtlasVisualization({
 
   const changeViewMode = (mode: 'universe3d' | 'atlas2d') => {
     if (mode === viewMode) return;
+    setUniverseSceneSettled(true);
     if (mode === 'atlas2d') {
       const universeNode = universe.nodes.find(node => node.id === selectedUniverseNodeId);
       const atlasNode = universeNode?.path
@@ -1587,6 +1594,7 @@ function RepositoryAtlasVisualization({
 
   const enterFullscreen = () => {
     setNavigationActive(false);
+    setUniverseSceneSettled(true);
     setFullscreen(true);
   };
 
@@ -1628,16 +1636,16 @@ function RepositoryAtlasVisualization({
           value={query}
           onChange={event => setQuery(event.target.value)}
           onFocus={() => setNavigationActive(true)}
-          className="h-9 w-full rounded-full border border-border/60 bg-background/35 pl-8 pr-3 text-sm outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/25"
+          className="h-9 w-full rounded-full border border-primary/15 bg-background/20 pl-8 pr-3 text-sm outline-none transition hover:border-primary/25 focus:border-accent/45 focus:ring-2 focus:ring-accent/15"
           placeholder="Search files, paths, roles"
         />
       </label>
-      <div className="flex rounded-full border border-border/60 bg-background/25 p-1" aria-label="Repository view selector">
+      <div className="flex rounded-full border border-primary/15 bg-background/15 p-1" aria-label="Repository view selector">
         <button
           type="button"
           aria-pressed={viewMode === 'universe3d'}
           onClick={() => changeViewMode('universe3d')}
-          className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'universe3d' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'universe3d' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.2),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_22px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:text-foreground'}`}
         >
           Universe 3D
         </button>
@@ -1645,13 +1653,13 @@ function RepositoryAtlasVisualization({
           type="button"
           aria-pressed={viewMode === 'atlas2d'}
           onClick={() => changeViewMode('atlas2d')}
-          className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'atlas2d' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+          className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'atlas2d' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.2),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_22px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:text-foreground'}`}
         >
           Atlas 2D
         </button>
       </div>
       <details className="relative shrink-0">
-        <summary className="flex h-9 cursor-pointer list-none items-center rounded-md border border-border/60 bg-background/25 px-3 text-xs font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">More controls</summary>
+        <summary className="flex h-9 cursor-pointer list-none items-center rounded-full border border-primary/15 bg-background/15 px-3 text-xs font-medium text-foreground transition hover:border-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">More controls</summary>
         <div className="absolute right-0 z-20 mt-2 flex w-44 flex-col gap-1 rounded-xl border border-border/60 bg-popover p-2 shadow-lg">
           {viewMode === 'universe3d' && <Button type="button" variant="ghost" size="sm" onClick={() => setUniverseRotationPaused(current => !current)} className="justify-start">{universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}</Button>}
           <Button type="button" variant="ghost" size="sm" onClick={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) })) : setScale(view.scale + 0.14)} className="justify-start"><ZoomIn className="mr-1.5 h-3.5 w-3.5" /> Zoom in</Button>
@@ -1660,7 +1668,7 @@ function RepositoryAtlasVisualization({
         </div>
       </details>
       {!fullscreen && (
-        <Button ref={fullscreenButtonRef} type="button" variant="outline" size="sm" onClick={enterFullscreen} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+        <Button ref={fullscreenButtonRef} type="button" variant="outline" size="sm" onClick={enterFullscreen} className="rounded-full border-accent/25 bg-accent/5 text-accent hover:border-accent/40 hover:bg-accent/10 hover:text-accent">
           <Maximize2 className="mr-1.5 h-3.5 w-3.5" /> Fullscreen
         </Button>
       )}
@@ -1853,7 +1861,7 @@ function RepositoryAtlasVisualization({
   const atlasCanvas = (
     <div
       ref={viewportRef}
-      className={`relative overflow-hidden rounded-[1.5rem] border border-primary/15 bg-[radial-gradient(circle_at_50%_48%,hsl(var(--primary)/0.16),transparent_34%),linear-gradient(180deg,hsl(var(--background)/0.2),hsl(var(--background)/0.08))] select-none ${fullscreen ? 'min-h-0 flex-1' : 'min-h-[560px]'} ${atlasNavigationActive ? 'touch-none overscroll-contain cursor-grab' : 'touch-pan-y cursor-default'}`}
+      className={`relative overflow-hidden bg-[radial-gradient(circle_at_50%_48%,hsl(var(--primary)/0.16),transparent_34%),linear-gradient(180deg,hsl(var(--universe-stage-bg)/0.2),hsl(var(--universe-stage-bg)/0.08))] select-none ${fullscreen ? 'min-h-0 flex-1 rounded-[1.5rem] border border-primary/15' : 'h-full min-h-[560px] border-0'} ${atlasNavigationActive ? 'touch-none overscroll-contain cursor-grab' : 'touch-pan-y cursor-default'}`}
       role="img"
       tabIndex={0}
       aria-label="Repository Atlas knowledge graph. Select nodes to inspect evidence and relationships."
@@ -2192,7 +2200,7 @@ function RepositoryAtlasVisualization({
   const showPlanReview = optimizationPlanReview && (activeResultChapter === 'improve' || activeResultChapter === 'verify');
 
   return (
-    <section ref={atlasRootRef} className={`relative border-y border-primary/20 bg-[hsl(224_31%_6%)] ${activeResultChapter === 'understand' ? '' : 'px-2 py-2 md:px-3'}`} aria-labelledby="repository-atlas-heading">
+    <section ref={atlasRootRef} className={`relative border-y border-primary/15 bg-[hsl(var(--universe-stage-bg))] ${activeResultChapter === 'understand' ? '' : 'px-2 py-2 md:px-3'}`} aria-labelledby="repository-atlas-heading">
       <div className={activeResultChapter === 'understand' ? 'sr-only' : 'mb-2 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between'}>
         <div>
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{resultChapterEyebrow}</div>
@@ -2234,22 +2242,27 @@ function RepositoryAtlasVisualization({
       )}
 
       {!fullscreen && showUniverseWorkspace && (
-        <div data-testid="repository-universe-workspace-stage" className="relative min-h-[calc(100dvh-9rem)] overflow-hidden">
-          <div className="absolute inset-0 [&>*]:h-full">{viewMode === 'universe3d' ? universeCanvas : atlasCanvas}</div>
-          <div className="pointer-events-none absolute inset-x-2 top-2 z-20 grid min-w-0 gap-2 lg:grid-cols-[minmax(18rem,23rem)_minmax(0,1fr)] lg:items-start">
-            <div data-testid="repository-context-overlay" className={activeResultChapter === 'understand' ? 'min-w-0' : 'hidden'}>
+        <div data-testid="repository-universe-workspace-stage" className="relative min-h-[calc(100dvh-9rem)] overflow-hidden bg-[hsl(var(--universe-stage-bg))]">
+          <div className="absolute inset-0 z-0 [&>*]:h-full">{viewMode === 'universe3d' ? universeCanvas : atlasCanvas}</div>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_44%,transparent_36%,hsl(var(--universe-stage-bg)/0.2)_68%,hsl(var(--universe-stage-bg)/0.68)_100%)]" />
+          <div
+            className="pointer-events-none absolute inset-x-2 top-2 z-20 grid min-w-0 gap-2 lg:grid-cols-[minmax(18rem,23rem)_minmax(0,1fr)] lg:items-start"
+            onPointerDownCapture={() => setUniverseSceneSettled(true)}
+            onFocusCapture={() => setUniverseSceneSettled(true)}
+          >
+            <div data-testid="repository-context-overlay" className={activeResultChapter === 'understand' ? 'w-full min-w-0 max-w-[23rem]' : 'hidden'}>
               {activeResultChapter === 'understand' ? repositoryContextOverlay : null}
             </div>
-            <div data-testid="repository-toolbar-overlay" className="pointer-events-auto min-w-0 max-w-full rounded-xl border border-border/60 bg-background/80 p-1.5 shadow-lg shadow-black/20 backdrop-blur-md lg:col-start-2 lg:justify-self-end">
+            <div data-testid="repository-toolbar-overlay" className="pointer-events-auto min-w-0 max-w-full rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.68)] p-1.5 shadow-[0_18px_55px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl motion-safe:animate-fade-in lg:col-start-2 lg:justify-self-end">
               {atlasToolbar}
             </div>
-            <div data-testid="result-chapter-rail-overlay" className="min-w-0 md:mx-auto md:w-[min(46rem,calc(100%-2rem))] lg:col-span-2">
+            <div data-testid="result-chapter-rail-overlay" className="min-w-0 md:mx-auto md:w-[min(46rem,calc(100%-2rem))] lg:col-start-2 lg:row-start-2 lg:mx-0 lg:w-[min(38rem,100%)] lg:justify-self-end">
               {chapterNavOverlay}
             </div>
           </div>
           {inspectorVisible
-            ? <aside className={`absolute bottom-3 right-3 z-30 max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-auto lg:bottom-auto ${activeResultChapter === 'understand' ? 'lg:top-[17rem] lg:max-h-[calc(100%-18rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}>{inspector}</aside>
-            : <div className="pointer-events-none absolute bottom-4 right-4 z-10 rounded-full border border-border/50 bg-background/75 px-3 py-1.5 text-xs text-muted-foreground">Select a node to inspect evidence</div>}
+            ? <aside className={`absolute bottom-3 right-3 z-30 max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-auto motion-safe:animate-scale-in lg:bottom-auto ${activeResultChapter === 'understand' ? 'lg:top-[7.5rem] lg:max-h-[calc(100%-8.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}>{inspector}</aside>
+            : <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-center gap-2 rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.58)] px-3 py-1.5 text-xs text-muted-foreground shadow-[0_14px_44px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl"><span className="h-1.5 w-1.5 rounded-full bg-accent/70 shadow-[0_0_12px_hsl(var(--accent)/0.55)]" />Select a node to inspect evidence</div>}
         </div>
       )}
 
@@ -3282,7 +3295,7 @@ function TransformationInspector({
 }) {
   if (collapsed) {
     return (
-      <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="transformation-inspector-collapsed">
+      <aside className="rounded-[1.6rem] border border-primary/15 bg-[hsl(var(--universe-surface-raised)/0.82)] p-4 shadow-[0_24px_75px_hsl(var(--universe-stage-bg)/0.58)] backdrop-blur-xl motion-safe:animate-fade-in" aria-labelledby="transformation-inspector-collapsed">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">With ShipSeal</div>
@@ -3300,7 +3313,7 @@ function TransformationInspector({
   }
 
   return (
-    <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="transformation-inspector-heading">
+    <aside className="rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(155deg,hsl(var(--universe-surface-raised)/0.9),hsl(var(--universe-stage-bg)/0.76))] p-5 shadow-[0_24px_75px_hsl(var(--universe-stage-bg)/0.62),0_0_36px_hsl(var(--primary)/0.05)] backdrop-blur-xl motion-safe:animate-fade-in" aria-labelledby="transformation-inspector-heading">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className="border-primary/45 text-primary-glow">Proposed</Badge>
         <Badge variant="outline" className="border-border/60 text-muted-foreground">{transformationDomainLabel(proposal.domain)}</Badge>
@@ -3464,7 +3477,7 @@ function UniverseInspector({
 
   if (collapsed) {
     return (
-      <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="universe-inspector-heading-collapsed">
+      <aside className="rounded-[1.6rem] border border-primary/15 bg-[hsl(var(--universe-surface-raised)/0.82)] p-4 shadow-[0_24px_75px_hsl(var(--universe-stage-bg)/0.58)] backdrop-blur-xl motion-safe:animate-fade-in" aria-labelledby="universe-inspector-heading-collapsed">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{isRepositoryOverview ? 'Repository overview' : 'Selected entity'}</div>
@@ -3482,7 +3495,7 @@ function UniverseInspector({
   }
 
   return (
-    <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="universe-inspector-heading">
+    <aside className="rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(155deg,hsl(var(--universe-surface-raised)/0.9),hsl(var(--universe-stage-bg)/0.76))] p-5 shadow-[0_24px_75px_hsl(var(--universe-stage-bg)/0.62),0_0_36px_hsl(var(--accent)/0.05)] backdrop-blur-xl motion-safe:animate-fade-in" aria-labelledby="universe-inspector-heading">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={node?.evidenceType === 'evidence' ? 'border-primary/40 text-primary-glow' : node?.evidenceType === 'missing' ? 'border-warning/50 text-warning' : 'border-border/70 text-muted-foreground'}>
           {node ? evidenceStateLabel(node.evidenceType) : 'Entity'}
@@ -3667,7 +3680,7 @@ function AtlasInspector({
 
   if (collapsed) {
     return (
-      <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-4" aria-labelledby="atlas-inspector-heading-collapsed">
+      <aside className="rounded-[1.6rem] border border-primary/15 bg-[hsl(var(--universe-surface-raised)/0.82)] p-4 shadow-[0_24px_75px_hsl(var(--universe-stage-bg)/0.58)] backdrop-blur-xl motion-safe:animate-fade-in" aria-labelledby="atlas-inspector-heading-collapsed">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Selected entity</div>
@@ -3685,7 +3698,7 @@ function AtlasInspector({
   }
 
   return (
-    <aside className="rounded-[1.5rem] border border-primary/15 bg-background/25 p-5" aria-labelledby="atlas-inspector-heading">
+    <aside className="rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(155deg,hsl(var(--universe-surface-raised)/0.9),hsl(var(--universe-stage-bg)/0.76))] p-5 shadow-[0_24px_75px_hsl(var(--universe-stage-bg)/0.62),0_0_36px_hsl(var(--accent)/0.05)] backdrop-blur-xl motion-safe:animate-fade-in" aria-labelledby="atlas-inspector-heading">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={node?.evidenceType === 'evidence' ? 'border-primary/40 text-primary-glow' : node?.evidenceType === 'missing' ? 'border-warning/50 text-warning' : 'border-border/70 text-muted-foreground'}>
           {node ? evidenceStateLabel(node.evidenceType) : 'Entity'}

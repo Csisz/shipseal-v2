@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel } from '@/components/agentready/RepositoryUniverse3D';
+import { repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseRevealStartCamera } from '@/components/agentready/RepositoryUniverse3D';
 import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryUniverseNode } from '@/lib/workspace';
 
@@ -64,6 +64,22 @@ describe('Repository Universe 3D labels', () => {
       }
     }
     expect(new Set(REPOSITORY_UNIVERSE_CLUSTER_PALETTE.map(token => token.hex)).size).toBe(REPOSITORY_UNIVERSE_CLUSTER_PALETTE.length);
+  });
+
+  it('starts the cinematic reveal wider without changing the working target and skips it for reduced motion', () => {
+    const camera = {
+      theta: 0.8,
+      phi: 1.12,
+      radius: 620,
+      target: { x: 24, y: -12, z: 36 },
+    };
+
+    const revealStart = repositoryUniverseRevealStartCamera(camera);
+    expect(revealStart.radius).toBeGreaterThan(camera.radius);
+    expect(revealStart.radius).toBeLessThanOrEqual(1500);
+    expect(revealStart.target).toEqual(camera.target);
+    expect(revealStart.theta).not.toBe(camera.theta);
+    expect(repositoryUniverseRevealStartCamera(camera, false)).toEqual(camera);
   });
 });
 

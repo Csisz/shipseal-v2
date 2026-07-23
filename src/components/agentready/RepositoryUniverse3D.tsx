@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposalModel, RepositoryUniverseCluster, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
-import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, softenClusterColor, blendHex } from '@/lib/workspace/repositoryUniverseVisual';
+import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, softenClusterColor, blendHex, REPOSITORY_UNIVERSE_CINEMATIC_TOKENS } from '@/lib/workspace/repositoryUniverseVisual';
 
 export interface UniverseCameraState {
   theta: number;
@@ -75,7 +75,7 @@ interface ProposalEdgeRenderItem {
   line: THREE.Line<THREE.BufferGeometry, THREE.LineDashedMaterial>;
 }
 
-const INITIAL_APPEARANCE_MS = 1400;
+const INITIAL_APPEARANCE_MS = 1800;
 const IDLE_ROTATION_DELAY_MS = 3600;
 const LABEL_FAR_RADIUS = 720;
 const LABEL_MEDIUM_RADIUS = 420;
@@ -259,17 +259,32 @@ export default function RepositoryUniverse3D({
     let localSettled = reducedMotionRef.current || !animateInRef.current;
     let lastPublishedCamera = cameraStateRef.current;
     const startedAt = performance.now();
+    const revealEnabled = !reducedMotionRef.current && animateInRef.current;
+    const revealTargetCamera = clampCameraState(cameraStateRef.current);
+    const revealStartCamera = repositoryUniverseRevealStartCamera(revealTargetCamera, revealEnabled);
+    let revealInterrupted = !revealEnabled;
+    renderCameraStateRef.current = revealStartCamera;
 
-    renderer.setClearColor(0x050914, 1);
+    renderer.setClearColor(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.background, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, fullscreenRef.current ? 1.5 : 1.35));
 
-    scene.add(new THREE.AmbientLight(0x8fb9ff, 1.25));
-    const directional = new THREE.DirectionalLight(0xd8f7ff, 1.65);
+    scene.fog = new THREE.FogExp2(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.fog, 0.00032);
+    scene.add(new THREE.AmbientLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.ambientLight, 1.18));
+    const directional = new THREE.DirectionalLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.keyLight, 1.8);
     directional.position.set(220, 360, 180);
     scene.add(directional);
-    const centerGlow = new THREE.PointLight(0x6ee7ff, 1.05, 760);
+    const centerGlow = new THREE.PointLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.coreGlow, 1.25, 860);
     centerGlow.position.set(0, 0, 0);
     scene.add(centerGlow);
+    const violetGlow = new THREE.PointLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.violetGlow, 0.42, 920);
+    violetGlow.position.set(-360, 180, -260);
+    scene.add(violetGlow);
+    const warmGlow = new THREE.PointLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.warmGlow, 0.24, 680);
+    warmGlow.position.set(420, -120, 260);
+    scene.add(warmGlow);
+
+    const starField = createStarField();
+    scene.add(starField);
 
     const sphereFor = (radius: number) => {
       const rounded = Math.round(radius * 10) / 10;
@@ -457,18 +472,36 @@ export default function RepositoryUniverse3D({
       }
     };
 
-    const applyCamera = () => {
+    const finishReveal = () => {
+      if (localSettled) return;
+      localSettled = true;
+      setSettled(true);
+      onSceneSettledRef.current?.();
+    };
+
+    const interruptReveal = () => {
+      if (revealInterrupted) return;
+      revealInterrupted = true;
+      finishReveal();
+    };
+
+    const applyCamera = (now: number) => {
       const desired = clampCameraState(cameraStateRef.current);
       const current = renderCameraStateRef.current;
-      const damping = reducedMotionRef.current ? 1 : 0.18;
+      const revealStillTargetingInitialCamera = cameraStateDistance(desired, revealTargetCamera) < 2;
+      if (!revealStillTargetingInitialCamera) interruptReveal();
+      const revealProgress = Math.min(1, (now - startedAt) / INITIAL_APPEARANCE_MS);
+      const revealing = revealEnabled && !revealInterrupted && animateInRef.current && revealProgress < 1;
+      const amount = revealing ? easeInOutCubic(revealProgress) : reducedMotionRef.current ? 1 : 0.18;
+      const source = revealing ? revealStartCamera : current;
       const next = {
-        theta: lerpAngle(current.theta, desired.theta, damping),
-        phi: current.phi + (desired.phi - current.phi) * damping,
-        radius: current.radius + (desired.radius - current.radius) * damping,
+        theta: lerpAngle(source.theta, desired.theta, amount),
+        phi: source.phi + (desired.phi - source.phi) * amount,
+        radius: source.radius + (desired.radius - source.radius) * amount,
         target: {
-          x: current.target.x + (desired.target.x - current.target.x) * damping,
-          y: current.target.y + (desired.target.y - current.target.y) * damping,
-          z: current.target.z + (desired.target.z - current.target.z) * damping,
+          x: source.target.x + (desired.target.x - source.target.x) * amount,
+          y: source.target.y + (desired.target.y - source.target.y) * amount,
+          z: source.target.z + (desired.target.z - source.target.z) * amount,
         },
       };
       renderCameraStateRef.current = next;
@@ -547,6 +580,7 @@ export default function RepositoryUniverse3D({
 
     function handlePointerDown(event: PointerEvent) {
       if (event.button !== 0 && event.button !== 2) return;
+      interruptReveal();
       setPointer(event);
       canvas.setPointerCapture?.(event.pointerId);
       pointerMode = event.button === 2 ? 'pan' : 'orbit';
@@ -574,6 +608,7 @@ export default function RepositoryUniverse3D({
     }
 
     const handleWheel = (event: WheelEvent) => {
+      interruptReveal();
       const state = cameraStateRef.current;
       const factor = Math.exp(event.deltaY * (fullscreenRef.current ? 0.0009 : 0.00068));
       const nextRadius = Math.max(150, Math.min(1500, state.radius * factor));
@@ -583,6 +618,7 @@ export default function RepositoryUniverse3D({
     };
 
     const handleDoubleClick = (event: MouseEvent) => {
+      interruptReveal();
       setPointer(event);
       const { nodeId, proposalId } = intersectEntity();
       if (proposalId) {
@@ -619,7 +655,7 @@ export default function RepositoryUniverse3D({
       return related;
     };
 
-    const updateVisualState = () => {
+    const updateVisualState = (now: number) => {
       const selectedId = selectedNodeIdRef.current;
       const focusedCluster = focusedClusterIdRef.current;
       const routeNodeIds = routeNodeIdSetRef.current;
@@ -645,12 +681,12 @@ export default function RepositoryUniverse3D({
         const related = selectedRelatedClusterIds.has(item.cluster.id);
         item.ring.visible = true;
         item.ring.material.opacity = active
-          ? 0.09
+          ? 0.12
           : related
-            ? 0.045
+            ? 0.055
             : focusedCluster || selectedId
-              ? 0.012
-              : 0.022;
+              ? 0.009
+              : 0.026;
         item.ring.material.color.setHex(colorForCluster(item.cluster, active, related));
       }
 
@@ -663,12 +699,12 @@ export default function RepositoryUniverse3D({
         line.material.opacity = !visible
           ? 0
           : directlySelected
-            ? edge.evidenceType === 'heuristic' ? 0.38 : 0.56
+            ? edge.evidenceType === 'heuristic' ? 0.4 : 0.62
             : focused
-              ? 0.25
+              ? 0.3
               : edge.relationship === 'contains'
-                ? selectedId || focusedCluster ? 0.035 : 0.05
-                : selectedId || focusedCluster ? 0.08 : 0.12;
+                ? selectedId || focusedCluster || routeActive ? 0.02 : 0.045
+                : selectedId || focusedCluster || routeActive ? 0.055 : 0.14;
         line.material.color.setHex(colorForEdge(edge, directlySelected, focused));
       }
 
@@ -682,6 +718,7 @@ export default function RepositoryUniverse3D({
       }
 
       const radius = cameraStateRef.current.radius;
+      const focusPulse = reducedMotionRef.current ? 0.5 : (Math.sin(now / 520) + 1) / 2;
       for (const item of nodeItems.values()) {
         const { node, mesh, halo, label, labelMaterial, baseRadius } = item;
         const visible = visibleNodes.has(node.id);
@@ -693,21 +730,29 @@ export default function RepositoryUniverse3D({
         const focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
         const quiet = Boolean((selectedId || routeActive) && !selected && !connected && !matched && !routeHighlighted && node.id !== model.rootNodeId);
         const suppressed = Boolean(focusedCluster && !focused && !selected && !matched && !routeHighlighted);
-        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.98 : routeHighlighted ? 0.96 : connected ? 0.92 : quiet || suppressed ? 0.3 : node.importance === 'background' ? 0.58 : 0.86;
-        const scale = selected ? 2.18 : hovered ? 1.58 : matched ? 1.48 : routeHighlighted ? 1.38 : connected ? 1.32 : node.importance === 'primary' ? 1.08 : 1;
+        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.99 : routeHighlighted ? 0.98 : connected ? 0.92 : quiet || suppressed ? 0.18 : node.importance === 'background' ? 0.5 : 0.88;
+        const scale = selected ? 2.08 + focusPulse * 0.08 : hovered ? 1.58 : matched ? 1.5 : routeHighlighted ? 1.44 : connected ? 1.28 : node.importance === 'primary' ? 1.1 : 1;
 
         mesh.visible = opacity > 0.02;
         mesh.material.opacity = opacity;
-        mesh.material.color.setHex(colorForNode(node, selected, matched || routeHighlighted, hovered, connected));
-        mesh.material.emissive.setHex(emissiveForNode(node, selected, matched || routeHighlighted, hovered));
-        mesh.material.emissiveIntensity = selected ? 1.25 : hovered || matched ? 0.78 : routeHighlighted ? 0.64 : connected ? 0.54 : node.importance === 'primary' ? 0.32 : 0.09;
+        mesh.material.color.setHex(colorForNode(node, selected, matched, routeHighlighted, hovered, connected));
+        mesh.material.emissive.setHex(emissiveForNode(node, selected, matched, routeHighlighted, hovered));
+        mesh.material.emissiveIntensity = selected ? 1.42 : hovered || matched ? 0.84 : routeHighlighted ? 0.82 : connected ? 0.52 : node.importance === 'primary' ? 0.34 : 0.08;
         mesh.material.wireframe = node.evidenceType === 'missing' || node.kind === 'recommendation';
         mesh.scale.setScalar(scale);
 
         halo.visible = visible && (selected || hovered || matched || routeHighlighted || connected);
-        halo.material.opacity = selected ? 0.58 : hovered ? 0.25 : matched ? 0.22 : routeHighlighted ? 0.18 : connected ? 0.13 : 0;
-        halo.material.color.setHex(selected ? 0xe0faff : routeHighlighted ? 0xa7f3ff : connected ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16) : 0x67e8f9);
-        halo.scale.setScalar(selected ? 1.5 : routeHighlighted ? 1.22 : connected ? 1.16 : 1);
+        halo.material.opacity = selected ? 0.5 + focusPulse * 0.12 : hovered ? 0.28 : matched ? 0.25 : routeHighlighted ? 0.2 + focusPulse * 0.04 : connected ? 0.12 : 0;
+        halo.material.color.setHex(selected
+          ? REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.selected
+          : routeHighlighted
+            ? REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.route
+            : matched
+              ? REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.search
+              : connected
+                ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16)
+                : REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.coreGlow);
+        halo.scale.setScalar(selected ? 1.52 + focusPulse * 0.08 : routeHighlighted ? 1.25 : connected ? 1.14 : 1);
 
         const labelVisible = visible && shouldRenderLabel(node, {
           selected,
@@ -748,19 +793,17 @@ export default function RepositoryUniverse3D({
       if (disposed) return;
       const now = performance.now();
       const elapsed = now - startedAt;
-      if (!reducedMotionRef.current && animateInRef.current && elapsed > INITIAL_APPEARANCE_MS && !localSettled) {
-        localSettled = true;
-        setSettled(true);
-        onSceneSettledRef.current?.();
+      if (!localSettled && (reducedMotionRef.current || !animateInRef.current || elapsed >= INITIAL_APPEARANCE_MS)) {
+        finishReveal();
       }
-      if (!reducedMotionRef.current && !rotationPausedRef.current && elapsed > INITIAL_APPEARANCE_MS && now - userInteractedAt > IDLE_ROTATION_DELAY_MS) {
+      if (!reducedMotionRef.current && !rotationPausedRef.current && localSettled && now - userInteractedAt > IDLE_ROTATION_DELAY_MS) {
         const state = cameraStateRef.current;
         cameraStateRef.current = { ...state, theta: state.theta + 0.0007 };
       }
-      const appearance = reducedMotionRef.current || !animateInRef.current ? 1 : easeOutCubic(Math.min(1, elapsed / INITIAL_APPEARANCE_MS));
+      const appearance = reducedMotionRef.current || !animateInRef.current || revealInterrupted ? 1 : easeOutCubic(Math.min(1, elapsed / INITIAL_APPEARANCE_MS));
       for (const item of nodeItems.values()) {
         const base = item.position;
-        const startScale = 0.42;
+        const startScale = 0.72;
         item.mesh.position.set(
           base.x * startScale + base.x * (1 - startScale) * appearance,
           base.y * startScale + base.y * (1 - startScale) * appearance,
@@ -770,8 +813,9 @@ export default function RepositoryUniverse3D({
         item.label.position.x = item.mesh.position.x;
         item.label.position.z = item.mesh.position.z;
       }
-      applyCamera();
-      updateVisualState();
+      if (!reducedMotionRef.current) starField.rotation.y += 0.000012;
+      applyCamera(now);
+      updateVisualState(now);
       renderer.render(scene, camera);
       frameId = requestAnimationFrame(animate);
     };
@@ -811,7 +855,12 @@ export default function RepositoryUniverse3D({
   }, [model, transformation]);
 
   return (
-    <div ref={hostRef} className="relative h-full min-h-[440px] overflow-hidden rounded-[1.4rem] border border-primary/15 bg-[#050914]" data-testid="repository-universe-host">
+    <div
+      ref={hostRef}
+      className="relative h-full min-h-[440px] overflow-hidden bg-[hsl(var(--universe-stage-bg))]"
+      data-testid="repository-universe-host"
+      data-reveal-active={!settled && !reducedMotion ? 'true' : 'false'}
+    >
       <canvas
         ref={canvasRef}
         className="block h-full min-h-[440px] w-full touch-none"
@@ -829,30 +878,20 @@ export default function RepositoryUniverse3D({
         data-settled={settled ? 'true' : 'false'}
       />
       {!settled && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-[#050914]/70 backdrop-blur-[1px] transition-opacity duration-500 motion-reduce:hidden" aria-hidden="true">
-          <div className="relative flex h-52 w-52 items-center justify-center">
-            <div className="absolute h-full w-full rounded-full border border-primary/15" />
-            <div className="absolute h-36 w-36 rounded-full border border-primary/20" />
-            <div className="absolute h-20 w-20 rounded-full border border-primary/30 bg-primary/10 shadow-glow" />
-            <div className="absolute left-8 top-8 h-2.5 w-2.5 rounded-full bg-primary/80 shadow-[0_0_18px_hsl(var(--primary)/0.5)]" />
-            <div className="absolute right-10 top-14 h-2 w-2 rounded-full bg-accent/80 shadow-[0_0_16px_hsl(var(--accent)/0.45)]" />
-            <div className="absolute bottom-10 left-14 h-2 w-2 rounded-full bg-success/80 shadow-[0_0_16px_hsl(var(--success)/0.45)]" />
-            <div className="absolute bottom-14 right-9 h-2.5 w-2.5 rounded-full bg-primary-glow/80 shadow-[0_0_18px_hsl(var(--primary-glow)/0.5)]" />
-            <div className="relative rounded-full border border-primary/25 bg-background/70 px-4 py-2 text-center backdrop-blur">
-              <div className="font-display text-sm font-semibold text-foreground">Forming repository universe</div>
-              <div className="mt-1 text-[11px] text-muted-foreground">Signals are becoming clusters</div>
-            </div>
-          </div>
-        </div>
+        <div
+          data-testid="repository-universe-cinematic-reveal"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_48%,hsl(var(--accent)/0.08),transparent_38%),linear-gradient(180deg,hsl(var(--universe-stage-bg)/0.45),transparent_30%,transparent_72%,hsl(var(--universe-stage-bg)/0.52))] motion-reduce:hidden"
+          aria-hidden="true"
+        />
       )}
-      <div className="pointer-events-none absolute left-4 top-4 rounded-full border border-primary/20 bg-background/55 px-3 py-1.5 text-[11px] text-muted-foreground backdrop-blur">
+      <div className="sr-only">
         Drag to orbit - gentle scroll to zoom - click a node
       </div>
-      <div className="pointer-events-none absolute bottom-4 left-4 rounded-full border border-border/50 bg-background/50 px-3 py-1.5 text-[11px] text-muted-foreground backdrop-blur">
+      <div className="pointer-events-none absolute bottom-4 left-4 rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.58)] px-3 py-1.5 text-[11px] text-muted-foreground shadow-[0_12px_40px_hsl(var(--universe-stage-bg)/0.45)] backdrop-blur-xl">
         {visibleNodeIds.length.toLocaleString()} visible - {model.summary.representedFileNodeCount.toLocaleString()} file nodes - {model.summary.folderNodeCount.toLocaleString()} folders
       </div>
       {webglUnavailable && (
-        <div className="absolute inset-0 grid place-items-center bg-[#050914]/95 p-8 text-center">
+        <div className="absolute inset-0 grid place-items-center bg-[hsl(var(--universe-stage-bg)/0.95)] p-8 text-center">
           <div className="max-w-md rounded-3xl border border-primary/20 bg-background/50 p-6">
             <div className="font-display text-xl font-semibold">3D rendering is unavailable</div>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -865,6 +904,62 @@ export default function RepositoryUniverse3D({
   );
 }
 
+// Focused motion-contract tests consume this helper without requiring WebGL.
+// eslint-disable-next-line react-refresh/only-export-components
+export function repositoryUniverseRevealStartCamera(state: UniverseCameraState, enabled = true): UniverseCameraState {
+  const target = clampCameraState(state);
+  if (!enabled) return target;
+  return {
+    ...target,
+    theta: target.theta - 0.085,
+    phi: Math.max(0.24, Math.min(Math.PI - 0.24, target.phi + 0.045)),
+    radius: Math.min(1500, Math.max(target.radius + 170, target.radius * 1.28)),
+  };
+}
+
+function createStarField() {
+  const count = 260;
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const color = new THREE.Color();
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  const palette = [
+    REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.starCool,
+    REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.starCool,
+    REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.starViolet,
+    REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.starWarm,
+  ];
+
+  for (let index = 0; index < count; index += 1) {
+    const normalized = (index + 0.5) / count;
+    const inclination = Math.acos(1 - 2 * normalized);
+    const azimuth = goldenAngle * index;
+    const radius = 680 + (index % 23) * 48;
+    const offset = index * 3;
+    positions[offset] = radius * Math.sin(inclination) * Math.cos(azimuth);
+    positions[offset + 1] = radius * Math.cos(inclination) * 0.72;
+    positions[offset + 2] = radius * Math.sin(inclination) * Math.sin(azimuth);
+    color.setHex(palette[index % palette.length]);
+    colors[offset] = color.r;
+    colors[offset + 1] = color.g;
+    colors[offset + 2] = color.b;
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  const material = new THREE.PointsMaterial({
+    size: 2,
+    sizeAttenuation: true,
+    transparent: true,
+    opacity: 0.52,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    vertexColors: true,
+  });
+  return new THREE.Points(geometry, material);
+}
+
 function nodeRadius(node: RepositoryUniverseNode) {
   if (node.kind === 'repository') return 7.8;
   if (node.kind === 'folder') return node.importance === 'supporting' ? 4.7 : 3.85;
@@ -874,10 +969,11 @@ function nodeRadius(node: RepositoryUniverseNode) {
   return 2.15;
 }
 
-function colorForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, hovered?: boolean, connected?: boolean) {
+function colorForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, route?: boolean, hovered?: boolean, connected?: boolean) {
   if (selected) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.44);
   if (hovered) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.34);
-  if (matched) return blendHex(repositoryUniverseNodeBaseColor(node), 0xfacc15, 0.22);
+  if (route) return blendHex(repositoryUniverseNodeBaseColor(node), REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.route, 0.32);
+  if (matched) return blendHex(repositoryUniverseNodeBaseColor(node), REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.search, 0.28);
   if (connected) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.2);
   return repositoryUniverseNodeBaseColor(node);
 }
@@ -891,18 +987,19 @@ export function repositoryUniverseNodeBaseColor(node: Pick<RepositoryUniverseNod
   return node.importance === 'background' ? softenClusterColor(base, 0.24) : base;
 }
 
-function emissiveForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, hovered?: boolean) {
-  if (selected || hovered) return 0x67e8f9;
-  if (matched) return 0xfacc15;
+function emissiveForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, route?: boolean, hovered?: boolean) {
+  if (selected || hovered) return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.coreGlow;
+  if (route) return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.route;
+  if (matched) return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.search;
   if (node.kind === 'repository') return 0x0891b2;
   if (node.importance === 'primary') return 0x1d4ed8;
   return 0x0f172a;
 }
 
 function colorForEdge(edge: RepositoryUniverseEdge, selected?: boolean, focused?: boolean) {
-  if (selected) return edge.evidenceType === 'heuristic' ? 0x94a3b8 : 0x9bdcf3;
-  if (focused) return 0x7dd3fc;
-  if (edge.evidenceType === 'heuristic') return 0x94a3b8;
+  if (selected) return edge.evidenceType === 'heuristic' ? REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.heuristicEdge : REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.evidenceEdge;
+  if (focused) return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.connectedEdge;
+  if (edge.evidenceType === 'heuristic') return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.heuristicEdge;
   if (edge.relationship === 'contains') return 0x38bdf8;
   return 0x5eead4;
 }
@@ -1017,6 +1114,13 @@ function vectorDistance(first: RepositoryUniversePosition, second: RepositoryUni
   return Math.hypot(first.x - second.x, first.y - second.y, first.z - second.z);
 }
 
+function cameraStateDistance(first: UniverseCameraState, second: UniverseCameraState) {
+  return Math.abs(first.radius - second.radius)
+    + Math.abs(first.theta - second.theta) * 100
+    + Math.abs(first.phi - second.phi) * 100
+    + vectorDistance(first.target, second.target);
+}
+
 function lerpAngle(current: number, desired: number, amount: number) {
   let delta = desired - current;
   while (delta > Math.PI) delta -= Math.PI * 2;
@@ -1026,6 +1130,12 @@ function lerpAngle(current: number, desired: number, amount: number) {
 
 function easeOutCubic(value: number) {
   return 1 - Math.pow(1 - value, 3);
+}
+
+function easeInOutCubic(value: number) {
+  return value < 0.5
+    ? 4 * value * value * value
+    : 1 - Math.pow(-2 * value + 2, 3) / 2;
 }
 
 function roundRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {

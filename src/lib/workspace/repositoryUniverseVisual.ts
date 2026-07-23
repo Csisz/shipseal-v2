@@ -7,6 +7,27 @@ export interface RepositoryUniverseVisualToken {
   css: string;
 }
 
+// Renderer-only cinematic colors live together so Ω.17.5 can map them onto
+// semantic theme tokens without changing repository or graph semantics.
+export const REPOSITORY_UNIVERSE_CINEMATIC_TOKENS = {
+  background: 0x02040c,
+  fog: 0x030711,
+  ambientLight: 0x789dff,
+  keyLight: 0xe0fbff,
+  coreGlow: 0x4de8ff,
+  violetGlow: 0xa78bfa,
+  warmGlow: 0xf6c86b,
+  selected: 0xdcfbff,
+  route: 0xf6c86b,
+  search: 0xd8b4fe,
+  connectedEdge: 0x7dd3fc,
+  evidenceEdge: 0x67e8f9,
+  heuristicEdge: 0x94a3b8,
+  starCool: 0x9bdcff,
+  starViolet: 0xc4b5fd,
+  starWarm: 0xfde68a,
+} as const;
+
 // Repository Universe visual grammar:
 // hue = cluster membership; size = entity kind and importance;
 // brightness/opacity = evidence state; glow = selection/focus;
