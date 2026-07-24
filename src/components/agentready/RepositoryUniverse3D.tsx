@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposalModel, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
+import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposal, RepositoryTransformationProposedNode, RepositoryTransformationProposalModel, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
 import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseVisualPosition, softenClusterColor, blendHex, repositoryUniverseRendererTokens, REPOSITORY_UNIVERSE_CINEMATIC_TOKENS, type RepositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
 import type { ShipSealResolvedTheme } from '@/lib/theme';
 
@@ -62,6 +62,7 @@ interface EdgeRenderItem {
 interface ProposalRenderItem {
   proposalId: string;
   domain: string;
+  priorityIndex: number;
   mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
   halo: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
   label: THREE.Sprite;
@@ -81,6 +82,16 @@ const NODE_FOCUS_TRANSITION_MS = 650;
 const IDLE_ROTATION_DELAY_MS = 3600;
 const LABEL_FAR_RADIUS = 720;
 const LABEL_MEDIUM_RADIUS = 420;
+const PROPOSAL_LABEL_FAR_RADIUS = 620;
+
+interface LabelCollisionCandidate {
+  id: string;
+  sprite: THREE.Sprite;
+  material: THREE.SpriteMaterial;
+  opacity: number;
+  priority: number;
+  protected: boolean;
+}
 
 export default function RepositoryUniverse3D({
   model,
@@ -262,6 +273,7 @@ export default function RepositoryUniverse3D({
     let pointerLast = { x: 0, y: 0 };
     let pointerMoved = false;
     let hoveredNodeId: string | null = null;
+    let hoveredProposalId: string | null = null;
     let userInteractedAt = performance.now();
     let localSettled = reducedMotionRef.current || !animateInRef.current;
     let focusTransition: {
@@ -347,6 +359,7 @@ export default function RepositoryUniverse3D({
       addRelatedNode(edge.target, edge.source);
     }
 
+    let proposalPriorityIndex = 0;
     for (const proposal of transformation?.proposals || []) {
       for (const proposedNode of proposal.graphChanges.proposedNodes) {
         const position = visualPositionFor(proposedNode.position);
@@ -373,16 +386,18 @@ export default function RepositoryUniverse3D({
           depthWrite: false,
           blending: THREE.AdditiveBlending,
         });
-        const halo = new THREE.Mesh(sphereFor(13.4), haloMaterial);
+        const halo = new THREE.Mesh(sphereFor(9.2), haloMaterial);
         halo.position.copy(position);
         scene.add(halo);
 
-        const { sprite: label, material: labelMaterial, texture } = labelSprite('Proposed', theme === 'light' ? '#493078' : '#e0faff', theme);
-        label.position.set(position.x, position.y + 12, position.z);
-        label.scale.set(44, 13, 1);
+        const proposalIdentity = repositoryUniverseProposalDisplayLabel(proposedNode, proposal);
+        const { sprite: label, material: labelMaterial, texture } = labelSprite(shortLabel(proposalIdentity), theme === 'light' ? '#493078' : '#e0faff', theme, 'Proposed');
+        label.position.set(position.x, position.y + 10, position.z);
+        label.scale.set(42, 14, 1);
         scene.add(label);
 
-        proposalItems.set(proposal.id, { proposalId: proposal.id, domain: proposal.domain, mesh, halo, label, labelMaterial, labelTexture: texture, position });
+        proposalItems.set(proposal.id, { proposalId: proposal.id, domain: proposal.domain, priorityIndex: proposalPriorityIndex, mesh, halo, label, labelMaterial, labelTexture: texture, position });
+        proposalPriorityIndex += 1;
       }
 
       for (const edge of proposal.graphChanges.proposedEdges) {
@@ -607,7 +622,9 @@ export default function RepositoryUniverse3D({
     const handleCanvasPointerMove = (event: PointerEvent) => {
       if (pointerMode) return;
       setPointer(event);
-      hoveredNodeId = intersectEntity().nodeId || null;
+      const hovered = intersectEntity();
+      hoveredNodeId = hovered.nodeId || null;
+      hoveredProposalId = hovered.proposalId || null;
     };
 
     const cleanupDocumentDrag = () => {
@@ -694,6 +711,7 @@ export default function RepositoryUniverse3D({
     };
 
     const updateVisualState = (now: number) => {
+      const labelCandidates: LabelCollisionCandidate[] = [];
       const selectedId = selectedNodeIdRef.current;
       const focusedCluster = focusedClusterIdRef.current;
       const routeNodeIds = routeNodeIdSetRef.current;
@@ -804,28 +822,79 @@ export default function RepositoryUniverse3D({
           cameraRadius: radius,
         });
         label.visible = labelVisible;
-        labelMaterial.opacity = labelVisible ? labelOpacity(node, radius, selected, hovered, matched, connected) : 0;
+        const desiredLabelOpacity = labelVisible ? labelOpacity(node, radius, selected, hovered, matched, connected) : 0;
+        labelMaterial.opacity = desiredLabelOpacity;
         label.position.set(item.position.x, item.position.y + baseRadius * scale + 5, item.position.z);
         const labelScale = labelScaleForNode(node, radius, selected || hovered || matched);
         label.scale.set(labelScale.width, labelScale.height, 1);
         label.lookAt(camera.position);
+        if (labelVisible) {
+          const routeHighlightedForPriority = routeNodeIds.has(node.id);
+          labelCandidates.push({
+            id: node.id,
+            sprite: label,
+            material: labelMaterial,
+            opacity: desiredLabelOpacity,
+            priority: repositoryUniverseLabelPriority({
+              selected,
+              searched: matched,
+              route: routeHighlightedForPriority,
+              repositoryRoot: node.id === model.rootNodeId,
+              activeDomain: false,
+              importance: node.importance,
+              connected,
+            }),
+            protected: selected || matched || routeHighlightedForPriority,
+          });
+        }
       }
 
       for (const item of proposalItems.values()) {
         const visible = mode === 'with-shipseal' && (domain === 'all' || item.domain === domain);
         const selected = selectedProposal === item.proposalId;
+        const hovered = hoveredProposalId === item.proposalId;
         const excluded = excludedProposals.has(item.proposalId);
-        const opacity = !visible ? 0 : excluded ? 0.24 : selected ? 0.92 : 0.66;
+        const unrelated = Boolean(selectedProposal && !selected);
+        const opacity = !visible ? 0 : excluded ? 0.16 : selected ? 0.96 : hovered ? 0.82 : unrelated ? 0.3 : 0.58;
         item.mesh.visible = opacity > 0.02;
         item.mesh.material.opacity = opacity;
-        item.mesh.scale.setScalar(selected ? 1.34 : 1);
-        item.halo.visible = visible && !excluded;
-        item.halo.material.opacity = selected ? 0.26 : 0.12;
-        item.label.visible = visible;
-        item.labelMaterial.opacity = visible ? excluded ? 0.34 : selected ? 0.94 : 0.7 : 0;
-        item.label.position.set(item.position.x, item.position.y + (selected ? 16 : 12), item.position.z);
+        item.mesh.material.emissiveIntensity = selected ? visualTokens.selectedEmissiveIntensity : hovered ? visualTokens.priorityEmissiveIntensity : visualTokens.quietEmissiveIntensity;
+        item.mesh.scale.setScalar(selected ? 1.28 : hovered ? 1.12 : 1);
+        item.halo.visible = visible && !excluded && (selected || hovered || !selectedProposal);
+        item.halo.material.opacity = selected ? 0.22 : hovered ? 0.1 : 0.035;
+        item.halo.scale.setScalar(selected ? 1.24 + focusPulse * 0.04 : 1);
+        const labelVisible = visible && repositoryUniverseProposalLabelVisible({
+          selected,
+          hovered,
+          excluded,
+          activeDomain: domain !== 'all',
+          hasSelectedProposal: Boolean(selectedProposal),
+          cameraRadius: radius,
+          priorityIndex: item.priorityIndex,
+        });
+        item.label.visible = labelVisible;
+        const desiredLabelOpacity = !labelVisible ? 0 : selected ? 1 : hovered ? 0.94 : unrelated ? 0.42 : excluded ? 0.3 : 0.72;
+        item.labelMaterial.opacity = desiredLabelOpacity;
+        item.label.position.set(item.position.x, item.position.y + (selected ? 13 : 10), item.position.z);
+        item.label.scale.set(selected ? 48 : hovered ? 45 : 40, selected ? 16 : 14, 1);
         item.label.lookAt(camera.position);
+        if (labelVisible) {
+          labelCandidates.push({
+            id: `proposal:${item.proposalId}`,
+            sprite: item.label,
+            material: item.labelMaterial,
+            opacity: desiredLabelOpacity,
+            priority: repositoryUniverseLabelPriority({
+              selectedProposal: selected,
+              hovered,
+              activeDomain: domain !== 'all',
+              importance: 'supporting',
+            }),
+            protected: selected || hovered,
+          });
+        }
       }
+      applyDeterministicLabelCollisions(labelCandidates, camera, viewportWidth, viewportHeight);
     };
 
     const animate = () => {
@@ -1108,6 +1177,64 @@ function shouldRenderLabel(node: RepositoryUniverseNode, state: {
   return node.kind === 'folder' || node.importance !== 'background' || Boolean(state.connected);
 }
 
+// Focused visual-contract tests consume this deterministic hierarchy alongside the renderer.
+// eslint-disable-next-line react-refresh/only-export-components
+export function repositoryUniverseLabelPriority(state: {
+  selected?: boolean;
+  searched?: boolean;
+  route?: boolean;
+  selectedProposal?: boolean;
+  hovered?: boolean;
+  activeDomain?: boolean;
+  repositoryRoot?: boolean;
+  connected?: boolean;
+  importance?: RepositoryUniverseNode['importance'];
+}) {
+  if (state.selected) return 900;
+  if (state.searched) return 850;
+  if (state.route) return 800;
+  if (state.selectedProposal) return 750;
+  if (state.hovered) return 700;
+  if (state.activeDomain) return 650;
+  if (state.repositoryRoot) return 600;
+  if (state.importance === 'primary') return 500;
+  if (state.connected) return 450;
+  if (state.importance === 'supporting') return 300;
+  return 100;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function repositoryUniverseProposalDisplayLabel(
+  node: Pick<RepositoryTransformationProposedNode, 'label' | 'artifactPath'>,
+  proposal?: Pick<RepositoryTransformationProposal, 'title' | 'artifactActions'>,
+) {
+  const label = node.label.trim();
+  if (label && label.toLowerCase() !== 'proposed') return label;
+  const artifactPath = node.artifactPath.trim() || proposal?.artifactActions[0]?.path?.trim() || '';
+  const artifactName = artifactPath.split('/').filter(Boolean).pop();
+  if (artifactName) return artifactName;
+  const title = proposal?.title.trim();
+  return title || 'Proposed artifact';
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function repositoryUniverseProposalLabelVisible(state: {
+  selected?: boolean;
+  hovered?: boolean;
+  excluded?: boolean;
+  activeDomain?: boolean;
+  hasSelectedProposal?: boolean;
+  cameraRadius: number;
+  priorityIndex: number;
+}) {
+  if (state.selected || state.hovered) return true;
+  if (state.excluded || state.hasSelectedProposal) return false;
+  if (state.activeDomain) return state.cameraRadius <= PROPOSAL_LABEL_FAR_RADIUS || state.priorityIndex < 3;
+  if (state.cameraRadius > PROPOSAL_LABEL_FAR_RADIUS) return state.priorityIndex === 0;
+  if (state.cameraRadius > LABEL_MEDIUM_RADIUS) return state.priorityIndex % 3 === 0;
+  return state.priorityIndex % 2 === 0;
+}
+
 function labelOpacity(node: RepositoryUniverseNode, cameraRadius: number, selected?: boolean, hovered?: boolean, matched?: boolean, connected?: boolean) {
   if (selected || hovered || matched) return 1;
   if (connected) return 0.78;
@@ -1146,7 +1273,7 @@ export function repositoryUniverseNodeDisplayLabel(node: Pick<RepositoryUniverse
   return id || 'Unknown repository entity';
 }
 
-function labelSprite(label: string, color: string, theme: ShipSealResolvedTheme = 'dark') {
+function labelSprite(label: string, color: string, theme: ShipSealResolvedTheme = 'dark', secondaryLabel?: string) {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 128;
@@ -1157,7 +1284,7 @@ function labelSprite(label: string, color: string, theme: ShipSealResolvedTheme 
     context.textAlign = 'center';
     context.textBaseline = 'middle';
     context.fillStyle = theme === 'light' ? 'rgba(255, 253, 248, 0.95)' : 'rgba(5, 9, 20, 0.66)';
-    roundRect(context, 34, 36, 444, 56, 24);
+    roundRect(context, 34, secondaryLabel ? 22 : 36, 444, secondaryLabel ? 84 : 56, 24);
     context.fill();
     if (theme === 'light') {
       context.strokeStyle = 'rgba(24, 56, 74, 0.22)';
@@ -1165,12 +1292,55 @@ function labelSprite(label: string, color: string, theme: ShipSealResolvedTheme 
       context.stroke();
     }
     context.fillStyle = color;
-    context.fillText(label, 256, 64, 400);
+    context.fillText(label, 256, secondaryLabel ? 51 : 64, 400);
+    if (secondaryLabel) {
+      context.globalAlpha = 0.76;
+      context.font = '600 17px Inter, system-ui, sans-serif';
+      context.fillText(secondaryLabel, 256, 83, 360);
+      context.globalAlpha = 1;
+    }
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.minFilter = THREE.LinearFilter;
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0 });
   return { sprite: new THREE.Sprite(material), material, texture };
+}
+
+function applyDeterministicLabelCollisions(
+  candidates: LabelCollisionCandidate[],
+  camera: THREE.Camera,
+  viewportWidth: number,
+  viewportHeight: number,
+) {
+  const accepted: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+  const sorted = [...candidates].sort((first, second) => second.priority - first.priority || first.id.localeCompare(second.id));
+  for (const candidate of sorted) {
+    const projected = candidate.sprite.position.clone().project(camera);
+    if (projected.z < -1 || projected.z > 1) {
+      candidate.sprite.visible = false;
+      candidate.material.opacity = 0;
+      continue;
+    }
+    const centerX = (projected.x * 0.5 + 0.5) * viewportWidth;
+    const centerY = (-projected.y * 0.5 + 0.5) * viewportHeight;
+    const width = Math.max(72, Math.min(164, candidate.sprite.scale.x * 2.6));
+    const height = Math.max(24, candidate.sprite.scale.y * 2);
+    const rect = {
+      left: centerX - width / 2,
+      right: centerX + width / 2,
+      top: centerY - height / 2,
+      bottom: centerY + height / 2,
+    };
+    const collides = accepted.some(existing => rect.left < existing.right && rect.right > existing.left && rect.top < existing.bottom && rect.bottom > existing.top);
+    if (collides && !candidate.protected) {
+      candidate.sprite.visible = false;
+      candidate.material.opacity = 0;
+      continue;
+    }
+    candidate.sprite.visible = true;
+    candidate.material.opacity = candidate.opacity;
+    accepted.push(rect);
+  }
 }
 
 function shortLabel(label: string) {

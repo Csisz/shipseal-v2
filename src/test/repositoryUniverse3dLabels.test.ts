@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseRevealStartCamera, repositoryUniverseWheelCameraState } from '@/components/agentready/RepositoryUniverse3D';
+import { repositoryUniverseLabelPriority, repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseProposalDisplayLabel, repositoryUniverseProposalLabelVisible, repositoryUniverseRevealStartCamera, repositoryUniverseWheelCameraState } from '@/components/agentready/RepositoryUniverse3D';
 import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseFocusCameraState, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryUniverseNode } from '@/lib/workspace';
 
@@ -31,6 +31,30 @@ describe('Repository Universe 3D labels', () => {
     expect(repositoryUniverseNodeDisplayLabel(node({ id: 'file:path', label: '', path: 'src/App.tsx' }))).toBe('App.tsx');
     expect(repositoryUniverseNodeDisplayLabel(node({ id: 'concept:no-label', label: '', path: '' }))).toBe('concept:no-label');
     expect(repositoryUniverseNodeDisplayLabel({ id: '', label: '', path: '' })).toBe('Unknown repository entity');
+  });
+
+  it('uses existing proposal identity while keeping Proposed as secondary state', () => {
+    expect(repositoryUniverseProposalDisplayLabel(
+      { label: 'Testing strategy', artifactPath: '04-testing/TEST_STRATEGY.md' },
+    )).toBe('Testing strategy');
+    expect(repositoryUniverseProposalDisplayLabel(
+      { label: 'Proposed', artifactPath: '01-agent-instructions/AGENTS.md' },
+    )).toBe('AGENTS.md');
+    expect(repositoryUniverseProposalDisplayLabel(
+      { label: '', artifactPath: '' },
+      { title: 'Architecture memory', artifactActions: [] },
+    )).toBe('Architecture memory');
+  });
+
+  it('keeps priority labels visible and deterministically reduces ordinary proposal labels', () => {
+    expect(repositoryUniverseLabelPriority({ selected: true })).toBeGreaterThan(repositoryUniverseLabelPriority({ searched: true }));
+    expect(repositoryUniverseLabelPriority({ searched: true })).toBeGreaterThan(repositoryUniverseLabelPriority({ route: true }));
+    expect(repositoryUniverseLabelPriority({ selectedProposal: true })).toBeGreaterThan(repositoryUniverseLabelPriority({ activeDomain: true }));
+    expect(repositoryUniverseProposalLabelVisible({ selected: true, cameraRadius: 1200, priorityIndex: 9 })).toBe(true);
+    expect(repositoryUniverseProposalLabelVisible({ activeDomain: true, cameraRadius: 400, priorityIndex: 7 })).toBe(true);
+    expect(repositoryUniverseProposalLabelVisible({ cameraRadius: 500, priorityIndex: 1 })).toBe(false);
+    expect(repositoryUniverseProposalLabelVisible({ cameraRadius: 500, priorityIndex: 3 })).toBe(true);
+    expect(repositoryUniverseProposalLabelVisible({ hasSelectedProposal: true, cameraRadius: 300, priorityIndex: 0 })).toBe(false);
   });
 
   it('keeps Repository Universe colors tied to stable cluster membership', () => {

@@ -47,6 +47,7 @@ import {
   repositoryTransformationDomainCounts,
   serializeRepositoryOptimizationManifest,
   transformationDomainLabel,
+  workspaceStateLabel,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
   type RepositoryAgentFlightPath,
@@ -84,6 +85,7 @@ import { ResultChapterNav } from '@/components/agentready/result-dashboard/Resul
 import { ResultChapterShell } from '@/components/agentready/result-dashboard/ResultChapterShell';
 import { ResultChapterLoadBoundary, ResultChapterLoading } from '@/components/agentready/result-dashboard/ResultChapterLoadBoundary';
 import { getResultChapterStatuses, workspaceInsights } from '@/components/agentready/result-dashboard/chapterState';
+import { buildVerifyPresentation, type VerifyLifecycleState } from '@/components/agentready/result-dashboard/verifyPresentation';
 import { selectRepositoryFrictions } from '@/components/agentready/result-dashboard/repositoryFrictions';
 import type { ResultChapterId } from '@/components/agentready/result-dashboard/types';
 import {
@@ -157,6 +159,10 @@ export function AiWorkspaceHero({
   onPrCreated,
   githubConnection,
   verificationBaseline,
+  intelligenceVerificationBaseline,
+  intelligenceVerificationResult,
+  intelligenceVerificationStatus,
+  onRescan,
   onSaveVerificationBaseline,
   onDiscardVerificationBaseline,
 }: {
@@ -176,6 +182,10 @@ export function AiWorkspaceHero({
   onPrCreated: () => void;
   githubConnection?: GitHubConnectionState;
   verificationBaseline?: RepositoryVerificationBaseline | null;
+  intelligenceVerificationBaseline?: RepositoryIntelligenceVerificationBaseline | null;
+  intelligenceVerificationResult?: RepositoryIntelligenceVerificationResult | null;
+  intelligenceVerificationStatus?: 'idle' | 'scanning' | 'completed' | 'failed';
+  onRescan?: () => void;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
 }) {
@@ -220,6 +230,10 @@ export function AiWorkspaceHero({
               onPrCreated={onPrCreated}
               githubConnection={githubConnection}
               verificationBaseline={verificationBaseline}
+              intelligenceVerificationBaseline={intelligenceVerificationBaseline}
+              intelligenceVerificationResult={intelligenceVerificationResult}
+              intelligenceVerificationStatus={intelligenceVerificationStatus}
+              onRescan={onRescan}
               onSaveVerificationBaseline={onSaveVerificationBaseline}
               onDiscardVerificationBaseline={onDiscardVerificationBaseline}
             />
@@ -257,6 +271,10 @@ function RepositoryAtlasVisualization({
   onPrCreated,
   githubConnection,
   verificationBaseline,
+  intelligenceVerificationBaseline,
+  intelligenceVerificationResult,
+  intelligenceVerificationStatus,
+  onRescan,
   onSaveVerificationBaseline,
   onDiscardVerificationBaseline,
 }: {
@@ -275,6 +293,10 @@ function RepositoryAtlasVisualization({
   onPrCreated: () => void;
   githubConnection?: GitHubConnectionState;
   verificationBaseline?: RepositoryVerificationBaseline | null;
+  intelligenceVerificationBaseline?: RepositoryIntelligenceVerificationBaseline | null;
+  intelligenceVerificationResult?: RepositoryIntelligenceVerificationResult | null;
+  intelligenceVerificationStatus?: 'idle' | 'scanning' | 'completed' | 'failed';
+  onRescan?: () => void;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
 }) {
@@ -387,6 +409,36 @@ function RepositoryAtlasVisualization({
   const verificationResult = useMemo(() => verificationBaseline
     ? buildRepositoryVerificationResult({ baseline: verificationBaseline, currentReport: report })
     : null, [report, verificationBaseline]);
+  const intelligenceVerifiedCount = intelligenceVerificationResult
+    ? intelligenceVerificationResult.counts['verified-exact']
+      + intelligenceVerificationResult.counts['verified-present-with-modifications']
+      + intelligenceVerificationResult.counts['verified-strengthened']
+    : 0;
+  const intelligenceUnresolvedCount = intelligenceVerificationResult
+    ? intelligenceVerificationResult.counts.missing
+      + intelligenceVerificationResult.counts.conflicting
+      + intelligenceVerificationResult.counts['partially-verified']
+      + intelligenceVerificationResult.counts['requires-human-review']
+      + intelligenceVerificationResult.counts.unavailable
+    : 0;
+  const optimizationVerifiedCount = verificationResult?.status === 'matched-rescan'
+    ? verificationResult.counts.detected + verificationResult.counts.contentMatched
+    : 0;
+  const optimizationUnresolvedCount = verificationResult?.status === 'matched-rescan'
+    ? verificationResult.counts.needsReview + verificationResult.counts.missing + verificationResult.counts.notVerifiable + verificationResult.counts.blocked
+    : 0;
+  const hasVerificationEvidence = Boolean(intelligenceVerificationResult || verificationResult?.status === 'matched-rescan');
+  const verifyPresentation = buildVerifyPresentation({
+    selectedProposalCount: includedProposalCount,
+    preparedArtifactCount: activeTransformationArtifactCount,
+    appliedArtifactCount: Math.max(
+      verificationBaseline && verificationBaseline.applyMethod !== 'manual-baseline' ? verificationBaseline.artifacts.length : 0,
+      intelligenceVerificationBaseline?.artifacts.length || 0,
+    ),
+    verifiedItemCount: intelligenceVerificationResult ? intelligenceVerifiedCount : optimizationVerifiedCount,
+    unresolvedItemCount: intelligenceVerificationResult ? intelligenceUnresolvedCount : optimizationUnresolvedCount,
+    hasVerificationEvidence,
+  });
   const selectedOptimizationItem = selectedOptimizationItemId
     ? optimizationPlan?.items.find(item => item.id === selectedOptimizationItemId) || null
     : optimizationPlan?.items[0] || null;
@@ -495,9 +547,8 @@ function RepositoryAtlasVisualization({
   useEffect(() => {
     if (!planReadyForChapter || transformation.proposals.length === 0) return;
     setTransformationMode(current => current === 'after-rescan' ? current : 'with-shipseal');
-    setOptimizationPlanOpen(true);
-    onPlanReviewed();
-  }, [onPlanReviewed, planReadyForChapter, transformation.proposals.length]);
+    setOptimizationPlanOpen(false);
+  }, [planReadyForChapter, transformation.proposals.length]);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -1419,7 +1470,7 @@ function RepositoryAtlasVisualization({
                   y2={target.y + 320}
                   stroke="hsl(var(--primary))"
                   strokeWidth={selectedProposalId === proposal.id ? 2 : 1.2}
-                  strokeOpacity={excludedProposalIds.has(proposal.id) ? 0.16 : selectedProposalId === proposal.id ? 0.58 : 0.3}
+                  strokeOpacity={excludedProposalIds.has(proposal.id) ? 0.08 : selectedProposalId === proposal.id ? 0.62 : selectedProposalId ? 0.1 : 0.22}
                   strokeDasharray="7 8"
                   className="transition-all duration-500"
                 />
@@ -1428,10 +1479,11 @@ function RepositoryAtlasVisualization({
           })
         ))}
 
-        {transformationMode === 'with-shipseal' && visibleTransformationProposals.flatMap(proposal => (
+        {transformationMode === 'with-shipseal' && visibleTransformationProposals.flatMap((proposal, proposalIndex) => (
           proposal.graphChanges.proposedNodes.map(node => {
             const selected = selectedProposalId === proposal.id;
             const excluded = excludedProposalIds.has(proposal.id);
+            const showLabel = selected || transformationDomain !== 'all' || proposalIndex % 2 === 0;
             return (
               <button
                 key={node.id}
@@ -1443,18 +1495,21 @@ function RepositoryAtlasVisualization({
                   selected
                     ? 'border-primary/80 bg-primary/20 text-primary-glow shadow-glow'
                     : 'border-primary/45 bg-background/55 text-primary-glow/85 hover:border-primary/70'
-                } ${excluded ? 'opacity-35' : 'opacity-100'}`}
+                } ${excluded ? 'opacity-25' : selectedProposalId && !selected ? 'opacity-40' : 'opacity-100'}`}
                 style={{
                   left: node.x + 460,
                   top: node.y + 320,
-                  width: selected ? 72 : 58,
-                  height: selected ? 72 : 58,
+                  width: selected ? 52 : 40,
+                  height: selected ? 52 : 40,
                 }}
               >
                 <span className="h-3 w-3 rounded-full border border-primary/60 bg-primary/15" />
-                <span className="pointer-events-none absolute left-1/2 top-[calc(100%+7px)] max-w-[170px] -translate-x-1/2 rounded-full border border-primary/35 bg-background/80 px-2 py-1 text-[10px] font-medium leading-tight text-primary-glow shadow-sm">
-                  Proposed
-                </span>
+                {showLabel && (
+                  <span className="pointer-events-none absolute left-1/2 top-[calc(100%+5px)] w-max max-w-[170px] -translate-x-1/2 rounded-xl border border-primary/30 bg-background/88 px-2 py-1 text-[10px] font-medium leading-tight text-primary-glow shadow-sm">
+                    <span className="block truncate">{node.label}</span>
+                    <span className="block text-[9px] font-normal text-muted-foreground">Proposed</span>
+                  </span>
+                )}
               </button>
             );
           })
@@ -1599,7 +1654,84 @@ function RepositoryAtlasVisualization({
             : 'Client handoff and exports remain available without changing their contents.';
   const showUniverseWorkspace = activeResultChapter === 'understand' || activeResultChapter === 'improve';
   const showTransformationPanel = activeResultChapter === 'improve';
-  const showPlanReview = optimizationPlanReview && (activeResultChapter === 'improve' || activeResultChapter === 'verify');
+  const focusVerifyTechnicalDetails = () => {
+    const target = document.querySelector<HTMLElement>('[data-verify-technical-details]');
+    const disclosure = target?.querySelector<HTMLDetailsElement>('details');
+    if (disclosure && !disclosure.open) disclosure.querySelector<HTMLElement>('summary')?.click();
+    if (typeof target?.scrollIntoView === 'function') {
+      target.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+    }
+    target?.focus({ preventScroll: true });
+  };
+  const handleVerifyPrimaryAction = () => {
+    if (verifyPresentation.primaryAction === 'improve') {
+      onResultChapterChange('improve');
+      return;
+    }
+    if (verifyPresentation.primaryAction === 'apply') {
+      openOptimizationPlan();
+      return;
+    }
+    if (verifyPresentation.primaryAction === 'rescan') {
+      onRescan?.();
+      return;
+    }
+    focusVerifyTechnicalDetails();
+  };
+  const verifySummary = activeResultChapter === 'verify' && (
+    <section className="mb-4 rounded-3xl border border-primary/20 bg-[linear-gradient(145deg,hsl(var(--primary)/0.08),hsl(var(--background)/0.22))] p-4 md:p-6" aria-labelledby="verify-lifecycle-heading">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+        <div className="min-w-0 max-w-3xl">
+          <div className="text-xs font-mono uppercase tracking-wider text-primary-glow">Verification state</div>
+          <h3 id="verify-lifecycle-heading" className="mt-2 font-display text-2xl font-semibold text-foreground">{verifyPresentation.heading}</h3>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{verifyPresentation.explanation}</p>
+          <div className="mt-4 flex flex-wrap gap-2" aria-label="Repository improvement lifecycle">
+            {(['proposed', 'prepared', 'applied', 'verified', 'unresolved'] as VerifyLifecycleState[]).map(state => (
+              <Badge
+                key={state}
+                variant="outline"
+                aria-current={verifyPresentation.state === state ? 'step' : undefined}
+                className={verifyLifecycleClass(state, verifyPresentation.state === state)}
+              >
+                {verifyPresentation.state === state && <Check className="mr-1 h-3 w-3" aria-hidden="true" />}
+                {workspaceStateLabel(state)}
+              </Badge>
+            ))}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
+          <Button
+            type="button"
+            onClick={handleVerifyPrimaryAction}
+            disabled={verifyPresentation.primaryAction === 'rescan' && (!onRescan || intelligenceVerificationStatus === 'scanning')}
+            className="min-h-11 bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            {intelligenceVerificationStatus === 'scanning' && verifyPresentation.primaryAction === 'rescan'
+              ? 'Scanning later state…'
+              : verifyPresentation.primaryLabel}
+          </Button>
+          {activeTransformationArtifactCount > 0 && (
+            <Button type="button" variant="outline" onClick={openOptimizationPlan} className="min-h-11 border-primary/35 bg-primary/5">
+              Review prepared artifacts
+            </Button>
+          )}
+          <Button type="button" variant="ghost" onClick={focusVerifyTechnicalDetails} className="min-h-11">
+            View technical evidence
+          </Button>
+        </div>
+      </div>
+      {verifyPresentation.metrics.length > 0 && (
+        <div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-4" aria-label="Verification summary">
+          {verifyPresentation.metrics.map(metric => (
+            <div key={metric.label} className="rounded-2xl border border-border/45 bg-background/25 px-3 py-2.5">
+              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{metric.label}</div>
+              <div className="mt-1 text-lg font-semibold text-foreground">{metric.value.toLocaleString()}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 
   return (
     <section ref={atlasRootRef} className={`relative border-y border-primary/15 bg-[hsl(var(--universe-stage-bg))] ${activeResultChapter === 'understand' || activeResultChapter === 'improve' ? '' : 'px-2 py-2 md:px-3'}`} aria-labelledby="repository-atlas-heading">
@@ -1623,15 +1755,7 @@ function RepositoryAtlasVisualization({
             </div>
           )}
 
-          {activeResultChapter === 'verify' && showPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
-          {activeResultChapter === 'verify' && !optimizationPlanReview && (
-            <div className="mb-4 rounded-2xl border border-border/55 bg-background/20 p-4">
-              <p className="text-sm text-muted-foreground">No active optimization artifacts are selected yet.</p>
-              <Button type="button" size="sm" onClick={() => onResultChapterChange('improve')} className="mt-3 bg-primary text-primary-foreground hover:bg-primary/90">
-                Review ShipSeal improvements
-              </Button>
-            </div>
-          )}
+          {verifySummary}
         </>
       )}
 
@@ -1723,12 +1847,6 @@ function RepositoryAtlasVisualization({
 
       {mobileControlsSheet}
 
-      {!fullscreen && activeResultChapter === 'improve' && showPlanReview && (
-        <div data-testid="improve-supporting-content" className="border-t border-primary/15 bg-background/10 px-3 py-5 md:px-5">
-          {optimizationPlanReview}
-        </div>
-      )}
-
       {!fullscreen && showUniverseWorkspace && (
         <div className="mt-4 space-y-3">
           {searchResultList}
@@ -1805,7 +1923,6 @@ function RepositoryAtlasVisualization({
             {atlasToolbar}
           </div>
           {showTransformationPanel && <div className="mb-4">{transformationControls}</div>}
-          {optimizationPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
           <div className="mb-4">{atlasFilters}</div>
           {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
@@ -1823,6 +1940,22 @@ function RepositoryAtlasVisualization({
           </div>
         </div>
       )}
+
+      <Sheet open={optimizationPlanOpen} onOpenChange={setOptimizationPlanOpen}>
+        <SheetContent
+          side={isMobile ? 'bottom' : 'right'}
+          className={isMobile
+            ? 'max-h-[92dvh] overflow-y-auto overscroll-y-contain rounded-t-[1.75rem] px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10'
+            : 'h-dvh w-[min(58rem,92vw)] max-w-none overflow-y-auto overscroll-y-contain px-5 pb-6 pt-10'}
+          data-testid="optimization-artifact-review-sheet"
+        >
+          <SheetHeader className="sr-only">
+            <SheetTitle>Review prepared artifacts</SheetTitle>
+            <SheetDescription>Review selected artifacts, their evidence, package preparation, and pull request preview.</SheetDescription>
+          </SheetHeader>
+          {optimizationPlanReview}
+        </SheetContent>
+      </Sheet>
     </section>
   );
 }
@@ -2837,6 +2970,24 @@ function TransformationInspector({
       <p className="mt-3 rounded-2xl border border-primary/25 bg-primary/10 px-3 py-2 text-xs text-primary-glow">
         Status: Proposed - not yet applied. Generated after approval.
       </p>
+      <dl className="mt-4 grid gap-2 rounded-2xl border border-border/45 bg-background/20 p-3 text-xs sm:grid-cols-2">
+        <div>
+          <dt className="text-muted-foreground">Intended change</dt>
+          <dd className="mt-1 font-medium text-foreground">{proposal.title}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Generated destination</dt>
+          <dd className="mt-1 break-all font-medium text-foreground">{proposal.artifactActions.map(action => action.path).join(', ')}</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Affected repository area</dt>
+          <dd className="mt-1 font-medium text-foreground">{proposal.graphChanges.affectedExistingNodeIds.length.toLocaleString()} connected entities</dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">Relationship</dt>
+          <dd className="mt-1 font-medium text-foreground">{proposal.graphChanges.proposedEdges[0]?.relationship.replace(/-/g, ' ') || 'Proposed relationship'}</dd>
+        </div>
+      </dl>
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onToggleIncluded} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
@@ -3698,6 +3849,15 @@ function optimizationActionLabel(action: RepositoryOptimizationPlanItem['artifac
   if (action === 'update') return 'Update';
   if (action === 'strengthen') return 'Strengthen';
   return 'Unavailable';
+}
+
+function verifyLifecycleClass(state: VerifyLifecycleState, active: boolean) {
+  const emphasis = active ? 'bg-background/45 font-semibold shadow-sm' : 'opacity-55';
+  if (state === 'verified') return `border-success/45 text-success ${emphasis}`;
+  if (state === 'unresolved') return `border-warning/55 text-warning ${emphasis}`;
+  if (state === 'applied') return `border-accent/45 text-accent ${emphasis}`;
+  if (state === 'prepared') return `border-primary/45 text-primary-glow ${emphasis}`;
+  return `border-border/65 text-muted-foreground ${emphasis}`;
 }
 
 function optimizationReadinessLabel(readiness: RepositoryOptimizationReadiness) {

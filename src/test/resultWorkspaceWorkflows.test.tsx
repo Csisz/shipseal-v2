@@ -544,17 +544,50 @@ describe('Result Workspace improvement and verification workflows', () => {
     expect(screen.getByText(/Manifest and apply instructions/i)).toBeInTheDocument();
     expect(screen.getAllByText(/ShipSeal Delivery Pack/i).length).toBeGreaterThan(0);
 
+    fireEvent.click(screen.getByRole('button', { name: /Close plan/i }));
     switchToAtlas2D();
     const proposedButtons = await screen.findAllByRole('button', { name: /Proposed With ShipSeal entity/i });
     fireEvent.click(proposedButtons[0]);
     expect(screen.getAllByRole('button', { name: /Add to optimization plan|Remove from plan/i }).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Current' })[0]);
-    expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'With ShipSeal' })[0]);
     fireEvent.click(screen.getByRole('button', { name: /Universe 3D/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
     expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
   }, 20000);
+
+  it('keeps Verify concise until prepared artifacts are explicitly reviewed', () => {
+    const report = optimizationDashboardReport();
+    render(
+      <ResultDashboard
+        report={report}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        onReplayReveal={vi.fn()}
+      />
+    );
+
+    switchResultChapter('Verify');
+
+    expect(screen.getByRole('heading', { name: /Plan prepared — not yet applied/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Repository improvement lifecycle/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Optimization Plan artifacts/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Review prepared artifacts/i }));
+    expect(screen.getByTestId('optimization-artifact-review-sheet')).toHaveAttribute('data-state', 'open');
+    expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Close plan/i }));
+    expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Plan prepared — not yet applied/i })).toBeInTheDocument();
+    expect(screen.queryByText(/No Repository Intelligence verification baseline/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /View technical evidence/i }));
+    expect(screen.getByText(/No Repository Intelligence verification baseline/i)).toBeInTheDocument();
+  });
 
   it('previews and creates an Optimization Pack PR only after explicit GitHub App confirmation', async () => {
     const report = optimizationDashboardReport();
@@ -716,6 +749,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     );
 
     switchResultChapter('Verify');
+    fireEvent.click(screen.getByRole('button', { name: /Review prepared artifacts/i }));
     const verification = await screen.findByLabelText(/Rescan Verification/i);
     expect(within(verification).getByText(/This scan does not match the saved optimization baseline/i)).toBeInTheDocument();
     fireEvent.click(within(verification).getByRole('button', { name: /Discard baseline/i }));

@@ -100,7 +100,7 @@ export const FUTURE_AI_WORKSPACE_NAVIGATION = [
 ] as const;
 
 export const WORKSPACE_STATE_TERM_IDS = [
-  'current', 'proposed', 'applied', 'verified', 'ready', 'limited', 'evidence-backed', 'heuristic',
+  'current', 'proposed', 'prepared', 'applied', 'verified', 'unresolved', 'ready', 'limited', 'evidence-backed', 'heuristic',
 ] as const;
 
 export type WorkspaceStateTermId = typeof WORKSPACE_STATE_TERM_IDS[number];
@@ -108,8 +108,10 @@ export type WorkspaceStateTermId = typeof WORKSPACE_STATE_TERM_IDS[number];
 export const WORKSPACE_STATE_TERMS: Record<WorkspaceStateTermId, { label: string; definition: string }> = {
   current: { label: 'Current', definition: 'Observed in the present scan.' },
   proposed: { label: 'Proposed', definition: 'Generated or recommended by ShipSeal, but not yet written to the repository.' },
+  prepared: { label: 'Prepared', definition: 'Generated and ready for review or packaging, but not yet written or exported as an applied change.' },
   applied: { label: 'Applied', definition: 'Written or included through an export or repository mutation, but not yet confirmed by a later scan.' },
   verified: { label: 'Verified', definition: 'Confirmed by rescan evidence or another explicitly implemented verification mechanism.' },
+  unresolved: { label: 'Unresolved', definition: 'An expected change is not confirmed, still needs human review, or a regression remains.' },
   ready: { label: 'Ready', definition: 'Eligible for the named next action; this does not itself mean applied or verified.' },
   limited: { label: 'Limited', definition: 'The scan or comparison has an explicit evidence or coverage boundary.' },
   'evidence-backed': { label: 'Evidence-backed', definition: 'Supported by concrete repository evidence.' },

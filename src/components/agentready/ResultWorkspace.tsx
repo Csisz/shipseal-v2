@@ -258,6 +258,10 @@ export function ResultWorkspace({
           onPrCreated={() => setPrCreated(true)}
           githubConnection={githubConnection}
           verificationBaseline={verificationBaseline}
+          intelligenceVerificationBaseline={repositoryIntelligenceVerificationBaseline}
+          intelligenceVerificationResult={repositoryIntelligenceVerificationResult}
+          intelligenceVerificationStatus={repositoryIntelligenceVerificationStatus}
+          onRescan={onRescanRepositoryIntelligence}
           onSaveVerificationBaseline={onSaveVerificationBaseline}
           onDiscardVerificationBaseline={onDiscardVerificationBaseline}
         /> : null}

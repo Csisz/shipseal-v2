@@ -324,6 +324,14 @@ describe('Result Workspace composition', () => {
       switchResultChapter(chapter);
       expect(screen.getAllByRole('navigation', { name: /Result chapters/i })).toHaveLength(1);
       expect(within(screen.getByRole('navigation', { name: /Result chapters/i })).getByRole('button', { name: new RegExp(chapter, 'i') })).toHaveAttribute('aria-pressed', 'true');
+      if (chapter === 'Verify') {
+        expect(screen.queryByLabelText(/Optimization Plan artifacts/i)).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /Review prepared artifacts/i }));
+        const reviewSheet = await screen.findByTestId('optimization-artifact-review-sheet');
+        expect(reviewSheet).toHaveClass('max-h-[92dvh]', 'rounded-t-[1.75rem]');
+        expect(within(reviewSheet).getByLabelText(/Optimization Plan artifacts/i)).toBeInTheDocument();
+        fireEvent.click(within(reviewSheet).getByRole('button', { name: /Close plan/i }));
+      }
     }
     expect(await screen.findByTestId('repository-universe-canvas')).toHaveAttribute('data-camera-target', selectedTarget);
   }, 20_000);

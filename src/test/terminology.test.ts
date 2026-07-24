@@ -6,15 +6,19 @@ describe('R0 terminology contract', () => {
   it('maps lifecycle states to distinct user-facing terms', () => {
     expect(workspaceStateLabel('current')).toBe('Current');
     expect(workspaceStateLabel('proposed')).toBe('Proposed');
+    expect(workspaceStateLabel('prepared')).toBe('Prepared');
     expect(workspaceStateLabel('applied')).toBe('Applied');
     expect(workspaceStateLabel('verified')).toBe('Verified');
+    expect(workspaceStateLabel('unresolved')).toBe('Unresolved');
     expect(WORKSPACE_STATE_TERMS['evidence-backed'].definition).toMatch(/concrete repository evidence/i);
     expect(WORKSPACE_STATE_TERMS.heuristic.definition).toMatch(/inference/i);
   });
 
   it('never represents Applied as Verified', () => {
     expect(WORKSPACE_STATE_TERMS.applied.label).not.toBe(WORKSPACE_STATE_TERMS.verified.label);
+    expect(WORKSPACE_STATE_TERMS.prepared.label).not.toBe(WORKSPACE_STATE_TERMS.applied.label);
     expect(WORKSPACE_STATE_TERMS.applied.definition).toMatch(/not yet confirmed/i);
+    expect(WORKSPACE_STATE_TERMS.verified.definition).toMatch(/evidence|verification/i);
   });
 
   it('preserves the legacy score value while removing certification language from display copy', () => {
