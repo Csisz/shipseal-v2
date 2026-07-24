@@ -1,4 +1,4 @@
-import type { RepositoryUniverseCluster, RepositoryUniverseNode } from './repositoryUniverse';
+import type { RepositoryUniverseCluster, RepositoryUniverseNode, RepositoryUniversePosition } from './repositoryUniverse';
 
 export interface RepositoryUniverseVisualToken {
   id: string;
@@ -6,6 +6,16 @@ export interface RepositoryUniverseVisualToken {
   hex: number;
   css: string;
 }
+
+export interface RepositoryUniverseCameraFrame {
+  theta: number;
+  phi: number;
+  radius: number;
+  target: RepositoryUniversePosition;
+}
+
+const REPOSITORY_UNIVERSE_LAYOUT_SPREAD_XZ = 0.96;
+const REPOSITORY_UNIVERSE_LAYOUT_SPREAD_Y = 0.78;
 
 // Renderer-only cinematic colors live together so Ω.17.5 can map them onto
 // semantic theme tokens without changing repository or graph semantics.
@@ -80,6 +90,62 @@ export function repositoryUniverseClusterToken(clusterId: string): RepositoryUni
 
 export function repositoryUniverseNodeClusterToken(node: Pick<RepositoryUniverseNode, 'clusterId'>): RepositoryUniverseVisualToken {
   return repositoryUniverseClusterToken(node.clusterId || 'cluster:repository');
+}
+
+export function repositoryUniverseVisualPosition(
+  node: Pick<RepositoryUniverseNode, 'id' | 'position'>,
+  rootNodeId: string,
+): RepositoryUniversePosition {
+  if (node.id === rootNodeId) return { ...node.position };
+  return {
+    x: node.position.x * REPOSITORY_UNIVERSE_LAYOUT_SPREAD_XZ,
+    y: node.position.y * REPOSITORY_UNIVERSE_LAYOUT_SPREAD_Y,
+    z: node.position.z * REPOSITORY_UNIVERSE_LAYOUT_SPREAD_XZ,
+  };
+}
+
+export function repositoryUniverseFocusCameraState<T extends RepositoryUniverseCameraFrame>(
+  state: T,
+  node: Pick<RepositoryUniverseNode, 'id' | 'kind' | 'position'>,
+  rootNodeId: string,
+): T {
+  const rootSelected = node.id === rootNodeId;
+  const focusRadius = node.kind === 'file' ? 240 : 320;
+  return {
+    ...state,
+    radius: rootSelected ? Math.max(state.radius, 560) : Math.min(state.radius, focusRadius),
+    target: repositoryUniverseVisualPosition(node, rootNodeId),
+  };
+}
+
+export function repositoryUniverseInspectorAwareLookTarget(
+  state: RepositoryUniverseCameraFrame,
+  viewport: { width: number; height: number; fullscreen: boolean; inspectorOpen: boolean },
+  amount = 1,
+): RepositoryUniversePosition {
+  if (!viewport.inspectorOpen || amount <= 0 || viewport.fullscreen) return { ...state.target };
+  const height = Math.max(1, viewport.height);
+  const worldUnitsPerPixel = (2 * state.radius * Math.tan((45 * Math.PI / 180) / 2)) / height;
+  const desktop = viewport.width >= 1024;
+  const horizontalPixels = desktop ? Math.min(364, viewport.width * 0.34) / 2 : 0;
+  const verticalPixels = desktop ? 0 : Math.min(viewport.height * 0.36, 300) / 2;
+  const right = {
+    x: Math.sin(state.theta),
+    y: 0,
+    z: -Math.cos(state.theta),
+  };
+  const up = {
+    x: -Math.cos(state.theta) * Math.cos(state.phi),
+    y: Math.sin(state.phi),
+    z: -Math.sin(state.theta) * Math.cos(state.phi),
+  };
+  const horizontalOffset = horizontalPixels * worldUnitsPerPixel * amount;
+  const verticalOffset = verticalPixels * worldUnitsPerPixel * amount;
+  return {
+    x: state.target.x + right.x * horizontalOffset - up.x * verticalOffset,
+    y: state.target.y + right.y * horizontalOffset - up.y * verticalOffset,
+    z: state.target.z + right.z * horizontalOffset - up.z * verticalOffset,
+  };
 }
 
 export function repositoryUniverseClusterLegend(clusters: RepositoryUniverseCluster[]) {

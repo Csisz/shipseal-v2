@@ -17,6 +17,7 @@ const universeMockState = vi.hoisted(() => ({
   models: [] as unknown[],
   selectedNodeIds: [] as Array<string | undefined>,
   cameraRadii: [] as number[],
+  cameraTargets: [] as Array<{ x: number; y: number; z: number }>,
   visibleNodeCounts: [] as number[],
   shouldThrow: false,
 }));
@@ -61,18 +62,19 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
 }));
 
 vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
-  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode, onSceneSettled }: {
-    model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string }[] };
+  default: ({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode, onSceneSettled, focusRequest }: {
+    model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string; position: { x: number; y: number; z: number } }[] };
     selectedNodeId?: string;
     rotationPaused?: boolean;
     reducedMotion?: boolean;
     routeNodeIds?: string[];
     visibleNodeIds: string[];
     visibleEdgeIds: string[];
-    cameraState: { radius: number };
+    cameraState: { radius: number; target: { x: number; y: number; z: number } };
     animateIn?: boolean;
     onSelectNode: (nodeId: string) => void;
     onSceneSettled?: () => void;
+    focusRequest?: { nodeId: string; sequence: number };
   }) => {
     if (universeMockState.shouldThrow) {
       throw new Error('Simulated Repository Universe render failure');
@@ -80,6 +82,7 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
     universeMockState.models.push(model);
     universeMockState.selectedNodeIds.push(selectedNodeId);
     universeMockState.cameraRadii.push(cameraState.radius);
+    universeMockState.cameraTargets.push(cameraState.target);
     universeMockState.visibleNodeCounts.push(visibleNodeIds.length);
     return (
       <div
@@ -93,11 +96,16 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
         data-route-node-count={routeNodeIds.length}
         data-selected-node={selectedNodeId}
         data-camera-radius={cameraState.radius}
+        data-camera-target={`${cameraState.target.x},${cameraState.target.y},${cameraState.target.z}`}
+        data-focus-request={focusRequest ? `${focusRequest.sequence}:${focusRequest.nodeId}` : ''}
         data-animate-in={animateIn ? 'true' : 'false'}
         data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}
       >
         <button type="button" onClick={() => model.nodes[1] && onSelectNode(model.nodes[1].id)}>
           Select universe node
+        </button>
+        <button type="button" onClick={() => model.nodes[2] && onSelectNode(model.nodes[2].id)}>
+          Select second universe node
         </button>
         <button type="button" onClick={onSceneSettled}>Settle Universe reveal</button>
       </div>
@@ -207,6 +215,7 @@ describe('ResultDashboard summary copy', () => {
     universeMockState.models = [];
     universeMockState.selectedNodeIds = [];
     universeMockState.cameraRadii = [];
+    universeMockState.cameraTargets = [];
     universeMockState.visibleNodeCounts = [];
     universeMockState.shouldThrow = false;
     githubWriteMock.createGitHubAppReadinessPr.mockReset();
@@ -336,6 +345,13 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByRole('heading', { name: /Review ShipSeal improvements/i })).toBeInTheDocument();
     expect(screen.getByText(/Preview what ShipSeal can prepare/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Prepare optimization package/i })).toBeInTheDocument();
+    const improveStage = screen.getByTestId('repository-universe-workspace-stage');
+    const improveSupportingContent = screen.getByTestId('improve-supporting-content');
+    expect(improveStage.compareDocumentPosition(improveSupportingContent) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(improveSupportingContent).toContainElement(screen.getByRole('heading', { name: /Review ShipSeal improvements/i }));
+    expect(improveSupportingContent).toContainElement(screen.getByRole('button', { name: /Prepare optimization package/i }));
+    expect(screen.getAllByRole('heading', { name: /Review ShipSeal improvements/i })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /Prepare optimization package/i })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: /^Plan an agent task$/i }));
     expect(within(chapterNav).getByRole('button', { name: /Understand/i })).toHaveAttribute('aria-pressed', 'true');
@@ -558,6 +574,7 @@ describe('ResultDashboard summary copy', () => {
     const initialEdgeCount = universe.getAttribute('data-edge-count');
     const initialVisibleCount = Number(universe.getAttribute('data-visible-node-count'));
     const initialRadius = Number(universe.getAttribute('data-camera-radius'));
+    const initialTarget = universe.getAttribute('data-camera-target');
     const initialSelectedNode = universe.getAttribute('data-selected-node');
 
     fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
@@ -566,7 +583,10 @@ describe('ResultDashboard summary copy', () => {
     expect(afterSelection).toHaveAttribute('data-node-count', initialNodeCount || '');
     expect(afterSelection).toHaveAttribute('data-edge-count', initialEdgeCount || '');
     expect(afterSelection).toHaveAttribute('data-visible-node-count', String(initialVisibleCount));
-    expect(afterSelection).toHaveAttribute('data-camera-radius', String(initialRadius));
+    expect(Number(afterSelection.getAttribute('data-camera-radius'))).toBeLessThanOrEqual(initialRadius);
+    expect(afterSelection).not.toHaveAttribute('data-camera-target', initialTarget || '');
+    const firstFocusTarget = afterSelection.getAttribute('data-camera-target');
+    expect(afterSelection.getAttribute('data-focus-request')).toMatch(/^1:/);
     expect(within(screen.getByRole('navigation', { name: /Result chapters/i })).getByRole('button', { name: /Understand/i })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByText(/Repository Universe could not be rendered/i)).not.toBeInTheDocument();
     expect(universeMockState.models.at(-1)).toBe(initialModel);
@@ -590,7 +610,18 @@ describe('ResultDashboard summary copy', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
     await waitFor(() => expect(Number(screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-radius'))).toBeLessThan(initialRadius));
+    expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-camera-target', firstFocusTarget || '');
     expect(universeMockState.models.at(-1)).toBe(initialModel);
+
+    fireEvent.click(screen.getByRole('button', { name: /Select second universe node/i }));
+    const secondFocus = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+    expect(secondFocus).not.toHaveAttribute('data-camera-target', firstFocusTarget || '');
+    expect(secondFocus.getAttribute('data-focus-request')).toMatch(/^3:/);
+
+    fireEvent.click(screen.getByRole('button', { name: /Reset view/i }));
+    const resetUniverse = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+    expect(resetUniverse).toHaveAttribute('data-camera-radius', String(initialRadius));
+    expect(resetUniverse).toHaveAttribute('data-camera-target', initialTarget || '');
   });
 
   it('renders Agent Flight Path in Understand and generates an evidence-bound route', async () => {
@@ -1016,6 +1047,7 @@ describe('ResultDashboard summary copy', () => {
     fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
     const selectedNodeId = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-selected-node');
     const cameraRadius = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-radius');
+    const cameraTarget = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-target');
 
     fireEvent.click(screen.getByRole('button', { name: /Fullscreen/i }));
 
@@ -1025,6 +1057,7 @@ describe('ResultDashboard summary copy', () => {
     expect(fullscreenUniverse).toHaveAttribute('data-animate-in', 'false');
     expect(fullscreenUniverse).toHaveAttribute('data-selected-node', selectedNodeId || '');
     expect(fullscreenUniverse).toHaveAttribute('data-camera-radius', cameraRadius || '');
+    expect(fullscreenUniverse).toHaveAttribute('data-camera-target', cameraTarget || '');
 
     fireEvent.keyDown(document, { key: 'Escape' });
 
@@ -1115,6 +1148,11 @@ describe('ResultDashboard summary copy', () => {
       const universe = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
       expect(universe).toHaveAttribute('data-animate-in', 'false');
       expect(universe).toHaveAttribute('data-rotation-paused', 'true');
+      const initialTarget = universe.getAttribute('data-camera-target');
+      fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
+      const focusedUniverse = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
+      expect(focusedUniverse).not.toHaveAttribute('data-camera-target', initialTarget || '');
+      expect(focusedUniverse.getAttribute('data-focus-request')).toMatch(/^1:/);
       switchToAtlas2D();
       const atlas = screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
       expect(atlas).toHaveAttribute('data-motion', 'reduced');

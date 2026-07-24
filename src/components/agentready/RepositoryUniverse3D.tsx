@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposalModel, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
-import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, softenClusterColor, blendHex, REPOSITORY_UNIVERSE_CINEMATIC_TOKENS } from '@/lib/workspace/repositoryUniverseVisual';
+import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseVisualPosition, softenClusterColor, blendHex, REPOSITORY_UNIVERSE_CINEMATIC_TOKENS } from '@/lib/workspace/repositoryUniverseVisual';
 
 export interface UniverseCameraState {
   theta: number;
@@ -33,6 +33,10 @@ interface RepositoryUniverse3DProps {
   onSelectProposal?: (proposalId: string) => void;
   onFocusNodeSettled?: (nodeId: string) => void;
   onSceneSettled?: () => void;
+  focusRequest?: {
+    nodeId: string;
+    sequence: number;
+  };
 }
 
 type PointerMode = 'orbit' | 'pan';
@@ -71,11 +75,10 @@ interface ProposalEdgeRenderItem {
 }
 
 const INITIAL_APPEARANCE_MS = 1800;
+const NODE_FOCUS_TRANSITION_MS = 650;
 const IDLE_ROTATION_DELAY_MS = 3600;
 const LABEL_FAR_RADIUS = 720;
 const LABEL_MEDIUM_RADIUS = 420;
-const LAYOUT_SPREAD_XZ = 0.96;
-const LAYOUT_SPREAD_Y = 0.78;
 
 export default function RepositoryUniverse3D({
   model,
@@ -100,6 +103,7 @@ export default function RepositoryUniverse3D({
   onSelectProposal,
   onFocusNodeSettled,
   onSceneSettled,
+  focusRequest,
 }: RepositoryUniverse3DProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -124,6 +128,7 @@ export default function RepositoryUniverse3D({
   const onSelectProposalRef = useRef(onSelectProposal);
   const onFocusNodeSettledRef = useRef(onFocusNodeSettled);
   const onSceneSettledRef = useRef(onSceneSettled);
+  const focusRequestRef = useRef(focusRequest);
   const [webglUnavailable, setWebglUnavailable] = useState(false);
   const [settled, setSettled] = useState(reducedMotion);
 
@@ -213,6 +218,10 @@ export default function RepositoryUniverse3D({
   }, [onSceneSettled]);
 
   useEffect(() => {
+    focusRequestRef.current = focusRequest;
+  }, [focusRequest]);
+
+  useEffect(() => {
     const host = hostRef.current;
     const canvas = canvasRef.current;
     if (!host || !canvas) return;
@@ -251,6 +260,16 @@ export default function RepositoryUniverse3D({
     let hoveredNodeId: string | null = null;
     let userInteractedAt = performance.now();
     let localSettled = reducedMotionRef.current || !animateInRef.current;
+    let focusTransition: {
+      nodeId: string;
+      startedAt: number;
+      from: UniverseCameraState;
+      to: UniverseCameraState;
+    } | null = null;
+    let handledFocusSequence = focusRequestRef.current?.sequence || 0;
+    let inspectorFramingAmount = selectedNodeIdRef.current && selectedNodeIdRef.current !== model.rootNodeId ? 1 : 0;
+    let viewportWidth = 320;
+    let viewportHeight = 320;
     let lastPublishedCamera = cameraStateRef.current;
     const startedAt = performance.now();
     const revealEnabled = !reducedMotionRef.current && animateInRef.current;
@@ -302,7 +321,8 @@ export default function RepositoryUniverse3D({
     };
     const visualPositionByNodeId = new Map<string, THREE.Vector3>();
     for (const node of model.nodes) {
-      visualPositionByNodeId.set(node.id, visualPositionFor(node.position, node.id === model.rootNodeId));
+      const position = repositoryUniverseVisualPosition(node, model.rootNodeId);
+      visualPositionByNodeId.set(node.id, new THREE.Vector3(position.x, position.y, position.z));
     }
 
     for (const edge of model.edges) {
@@ -422,10 +442,10 @@ export default function RepositoryUniverse3D({
 
     const resize = () => {
       const rect = host.getBoundingClientRect();
-      const width = Math.max(320, rect.width);
-      const height = Math.max(320, rect.height);
-      renderer.setSize(width, height, false);
-      camera.aspect = width / height;
+      viewportWidth = Math.max(320, rect.width);
+      viewportHeight = Math.max(320, rect.height);
+      renderer.setSize(viewportWidth, viewportHeight, false);
+      camera.aspect = viewportWidth / viewportHeight;
       camera.updateProjectionMatrix();
     };
 
@@ -459,32 +479,72 @@ export default function RepositoryUniverse3D({
       finishReveal();
     };
 
+    const cancelFocusTransition = () => {
+      if (!focusTransition) return;
+      focusTransition = null;
+      publishCamera(renderCameraStateRef.current, true);
+    };
+
+    const beginRequestedFocus = (now: number) => {
+      const request = focusRequestRef.current;
+      if (!request || request.sequence === handledFocusSequence) return;
+      handledFocusSequence = request.sequence;
+      interruptReveal();
+      const desired = clampCameraState(cameraStateRef.current);
+      if (reducedMotionRef.current) {
+        focusTransition = null;
+        renderCameraStateRef.current = desired;
+        onFocusNodeSettledRef.current?.(request.nodeId);
+        return;
+      }
+      focusTransition = {
+        nodeId: request.nodeId,
+        startedAt: now,
+        from: clampCameraState(renderCameraStateRef.current),
+        to: desired,
+      };
+    };
+
     const applyCamera = (now: number) => {
       const desired = clampCameraState(cameraStateRef.current);
       const current = renderCameraStateRef.current;
       const revealStillTargetingInitialCamera = cameraStateDistance(desired, revealTargetCamera) < 2;
       if (!revealStillTargetingInitialCamera) interruptReveal();
-      const revealProgress = Math.min(1, (now - startedAt) / INITIAL_APPEARANCE_MS);
-      const revealing = revealEnabled && !revealInterrupted && animateInRef.current && revealProgress < 1;
-      const amount = revealing ? easeInOutCubic(revealProgress) : reducedMotionRef.current ? 1 : 0.18;
-      const source = revealing ? revealStartCamera : current;
-      const next = {
-        theta: lerpAngle(source.theta, desired.theta, amount),
-        phi: source.phi + (desired.phi - source.phi) * amount,
-        radius: source.radius + (desired.radius - source.radius) * amount,
-        target: {
-          x: source.target.x + (desired.target.x - source.target.x) * amount,
-          y: source.target.y + (desired.target.y - source.target.y) * amount,
-          z: source.target.z + (desired.target.z - source.target.z) * amount,
-        },
-      };
+      if (focusTransition && cameraStateDistance(desired, focusTransition.to) > 2) focusTransition = null;
+
+      let next: UniverseCameraState;
+      if (focusTransition) {
+        const progress = Math.min(1, (now - focusTransition.startedAt) / NODE_FOCUS_TRANSITION_MS);
+        next = interpolateCameraState(focusTransition.from, focusTransition.to, easeInOutCubic(progress));
+        if (progress >= 1) {
+          const focusedNodeId = focusTransition.nodeId;
+          focusTransition = null;
+          onFocusNodeSettledRef.current?.(focusedNodeId);
+        }
+      } else {
+        const revealProgress = Math.min(1, (now - startedAt) / INITIAL_APPEARANCE_MS);
+        const revealing = revealEnabled && !revealInterrupted && animateInRef.current && revealProgress < 1;
+        const amount = revealing ? easeInOutCubic(revealProgress) : reducedMotionRef.current ? 1 : 0.18;
+        const source = revealing ? revealStartCamera : current;
+        next = interpolateCameraState(source, desired, amount);
+      }
       renderCameraStateRef.current = next;
       const phi = Math.max(0.18, Math.min(Math.PI - 0.18, next.phi));
       const x = next.target.x + next.radius * Math.sin(phi) * Math.cos(next.theta);
       const y = next.target.y + next.radius * Math.cos(phi);
       const z = next.target.z + next.radius * Math.sin(phi) * Math.sin(next.theta);
       camera.position.set(x, y, z);
-      camera.lookAt(next.target.x, next.target.y, next.target.z);
+      const inspectorFramingTarget = selectedNodeIdRef.current && selectedNodeIdRef.current !== model.rootNodeId ? 1 : 0;
+      inspectorFramingAmount = reducedMotionRef.current
+        ? inspectorFramingTarget
+        : inspectorFramingAmount + (inspectorFramingTarget - inspectorFramingAmount) * 0.14;
+      const lookTarget = repositoryUniverseInspectorAwareLookTarget(next, {
+        width: viewportWidth,
+        height: viewportHeight,
+        fullscreen: fullscreenRef.current,
+        inspectorOpen: inspectorFramingAmount > 0.001,
+      }, inspectorFramingAmount);
+      camera.lookAt(lookTarget.x, lookTarget.y, lookTarget.z);
     };
 
     const setPointer = (event: Pick<PointerEvent | MouseEvent, 'clientX' | 'clientY'>) => {
@@ -555,6 +615,7 @@ export default function RepositoryUniverse3D({
     function handlePointerDown(event: PointerEvent) {
       if (event.button !== 0 && event.button !== 2) return;
       interruptReveal();
+      cancelFocusTransition();
       setPointer(event);
       canvas.setPointerCapture?.(event.pointerId);
       pointerMode = event.button === 2 ? 'pan' : 'orbit';
@@ -583,6 +644,7 @@ export default function RepositoryUniverse3D({
 
     const handleWheel = (event: WheelEvent) => {
       interruptReveal();
+      cancelFocusTransition();
       const state = cameraStateRef.current;
       const factor = Math.exp(event.deltaY * (fullscreenRef.current ? 0.0009 : 0.00068));
       const nextRadius = Math.max(150, Math.min(1500, state.radius * factor));
@@ -593,6 +655,7 @@ export default function RepositoryUniverse3D({
 
     const handleDoubleClick = (event: MouseEvent) => {
       interruptReveal();
+      cancelFocusTransition();
       setPointer(event);
       const { nodeId, proposalId } = intersectEntity();
       if (proposalId) {
@@ -748,6 +811,7 @@ export default function RepositoryUniverse3D({
       if (disposed) return;
       const now = performance.now();
       const elapsed = now - startedAt;
+      beginRequestedFocus(now);
       if (!localSettled && (reducedMotionRef.current || !animateInRef.current || elapsed >= INITIAL_APPEARANCE_MS)) {
         finishReveal();
       }
@@ -1042,7 +1106,7 @@ function shortLabel(label: string) {
 
 function visualPositionFor(position: RepositoryUniversePosition, isRoot = false) {
   if (isRoot) return new THREE.Vector3(position.x, position.y, position.z);
-  return new THREE.Vector3(position.x * LAYOUT_SPREAD_XZ, position.y * LAYOUT_SPREAD_Y, position.z * LAYOUT_SPREAD_XZ);
+  return new THREE.Vector3(position.x * 0.96, position.y * 0.78, position.z * 0.96);
 }
 
 function clampCameraState(state: UniverseCameraState): UniverseCameraState {
@@ -1078,6 +1142,19 @@ function lerpAngle(current: number, desired: number, amount: number) {
 
 function easeOutCubic(value: number) {
   return 1 - Math.pow(1 - value, 3);
+}
+
+function interpolateCameraState(from: UniverseCameraState, to: UniverseCameraState, amount: number): UniverseCameraState {
+  return {
+    theta: lerpAngle(from.theta, to.theta, amount),
+    phi: from.phi + (to.phi - from.phi) * amount,
+    radius: from.radius + (to.radius - from.radius) * amount,
+    target: {
+      x: from.target.x + (to.target.x - from.target.x) * amount,
+      y: from.target.y + (to.target.y - from.target.y) * amount,
+      z: from.target.z + (to.target.z - from.target.z) * amount,
+    },
+  };
 }
 
 function easeInOutCubic(value: number) {

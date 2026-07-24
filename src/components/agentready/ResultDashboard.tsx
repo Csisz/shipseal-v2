@@ -71,7 +71,7 @@ import {
   type WorkspaceStoryDnaDimensionId,
   type WorkspaceStoryMentalNodeId,
 } from '@/lib/workspace';
-import { repositoryUniverseClusterLegend } from '@/lib/workspace/repositoryUniverseVisual';
+import { repositoryUniverseClusterLegend, repositoryUniverseFocusCameraState } from '@/lib/workspace/repositoryUniverseVisual';
 import type { UniverseCameraState } from './RepositoryUniverse3D';
 import type { RepositoryIntelligenceReviewUiSession } from './RepositoryIntelligenceReviewPanel';
 import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
@@ -1177,6 +1177,7 @@ function RepositoryAtlasVisualization({
   const [selectedOptimizationItemId, setSelectedOptimizationItemId] = useState<string | null>(null);
   const [selectedUniverseNodeId, setSelectedUniverseNodeId] = useState(universe.rootNodeId);
   const [universeCamera, setUniverseCamera] = useState<UniverseCameraState>(initialUniverseCamera);
+  const [universeFocusRequest, setUniverseFocusRequest] = useState({ nodeId: universe.rootNodeId, sequence: 0 });
   const [universeRotationPaused, setUniverseRotationPaused] = useState(prefersReducedMotion);
   const [universeSceneSettled, setUniverseSceneSettled] = useState(prefersReducedMotion);
   const [universeRetryKey, setUniverseRetryKey] = useState(0);
@@ -1313,6 +1314,7 @@ function RepositoryAtlasVisualization({
 
   useEffect(() => {
     setUniverseCamera(initialUniverseCamera);
+    setUniverseFocusRequest({ nodeId: universe.rootNodeId, sequence: 0 });
     setUniverseSceneSettled(prefersReducedMotion);
     setTransformationMode('current');
     setTransformationDomain('all');
@@ -1323,7 +1325,7 @@ function RepositoryAtlasVisualization({
     setAgentFlightPathTask('');
     setAgentFlightPath(null);
     setAgentFlightPathCopied(false);
-  }, [report.repoName, report.scannedAt, initialUniverseCamera, prefersReducedMotion]);
+  }, [report.repoName, report.scannedAt, initialUniverseCamera, prefersReducedMotion, universe.rootNodeId]);
 
   useEffect(() => {
     if (!optimizationPlan?.items.length) {
@@ -1454,15 +1456,22 @@ function RepositoryAtlasVisualization({
     }
   }, [onSelectChapter, story.chapters, universe.nodes]);
 
+  const focusUniverseNode = useCallback((node: RepositoryUniverseNode) => {
+    setUniverseSceneSettled(true);
+    setUniverseCamera(current => repositoryUniverseFocusCameraState(current, node, universe.rootNodeId));
+    setUniverseFocusRequest(current => ({ nodeId: node.id, sequence: current.sequence + 1 }));
+  }, [universe.rootNodeId]);
+
   const selectUniverseNode = useCallback((node: RepositoryUniverseNode) => {
     setSelectedUniverseNodeId(node.id);
     if (node.clusterId) setFocusedClusterId(node.clusterId);
     if (node.metadata.atlasNodeId) setSelectedNodeId(node.metadata.atlasNodeId);
+    focusUniverseNode(node);
     const chapterId = typeof node.metadata.storyChapterId === 'string' ? node.metadata.storyChapterId as WorkspaceStoryChapterId : null;
     if (chapterId && story.chapters.some(chapter => chapter.id === chapterId)) {
       onSelectChapter(chapterId);
     }
-  }, [onSelectChapter, story.chapters]);
+  }, [focusUniverseNode, onSelectChapter, story.chapters]);
 
   const changeViewMode = (mode: 'universe3d' | 'atlas2d') => {
     if (mode === viewMode) return;
@@ -1551,11 +1560,7 @@ function RepositoryAtlasVisualization({
       setSelectedUniverseNodeId(universeNode.id);
       if (universeNode.metadata.atlasNodeId) setSelectedNodeId(universeNode.metadata.atlasNodeId);
       if (universeNode.clusterId) setFocusedClusterId(universeNode.clusterId);
-      setUniverseCamera(current => ({
-        ...current,
-        radius: universeNode.kind === 'file' ? 220 : 300,
-        target: universeNode.position,
-      }));
+      focusUniverseNode(universeNode);
       return;
     }
 
@@ -1570,7 +1575,7 @@ function RepositoryAtlasVisualization({
         : universe.nodes.find(node => node.metadata.atlasNodeId === atlasNode.id);
       if (matchingUniverseNode) setSelectedUniverseNodeId(matchingUniverseNode.id);
     }
-  }, [agentFlightPath, atlas.nodes, universe.nodes]);
+  }, [agentFlightPath, atlas.nodes, focusUniverseNode, universe.nodes]);
 
   const toggleProposalIncluded = (proposalId: string) => {
     setExcludedProposalIds(current => {
@@ -2156,6 +2161,7 @@ function RepositoryAtlasVisualization({
             onSelectNode={handleUniverseSelectNode}
             onSelectProposal={handleUniverseSelectProposal}
             onSceneSettled={handleUniverseSceneSettled}
+            focusRequest={universeFocusRequest}
           />
         </Suspense>
       </RepositoryUniverseErrorBoundary>
@@ -2193,12 +2199,11 @@ function RepositoryAtlasVisualization({
           rootNodeId={universe.rootNodeId}
           collapsed={fullscreen && inspectorCollapsed}
           onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
-          onFocusNode={() => selectedUniverseNode && setUniverseCamera(current => ({ ...current, radius: selectedUniverseNode.kind === 'file' ? 220 : 300, target: selectedUniverseNode.position }))}
+          onFocusNode={() => selectedUniverseNode && focusUniverseNode(selectedUniverseNode)}
           onFocusCluster={() => selectedUniverseNode?.clusterId && setFocusedClusterId(selectedUniverseNode.clusterId)}
           onClearFocus={() => setFocusedClusterId(null)}
           onReturnRepository={() => {
             setSelectedUniverseNodeId(universe.rootNodeId);
-            setUniverseCamera(initialUniverseCamera);
           }}
           onOpenAtlas={() => changeViewMode('atlas2d')}
           onSelectNode={selectUniverseNode}
@@ -2251,35 +2256,28 @@ function RepositoryAtlasVisualization({
   const showPlanReview = optimizationPlanReview && (activeResultChapter === 'improve' || activeResultChapter === 'verify');
 
   return (
-    <section ref={atlasRootRef} className={`relative border-y border-primary/15 bg-[hsl(var(--universe-stage-bg))] ${activeResultChapter === 'understand' ? '' : 'px-2 py-2 md:px-3'}`} aria-labelledby="repository-atlas-heading">
-      <div className={activeResultChapter === 'understand' ? 'sr-only' : 'mb-2 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between'}>
-        <div>
-          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{resultChapterEyebrow}</div>
-          <h2 id="repository-atlas-heading" className="font-display text-lg font-semibold">{resultChapterTitle}</h2>
-          <p className="hidden text-sm text-muted-foreground xl:block">
-            {resultChapterSummary}
-          </p>
+    <section ref={atlasRootRef} className={`relative border-y border-primary/15 bg-[hsl(var(--universe-stage-bg))] ${activeResultChapter === 'understand' || activeResultChapter === 'improve' ? '' : 'px-2 py-2 md:px-3'}`} aria-labelledby="repository-atlas-heading">
+      {activeResultChapter !== 'improve' && (
+        <div className={activeResultChapter === 'understand' ? 'sr-only' : 'mb-2 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between'}>
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{resultChapterEyebrow}</div>
+            <h2 id="repository-atlas-heading" className="font-display text-lg font-semibold">{resultChapterTitle}</h2>
+            <p className="hidden text-sm text-muted-foreground xl:block">
+              {resultChapterSummary}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {!fullscreen && (
         <>
-          {showUniverseWorkspace && (
+          {activeResultChapter === 'understand' && (
             <div id="repository-atlas-navigation-status" className={activeResultChapter === 'understand' ? 'sr-only' : 'mb-2 text-xs text-muted-foreground'} aria-live="polite">
               {atlasNavigationActive ? `${viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to release` : 'Click to explore - Scroll to zoom - Drag to move'}
             </div>
           )}
 
-          {showPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
-          {activeResultChapter === 'improve' && !optimizationPlanOpen && (
-            <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
-              <div className="font-display text-lg font-semibold">ShipSeal found concrete improvements.</div>
-              <p className="mt-1 text-sm text-muted-foreground">Review the generated plan, then package only what should be human-reviewed.</p>
-              <Button type="button" size="sm" onClick={openOptimizationPlan} className="mt-3 bg-primary text-primary-foreground hover:bg-primary/90">
-                Prepare optimization package
-              </Button>
-            </div>
-          )}
+          {activeResultChapter === 'verify' && showPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
           {activeResultChapter === 'verify' && !optimizationPlanReview && (
             <div className="mb-4 rounded-2xl border border-border/55 bg-background/20 p-4">
               <p className="text-sm text-muted-foreground">No active optimization artifacts are selected yet.</p>
@@ -2318,6 +2316,29 @@ function RepositoryAtlasVisualization({
           {inspectorVisible
             ? <aside className={`absolute bottom-3 right-3 z-30 max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-auto motion-safe:animate-scale-in lg:bottom-auto ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}>{inspector}</aside>
             : <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-center gap-2 rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.58)] px-3 py-1.5 text-xs text-muted-foreground shadow-[0_14px_44px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl"><span className="h-1.5 w-1.5 rounded-full bg-accent/70 shadow-[0_0_12px_hsl(var(--accent)/0.55)]" />Select a node to inspect evidence</div>}
+        </div>
+      )}
+
+      {!fullscreen && activeResultChapter === 'improve' && (
+        <div data-testid="improve-supporting-content" className="space-y-4 border-t border-primary/15 bg-background/10 px-3 py-5 md:px-5">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{resultChapterEyebrow}</div>
+            <h2 id="repository-atlas-heading" className="mt-1 font-display text-xl font-semibold">{resultChapterTitle}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{resultChapterSummary}</p>
+            <p id="repository-atlas-navigation-status" className="mt-2 text-xs text-muted-foreground" aria-live="polite">
+              {atlasNavigationActive ? `${viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to release` : 'Click to explore - Scroll to zoom - Drag to move'}
+            </p>
+          </div>
+          {!optimizationPlanOpen && (
+            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
+              <div className="font-display text-lg font-semibold">ShipSeal found concrete improvements.</div>
+              <p className="mt-1 text-sm text-muted-foreground">Review the generated plan, then package only what should be human-reviewed.</p>
+              <Button type="button" size="sm" onClick={openOptimizationPlan} className="mt-3 bg-primary text-primary-foreground hover:bg-primary/90">
+                Prepare optimization package
+              </Button>
+            </div>
+          )}
+          {showPlanReview && optimizationPlanReview}
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseRevealStartCamera } from '@/components/agentready/RepositoryUniverse3D';
-import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken } from '@/lib/workspace/repositoryUniverseVisual';
+import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseFocusCameraState, repositoryUniverseInspectorAwareLookTarget } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryUniverseNode } from '@/lib/workspace';
 
 function node(overrides: Partial<RepositoryUniverseNode>) {
@@ -81,6 +81,64 @@ describe('Repository Universe 3D labels', () => {
     expect(revealStart.target).toEqual(camera.target);
     expect(revealStart.theta).not.toBe(camera.theta);
     expect(repositoryUniverseRevealStartCamera(camera, false)).toEqual(camera);
+  });
+
+  it('targets selected nodes without changing orientation and preserves that target for zoom', () => {
+    const camera = {
+      theta: 0.8,
+      phi: 1.12,
+      radius: 620,
+      target: { x: 0, y: 0, z: 0 },
+    };
+    const selected = node({ id: 'file:selected', kind: 'file', position: { x: 100, y: 50, z: -80 } });
+    const second = node({ id: 'file:second', kind: 'file', position: { x: -120, y: 30, z: 140 } });
+
+    const focused = repositoryUniverseFocusCameraState(camera, selected, 'repo:test');
+    expect(focused.theta).toBe(camera.theta);
+    expect(focused.phi).toBe(camera.phi);
+    expect(focused.radius).toBe(240);
+    expect(focused.target).toEqual({ x: 96, y: 39, z: -76.8 });
+
+    const zoomed = { ...focused, radius: 180 };
+    expect(zoomed.target).toEqual(focused.target);
+    expect(repositoryUniverseFocusCameraState(focused, second, 'repo:test').target).not.toEqual(focused.target);
+
+    const root = node({ id: 'repo:test', kind: 'repository', position: { x: 10, y: 5, z: -8 } });
+    const rootFocused = repositoryUniverseFocusCameraState(zoomed, root, 'repo:test');
+    expect(rootFocused.radius).toBeGreaterThanOrEqual(560);
+    expect(rootFocused.target).toEqual(root.position);
+  });
+
+  it('offsets only the look direction for inspector-aware desktop and mobile framing', () => {
+    const camera = {
+      theta: 0.8,
+      phi: 1.12,
+      radius: 240,
+      target: { x: 96, y: 39, z: -76.8 },
+    };
+    const desktopLook = repositoryUniverseInspectorAwareLookTarget(camera, {
+      width: 1280,
+      height: 800,
+      fullscreen: false,
+      inspectorOpen: true,
+    });
+    const mobileLook = repositoryUniverseInspectorAwareLookTarget(camera, {
+      width: 390,
+      height: 844,
+      fullscreen: false,
+      inspectorOpen: true,
+    });
+
+    expect(desktopLook).not.toEqual(camera.target);
+    expect(desktopLook.y).toBe(camera.target.y);
+    expect(mobileLook).not.toEqual(camera.target);
+    expect(mobileLook.y).toBeLessThan(camera.target.y);
+    expect(repositoryUniverseInspectorAwareLookTarget(camera, {
+      width: 1280,
+      height: 800,
+      fullscreen: true,
+      inspectorOpen: true,
+    })).toEqual(camera.target);
   });
 });
 
