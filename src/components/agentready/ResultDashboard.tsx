@@ -1190,6 +1190,7 @@ function RepositoryAtlasVisualization({
   const [navigationActive, setNavigationActive] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [inspectorScrollActive, setInspectorScrollActive] = useState(false);
   const [agentFlightPathTask, setAgentFlightPathTask] = useState('');
   const [agentFlightPath, setAgentFlightPath] = useState<RepositoryAgentFlightPath | null>(null);
   const [agentFlightPathCopied, setAgentFlightPathCopied] = useState(false);
@@ -2347,7 +2348,31 @@ function RepositoryAtlasVisualization({
             </div>
           </div>
           {inspectorVisible
-            ? <aside className={`absolute bottom-3 right-3 z-[var(--layer-inspector)] max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-auto motion-safe:animate-scale-in lg:bottom-auto ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}>{inspector}</aside>
+            ? (
+              <aside
+                role="region"
+                aria-label="Selected entity inspector. Focus or click to scroll details."
+                tabIndex={0}
+                data-testid="repository-inspector-scroll-region"
+                data-scroll-mode={inspectorScrollActive ? 'inspector' : 'page'}
+                onPointerDownCapture={() => setInspectorScrollActive(true)}
+                onFocusCapture={() => setInspectorScrollActive(true)}
+                onBlurCapture={event => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setInspectorScrollActive(false);
+                }}
+                onPointerLeave={event => {
+                  if (!event.currentTarget.contains(document.activeElement)) setInspectorScrollActive(false);
+                }}
+                className={`absolute bottom-3 right-3 z-[var(--layer-inspector)] max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overscroll-y-auto rounded-[1.6rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:animate-scale-in lg:bottom-auto ${inspectorScrollActive ? 'overflow-y-auto' : 'overflow-hidden'} ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}
+              >
+                {inspector}
+                {!inspectorScrollActive && (
+                  <div className="pointer-events-none sticky bottom-2 ml-auto mr-2 mt-[-2.25rem] w-fit rounded-full border border-border/60 bg-floating/90 px-2.5 py-1 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur">
+                    Focus to scroll details
+                  </div>
+                )}
+              </aside>
+            )
             : <div className="pointer-events-none absolute bottom-4 right-4 z-[var(--layer-graph-overlay)] flex items-center gap-2 rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.72)] px-3 py-1.5 text-xs text-muted-foreground shadow-[var(--shadow-md-semantic)] backdrop-blur-xl"><span className="h-1.5 w-1.5 rounded-full bg-accent/70 shadow-[0_0_12px_hsl(var(--accent)/0.55)]" />Select a node to inspect evidence</div>}
         </div>
       )}
@@ -2448,7 +2473,15 @@ function RepositoryAtlasVisualization({
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
           <div className={`grid min-h-0 flex-1 gap-4 ${inspectorCollapsed ? 'xl:grid-cols-[minmax(0,1fr)_220px]' : 'xl:grid-cols-[minmax(0,1fr)_360px]'}`}>
             {viewMode === 'universe3d' ? universeCanvas : atlasCanvas}
-            {inspector}
+            <div
+              className="min-h-0 overflow-y-auto overscroll-y-contain rounded-[1.6rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              role="region"
+              tabIndex={0}
+              aria-label="Fullscreen selected entity inspector"
+              data-testid="fullscreen-inspector-scroll-region"
+            >
+              {inspector}
+            </div>
           </div>
         </div>
       )}

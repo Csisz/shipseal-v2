@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseRevealStartCamera } from '@/components/agentready/RepositoryUniverse3D';
+import { repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseRevealStartCamera, repositoryUniverseWheelCameraState } from '@/components/agentready/RepositoryUniverse3D';
 import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseFocusCameraState, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryUniverseNode } from '@/lib/workspace';
 
@@ -49,12 +49,25 @@ describe('Repository Universe 3D labels', () => {
     const light = repositoryUniverseRendererTokens('light');
     const dark = repositoryUniverseRendererTokens('dark');
 
+    expect(light.mode).toBe('light');
+    expect(dark.mode).toBe('dark');
     expect(light.background).not.toBe(dark.background);
     expect(light.starOpacity).toBeLessThan(dark.starOpacity);
     expect(light.fogDensity).toBeLessThan(dark.fogDensity);
     expect(light.relationshipEdge).not.toBe(dark.relationshipEdge);
     expect(light.route).not.toBe(dark.route);
     expect(light.nodeEmissivePrimary).toBeLessThan(dark.nodeEmissivePrimary);
+    expect(light.edgeOpacityBase).toBeGreaterThan(dark.edgeOpacityBase);
+    expect(light.edgeOpacitySelected).toBeGreaterThan(light.edgeOpacityBase);
+    expect(light.edgeOpacityFocused).toBeGreaterThan(light.edgeOpacityBase);
+    expect(light.nodeOpacityBase).toBeGreaterThan(dark.nodeOpacityBase);
+    expect(light.selected).not.toBe(light.search);
+    expect(light.selected).not.toBe(light.route);
+    expect(light.search).not.toBe(light.route);
+    expect(light.haloAdditive).toBe(false);
+    expect(dark.haloAdditive).toBe(true);
+    expect(dark.background).toBe(0x000106);
+    expect(dark.starOpacity).toBe(0.82);
   });
 
   it('keeps the deterministic cluster palette vivid and distinguishable', () => {
@@ -119,6 +132,28 @@ describe('Repository Universe 3D labels', () => {
     const rootFocused = repositoryUniverseFocusCameraState(zoomed, root, 'repo:test');
     expect(rootFocused.radius).toBeGreaterThanOrEqual(560);
     expect(rootFocused.target).toEqual(root.position);
+  });
+
+  it('keeps Universe wheel zoom centered on the active camera target', () => {
+    const camera = {
+      theta: 0.8,
+      phi: 1.12,
+      radius: 620,
+      target: { x: 96, y: 39, z: -76.8 },
+    };
+
+    const zoomedIn = repositoryUniverseWheelCameraState(camera, -120);
+    const zoomedOut = repositoryUniverseWheelCameraState(camera, 120);
+    const fullscreenZoom = repositoryUniverseWheelCameraState(camera, -120, true);
+
+    expect(zoomedIn.radius).toBeLessThan(camera.radius);
+    expect(zoomedOut.radius).toBeGreaterThan(camera.radius);
+    expect(fullscreenZoom.radius).toBeLessThan(zoomedIn.radius);
+    expect(zoomedIn.target).toEqual(camera.target);
+    expect(zoomedIn.theta).toBe(camera.theta);
+    expect(zoomedIn.phi).toBe(camera.phi);
+    expect(repositoryUniverseWheelCameraState({ ...camera, radius: 150 }, -1000).radius).toBe(150);
+    expect(repositoryUniverseWheelCameraState({ ...camera, radius: 1500 }, 1000).radius).toBe(1500);
   });
 
   it('offsets only the look direction for inspector-aware desktop and mobile framing', () => {

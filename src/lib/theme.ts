@@ -8,7 +8,7 @@ export type ShipSealResolvedTheme = Exclude<ShipSealThemePreference, 'system'>;
 export function parseShipSealThemePreference(value: unknown): ShipSealThemePreference {
   return typeof value === 'string' && SHIPSEAL_THEME_PREFERENCES.includes(value as ShipSealThemePreference)
     ? value as ShipSealThemePreference
-    : 'system';
+    : 'dark';
 }
 
 export function resolveShipSealTheme(

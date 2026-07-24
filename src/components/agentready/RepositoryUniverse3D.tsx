@@ -336,7 +336,7 @@ export default function RepositoryUniverse3D({
       const material = new THREE.LineBasicMaterial({
         color: colorForEdge(edge, false, false, visualTokens),
         transparent: true,
-        opacity: 0.1,
+        opacity: visualTokens.edgeOpacityBase,
         depthWrite: false,
       });
       const geometry = new THREE.BufferGeometry().setFromPoints([source, target]);
@@ -414,8 +414,8 @@ export default function RepositoryUniverse3D({
         color: colorForNode(node, false, false, false, false, false, visualTokens),
         emissive: emissiveForNode(node, false, false, false, false, visualTokens),
         emissiveIntensity: node.importance === 'primary' ? visualTokens.nodeEmissivePrimary : visualTokens.nodeEmissiveQuiet,
-        metalness: 0.18,
-        roughness: 0.38,
+        metalness: visualTokens.materialMetalness,
+        roughness: visualTokens.materialRoughness,
         transparent: true,
         opacity: 0.9,
         wireframe: node.evidenceType === 'missing' || node.kind === 'recommendation',
@@ -430,7 +430,7 @@ export default function RepositoryUniverse3D({
         transparent: true,
         opacity: 0,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
+        blending: visualTokens.haloAdditive ? THREE.AdditiveBlending : THREE.NormalBlending,
       });
       const halo = new THREE.Mesh(sphereFor(baseRadius * 2.25), haloMaterial);
       halo.position.copy(mesh.position);
@@ -649,10 +649,7 @@ export default function RepositoryUniverse3D({
     const handleWheel = (event: WheelEvent) => {
       interruptReveal();
       cancelFocusTransition();
-      const state = cameraStateRef.current;
-      const factor = Math.exp(event.deltaY * (fullscreenRef.current ? 0.0009 : 0.00068));
-      const nextRadius = Math.max(150, Math.min(1500, state.radius * factor));
-      publishCamera({ ...state, radius: nextRadius });
+      publishCamera(repositoryUniverseWheelCameraState(cameraStateRef.current, event.deltaY, fullscreenRef.current));
       userInteractedAt = performance.now();
       event.preventDefault();
     };
@@ -719,12 +716,12 @@ export default function RepositoryUniverse3D({
         line.material.opacity = !visible
           ? 0
           : directlySelected
-            ? edge.evidenceType === 'heuristic' ? 0.5 : 0.78
+            ? edge.evidenceType === 'heuristic' ? visualTokens.edgeOpacitySelectedHeuristic : visualTokens.edgeOpacitySelected
             : focused
-              ? 0.42
+              ? visualTokens.edgeOpacityFocused
               : edge.relationship === 'contains'
-                ? selectedId || focusedCluster || routeActive ? 0.02 : 0.045
-                : selectedId || focusedCluster || routeActive ? 0.065 : 0.18;
+                ? selectedId || focusedCluster || routeActive ? visualTokens.edgeOpacityContainsQuiet : visualTokens.edgeOpacityContainsBase
+                : selectedId || focusedCluster || routeActive ? visualTokens.edgeOpacityQuiet : visualTokens.edgeOpacityBase;
         line.material.color.setHex(colorForEdge(edge, directlySelected, focused, visualTokens));
       }
 
@@ -752,19 +749,39 @@ export default function RepositoryUniverse3D({
         const focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
         const quiet = Boolean((selectedId || routeActive) && !selected && !connected && !matched && !routeHighlighted && node.id !== model.rootNodeId);
         const suppressed = Boolean(focusedCluster && !focused && !selected && !matched && !routeHighlighted);
-        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.99 : routeHighlighted ? 0.99 : connected ? 0.96 : quiet || suppressed ? 0.14 : node.importance === 'background' ? 0.52 : 0.9;
+        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.99 : routeHighlighted ? 0.99 : connected ? 0.96 : quiet || suppressed ? visualTokens.nodeOpacityQuiet : node.importance === 'background' ? visualTokens.nodeOpacityBackground : visualTokens.nodeOpacityBase;
         const scale = selected ? 2.16 + focusPulse * 0.08 : hovered ? 1.62 : matched ? 1.54 : routeHighlighted ? 1.5 : connected ? 1.32 : node.importance === 'primary' ? 1.12 : 1;
 
         mesh.visible = opacity > 0.02;
         mesh.material.opacity = opacity;
         mesh.material.color.setHex(colorForNode(node, selected, matched, routeHighlighted, hovered, connected, visualTokens));
         mesh.material.emissive.setHex(emissiveForNode(node, selected, matched, routeHighlighted, hovered, visualTokens));
-        mesh.material.emissiveIntensity = selected ? 1.62 : hovered || matched ? 0.94 : routeHighlighted ? 0.92 : connected ? 0.58 : node.importance === 'primary' ? 0.4 : 0.09;
+        mesh.material.emissiveIntensity = selected
+          ? visualTokens.selectedEmissiveIntensity
+          : hovered || matched
+            ? visualTokens.priorityEmissiveIntensity
+            : routeHighlighted
+              ? visualTokens.routeEmissiveIntensity
+              : connected
+                ? visualTokens.connectedEmissiveIntensity
+                : node.importance === 'primary'
+                  ? visualTokens.primaryEmissiveIntensity
+                  : visualTokens.quietEmissiveIntensity;
         mesh.material.wireframe = node.evidenceType === 'missing' || node.kind === 'recommendation';
         mesh.scale.setScalar(scale);
 
         halo.visible = visible && (selected || hovered || matched || routeHighlighted || connected);
-        halo.material.opacity = selected ? 0.58 + focusPulse * 0.1 : hovered ? 0.32 : matched ? 0.3 : routeHighlighted ? 0.26 + focusPulse * 0.04 : connected ? 0.15 : 0;
+        halo.material.opacity = selected
+          ? visualTokens.haloOpacitySelected + focusPulse * visualTokens.haloPulseOpacity
+          : hovered
+            ? visualTokens.haloOpacityHovered
+            : matched
+              ? visualTokens.haloOpacitySearch
+              : routeHighlighted
+                ? visualTokens.haloOpacityRoute + focusPulse * visualTokens.haloRoutePulseOpacity
+                : connected
+                  ? visualTokens.haloOpacityConnected
+                  : 0;
         halo.material.color.setHex(selected
           ? visualTokens.selected
           : routeHighlighted
@@ -940,6 +957,19 @@ export function repositoryUniverseRevealStartCamera(state: UniverseCameraState, 
   };
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function repositoryUniverseWheelCameraState(
+  state: UniverseCameraState,
+  deltaY: number,
+  fullscreen = false,
+): UniverseCameraState {
+  const factor = Math.exp(deltaY * (fullscreen ? 0.0009 : 0.00068));
+  return {
+    ...state,
+    radius: Math.max(150, Math.min(1500, state.radius * factor)),
+  };
+}
+
 function createStarField(tokens: RepositoryUniverseRendererTokens = REPOSITORY_UNIVERSE_CINEMATIC_TOKENS) {
   const count = 320;
   const positions = new Float32Array(count * 3);
@@ -1000,6 +1030,15 @@ function colorForNode(
   connected?: boolean,
   tokens: RepositoryUniverseRendererTokens = REPOSITORY_UNIVERSE_CINEMATIC_TOKENS,
 ) {
+  const baseColor = repositoryUniverseNodeBaseColor(node);
+  if (tokens.mode === 'light') {
+    if (selected) return blendHex(baseColor, tokens.selected, 0.56);
+    if (hovered) return blendHex(baseColor, tokens.coreGlow, 0.32);
+    if (route) return blendHex(baseColor, tokens.route, 0.5);
+    if (matched) return blendHex(baseColor, tokens.search, 0.46);
+    if (connected) return blendHex(baseColor, tokens.connectedEdge, 0.24);
+    return baseColor;
+  }
   if (selected) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.5);
   if (hovered) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.38);
   if (route) return blendHex(repositoryUniverseNodeBaseColor(node), tokens.route, 0.42);
@@ -1117,9 +1156,14 @@ function labelSprite(label: string, color: string, theme: ShipSealResolvedTheme 
     context.font = '600 28px Inter, system-ui, sans-serif';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillStyle = theme === 'light' ? 'rgba(255, 255, 255, 0.82)' : 'rgba(5, 9, 20, 0.66)';
+    context.fillStyle = theme === 'light' ? 'rgba(255, 253, 248, 0.95)' : 'rgba(5, 9, 20, 0.66)';
     roundRect(context, 34, 36, 444, 56, 24);
     context.fill();
+    if (theme === 'light') {
+      context.strokeStyle = 'rgba(24, 56, 74, 0.22)';
+      context.lineWidth = 2;
+      context.stroke();
+    }
     context.fillStyle = color;
     context.fillText(label, 256, 64, 400);
   }

@@ -401,6 +401,39 @@ describe('ResultDashboard summary copy', () => {
     await waitFor(() => expect(screen.queryByTestId('universe-more-controls-menu')).not.toBeInTheDocument());
   });
 
+  it('lets page scrolling win until the selected inspector is deliberately activated', async () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /Select universe node/i }));
+    const inspectorScrollRegion = screen.getByTestId('repository-inspector-scroll-region');
+
+    expect(inspectorScrollRegion).toHaveAttribute('data-scroll-mode', 'page');
+    expect(inspectorScrollRegion).toHaveClass('overflow-hidden');
+
+    const passiveWheel = new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: 120 });
+    inspectorScrollRegion.dispatchEvent(passiveWheel);
+    expect(passiveWheel.defaultPrevented).toBe(false);
+    expect(inspectorScrollRegion).toHaveAttribute('data-scroll-mode', 'page');
+
+    fireEvent.pointerDown(inspectorScrollRegion, { pointerId: 1, pointerType: 'mouse' });
+    expect(inspectorScrollRegion).toHaveAttribute('data-scroll-mode', 'inspector');
+    expect(inspectorScrollRegion).toHaveClass('overflow-y-auto');
+
+    fireEvent.blur(inspectorScrollRegion, { relatedTarget: document.body });
+    fireEvent.pointerLeave(inspectorScrollRegion);
+    expect(inspectorScrollRegion).toHaveAttribute('data-scroll-mode', 'page');
+
+    fireEvent.focus(inspectorScrollRegion);
+    expect(inspectorScrollRegion).toHaveAttribute('data-scroll-mode', 'inspector');
+  });
+
   it('makes visual understanding the primary dashboard summary and keeps Repository Health secondary', async () => {
     const report = buildSampleReport();
     const topAction = report.repositoryHealth.topActions[0];
@@ -1105,6 +1138,7 @@ describe('ResultDashboard summary copy', () => {
     expect(fullscreenUniverse).toHaveAttribute('data-selected-node', selectedNodeId || '');
     expect(fullscreenUniverse).toHaveAttribute('data-camera-radius', cameraRadius || '');
     expect(fullscreenUniverse).toHaveAttribute('data-camera-target', cameraTarget || '');
+    expect(within(dialog).getByTestId('fullscreen-inspector-scroll-region')).toHaveClass('overflow-y-auto');
 
     fireEvent.keyDown(document, { key: 'Escape' });
 

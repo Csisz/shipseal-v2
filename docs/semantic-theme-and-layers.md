@@ -1,6 +1,6 @@
 # Semantic themes and overlay layers
 
-ShipSeal uses `next-themes` with the local-only `shipseal-theme` preference. Valid values are `light`, `dark`, and `system`. The inline initializer in `index.html` resolves that preference before the application module loads; React then maintains the root `.dark` class through `ThemeProvider`.
+ShipSeal uses `next-themes` with the local-only `shipseal-theme` preference. Valid values are `light`, `dark`, and `system`. A first visit or invalid stored value defaults to `dark`; explicit `light`, `dark`, and `system` choices remain persistent. The inline initializer in `index.html` resolves that preference before the application module loads; React then maintains the root `.dark` class through `ThemeProvider`.
 
 Application colors belong in the semantic variables in `src/index.css`. Components should use surface, foreground, border, control, evidence, perspective, and graph variables rather than assuming a dark canvas. Exported HTML, PDF, score, and Delivery Pack generators do not read the application theme.
 
@@ -20,3 +20,7 @@ The reusable layer variables are:
 10. `--layer-critical`: reserved for critical modal overlays
 
 Popover-like UI must use a Radix portal with collision handling instead of an absolutely positioned child of an `overflow-hidden` stage. Dialog and drawer primitives own focus trapping; nonmodal stage menus close on outside interaction or Escape and return focus to their trigger.
+
+## Workspace scroll contract
+
+The document owns ordinary wheel scrolling. The Universe canvas owns wheel zoom only when the pointer is on the renderer. The selected-entity inspector remains non-scrollable until it receives pointer or keyboard focus, then exposes its internal scroll region with normal boundary chaining. Fullscreen has no document-scroll alternative, so its inspector is always independently scrollable.

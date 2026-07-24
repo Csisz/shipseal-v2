@@ -6,7 +6,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   return (
     <NextThemesProvider
       attribute="class"
-      defaultTheme="system"
+      defaultTheme="dark"
       enableColorScheme
       enableSystem
       storageKey={SHIPSEAL_THEME_STORAGE_KEY}

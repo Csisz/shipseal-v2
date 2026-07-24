@@ -47,21 +47,21 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
           </span>
           <span className="font-display text-xl font-bold tracking-tight">ShipSeal</span>
         </Link>
-        <nav className="hidden md:flex items-center gap-7">
+        <nav className="hidden lg:flex items-center gap-7">
           {links.map((l) => (
             <a key={l.href} href={l.href} onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor(l.href); } }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               {l.label}
             </a>
           ))}
         </nav>
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden lg:flex items-center gap-2">
           <ThemeToggle />
           <Button asChild variant="ghost"><Link to="/projects">My projects</Link></Button>
           <Button asChild variant="default" className="bg-gradient-primary hover:opacity-90 border-0 shadow-glow">
             <a href="#scan" onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a>
           </Button>
         </div>
-        <div className="flex items-center gap-1 md:hidden">
+        <div className="flex items-center gap-1 lg:hidden">
           <ThemeToggle />
           <button type="button" onClick={() => setOpen(!open)} className="rounded-full p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={open}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -69,7 +69,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
         </div>
       </div>
       {open && (
-        <div className="md:hidden border-t border-border/60 bg-background/95 backdrop-blur-xl">
+        <div className="border-t border-border/60 bg-background/95 backdrop-blur-xl lg:hidden">
           <div className="container py-4 flex flex-col gap-3">
             {links.map((l) => (
               <a key={l.href} href={l.href} onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor(l.href); } }} className="text-sm text-muted-foreground hover:text-foreground py-1.5">

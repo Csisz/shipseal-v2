@@ -27,7 +27,7 @@ export function ThemeToggle({ className }: { className?: string }) {
   const tooltipId = useId();
   const { theme, setTheme } = useTheme();
   const preference = parseShipSealThemePreference(theme);
-  const active = OPTIONS.find(option => option.value === preference) || OPTIONS[2];
+  const active = OPTIONS.find(option => option.value === preference) || OPTIONS[1];
   const ActiveIcon = active.icon;
 
   return (
@@ -37,13 +37,15 @@ export function ThemeToggle({ className }: { className?: string }) {
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className={cn('h-9 w-9 rounded-full border border-border/70 bg-floating/80 text-foreground shadow-sm', className)}
-            aria-label={`Theme: ${active.label}. Change color theme`}
+            size="sm"
+            className={cn('h-9 gap-1.5 rounded-full border border-border/70 bg-floating/80 px-2.5 text-foreground shadow-sm', className)}
+            aria-label={`Appearance theme: ${active.label}. Change appearance`}
             aria-describedby={tooltipId}
             data-testid="theme-toggle"
           >
             <ActiveIcon className="h-4 w-4" aria-hidden="true" />
+            <span className="text-xs font-medium">Theme</span>
+            <span className="text-xs text-muted-foreground" aria-hidden="true">{active.label}</span>
           </Button>
         </DropdownMenuTrigger>
         <span
@@ -51,7 +53,7 @@ export function ThemeToggle({ className }: { className?: string }) {
           role="tooltip"
           className="pointer-events-none absolute right-0 top-[calc(100%+0.5rem)] z-[var(--layer-tooltip)] whitespace-nowrap rounded-md bg-tooltip px-3 py-1.5 text-xs text-background opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
         >
-          Color theme: {active.label}
+          Appearance: {active.label}. Choose Dark, Light, or System.
         </span>
       </div>
       <DropdownMenuContent
@@ -61,7 +63,10 @@ export function ThemeToggle({ className }: { className?: string }) {
         className="w-44"
         data-testid="theme-menu"
       >
-        <DropdownMenuLabel>Color theme</DropdownMenuLabel>
+        <DropdownMenuLabel>
+          <span className="block">Appearance</span>
+          <span className="mt-0.5 block text-[11px] font-normal text-muted-foreground">Choose Dark, Light, or System</span>
+        </DropdownMenuLabel>
         <DropdownMenuSeparator />
         {OPTIONS.map(option => {
           const Icon = option.icon;
