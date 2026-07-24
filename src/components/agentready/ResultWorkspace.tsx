@@ -26,8 +26,6 @@ import {
   selectLimitedScanReason,
 } from './result-workspace/model/resultWorkspaceSelectors';
 import { AiWorkspaceHero } from './result-workspace/universe/UniverseWorkspace';
-import UnderstandWorkspace from './result-workspace/understand/UnderstandWorkspace';
-const UnderstandChapter = lazy(() => import('./result-dashboard/chapters/UnderstandChapter'));
 const ImproveChapter = lazy(() => import('./result-dashboard/chapters/ImproveChapter'));
 const VerifyChapter = lazy(() => import('./result-dashboard/chapters/VerifyChapter'));
 const DeliverChapter = lazy(() => import('./result-dashboard/chapters/DeliverChapter'));
@@ -265,14 +263,6 @@ export function ResultWorkspace({
         /> : null}
       </div>
 
-      {visitedResultChapters.has('understand') && (
-        <ResultChapterShell chapter="understand" active={activeResultChapter === 'understand'}>
-          <ResultChapterLoadBoundary chapterLabel="Understand">
-            <Suspense fallback={<ResultChapterLoading chapterLabel="Understand" />}><UnderstandChapter report={report} story={workspaceStory} /></Suspense>
-          </ResultChapterLoadBoundary>
-        </ResultChapterShell>
-      )}
-
       {visitedResultChapters.has('improve') && (
         <ResultChapterShell chapter="improve" active={activeResultChapter === 'improve'}>
           <ResultChapterLoadBoundary chapterLabel="Improve">
@@ -322,14 +312,6 @@ export function ResultWorkspace({
             <Suspense fallback={<ResultChapterLoading chapterLabel="Deliver" />}><DeliverChapter /></Suspense>
           </ResultChapterLoadBoundary>
         </ResultChapterShell>
-      )}
-
-      {visitedResultChapters.has('understand') && (
-        <UnderstandWorkspace
-          active={activeResultChapter === 'understand'}
-          report={report}
-          activeStoryChapter={activeStoryChapter}
-        />
       )}
 
       {visitedResultChapters.has('deliver') && (

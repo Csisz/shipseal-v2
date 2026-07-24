@@ -69,10 +69,10 @@ export function PostScanOverview({
           )}
         </div>
         <div className={`flex flex-wrap items-center gap-2 ${stageOverlay ? 'pt-0.5' : 'lg:justify-end'}`}>
-          <Button type="button" size="sm" onClick={onReviewRepositoryIntelligence} className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button type="button" variant={stageOverlay ? 'outline' : 'default'} size="sm" onClick={onReviewRepositoryIntelligence} className={stageOverlay ? 'border-border/60 bg-background/20' : 'bg-primary text-primary-foreground hover:bg-primary/90'}>
             Review improvements <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onPlanAgentTask} className="border-border/60 bg-background/20">
+          <Button type="button" variant={stageOverlay ? 'default' : 'outline'} size="sm" onClick={onPlanAgentTask} className={stageOverlay ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'border-border/60 bg-background/20'}>
             <Compass className="mr-1.5 h-3.5 w-3.5" /> Plan an agent task
           </Button>
           {persistenceControl && (

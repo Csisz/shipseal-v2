@@ -188,9 +188,11 @@ describe('ShipSeal pre-scan intake flow', () => {
     fireEvent.keyDown(resultActionsTrigger, { key: 'ArrowDown' });
     expect(screen.getByRole('menuitem', { name: /Replay reveal/i })).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
-    fireEvent.click(await screen.findByText(/Workspace story and evidence/i, undefined, { timeout: 15000 }));
-    fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
-    expect(screen.getByRole('heading', { name: /Knowledge and docs/i })).toBeInTheDocument();
+    const universeControls = screen.getByRole('button', { name: /More Universe controls/i });
+    fireEvent.keyDown(universeControls, { key: 'ArrowDown' });
+    fireEvent.click(screen.getByRole('menuitem', { name: /Open repository story/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Knowledge and docs/i }));
+    expect(screen.getByRole('tab', { name: /Story/i })).toHaveAttribute('aria-selected', 'true');
 
     fireEvent.keyDown(resultActionsTrigger, { key: 'ArrowDown' });
     fireEvent.click(screen.getByRole('menuitem', { name: /Replay reveal/i }));
@@ -198,8 +200,9 @@ describe('ShipSeal pre-scan intake flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 
     expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 15000 })).toBeInTheDocument();
-    fireEvent.click(await screen.findByText(/Workspace story and evidence/i, undefined, { timeout: 15000 }));
-    expect(await screen.findByRole('heading', { name: /Knowledge and docs/i }, { timeout: 5000 })).toBeInTheDocument();
+    const storyTab = await screen.findByRole('tab', { name: /Story/i }, { timeout: 5000 });
+    fireEvent.click(storyTab);
+    expect(screen.getByRole('button', { name: /Knowledge and docs/i })).toBeInTheDocument();
   }, 30000);
 
   it('shows and updates Agent Operating Mode for AI Agent Development package', async () => {

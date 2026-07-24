@@ -314,6 +314,7 @@ describe('Repository Universe workspace state', () => {
 
       expect(screen.getByRole('img', { name: /Repository Atlas knowledge graph/i })).toBeInTheDocument();
       switchResultChapter('Deliver');
+      fireEvent.click(await screen.findByRole('button', { name: /Open Client handoff/i }, { timeout: 10000 }));
       expect(await screen.findByRole('heading', { name: /Reports and Delivery Outputs/i }, { timeout: 10000 })).toBeInTheDocument();
       expect(onReset).not.toHaveBeenCalled();
     } finally {
@@ -504,7 +505,7 @@ describe('Repository Universe workspace state', () => {
 
     fireEvent.click(within(dialog).getAllByRole('button', { name: /Collapse inspector/i })[0]);
     expect(within(dialog).getAllByRole('button', { name: /Expand inspector/i }).length).toBeGreaterThan(0);
-    expect(within(dialog).getAllByText(/relationships/i).length).toBeGreaterThan(0);
+    expect(within(dialog).queryByRole('button', { name: /Close inspector/i })).not.toBeInTheDocument();
 
     openMoreControls();
     fireEvent.click(screen.getByRole('menuitem', { name: /Reset view/i }));
@@ -546,15 +547,18 @@ describe('Repository Universe workspace state', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /5 Verification path/i }));
-    expect(screen.getByRole('heading', { name: /Verification path/i })).toBeInTheDocument();
+    const moreControls = screen.getByRole('button', { name: /More Universe controls/i });
+    fireEvent.keyDown(moreControls, { key: 'ArrowDown' });
+    fireEvent.click(within(screen.getByTestId('universe-more-controls-menu')).getByRole('menuitem', { name: /Open repository story/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Verification path/i }));
+    expect(screen.getByRole('tab', { name: /Story/i })).toHaveAttribute('aria-selected', 'true');
 
     switchResultChapter('Deliver');
-    await screen.findByLabelText('Client name');
-    fireEvent.change(screen.getByLabelText('Client name'), { target: { value: 'Acme' } });
+    fireEvent.click(await screen.findByRole('button', { name: /Open Client handoff/i }));
+    expect(await screen.findByRole('heading', { name: /Reports and Delivery Outputs/i })).toBeInTheDocument();
     switchResultChapter('Understand');
 
-    expect(screen.getByRole('heading', { name: /Verification path/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { name: /Verification/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('tab', { name: /Story/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /Verification path/i })).toBeInTheDocument();
   });
 });

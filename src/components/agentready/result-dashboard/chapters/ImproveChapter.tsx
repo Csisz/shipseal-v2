@@ -5,6 +5,7 @@ import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerifi
 import { RepositoryIntelligenceReviewPanel, type RepositoryIntelligenceReviewUiSession } from '../../RepositoryIntelligenceReviewPanel';
 import { RepositoryFrictionProgression } from '../chapterContent';
 import type { RepositoryFriction } from '../types';
+import { ResultWorkspaceDisclosure } from '../../result-workspace/ResultWorkspaceDisclosure';
 
 export interface ImproveChapterProps {
   frictions: RepositoryFriction[];
@@ -45,21 +46,23 @@ export default function ImproveChapter({
   }, [focusTarget, onTargetFocused, targetRef]);
 
   return (
-    <div className="space-y-6">
-      <RepositoryFrictionProgression frictions={frictions} />
-      <div ref={targetRef} id="repository-intelligence-review" tabIndex={-1} className="scroll-mt-24 focus:outline-none">
-        <RepositoryIntelligenceReviewPanel
-          session={session}
-          preparing={preparing}
-          error={error}
-          enabled
-          prepareSession={prepareSession}
-          providerStatus={providerStatus}
-          prepareEnhancement={prepareEnhancement}
-          githubConnection={githubConnection}
-          onVerificationBaseline={onVerificationBaseline}
-        />
+    <ResultWorkspaceDisclosure title="Implementation and evidence details" defaultOpen={focusTarget} lazyMount>
+      <div className="space-y-6">
+        <RepositoryFrictionProgression frictions={frictions} />
+        <div ref={targetRef} id="repository-intelligence-review" tabIndex={-1} className="scroll-mt-24 focus:outline-none">
+          <RepositoryIntelligenceReviewPanel
+            session={session}
+            preparing={preparing}
+            error={error}
+            enabled
+            prepareSession={prepareSession}
+            providerStatus={providerStatus}
+            prepareEnhancement={prepareEnhancement}
+            githubConnection={githubConnection}
+            onVerificationBaseline={onVerificationBaseline}
+          />
+        </div>
       </div>
-    </div>
+    </ResultWorkspaceDisclosure>
   );
 }

@@ -179,35 +179,11 @@ export function AiWorkspaceHero({
 }) {
   const health = report.repositoryHealth;
   const unavailable = health.overall.score === null;
-  const repositoryDna = buildRepositoryDna(report);
-  const mentalModel = buildMentalModel(report);
-  const topAction = health.topActions[0];
-  const [exploredChapterIds, setExploredChapterIds] = useState<WorkspaceStoryChapterId[]>([]);
-  const [manualMentalNodeId, setManualMentalNodeId] = useState<MentalModelNodeId | null>(null);
-  const selectedMentalNodeId = activeStoryChapter?.mentalModelNodeId as MentalModelNodeId | undefined;
-  const activeMentalNodeId = manualMentalNodeId || selectedMentalNodeId || 'architecture';
-  const activeDnaDimensionId = activeStoryChapter?.dnaDimensionId as RepositoryDnaDimensionId | undefined;
 
   const selectStoryChapter = (chapterId: WorkspaceStoryChapterId) => {
     const chapter = story.chapters.find(item => item.id === chapterId);
     if (!chapter) return;
-    setExploredChapterIds(current => current.includes(chapterId) ? current : [...current, chapterId]);
-    setManualMentalNodeId((chapter.mentalModelNodeId as MentalModelNodeId | undefined) || null);
     onActiveStoryChapterChange?.(chapterId);
-  };
-
-  const selectMentalModelNode = (nodeId: MentalModelNodeId) => {
-    setManualMentalNodeId(nodeId);
-    const chapter = chapterForMentalModelNode(story, nodeId as WorkspaceStoryMentalNodeId);
-    if (chapter) {
-      setExploredChapterIds(current => current.includes(chapter.id) ? current : [...current, chapter.id]);
-      onActiveStoryChapterChange?.(chapter.id);
-    }
-  };
-
-  const selectDnaDimension = (dimensionId: RepositoryDnaDimensionId) => {
-    const chapter = chapterForDnaDimension(story, dimensionId as WorkspaceStoryDnaDimensionId);
-    if (chapter) selectStoryChapter(chapter.id);
   };
 
   return (
@@ -245,72 +221,8 @@ export function AiWorkspaceHero({
               onSaveVerificationBaseline={onSaveVerificationBaseline}
               onDiscardVerificationBaseline={onDiscardVerificationBaseline}
             />
-
-            {activeResultChapter === 'understand' && <details className="relative mt-5 rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
-              <summary className="cursor-pointer select-none font-display text-lg font-semibold text-foreground">Workspace story and evidence</summary>
-              <div className="mt-5">
-                <WorkspaceStoryNavigator
-                  story={story}
-                  activeChapter={activeStoryChapter}
-                  exploredChapterIds={exploredChapterIds}
-                  onSelectChapter={selectStoryChapter}
-                />
-                {activeStoryChapter ? (
-                  <WorkspaceEvidenceTrail chapter={activeStoryChapter} />
-                ) : (
-                  <p className="rounded-2xl border border-border/55 bg-background/20 p-4 text-sm text-muted-foreground">
-                    Select a story chapter to follow the evidence trail from repository signal to agent use.
-                  </p>
-                )}
-              </div>
-            </details>}
-
-            {activeResultChapter === 'understand' && <details className="relative mt-5 rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
-              <summary className="cursor-pointer select-none font-display text-lg font-semibold text-foreground">Repository models and metrics</summary>
-              <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
-                <div className="min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
-                  <MentalModelVisualization
-                    model={mentalModel}
-                    activeId={activeMentalNodeId}
-                    storyNodeId={selectedMentalNodeId}
-                    activeChapter={activeStoryChapter}
-                    onSelectNode={selectMentalModelNode}
-                  />
-                </div>
-
-                <aside className="min-h-[560px] overflow-hidden rounded-3xl border border-primary/20 bg-background/20 p-5 md:p-6">
-                  <RepositoryDnaVisualization
-                    dimensions={repositoryDna}
-                    unavailable={unavailable}
-                    activeDimensionId={activeDnaDimensionId}
-                    activeChapter={activeStoryChapter}
-                    onSelectDimension={selectDnaDimension}
-                  />
-                </aside>
-              </div>
-            </details>}
           </>
         )}
-
-        {activeResultChapter === 'understand' && <details className="relative mt-6 rounded-2xl border border-border/60 bg-secondary/15 px-4 py-3 text-sm text-muted-foreground">
-          <summary className="cursor-pointer select-none font-medium text-foreground">Workspace metrics and next action</summary>
-          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className={repositoryHealthStatusClass(health.overall.status)}>
-                {health.overall.status}
-              </Badge>
-              <span>{health.overall.confidence} confidence</span>
-              {health.overall.score !== null && <span>Workspace Quality {health.overall.score} / 100</span>}
-            </div>
-            {topAction && (
-              <div>
-                <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">First improvement</div>
-                <div className="mt-1 font-semibold text-foreground">{topAction.title}</div>
-                <p className="mt-1 leading-relaxed">{topAction.action}</p>
-              </div>
-            )}
-          </div>
-        </details>}
       </div>
     </section>
   );
@@ -324,6 +236,8 @@ interface AtlasFilters {
   heuristic: boolean;
   missing: boolean;
 }
+
+type ContextualInspectorTab = 'overview' | 'evidence' | 'relationships' | 'agent-impact' | 'story' | 'dna' | 'mental-model';
 
 function RepositoryAtlasVisualization({
   report,
@@ -408,6 +322,9 @@ function RepositoryAtlasVisualization({
   const [fullscreen, setFullscreen] = useState(false);
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [inspectorScrollActive, setInspectorScrollActive] = useState(false);
+  const [inspectorDismissed, setInspectorDismissed] = useState(false);
+  const [repositoryProfileOpen, setRepositoryProfileOpen] = useState(false);
+  const [inspectorTab, setInspectorTab] = useState<ContextualInspectorTab>('overview');
   const [agentFlightPathTask, setAgentFlightPathTask] = useState('');
   const [agentFlightPath, setAgentFlightPath] = useState<RepositoryAgentFlightPath | null>(null);
   const [agentFlightPathCopied, setAgentFlightPathCopied] = useState(false);
@@ -544,6 +461,9 @@ function RepositoryAtlasVisualization({
     setExcludedProposalIds(new Set());
     setOptimizationPlanOpen(false);
     setSelectedOptimizationItemId(null);
+    setInspectorDismissed(false);
+    setRepositoryProfileOpen(false);
+    setInspectorTab('overview');
     setAgentFlightPathTask('');
     setAgentFlightPath(null);
     setAgentFlightPathCopied(false);
@@ -663,6 +583,9 @@ function RepositoryAtlasVisualization({
 
   const selectNode = useCallback((node: RepositoryAtlasNode) => {
     setSelectedNodeId(node.id);
+    setInspectorDismissed(false);
+    setRepositoryProfileOpen(node.id === atlas.rootNodeId || node.kind === 'repository');
+    setInspectorTab(node.evidenceItems.length ? 'evidence' : 'overview');
     const matchingUniverseNode = node.path
       ? universe.nodes.find(item => item.path === node.path)
       : universe.nodes.find(item => item.metadata.atlasNodeId === node.id);
@@ -676,7 +599,7 @@ function RepositoryAtlasVisualization({
     if (chapterId && story.chapters.some(chapter => chapter.id === chapterId)) {
       onSelectChapter(chapterId);
     }
-  }, [onSelectChapter, story.chapters, universe.nodes]);
+  }, [atlas.rootNodeId, onSelectChapter, story.chapters, universe.nodes]);
 
   const focusUniverseNode = useCallback((node: RepositoryUniverseNode) => {
     setUniverseSceneSettled(true);
@@ -686,6 +609,9 @@ function RepositoryAtlasVisualization({
 
   const selectUniverseNode = useCallback((node: RepositoryUniverseNode) => {
     setSelectedUniverseNodeId(node.id);
+    setInspectorDismissed(false);
+    setRepositoryProfileOpen(node.id === universe.rootNodeId || node.kind === 'repository');
+    setInspectorTab(node.evidenceItems.length ? 'evidence' : 'overview');
     if (node.clusterId) setFocusedClusterId(node.clusterId);
     if (node.metadata.atlasNodeId) setSelectedNodeId(node.metadata.atlasNodeId);
     focusUniverseNode(node);
@@ -693,7 +619,7 @@ function RepositoryAtlasVisualization({
     if (chapterId && story.chapters.some(chapter => chapter.id === chapterId)) {
       onSelectChapter(chapterId);
     }
-  }, [focusUniverseNode, onSelectChapter, story.chapters]);
+  }, [focusUniverseNode, onSelectChapter, story.chapters, universe.rootNodeId]);
 
   const changeViewMode = (mode: 'universe3d' | 'atlas2d') => {
     if (mode === viewMode) return;
@@ -737,6 +663,8 @@ function RepositoryAtlasVisualization({
   const selectProposal = useCallback((proposal: RepositoryTransformationProposal) => {
     setTransformationMode('with-shipseal');
     setSelectedProposalId(proposal.id);
+    setInspectorDismissed(false);
+    setRepositoryProfileOpen(false);
     setFocusedClusterId(current => proposal.graphChanges.proposedNodes[0]?.clusterId || current);
   }, []);
 
@@ -866,6 +794,15 @@ function RepositoryAtlasVisualization({
     if (dragRef.current?.pointerId === event.pointerId) dragRef.current = null;
   };
 
+  const openRepositoryContext = (tab: ContextualInspectorTab) => {
+    setSelectedUniverseNodeId(universe.rootNodeId);
+    setSelectedNodeId(atlas.rootNodeId);
+    setSelectedProposalId(null);
+    setRepositoryProfileOpen(true);
+    setInspectorDismissed(false);
+    setInspectorTab(tab);
+  };
+
   const atlasToolbar = (
     <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 md:overflow-visible md:pb-0">
       <label className="relative min-w-[180px] flex-1 xl:w-[220px] xl:flex-none">
@@ -918,6 +855,22 @@ function RepositoryAtlasVisualization({
           data-testid="universe-more-controls-menu"
           data-overlay-layer="popover"
         >
+          {activeResultChapter === 'understand' && (
+            <>
+              <DropdownMenuItem onSelect={() => openRepositoryContext('story')}>
+                Open repository story
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openRepositoryContext('dna')}>
+                Repository DNA
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => openRepositoryContext('mental-model')}>
+                Semantic relationships
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setFlightPathOpen(true)}>
+                Agent Journey
+              </DropdownMenuItem>
+            </>
+          )}
           {viewMode === 'universe3d' && (
             <DropdownMenuItem onSelect={() => setUniverseRotationPaused(current => !current)}>
               {universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}
@@ -1035,20 +988,14 @@ function RepositoryAtlasVisualization({
       </div>
 
       {transformation.proposals.length > 0 && (
-        <div className="grid grid-cols-3 gap-1.5 text-[10px]" aria-live="polite">
-          <div className="min-w-0 rounded-xl border border-primary/10 bg-background/20 px-2 py-2 text-muted-foreground">
-            <span className="block font-semibold text-foreground">{visibleIncludedTransformationProposals.length.toLocaleString()}</span>
-            <span>{visibleIncludedTransformationProposals.length.toLocaleString()} selected proposals</span>
+        <details className="rounded-xl border border-primary/10 bg-background/20 px-2.5 py-2 text-[10px]">
+          <summary className="cursor-pointer font-medium text-foreground">Proposal summary</summary>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-muted-foreground" aria-live="polite">
+            <span><strong className="block text-foreground">{visibleIncludedTransformationProposals.length.toLocaleString()}</strong>proposals</span>
+            <span><strong className="block text-foreground">{visibleTransformationArtifactCount.toLocaleString()}</strong>artifacts</span>
+            <span><strong className="block text-foreground">{visibleTransformationRelationshipCount.toLocaleString()}</strong>relationships</span>
           </div>
-          <div className="min-w-0 rounded-xl border border-primary/10 bg-background/20 px-2 py-2 text-muted-foreground">
-            <span className="block font-semibold text-foreground">{visibleTransformationArtifactCount.toLocaleString()}</span>
-            <span>{visibleTransformationArtifactCount.toLocaleString()} unique artifacts</span>
-          </div>
-          <div className="min-w-0 rounded-xl border border-primary/10 bg-background/20 px-2 py-2 text-muted-foreground">
-            <span className="block font-semibold text-foreground">{visibleTransformationRelationshipCount.toLocaleString()}</span>
-            <span>{visibleTransformationRelationshipCount.toLocaleString()} proposed relationships</span>
-          </div>
-        </div>
+        </details>
       )}
 
       {transformation.proposals.length > 0 ? (
@@ -1431,9 +1378,10 @@ function RepositoryAtlasVisualization({
           onClear={() => setSelectedProposalId(null)}
         />
       )
-      : viewMode === 'universe3d'
-      ? (
+      : (
         <UniverseInspector
+          report={report}
+          story={story}
           universe={universe}
           node={selectedUniverseNode}
           nodeHiddenByFilters={Boolean(selectedUniverseNode && !selectedUniverseNodeVisible)}
@@ -1448,29 +1396,22 @@ function RepositoryAtlasVisualization({
             clusterCount: universe.clusters.length,
           }}
           rootNodeId={universe.rootNodeId}
+          activeTab={inspectorTab}
           collapsed={fullscreen && inspectorCollapsed}
           onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
+          onTabChange={setInspectorTab}
+          onClose={() => setInspectorDismissed(true)}
           onFocusNode={() => selectedUniverseNode && focusUniverseNode(selectedUniverseNode)}
           onFocusCluster={() => selectedUniverseNode?.clusterId && setFocusedClusterId(selectedUniverseNode.clusterId)}
           onClearFocus={() => setFocusedClusterId(null)}
           onReturnRepository={() => {
             setSelectedUniverseNodeId(universe.rootNodeId);
+            setRepositoryProfileOpen(true);
+            setInspectorTab('overview');
           }}
-          onOpenAtlas={() => changeViewMode('atlas2d')}
+          onOpenAtlas={viewMode === 'universe3d' ? () => changeViewMode('atlas2d') : undefined}
           onSelectNode={selectUniverseNode}
-        />
-      )
-      : (
-        <AtlasInspector
-          atlas={atlas}
-          node={selectedNode}
-          cluster={activeCluster}
-          activeChapter={activeChapter}
-          collapsed={fullscreen && inspectorCollapsed}
-          onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
-          onFocusCluster={() => selectedNode?.clusterId && setFocusedClusterId(selectedNode.clusterId)}
-          onClearFocus={() => setFocusedClusterId(null)}
-          onSelectNode={selectNode}
+          onSelectChapter={onSelectChapter}
         />
       )
   );
@@ -1500,9 +1441,9 @@ function RepositoryAtlasVisualization({
             ? 'Verification requires a saved baseline and a later scan of the changed repository.'
             : 'Client handoff and exports remain available without changing their contents.';
   const showUniverseWorkspace = activeResultChapter === 'understand' || activeResultChapter === 'improve';
-  const inspectorVisible = viewMode === 'universe3d'
-    ? selectedUniverseNode?.id !== universe.rootNodeId || Boolean(focusedClusterId) || flightPathUniverseNodeIds.length > 0
-    : selectedNode?.id !== atlas.rootNodeId || Boolean(focusedClusterId);
+  const inspectorVisible = !inspectorDismissed && (viewMode === 'universe3d'
+    ? repositoryProfileOpen || selectedUniverseNode?.id !== universe.rootNodeId || flightPathUniverseNodeIds.length > 0
+    : selectedNode?.id !== atlas.rootNodeId);
   const showTransformationPanel = activeResultChapter === 'improve';
   const showPlanReview = optimizationPlanReview && (activeResultChapter === 'improve' || activeResultChapter === 'verify');
 
@@ -1580,7 +1521,7 @@ function RepositoryAtlasVisualization({
                 onPointerLeave={event => {
                   if (!event.currentTarget.contains(document.activeElement)) setInspectorScrollActive(false);
                 }}
-                className={`absolute bottom-3 right-3 z-[var(--layer-inspector)] max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overscroll-y-auto rounded-[1.6rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:animate-scale-in lg:bottom-auto ${inspectorScrollActive ? 'overflow-y-auto' : 'overflow-hidden'} ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}
+                className={`absolute bottom-3 left-3 right-3 z-[var(--layer-inspector)] max-h-[70dvh] w-auto overscroll-y-auto rounded-[1.6rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:animate-scale-in sm:left-auto sm:w-[min(22rem,calc(100%-1.5rem))] lg:bottom-auto ${inspectorScrollActive ? 'overflow-y-auto' : 'overflow-hidden'} ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}
               >
                 {inspector}
                 {!inspectorScrollActive && (
@@ -1594,26 +1535,9 @@ function RepositoryAtlasVisualization({
         </div>
       )}
 
-      {!fullscreen && activeResultChapter === 'improve' && (
-        <div data-testid="improve-supporting-content" className="space-y-4 border-t border-primary/15 bg-background/10 px-3 py-5 md:px-5">
-          <div>
-            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">{resultChapterEyebrow}</div>
-            <h2 id="repository-atlas-heading" className="mt-1 font-display text-xl font-semibold">{resultChapterTitle}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">{resultChapterSummary}</p>
-            <p id="repository-atlas-navigation-status" className="mt-2 text-xs text-muted-foreground" aria-live="polite">
-              {atlasNavigationActive ? `${viewMode === 'universe3d' ? 'Universe' : 'Atlas'} navigation active - Press Esc to release` : 'Click to explore - Scroll to zoom - Drag to move'}
-            </p>
-          </div>
-          {!optimizationPlanOpen && (
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-              <div className="font-display text-lg font-semibold">ShipSeal found concrete improvements.</div>
-              <p className="mt-1 text-sm text-muted-foreground">Review the generated plan, then package only what should be human-reviewed.</p>
-              <Button type="button" size="sm" onClick={openOptimizationPlan} className="mt-3 bg-primary text-primary-foreground hover:bg-primary/90">
-                Prepare optimization package
-              </Button>
-            </div>
-          )}
-          {showPlanReview && optimizationPlanReview}
+      {!fullscreen && activeResultChapter === 'improve' && showPlanReview && (
+        <div data-testid="improve-supporting-content" className="border-t border-primary/15 bg-background/10 px-3 py-5 md:px-5">
+          {optimizationPlanReview}
         </div>
       )}
 
@@ -1628,8 +1552,9 @@ function RepositoryAtlasVisualization({
           {activeResultChapter === 'understand' && (
             <details open={flightPathOpen} onToggle={event => setFlightPathOpen(event.currentTarget.open)} className="rounded-2xl border border-border/45 bg-background/20 p-3">
               <summary className="cursor-pointer text-sm font-medium text-foreground">Plan an agent task</summary>
-              <div className="mt-3">
+              {flightPathOpen && <div className="mt-3">
                 <AgentFlightPathPanel
+                  report={report}
                   task={agentFlightPathTask}
                   flightPath={agentFlightPath}
                   copied={agentFlightPathCopied}
@@ -1637,8 +1562,12 @@ function RepositoryAtlasVisualization({
                   onGenerate={generateAgentFlightPath}
                   onCopyPrompt={copyAgentFlightPathPrompt}
                   onFocusRoute={focusAgentFlightPathRoute}
+                  onClearRoute={() => {
+                    setAgentFlightPath(null);
+                    setAgentFlightPathCopied(false);
+                  }}
                 />
-              </div>
+              </div>}
             </details>
           )}
           {activeResultChapter === 'understand' && (
@@ -1707,6 +1636,7 @@ function RepositoryAtlasVisualization({
 }
 
 function AgentFlightPathPanel({
+  report,
   task,
   flightPath,
   copied,
@@ -1714,7 +1644,9 @@ function AgentFlightPathPanel({
   onGenerate,
   onCopyPrompt,
   onFocusRoute,
+  onClearRoute,
 }: {
+  report: ReadinessReport;
   task: string;
   flightPath: RepositoryAgentFlightPath | null;
   copied: boolean;
@@ -1722,16 +1654,18 @@ function AgentFlightPathPanel({
   onGenerate: () => void;
   onCopyPrompt: () => void;
   onFocusRoute: () => void;
+  onClearRoute: () => void;
 }) {
   const routeNodeCount = flightPath?.metadata.routeNodeCount || 0;
+  const defaultJourney = buildAgentSimulatorPlan(report);
 
   return (
-    <section className="rounded-[1.35rem] border border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.08),hsl(var(--background)/0.24)_42%,hsl(var(--accent)/0.06))] p-4 shadow-sm shadow-primary/10" aria-label="Agent Flight Path">
+    <section className="rounded-[1.35rem] border border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.08),hsl(var(--background)/0.24)_42%,hsl(var(--accent)/0.06))] p-4 shadow-sm shadow-primary/10" aria-label="Agent Journey">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-2xl">
-          <div className="text-xs font-mono uppercase tracking-wider text-primary-glow/80">Agent Flight Path</div>
-          <h3 id="agent-flight-path-heading" className="mt-1 font-display text-xl font-semibold text-foreground">Plan the first pass before coding.</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Evidence-bound repository route for an AI coding agent.</p>
+          <div className="text-xs font-mono uppercase tracking-wider text-primary-glow/80">Agent Journey</div>
+          <h3 id="agent-journey-heading" className="mt-1 font-display text-xl font-semibold text-foreground">Plan the first pass.</h3>
+          <p className="mt-1 text-sm text-muted-foreground">A repository-evidence route, not model chain-of-thought or a productivity prediction.</p>
         </div>
         {flightPath && (
           <div className="flex flex-wrap gap-2 text-xs">
@@ -1744,6 +1678,23 @@ function AgentFlightPathPanel({
           </div>
         )}
       </div>
+
+      {!flightPath && (
+        <div className="mt-4 grid gap-2 md:grid-cols-3" aria-label="Default Agent Journey">
+          <div className="rounded-2xl border border-border/50 bg-background/20 p-3">
+            <div className="text-xs font-semibold text-foreground">Likely entry</div>
+            <p className="mt-1 text-xs text-muted-foreground">{defaultJourney.likelyFirstFiles[0]?.label || defaultJourney.steps[0]?.title || 'Repository root'}</p>
+          </div>
+          <div className="rounded-2xl border border-border/50 bg-background/20 p-3">
+            <div className="text-xs font-semibold text-foreground">Likely skipped</div>
+            <p className="mt-1 text-xs text-muted-foreground">{defaultJourney.likelyIgnoredFolders[0]?.label || 'Generated and vendor areas'}</p>
+          </div>
+          <div className="rounded-2xl border border-border/50 bg-background/20 p-3">
+            <div className="text-xs font-semibold text-foreground">Verification path</div>
+            <p className="mt-1 text-xs text-muted-foreground">{defaultJourney.steps.at(-1)?.title || 'Review and verify'}</p>
+          </div>
+        </div>
+      )}
 
       <form
         className="mt-4 flex flex-col gap-3 md:flex-row"
@@ -1763,7 +1714,7 @@ function AgentFlightPathPanel({
         </label>
         <Button type="submit" className="h-11 rounded-full bg-primary px-5 text-primary-foreground hover:bg-primary/90">
           <Sparkles className="mr-2 h-4 w-4" />
-          Generate flight path
+          Generate task journey
         </Button>
       </form>
 
@@ -1790,10 +1741,13 @@ function AgentFlightPathPanel({
                   <Crosshair className="mr-1.5 h-3.5 w-3.5" />
                   Focus route
                 </Button>
+                <Button type="button" variant="ghost" size="sm" onClick={onClearRoute}>
+                  Clear route
+                </Button>
               </div>
             </div>
 
-            <ol className="mt-4 grid gap-2" aria-label="Agent Flight Path route steps">
+            <ol className="mt-4 grid gap-2" aria-label="Agent Journey route steps">
               {flightPath.routeSteps.map(step => (
                 <li key={step.id} className="grid grid-cols-[32px_minmax(0,1fr)] gap-3 rounded-2xl border border-border/45 bg-background/20 p-3">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full border border-primary/35 bg-primary/10 text-xs font-semibold text-primary-glow">
@@ -2702,8 +2656,8 @@ function TransformationInspector({
       </div>
 
       <div className="mt-5 space-y-4 text-sm">
-        <section>
-          <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Why ShipSeal recommends this</h4>
+        <details className="rounded-xl border border-border/45 bg-background/20 p-3">
+          <summary className="cursor-pointer font-medium text-foreground">Evidence and confidence</summary>
           <ul className="mt-2 space-y-2">
             {proposal.sourceEvidence.map(item => (
               <li key={`${item.label}:${item.detail}`} className="rounded-2xl border border-border/45 bg-background/25 px-3 py-2">
@@ -2712,10 +2666,10 @@ function TransformationInspector({
               </li>
             ))}
           </ul>
-        </section>
+        </details>
 
-        <section>
-          <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">What ShipSeal would create or update</h4>
+        <details className="rounded-xl border border-border/45 bg-background/20 p-3">
+          <summary className="cursor-pointer font-medium text-foreground">Proposed artifacts</summary>
           <div className="mt-2 space-y-2">
             {proposal.artifactActions.map(action => (
               <details key={action.path} className="rounded-2xl border border-border/45 bg-background/25 px-3 py-2">
@@ -2733,18 +2687,18 @@ function TransformationInspector({
               </details>
             ))}
           </div>
-        </section>
+        </details>
 
-        <section>
-          <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Where it connects</h4>
+        <details className="rounded-xl border border-border/45 bg-background/20 p-3">
+          <summary className="cursor-pointer font-medium text-foreground">Affected areas</summary>
           <p className="mt-2 text-muted-foreground">{proposal.graphChanges.affectedExistingNodeIds.length.toLocaleString()} current repository entities are connected by proposed relationships.</p>
-        </section>
+        </details>
 
-        <section>
-          <h4 className="text-xs font-mono uppercase tracking-wider text-muted-foreground">How an AI agent would use it</h4>
+        <details className="rounded-xl border border-border/45 bg-background/20 p-3">
+          <summary className="cursor-pointer font-medium text-foreground">Agent impact</summary>
           <p className="mt-2 text-muted-foreground">{proposal.expectedEffect.agentBehavior}</p>
           <p className="mt-2 text-muted-foreground">{proposal.expectedEffect.repositoryMeaning}</p>
-        </section>
+        </details>
       </div>
     </aside>
   );
@@ -2786,6 +2740,257 @@ function RepositoryUniverseRecovery({ onOpenAtlas, onRetry }: { onOpenAtlas: () 
 }
 
 function UniverseInspector({
+  report,
+  story,
+  universe,
+  node,
+  nodeHiddenByFilters = false,
+  cluster,
+  activeChapter,
+  repositoryName,
+  scanSummary,
+  rootNodeId,
+  activeTab,
+  collapsed = false,
+  onToggleCollapsed,
+  onTabChange,
+  onClose,
+  onFocusNode,
+  onFocusCluster,
+  onClearFocus,
+  onReturnRepository,
+  onOpenAtlas,
+  onSelectNode,
+  onSelectChapter,
+}: {
+  report: ReadinessReport;
+  story: WorkspaceStory;
+  universe: RepositoryUniverseModel;
+  node?: RepositoryUniverseNode;
+  nodeHiddenByFilters?: boolean;
+  cluster?: RepositoryUniverseModel['clusters'][number] | null;
+  activeChapter: WorkspaceStoryChapter | null;
+  repositoryName: string;
+  scanSummary: {
+    sourceLabel: string;
+    analyzedFiles: number;
+    clusterCount: number;
+  };
+  rootNodeId: string;
+  activeTab: ContextualInspectorTab;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  onTabChange: (tab: ContextualInspectorTab) => void;
+  onClose: () => void;
+  onFocusNode: () => void;
+  onFocusCluster: () => void;
+  onClearFocus: () => void;
+  onReturnRepository: () => void;
+  onOpenAtlas?: () => void;
+  onSelectNode: (node: RepositoryUniverseNode) => void;
+  onSelectChapter: (chapterId: WorkspaceStoryChapterId) => void;
+}) {
+  const isRepository = !node || node.id === rootNodeId || node.kind === 'repository';
+  const evidenceItems = node?.evidenceItems || [];
+  const relationships = node ? universe.edges.filter(edge => edge.source === node.id || edge.target === node.id) : [];
+  const relatedNodes = relationships
+    .map(edge => universe.nodes.find(item => item.id === (edge.source === node?.id ? edge.target : edge.source)))
+    .filter(Boolean) as RepositoryUniverseNode[];
+  const repositoryDna = isRepository ? buildRepositoryDna(report) : [];
+  const mentalModel = isRepository ? buildMentalModel(report) : null;
+  const availableTabs: Array<{ id: ContextualInspectorTab; label: string }> = [
+    { id: 'overview', label: 'Overview' },
+    ...(evidenceItems.length || activeChapter?.evidenceItems.length ? [{ id: 'evidence' as const, label: 'Evidence' }] : []),
+    ...(relationships.length ? [{ id: 'relationships' as const, label: 'Relationships' }] : []),
+    ...(node?.metadata.agentRelevance || activeChapter?.agentUse ? [{ id: 'agent-impact' as const, label: 'Agent impact' }] : []),
+    ...(story.chapters.length && (isRepository || activeChapter) ? [{ id: 'story' as const, label: 'Story' }] : []),
+    ...(isRepository && repositoryDna.length ? [{ id: 'dna' as const, label: 'DNA' }] : []),
+    ...(isRepository && mentalModel?.nodes.length ? [{ id: 'mental-model' as const, label: 'Mental Model' }] : []),
+  ];
+  const selectedTab = availableTabs.some(tab => tab.id === activeTab) ? activeTab : availableTabs[0].id;
+
+  if (collapsed) {
+    return (
+      <aside className="rounded-[1.6rem] border border-primary/15 bg-[hsl(var(--universe-surface-raised)/0.82)] p-4 shadow-[0_24px_75px_hsl(var(--universe-stage-bg)/0.58)] backdrop-blur-xl" aria-labelledby="contextual-inspector-collapsed">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Context</div>
+            <h3 id="contextual-inspector-collapsed" className="mt-1 truncate font-display text-base font-semibold">{isRepository ? repositoryName : node?.label}</h3>
+          </div>
+          {onToggleCollapsed && <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} aria-label="Expand inspector"><PanelRightOpen className="h-3.5 w-3.5" /></Button>}
+        </div>
+      </aside>
+    );
+  }
+
+  return (
+    <aside className="rounded-[1.6rem] border border-primary/15 bg-[linear-gradient(155deg,hsl(var(--universe-surface-raised)/0.92),hsl(var(--universe-stage-bg)/0.8))] p-4 shadow-[0_24px_75px_hsl(var(--universe-stage-bg)/0.62)] backdrop-blur-xl" aria-labelledby="contextual-inspector-heading">
+      <header className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className={node?.evidenceType === 'evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/60 text-muted-foreground'}>
+              {isRepository ? 'Repository' : node ? evidenceStateLabel(node.evidenceType) : 'Entity'}
+            </Badge>
+            {activeChapter && <Badge variant="outline" className="border-accent/40 text-accent">{activeChapter.shortLabel}</Badge>}
+          </div>
+          <h3 id="contextual-inspector-heading" className="mt-2 break-words font-display text-lg font-semibold">{isRepository ? repositoryName : node?.label}</h3>
+          {node?.path && <p className="mt-1 break-all text-xs text-muted-foreground">{node.path}</p>}
+        </div>
+        {onToggleCollapsed && <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} aria-label="Collapse inspector"><PanelRightClose className="h-3.5 w-3.5" /></Button>}
+        <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close inspector">Close</Button>
+      </header>
+
+      <div className="mt-4 flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Contextual repository details">
+        {availableTabs.map(tab => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={selectedTab === tab.id}
+            onClick={() => onTabChange(tab.id)}
+            className={`shrink-0 rounded-full border px-2.5 py-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedTab === tab.id ? 'border-primary/45 bg-primary/15 text-primary-glow' : 'border-border/50 text-muted-foreground hover:text-foreground'}`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4" role="tabpanel">
+        {selectedTab === 'overview' && (
+          <div className="space-y-3">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {isRepository
+                ? `${scanSummary.analyzedFiles.toLocaleString()} files were organized into ${scanSummary.clusterCount.toLocaleString()} evidence clusters.`
+                : String(node?.metadata.repositoryRole || activeChapter?.repositoryMeaning || 'No repository role was inferred for this entity.')}
+            </p>
+            {nodeHiddenByFilters && <p className="rounded-xl border border-warning/35 bg-warning/10 p-3 text-xs text-warning">Selected, but hidden by the current filters.</p>}
+            <div className="grid gap-2 text-sm">
+              {isRepository ? (
+                <>
+                  <Row
+                    label="Workspace Quality"
+                    value={report.repositoryHealth.overall.score === null
+                      ? 'Unavailable'
+                      : `${report.repositoryHealth.overall.score} / 100 · ${report.repositoryHealth.overall.status}`}
+                  />
+                  <Row
+                    label="Agent friction"
+                    value={report.repositoryHealth.dimensions.contextWaste.riskScore === null
+                      ? 'Unavailable'
+                      : `${report.repositoryHealth.dimensions.contextWaste.riskScore} / 100 risk · ${contextWasteRiskLabel(report.repositoryHealth.dimensions.contextWaste.riskScore)}`}
+                  />
+                  <Row label="Confidence" value={`${report.repositoryHealth.overall.confidence} confidence`} />
+                </>
+              ) : (
+                <>
+                  <Row label="Type" value={node ? universeKindLabel(node.kind) : 'Repository'} />
+                  <Row label="Cluster" value={cluster?.label || 'Repository'} />
+                  <Row label="Relationships" value={String(relationships.length)} />
+                </>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!isRepository && <Button type="button" variant="outline" size="sm" onClick={onFocusNode}>Focus node</Button>}
+              {!isRepository && <Button type="button" variant="outline" size="sm" onClick={onFocusCluster} disabled={!node?.clusterId}>Focus cluster</Button>}
+              {!isRepository && <Button type="button" variant="ghost" size="sm" onClick={onReturnRepository}>Repository profile</Button>}
+              {onOpenAtlas && <Button type="button" variant="ghost" size="sm" onClick={onOpenAtlas}>Open Atlas 2D</Button>}
+              <Button type="button" variant="ghost" size="sm" onClick={onClearFocus}>Clear focus</Button>
+            </div>
+          </div>
+        )}
+
+        {selectedTab === 'evidence' && (
+          <div>
+            <p className="mb-3 text-xs text-muted-foreground">Evidence is shown for this entity or its active repository story.</p>
+            <ul className="space-y-2">
+              {(evidenceItems.length ? evidenceItems : activeChapter?.evidenceItems || []).slice(0, 5).map((item, index) => (
+                <li key={`${item.state}-${item.label}-${index}`} className="rounded-xl border border-border/50 bg-background/20 p-3">
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="break-all font-medium text-foreground">{item.label}</span>
+                    <Badge variant="outline" className={evidenceStateClass(item.state)}>{evidenceStateLabel(item.state)}</Badge>
+                  </div>
+                  {item.detail && <p className="mt-1 text-xs text-muted-foreground">{item.detail}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {selectedTab === 'relationships' && (
+          <div className="space-y-2">
+            {relationships.slice(0, 8).map(edge => {
+              const related = relatedNodes.find(item => item.id === (edge.source === node?.id ? edge.target : edge.source));
+              return (
+                <button key={edge.id} type="button" onClick={() => related && onSelectNode(related)} className="block w-full rounded-xl border border-border/50 bg-background/20 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <span className="text-sm font-medium text-foreground">{related?.label || 'Related entity'}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{relationshipLabel(edge)} · {edge.evidenceType}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {selectedTab === 'agent-impact' && (
+          <div className="space-y-3 text-sm leading-relaxed text-muted-foreground">
+            <p>{String(node?.metadata.agentRelevance || activeChapter?.agentUse || 'No agent-specific impact surfaced.')}</p>
+            {activeChapter && <p className="rounded-xl border border-border/50 bg-background/20 p-3">{activeChapter.relationship}</p>}
+          </div>
+        )}
+
+        {selectedTab === 'story' && (
+          <div className="space-y-3">
+            {(isRepository ? story.chapters : activeChapter ? [activeChapter] : []).map(chapter => (
+              <button key={chapter.id} type="button" onClick={() => onSelectChapter(chapter.id)} className="block w-full rounded-xl border border-border/50 bg-background/20 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <span className="text-sm font-semibold text-foreground">{chapter.label}</span>
+                <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{chapter.repositoryMeaning}</span>
+                <span className="mt-2 block text-[10px] uppercase tracking-wider text-muted-foreground">{chapter.evidenceItems.length} evidence references</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {selectedTab === 'dna' && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Current and potential workspace dimensions; calculations are unchanged.</p>
+            {repositoryDna.map(dimension => {
+              const chapter = chapterForDnaDimension(story, dimension.id as WorkspaceStoryDnaDimensionId);
+              return (
+                <details key={dimension.id} className="rounded-xl border border-border/50 bg-background/20 p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-foreground">
+                    {dimension.label} · {dimension.score === null ? 'Unavailable' : dimension.score} / potential {dimension.potentialScore ?? 'n/a'}
+                  </summary>
+                  <p className="mt-2 text-xs text-muted-foreground">{dimension.description}</p>
+                  <RepositoryDnaList title="Evidence" items={dimension.evidence} emptyText="No strong evidence surfaced." compact />
+                  <RepositoryDnaList title="Recommendations" items={dimension.recommendations} emptyText="No recommendation generated." compact />
+                  {chapter && <Button type="button" variant="ghost" size="sm" onClick={() => onSelectChapter(chapter.id)} className="mt-2 px-0">Open related story</Button>}
+                </details>
+              );
+            })}
+          </div>
+        )}
+
+        {selectedTab === 'mental-model' && mentalModel && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">Semantic relationships use the existing repository model; no second graph is created.</p>
+            {mentalModel.nodes.map(item => {
+              const chapter = chapterForMentalModelNode(story, item.id as WorkspaceStoryMentalNodeId);
+              const connectionCount = mentalModel.connections.filter(connection => connection.from === item.id || connection.to === item.id).length;
+              return (
+                <button key={item.id} type="button" onClick={() => chapter && onSelectChapter(chapter.id)} className="block w-full rounded-xl border border-border/50 bg-background/20 p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                  <span className="flex items-center justify-between gap-2 text-sm font-medium text-foreground"><span>{item.label}</span><Badge variant="outline" className={mentalModelStatusClass(item.status)}>{mentalModelStatusLabel(item.status)}</Badge></span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{item.description}</span>
+                  <span className="mt-2 block text-[10px] uppercase tracking-wider text-muted-foreground">{connectionCount} semantic relationships</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </aside>
+  );
+}
+
+function LegacyUniverseInspector({
   universe,
   node,
   nodeHiddenByFilters = false,
@@ -3017,6 +3222,7 @@ function AtlasInspector({
   activeChapter,
   collapsed = false,
   onToggleCollapsed,
+  onClose,
   onFocusCluster,
   onClearFocus,
   onSelectNode,
@@ -3027,6 +3233,7 @@ function AtlasInspector({
   activeChapter: WorkspaceStoryChapter | null;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  onClose: () => void;
   onFocusCluster: () => void;
   onClearFocus: () => void;
   onSelectNode: (node: RepositoryAtlasNode) => void;
@@ -3072,6 +3279,7 @@ function AtlasInspector({
             <PanelRightClose className="h-3.5 w-3.5" />
           </Button>
         )}
+        <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close inspector">Close</Button>
       </div>
 
       <h3 id="atlas-inspector-heading" className="mt-3 font-display text-xl font-semibold">Selected entity</h3>

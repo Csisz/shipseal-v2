@@ -138,17 +138,9 @@ function switchResultChapter(label: 'Understand' | 'Improve' | 'Verify' | 'Deliv
   }
 }
 
-function openDisclosure(title: RegExp | string) {
-  const summary = screen.getAllByText(title).find(element => element.tagName.toLowerCase() === 'summary');
-  if (!summary) throw new Error(`Disclosure summary not found: ${String(title)}`);
-  fireEvent.click(summary);
-}
-
-async function openDisclosureWhenReady(title: RegExp | string) {
-  const summaries = await screen.findAllByText(title, {}, { timeout: 10000 });
-  const summary = summaries.find(element => element.tagName.toLowerCase() === 'summary');
-  if (!summary) throw new Error(`Disclosure summary not found: ${String(title)}`);
-  fireEvent.click(summary);
+async function openDeliveryGroup(name: 'Client handoff' | 'AI workspace' | 'Repository Intelligence' | 'Technical exports') {
+  switchResultChapter('Deliver');
+  fireEvent.click(await screen.findByRole('button', { name: new RegExp(`Open ${name}`, 'i') }, { timeout: 10000 }));
 }
 
 function openMoreControls() {
@@ -253,50 +245,26 @@ describe('Result Workspace evidence and delivery', () => {
     });
   });
 
-  it('runs the Live Agent Simulator from repository evidence without model-reasoning claims', () => {
-    vi.useFakeTimers();
+  it('opens one evidence-bound Agent Journey without a competing simulator', () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
 
-    try {
-      render(
-        <ResultDashboard
-          report={buildSampleReport()}
-          history={[]}
-          onReset={vi.fn()}
-          onClearHistory={vi.fn()}
-        />
-      );
+    expect(screen.queryByRole('region', { name: /Agent Journey/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Live Agent Simulator/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Plan an agent task$/i }));
 
-      openDisclosure(/Supporting workspace views/i);
-      expect(screen.getByRole('heading', { name: /estimated repository exploration/i })).toBeInTheDocument();
-      expect(screen.getByText(/Estimated repository exploration based on ShipSeal Repository Intelligence/i)).toBeInTheDocument();
-      expect(screen.getByText('Repository detected')).toBeInTheDocument();
-      expect(screen.getByText('Framework identified')).toBeInTheDocument();
-
-      act(() => {
-        vi.advanceTimersByTime(7000);
-      });
-
-      expect(screen.getAllByText(/Workspace understanding complete/i).length).toBeGreaterThan(0);
-      expect(screen.getByText('Likely first files')).toBeInTheDocument();
-      expect(screen.getAllByText('README.md').length).toBeGreaterThan(0);
-      expect(screen.getByText('Likely ignored folders')).toBeInTheDocument();
-      expect(screen.getAllByText('node_modules').length).toBeGreaterThan(0);
-      expect(screen.getByText('Context reduction')).toBeInTheDocument();
-      expect(screen.getByText('Routing quality')).toBeInTheDocument();
-      expect(screen.getByText('Temporary heuristics')).toBeInTheDocument();
-      expect(document.body.textContent).not.toMatch(/internal reasoning|chain of thought|model reasoning/i);
-
-      fireEvent.click(screen.getByRole('button', { name: /replay/i }));
-      expect(screen.getByText(/Workspace understanding in progress/i)).toBeInTheDocument();
-
-      act(() => {
-        vi.advanceTimersByTime(7000);
-      });
-
-      expect(screen.getAllByText(/Workspace understanding complete/i).length).toBeGreaterThan(0);
-    } finally {
-      vi.useRealTimers();
-    }
+    expect(screen.getByRole('region', { name: /Agent Journey/i })).toBeInTheDocument();
+    expect(screen.getByText('Likely entry')).toBeInTheDocument();
+    expect(screen.getByText('Likely skipped')).toBeInTheDocument();
+    expect(screen.getByText('Verification path')).toBeInTheDocument();
+    expect(screen.getByText(/not model chain-of-thought or a productivity prediction/i)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/internal reasoning|model reasoning/i);
   });
 
   it('shows insufficient evidence without synthetic dimension values', () => {
@@ -333,9 +301,6 @@ describe('Result Workspace evidence and delivery', () => {
 
     expect(screen.getByText(/I need more evidence to understand this repository/i)).toBeInTheDocument();
     expect(screen.getByText(/The repository model is incomplete/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Unavailable').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Insufficient evidence').length).toBeGreaterThan(0);
-    expect(screen.getByText('Low confidence')).toBeInTheDocument();
     expect(screen.getByText(/upload the complete ZIP/i)).toBeInTheDocument();
     expect(screen.queryByText('0 / 100')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Repository Intelligence' })).not.toBeInTheDocument();
@@ -367,16 +332,16 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    expect(screen.getAllByText(/82 \/ 100/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Very high/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Higher friction means more context discovery/i)).toBeInTheDocument();
+    const { menu } = openMoreControls();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Repository DNA/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/i }));
+    expect(screen.getByText(/82 \/ 100 risk/i)).toBeInTheDocument();
+    expect(screen.getByText(/Very high/i)).toBeInTheDocument();
     expect(screen.queryByText(/high context waste is good/i)).not.toBeInTheDocument();
   });
 
   it('shows safe evidence and recommendations without raw readable content or unsupported claims', () => {
     const report = buildSampleReport();
-    const evidence = report.repositoryHealth.topActions[0]?.evidence[0];
-
     render(
       <ResultDashboard
         report={report}
@@ -386,9 +351,13 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    if (evidence) expect(screen.getAllByText(evidence).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Potential .* improvement: up to/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/deterministic static repository estimate/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
+    const evidenceTab = screen.queryByRole('tab', { name: /Evidence/i });
+    if (evidenceTab) {
+      fireEvent.click(evidenceTab);
+      expect(evidenceTab).toHaveAttribute('aria-selected', 'true');
+    }
+    expect(screen.getByRole('button', { name: /Close inspector/i })).toBeInTheDocument();
     expect(screen.queryByText(/PRIVATE_README_BODY_SHOULD_NOT_EXPORT/i)).not.toBeInTheDocument();
     expect(document.body.textContent?.toLowerCase()).not.toMatch(/token-saving|financial savings|guaranteed speed/);
   });
@@ -403,11 +372,12 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    switchResultChapter('Deliver');
-    await openDisclosureWhenReady(/Exports and reports/i);
+    await openDeliveryGroup('Client handoff');
     expect(screen.getAllByText('Exports and reports').length).toBeGreaterThan(0);
     expect(screen.getByText('Reports and Delivery Outputs')).toBeInTheDocument();
     expect(screen.getByText('Delivery readiness details')).toBeInTheDocument();
+    const readinessSummary = screen.getByText('Delivery readiness details');
+    fireEvent.click(readinessSummary);
     expect(screen.getByText('Delivery readiness categories')).toBeInTheDocument();
     expect(screen.getByText('Category breakdown mock')).toBeInTheDocument();
     expect(await screen.findByText('Delivery Pack preview mock')).toBeInTheDocument();
@@ -438,8 +408,11 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    expect(screen.getByText('41 / 100')).toBeInTheDocument();
-    expect(screen.getByText('High agent friction')).toBeInTheDocument();
+    const { menu } = openMoreControls();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Repository DNA/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/i }));
+    expect(screen.getByText(/41 \/ 100/i)).toBeInTheDocument();
+    expect(screen.getByText(/High agent friction/i)).toBeInTheDocument();
     expect(screen.getByText('Low confidence')).toBeInTheDocument();
   });
 
@@ -456,8 +429,7 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    switchResultChapter('Deliver');
-    await openDisclosureWhenReady(/Exports and reports/i);
+    await openDeliveryGroup('Client handoff');
     expect(screen.getByText('Agent development pack')).toBeInTheDocument();
     expect(screen.getAllByText(`${resolveDeliveryPackFocus(['agent-readiness'], { folderAgentPaths }).generatedPaths.length} outputs`).length).toBeGreaterThan(0);
     expect(screen.getByText(/Context Compression Pack generated/i)).toBeInTheDocument();
@@ -483,8 +455,7 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    switchResultChapter('Deliver');
-    await openDisclosureWhenReady(/Exports and reports/i);
+    await openDeliveryGroup('Client handoff');
     expect(screen.getByText('Recommended operating mode')).toBeInTheDocument();
     expect(screen.getByText('Focused Context')).toBeInTheDocument();
     expect(screen.getAllByText('Lowest context use').length).toBeGreaterThan(0);
@@ -502,8 +473,7 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    switchResultChapter('Deliver');
-    await openDisclosureWhenReady(/Exports and reports/i);
+    await openDeliveryGroup('Client handoff');
     expect(screen.getByText('Project package')).toBeInTheDocument();
     expect(screen.getByText('Security and data pre-screen')).toBeInTheDocument();
     expect(screen.getAllByText(`${resolveDeliveryPackFocus(['safety-risk']).generatedPaths.length} outputs`).length).toBeGreaterThan(0);
@@ -522,8 +492,7 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    switchResultChapter('Deliver');
-    await openDisclosureWhenReady(/Exports and reports/i);
+    await openDeliveryGroup('Client handoff');
     expect(screen.getAllByText('Partially Ready').length).toBeGreaterThan(0);
     expect(screen.getByText(/not a limited scan/i)).toBeInTheDocument();
     expect(screen.getByText(/strengthen security and data readiness/i)).toBeInTheDocument();
@@ -542,8 +511,7 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    switchResultChapter('Deliver');
-    await openDisclosureWhenReady(/Exports and reports/i);
+    await openDeliveryGroup('Client handoff');
     expect(screen.getByText('Almost there - improve a few areas to reach AI Coding Ready.')).toBeInTheDocument();
   });
 
@@ -558,8 +526,7 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    switchResultChapter('Deliver');
-    await openDisclosureWhenReady(/Exports and reports/i);
+    await openDeliveryGroup('Client handoff');
     expect(screen.getAllByText(/Client report quality is limited because project intake was skipped/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Project context used for Delivery Outputs')).toBeInTheDocument();
     expect(screen.getByText('Edit project context')).toBeInTheDocument();

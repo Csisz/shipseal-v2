@@ -138,12 +138,6 @@ function switchResultChapter(label: 'Understand' | 'Improve' | 'Verify' | 'Deliv
   }
 }
 
-function openDisclosure(title: RegExp | string) {
-  const summary = screen.getAllByText(title).find(element => element.tagName.toLowerCase() === 'summary');
-  if (!summary) throw new Error(`Disclosure summary not found: ${String(title)}`);
-  fireEvent.click(summary);
-}
-
 function openMoreControls() {
   const trigger = screen.getByRole('button', { name: /More Universe controls/i });
   fireEvent.keyDown(trigger, { key: 'ArrowDown' });
@@ -265,12 +259,12 @@ describe('Result Workspace composition', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Replay reveal/i }));
     expect(onReplayReveal).toHaveBeenCalledTimes(1);
     switchResultChapter('Deliver');
+    fireEvent.click(await screen.findByRole('button', { name: /Open Client handoff/i }, { timeout: 10000 }));
     await screen.findByText('Delivery Pack preview mock', {}, { timeout: 10000 });
     expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
     expect(screen.getByText(`${resolveDeliveryPackFocus(['full-package'], { folderAgentPaths }).generatedPaths.length} outputs`)).toBeInTheDocument();
     expect(screen.queryByText('Full Delivery Pack: 36 required outputs')).not.toBeInTheDocument();
     expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
-    expect(screen.getByText(/Specialist and technical exports/i)).toBeInTheDocument();
     switchResultChapter('Improve');
     expect(await screen.findByText(/Secondary repository improvements/i)).toBeInTheDocument();
   });
@@ -289,13 +283,13 @@ describe('Result Workspace composition', () => {
 
     render(<ResultDashboard report={buildSampleReport()} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
 
-    expect(await screen.findByRole('heading', { name: /How this repository works/i }, { timeout: 10000 })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /Deliver what ShipSeal learned/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 10000 })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Prepare delivery/i })).not.toBeInTheDocument();
     await screen.findByRole('img', { name: /Repository Universe 3D graph/i }, { timeout: 10000 });
     expect(new Set(universeMockState.models).size).toBe(1);
 
     switchResultChapter('Deliver');
-    const deliverHeading = await screen.findByRole('heading', { name: /Deliver what ShipSeal learned/i }, { timeout: 10000 });
+    const deliverHeading = await screen.findByRole('heading', { name: /Prepare delivery/i }, { timeout: 10000 });
     expect(deliverHeading).toBeVisible();
     switchResultChapter('Understand');
     expect(deliverHeading).not.toBeVisible();
@@ -350,16 +344,12 @@ describe('Result Workspace composition', () => {
     await waitFor(() => expect(prepareRepositoryIntelligenceReview).toHaveBeenCalledTimes(1), { timeout: 10000 });
     await waitFor(() => expect(document.activeElement).toHaveAttribute('id', 'repository-intelligence-review'), { timeout: 10000 });
     expect(screen.getByRole('heading', { name: /Preparing repository-specific artifact review/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Review ShipSeal improvements/i })).toBeInTheDocument();
-    expect(screen.getByText(/Preview what ShipSeal can prepare/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Prepare optimization package/i })).toBeInTheDocument();
-    const improveStage = screen.getByTestId('repository-universe-workspace-stage');
-    const improveSupportingContent = screen.getByTestId('improve-supporting-content');
-    expect(improveStage.compareDocumentPosition(improveSupportingContent) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(improveSupportingContent).toContainElement(screen.getByRole('heading', { name: /Review ShipSeal improvements/i }));
-    expect(improveSupportingContent).toContainElement(screen.getByRole('button', { name: /Prepare optimization package/i }));
-    expect(screen.getAllByRole('heading', { name: /Review ShipSeal improvements/i })).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: /Prepare optimization package/i })).toHaveLength(1);
+    expect(screen.getByTestId('improve-universe-control-dock')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Review optimization plan/i })).toBeInTheDocument();
+    expect(screen.getByText(/Implementation and evidence details/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('improve-supporting-content')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Review ShipSeal improvements/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Prepare optimization package/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /^Plan an agent task$/i }));
     expect(within(chapterNav).getByRole('button', { name: /Understand/i })).toHaveAttribute('aria-pressed', 'true');
@@ -377,7 +367,8 @@ describe('Result Workspace composition', () => {
     );
 
     fireEvent.click(await screen.findByRole('button', { name: /Select universe node/i }));
-    expect(screen.getByRole('heading', { name: /Selected entity/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Close inspector/i })).toBeInTheDocument();
+    expect(screen.getByRole('tablist', { name: /Contextual repository details/i })).toBeInTheDocument();
 
     const stage = screen.getByTestId('repository-universe-workspace-stage');
     const { trigger, menu } = openMoreControls();
@@ -434,9 +425,8 @@ describe('Result Workspace composition', () => {
     expect(inspectorScrollRegion).toHaveAttribute('data-scroll-mode', 'inspector');
   });
 
-  it('makes visual understanding the primary dashboard summary and keeps Repository Health secondary', async () => {
+  it('keeps Understand graph-first and reveals story, DNA, Mental Model, and metrics contextually', async () => {
     const report = buildSampleReport();
-    const topAction = report.repositoryHealth.topActions[0];
 
     render(
       <ResultDashboard
@@ -451,50 +441,25 @@ describe('Result Workspace composition', () => {
     expect(screen.getByRole('heading', { name: /Explore the repository universe/i })).toBeInTheDocument();
     const universe = await screen.findByRole('img', { name: /Repository Universe 3D graph/i });
     expect(universe).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Repository overview/i })).toBeInTheDocument();
-    expect(screen.getByText(/ShipSeal mapped the scan boundary/i)).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /What ShipSeal understood/i })).toBeInTheDocument();
-    expect(screen.getByText(/Workspace story and evidence/i)).toBeInTheDocument();
-    expect(screen.getByText(/Repository models and metrics/i)).toBeInTheDocument();
+    expect(screen.getByText(/Select a node to inspect evidence/i)).toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: /Contextual repository details/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Live Agent Simulator/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Agent Journey/i })).not.toBeInTheDocument();
 
-    openDisclosure(/Repository models and metrics/i);
-    expect(screen.getByRole('heading', { name: /How ShipSeal understands this repository/i })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /Mental Model semantic repository graph/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Architecture: .* signal/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /AI Instructions: .* signal/i }));
-    expect(screen.getByRole('heading', { name: /AI Instructions/i })).toBeInTheDocument();
-    expect(screen.getAllByText('Connections').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Repository DNA').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: /AI workspace profile/i })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: /Repository DNA radar profile/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Documentation: .*current score/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Context Efficiency:/i }));
-    expect(screen.getByRole('heading', { name: /Context Efficiency/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/Potential/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Evidence').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Recommendations').length).toBeGreaterThan(0);
-    expect(screen.getByText(/Signals and missing pieces/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Mental model built/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Workspace metrics and next action/i)).toBeInTheDocument();
-    expect(screen.getAllByText('Workspace Quality').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(`${report.repositoryHealth.overall.score} / 100`).length).toBeGreaterThan(0);
-    openDisclosure(/Supporting workspace views/i);
-    expect(screen.getByText('Workspace Overview')).toBeInTheDocument();
-    expect(screen.getByText('Repository as an AI workspace')).toBeInTheDocument();
-    expect(screen.getByText(`${report.repositoryHealth.overall.score} / 100`)).toBeInTheDocument();
-    expect(screen.getByText(report.repositoryHealth.overall.status)).toBeInTheDocument();
-    expect(screen.getAllByText(`${report.repositoryHealth.overall.confidence} confidence`).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Repository Friction').length).toBeGreaterThan(0);
-    expect(screen.getByText('Live Agent Simulator')).toBeInTheDocument();
-    expect(screen.queryByText('Agent Heatmap')).not.toBeInTheDocument();
-    expect(screen.queryByText('Context Timeline')).not.toBeInTheDocument();
-    expect(screen.getAllByText('AI Development Readiness').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Agent Routing').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Delivery Confidence').length).toBeGreaterThan(0);
-    expect(screen.getAllByText(topAction.title).length).toBeGreaterThan(0);
+    const { menu } = openMoreControls();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Open repository story/i }));
+    expect(screen.getByRole('tab', { name: /Story/i })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: /Knowledge and docs/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /DNA/i }));
+    expect(screen.getByText(/Current and potential workspace dimensions/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Mental Model/i }));
+    expect(screen.getByText(/Semantic relationships use the existing repository model/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Overview/i }));
+    expect(screen.getByText(/Workspace Quality/i)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${report.repositoryHealth.overall.score} / 100`))).toBeInTheDocument();
   }, 20_000);
 
-  it('syncs Workspace Story chapters across Mental Model, Repository DNA and simulator steps', () => {
+  it('preserves contextual Workspace Story state across DNA and Mental Model views', () => {
     render(
       <ResultDashboard
         report={buildSampleReport()}
@@ -504,26 +469,17 @@ describe('Result Workspace composition', () => {
       />
     );
 
-    openDisclosure(/Workspace story and evidence/i);
-    openDisclosure(/Repository models and metrics/i);
-    fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
-
-    expect(screen.getByRole('heading', { name: /Knowledge and docs/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { name: /^Documentation$/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/Documentation connects repository identity/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Story signal').length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole('button', { name: /AI Instructions: .* signal/i }));
-
-    expect(screen.getAllByRole('heading', { name: /Project memory/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('heading', { name: /AI Instructions/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole('heading', { name: /Project Memory/i }).length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole('button', { name: /Context Efficiency:/i }));
-
-    expect(screen.getByRole('heading', { name: /Context and workflow/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Context Efficiency/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/avoid generated folders/i).length).toBeGreaterThan(0);
+    const { menu } = openMoreControls();
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Open repository story/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Knowledge and docs/i }));
+    expect(screen.getByRole('tab', { name: /Story/i })).toHaveAttribute('aria-selected', 'true');
+    const reopened = openMoreControls();
+    fireEvent.click(within(reopened.menu).getByRole('menuitem', { name: /Repository DNA/i }));
+    expect(screen.getByText(/Current and potential workspace dimensions/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Mental Model/i }));
+    expect(screen.getByText(/Semantic relationships use the existing repository model/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: /Story/i }));
+    expect(screen.getByRole('button', { name: /Knowledge and docs/i })).toBeInTheDocument();
   });
 
   it('settles the cinematic reveal once and does not restart it after chapter navigation', () => {
@@ -564,9 +520,9 @@ describe('Result Workspace composition', () => {
 
     fireEvent.click(screen.getByTestId('atlas-node-file:documentation:readme.md'));
 
-    expect(screen.getByRole('heading', { name: 'Selected entity' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Selected entity inspector/i)).toBeInTheDocument();
     expect(screen.getAllByText('README.md').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('File').length).toBeGreaterThan(0);
+    expect(screen.getByRole('tab', { name: /Evidence/i })).toBeInTheDocument();
     expect(container.querySelectorAll('[data-testid^="atlas-edge-"]').length).toBeGreaterThan(0);
   });
 
@@ -586,6 +542,7 @@ describe('Result Workspace composition', () => {
     expect(screen.getByRole('heading', { name: /Explore the repository universe/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
     switchResultChapter('Deliver');
+    fireEvent.click(await screen.findByRole('button', { name: /Open Client handoff/i }, { timeout: 10000 }));
     expect(await screen.findByRole('heading', { name: /Reports and Delivery Outputs/i }, { timeout: 10000 })).toBeInTheDocument();
   });
 
@@ -599,13 +556,14 @@ describe('Result Workspace composition', () => {
       />
     );
 
-    openDisclosure(/Workspace story and evidence/i);
     switchToAtlas2D();
-    fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
+    fireEvent.click(screen.getByTestId('atlas-node-concept:documentation'));
     expect(screen.getByTestId('atlas-node-concept:documentation')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Close inspector/i })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Overview/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId('atlas-node-memory:projectMemory:agents.md'));
-    expect(screen.getAllByRole('heading', { name: /Project memory/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('heading', { name: /AGENTS.md/i })).toBeInTheDocument();
     expect(screen.getByTestId('atlas-node-memory:projectMemory:agents.md')).toHaveAttribute('aria-pressed', 'true');
   });
 

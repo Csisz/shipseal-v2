@@ -53,6 +53,8 @@ interface DeliverWorkspaceProps {
   agentOperatingMode?: AgentOperatingModeId;
 }
 
+type DeliveryOutcomeGroup = 'client-handoff' | 'ai-workspace' | 'repository-intelligence' | 'technical-exports';
+
 export default function DeliverWorkspace({
   active,
   report,
@@ -74,6 +76,7 @@ export default function DeliverWorkspace({
   const [appliedIntake, setAppliedIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [draftIntake, setDraftIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [wasIntakeSkipped, setWasIntakeSkipped] = useState(intakeSkipped);
+  const [activeDeliveryGroup, setActiveDeliveryGroup] = useState<DeliveryOutcomeGroup | null>(null);
   const readiness = evaluateReadiness(report.score, report.blockers);
   const ready = readiness.isReady;
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
@@ -95,6 +98,7 @@ export default function DeliverWorkspace({
     setAppliedIntake(nextIntake);
     setDraftIntake(nextIntake);
     setWasIntakeSkipped(intakeSkipped);
+    setActiveDeliveryGroup(null);
   }, [initialIntake, intakeSkipped, report.repoName, report.scannedAt]);
 
   const intakeDirty = !sameProjectIntake(appliedIntake, draftIntake);
@@ -111,8 +115,39 @@ export default function DeliverWorkspace({
 
   return (
     <>
-      <div hidden={!active}>
-      <Disclosure title="Exports and reports">
+      {active && (
+        <section className="mb-8" aria-labelledby="delivery-outcome-groups-heading">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Delivery</div>
+              <h2 id="delivery-outcome-groups-heading" className="mt-1 font-display text-2xl font-semibold">Prepare delivery</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Choose the outcome you need; technical detail stays closed until requested.</p>
+            </div>
+            <Button type="button" onClick={() => setActiveDeliveryGroup('client-handoff')} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              Prepare delivery
+            </Button>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {([
+              ['client-handoff', 'Client handoff', 'Package the reviewed client-facing report and Delivery Pack.'],
+              ['ai-workspace', 'AI workspace', 'Review agent instructions, context, and workspace outputs.'],
+              ['repository-intelligence', 'Repository Intelligence', 'Inspect evidence, readiness, and governance outcomes.'],
+              ['technical-exports', 'Technical exports', 'Access score, manifest, generated files, and scan metadata.'],
+            ] as const).map(([id, title, description]) => (
+              <article key={id} className={`rounded-2xl border p-4 ${activeDeliveryGroup === id ? 'border-primary/45 bg-primary/10' : 'border-border/55 bg-background/20'}`}>
+                <h3 className="font-display font-semibold">{title}</h3>
+                <p className="mt-1 min-h-10 text-xs leading-relaxed text-muted-foreground">{description}</p>
+                <Button type="button" variant="ghost" size="sm" aria-label={`Open ${title}`} aria-pressed={activeDeliveryGroup === id} onClick={() => setActiveDeliveryGroup(id)} className="mt-3 px-0 text-primary-glow hover:bg-transparent hover:text-primary-glow">
+                  {activeDeliveryGroup === id ? 'Showing details' : 'Open group'}
+                </Button>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {active && activeDeliveryGroup === 'client-handoff' && (
+      <div>
       <section className="mb-8" aria-labelledby="delivery-outputs-heading">
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -244,7 +279,7 @@ export default function DeliverWorkspace({
         </div>
       </div>
 
-      <Disclosure title="Delivery readiness details">
+      <Disclosure title="Delivery readiness details" lazyMount>
         <div className="grid gap-6 lg:grid-cols-[240px_minmax(0,1fr)]">
           <div className="glass rounded-2xl p-6 flex flex-col items-center justify-center">
             <ScoreGauge score={report.score} size={200} label="delivery / 100" />
@@ -265,7 +300,7 @@ export default function DeliverWorkspace({
         </Suspense>
       </ResultChapterLoadBoundary>
 
-      <Disclosure title="Project context used for Delivery Outputs" defaultOpen={wasIntakeSkipped || intakeDirty}>
+      <Disclosure title="Project context used for Delivery Outputs" defaultOpen={wasIntakeSkipped || intakeDirty} lazyMount>
         <ProjectContextPanel
           appliedIntake={appliedIntake}
           draftIntake={draftIntake}
@@ -277,11 +312,13 @@ export default function DeliverWorkspace({
         />
       </Disclosure>
       </section>
-      </Disclosure>
       </div>
+      )}
 
-      <div hidden={!active}>
-      <Disclosure title="Specialist and technical exports">
+      {active && activeDeliveryGroup && activeDeliveryGroup !== 'client-handoff' && (
+      <div>
+      {activeDeliveryGroup === 'ai-workspace' && (
+      <>
       <div className="glass rounded-2xl p-6 mb-8">
         <div className="flex flex-wrap items-start gap-3 mb-5">
           <Sparkles className={ready ? 'h-4 w-4 text-success mt-1' : 'h-4 w-4 text-accent mt-1'} />
@@ -375,7 +412,11 @@ export default function DeliverWorkspace({
           )}
         </div>
       </div>
+      </>
+      )}
 
+      {activeDeliveryGroup === 'repository-intelligence' && (
+      <>
       <div className="glass rounded-2xl p-6 mb-8">
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <ShieldCheck className="h-4 w-4 text-success" />
@@ -477,7 +518,11 @@ export default function DeliverWorkspace({
           ))}
         </div>
       </div>
+      </>
+      )}
 
+      {activeDeliveryGroup === 'technical-exports' && (
+      <>
       <div className="mt-10 grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="glass rounded-2xl p-6 lg:col-span-1">
           <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -520,8 +565,10 @@ export default function DeliverWorkspace({
       </div>
 
       <RecentScans history={history} onClear={onClearHistory} />
-      </Disclosure>
+      </>
+      )}
       </div>
+      )}
 
     </>
   );

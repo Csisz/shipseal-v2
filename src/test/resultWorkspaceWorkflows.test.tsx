@@ -150,6 +150,10 @@ function openMoreControls() {
   return { trigger, menu: screen.getByTestId('universe-more-controls-menu') };
 }
 
+function openAgentJourney() {
+  fireEvent.click(screen.getByRole('button', { name: /^Plan an agent task$/i }));
+}
+
 function atlasViewport() {
   switchToAtlas2D();
   return screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
@@ -314,7 +318,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     expect(resetUniverse).toHaveAttribute('data-camera-target', initialTarget || '');
   });
 
-  it('renders Agent Flight Path in Understand and generates an evidence-bound route', async () => {
+  it('opens Agent Journey on request and generates an evidence-bound task route', async () => {
     const report = optimizationDashboardReportWithFiles([
       'README.md',
       'AGENTS.md',
@@ -327,11 +331,13 @@ describe('Result Workspace improvement and verification workflows', () => {
     ], 'flight-path-dashboard');
     render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
 
-    expect(screen.getByRole('region', { name: /Agent Flight Path/i })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Agent Journey/i })).not.toBeInTheDocument();
+    openAgentJourney();
+    expect(screen.getByRole('region', { name: /Agent Journey/i })).toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'Fix the mobile pricing layout' } });
-    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate task journey/i }));
 
-    const panel = screen.getByRole('region', { name: /Agent Flight Path/i });
+    const panel = screen.getByRole('region', { name: /Agent Journey/i });
     expect(within(panel).getAllByText(/UI or layout work/i).length).toBeGreaterThan(0);
     expect(within(panel).getAllByText(/src\/components\/PricingPanel\.tsx/i).length).toBeGreaterThan(0);
     expect(within(panel).getByRole('button', { name: /Copy prompt/i })).toBeInTheDocument();
@@ -351,10 +357,11 @@ describe('Result Workspace improvement and verification workflows', () => {
     ], 'billing-dashboard');
     render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
 
+    openAgentJourney();
     fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'Add Stripe billing' } });
-    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate task journey/i }));
 
-    const panel = screen.getByRole('region', { name: /Agent Flight Path/i });
+    const panel = screen.getByRole('region', { name: /Agent Journey/i });
     expect(within(panel).getAllByText(/Payment and billing review/i).length).toBeGreaterThan(0);
     expect(within(panel).queryByText(/src\/stripe\.ts/i)).not.toBeInTheDocument();
   });
@@ -363,14 +370,15 @@ describe('Result Workspace improvement and verification workflows', () => {
     const report = optimizationDashboardReport();
     render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
 
+    openAgentJourney();
     fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'make it better' } });
-    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate task journey/i }));
 
     expect(screen.getByText(/low confidence/i)).toBeInTheDocument();
     expect(screen.getByText(/Clarify the task for a sharper route/i)).toBeInTheDocument();
 
     switchResultChapter('Improve');
-    expect(screen.getByRole('button', { name: /Prepare optimization package/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Review optimization plan/i })).toBeInTheDocument();
     switchResultChapter('Deliver');
     expect(screen.getByRole('heading', { name: /Deliver what ShipSeal learned/i })).toBeInTheDocument();
     switchResultChapter('Verify');
@@ -396,8 +404,9 @@ describe('Result Workspace improvement and verification workflows', () => {
     ], 'prompt-dashboard');
     render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
 
+    openAgentJourney();
     fireEvent.change(screen.getByPlaceholderText(/Describe what your AI agent should do/i), { target: { value: 'Improve PDF export' } });
-    fireEvent.click(screen.getByRole('button', { name: /Generate flight path/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate task journey/i }));
     fireEvent.click(screen.getByRole('button', { name: /Copy prompt/i }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Task: Improve PDF export')));
@@ -509,8 +518,9 @@ describe('Result Workspace improvement and verification workflows', () => {
     fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
 
     expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
-    expect(screen.getByText(`${plan.summary.selectedProposalCount.toLocaleString()} selected proposals`)).toBeInTheDocument();
-    expect(screen.getByText(`${plan.summary.artifactCount.toLocaleString()} unique artifacts`)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`^${transformation.proposals.length.toLocaleString()} proposed improvements selected`))).toBeInTheDocument();
+    openDisclosure('Proposal summary');
+    expect(screen.getByText('artifacts')).toBeInTheDocument();
     expect(screen.getAllByText(/Ready for package|Review required|Blocked/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Create|Update|Strengthen/i).length).toBeGreaterThan(0);
 
@@ -518,7 +528,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     expect(screen.getByText(firstItem.artifact.generatorId)).toBeInTheDocument();
     expect(screen.getByText(/Contributing proposals/i)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: /Remove from plan/i })[0]);
-    expect(screen.getByText(`${excludedPlan.summary.selectedProposalCount.toLocaleString()} selected proposals`)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`^${(transformation.proposals.length - 1).toLocaleString()} proposed improvements selected`))).toBeInTheDocument();
 
     const applyFlow = screen.getByLabelText(/Optimization Apply Flow/i);
     expect(within(applyFlow).getAllByText(/Optimization Pack ZIP/i).length).toBeGreaterThan(0);
