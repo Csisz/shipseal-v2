@@ -36,6 +36,21 @@ describe('ShipSeal semantic theme foundation', () => {
     expect(window.localStorage.length).toBeLessThanOrEqual(1);
   });
 
+  it('uses an icon-width mobile trigger while retaining the full accessible theme label and menu state', async () => {
+    render(
+      <ThemeProvider>
+        <ThemeToggle />
+      </ThemeProvider>
+    );
+
+    const trigger = await screen.findByRole('button', { name: /Appearance theme: Dark. Change appearance/i });
+    expect(trigger).toHaveAttribute('data-mobile-control', 'icon');
+    expect(trigger).toHaveClass('h-10', 'w-10', 'sm:w-auto');
+    expect(screen.getByText('Theme')).toHaveClass('hidden', 'sm:inline');
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitemradio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
+  });
+
   it('persists explicit light and dark selections with an accessible selected state', async () => {
     render(
       <ThemeProvider>

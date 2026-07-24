@@ -484,7 +484,7 @@ const Index = () => {
       {showIntelligenceReveal && activeReport ? (
         <IntelligenceReveal key={activeReportKey || activeReport.scannedAt} report={activeReport} onComplete={completeIntelligenceReveal} />
       ) : activeReport ? (
-        <main className="pt-20">
+        <main className="pt-16 md:pt-20">
           <Suspense fallback={<div className="container py-24 text-sm text-muted-foreground">Loading report...</div>}>
             <ResultDashboard
               report={activeReport}

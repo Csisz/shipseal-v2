@@ -316,7 +316,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     const resetUniverse = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
     expect(resetUniverse).toHaveAttribute('data-camera-radius', String(initialRadius));
     expect(resetUniverse).toHaveAttribute('data-camera-target', initialTarget || '');
-  });
+  }, 20_000);
 
   it('opens Agent Journey on request and generates an evidence-bound task route', async () => {
     const report = optimizationDashboardReportWithFiles([

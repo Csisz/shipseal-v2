@@ -38,14 +38,15 @@ export function ThemeToggle({ className }: { className?: string }) {
             type="button"
             variant="ghost"
             size="sm"
-            className={cn('h-9 gap-1.5 rounded-full border border-border/70 bg-floating/80 px-2.5 text-foreground shadow-sm', className)}
+            className={cn('h-10 w-10 gap-1.5 rounded-full border border-border/70 bg-floating/80 px-0 text-foreground shadow-sm sm:h-9 sm:w-auto sm:px-2.5', className)}
             aria-label={`Appearance theme: ${active.label}. Change appearance`}
             aria-describedby={tooltipId}
             data-testid="theme-toggle"
+            data-mobile-control="icon"
           >
             <ActiveIcon className="h-4 w-4" aria-hidden="true" />
-            <span className="text-xs font-medium">Theme</span>
-            <span className="text-xs text-muted-foreground" aria-hidden="true">{active.label}</span>
+            <span className="hidden text-xs font-medium sm:inline">Theme</span>
+            <span className="hidden text-xs text-muted-foreground sm:inline" aria-hidden="true">{active.label}</span>
           </Button>
         </DropdownMenuTrigger>
         <span

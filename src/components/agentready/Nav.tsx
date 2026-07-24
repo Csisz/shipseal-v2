@@ -34,7 +34,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
       'fixed top-0 inset-x-0 z-[var(--layer-toolbar)] transition-all',
       scrolled ? 'backdrop-blur-2xl bg-background/70 border-b border-border/60' : 'bg-transparent'
     )}>
-      <div className="container flex h-20 items-center justify-between">
+      <div className="container flex h-16 items-center justify-between md:h-20">
 
         <Link
           to="/"
@@ -42,10 +42,10 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
           className="flex items-center gap-2 group"
           aria-label="ShipSeal home"
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-primary shadow-glow">
-            <Braces className="h-5 w-5 text-primary-foreground" />
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-primary shadow-glow sm:h-9 sm:w-9">
+            <Braces className="h-4 w-4 text-primary-foreground sm:h-5 sm:w-5" />
           </span>
-          <span className="font-display text-xl font-bold tracking-tight">ShipSeal</span>
+          <span className="font-display text-lg font-bold tracking-tight sm:text-xl">ShipSeal</span>
         </Link>
         <nav className="hidden lg:flex items-center gap-7">
           {links.map((l) => (

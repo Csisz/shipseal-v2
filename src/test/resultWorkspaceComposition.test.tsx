@@ -144,6 +144,10 @@ function openMoreControls() {
   return { trigger, menu: screen.getByTestId('universe-more-controls-menu') };
 }
 
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+}
+
 function atlasViewport() {
   switchToAtlas2D();
   return screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
@@ -200,6 +204,7 @@ function optimizationDashboardReportWithFiles(files: string[], repoName = 'optim
 
 describe('Result Workspace composition', () => {
   beforeEach(() => {
+    setViewportWidth(1024);
     globalThis.IntersectionObserver = class ImmediateIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = '240px 0px';
@@ -239,6 +244,89 @@ describe('Result Workspace composition', () => {
       value: vi.fn(),
     });
   });
+
+  it('uses one compact mobile hierarchy while keeping every Universe control and state path reachable', async () => {
+    setViewportWidth(390);
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        persistenceControl={<button type="button">Save project</button>}
+      />
+    );
+
+    const stage = await screen.findByTestId('repository-universe-workspace-stage');
+    await waitFor(() => expect(screen.getByTestId('repository-toolbar-overlay')).toHaveTextContent('More'));
+    expect(stage).toHaveAttribute('data-mobile-viewport-contract', 'safe-dynamic');
+    expect(stage).toHaveClass('h-[calc(100dvh-4rem)]', 'min-h-[calc(100svh-4rem)]', 'overflow-hidden');
+    expect(screen.getAllByTestId('repository-context-overlay')).toHaveLength(1);
+    expect(screen.getAllByTestId('repository-toolbar-overlay')).toHaveLength(1);
+    expect(screen.getAllByTestId('result-chapter-rail-overlay')).toHaveLength(1);
+
+    const context = screen.getByTestId('repository-context-overlay');
+    expect(within(context).getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
+    expect(within(context).getAllByRole('button').filter(button => button.hasAttribute('data-mobile-primary-action'))).toHaveLength(1);
+    expect(within(context).getByRole('button', { name: /Plan an agent task/i })).toBeInTheDocument();
+    expect(within(context).getByRole('button', { name: /Review improvements/i })).not.toBeVisible();
+
+    fireEvent.click(within(context).getByLabelText(/More repository actions/i));
+    expect(within(context).getByRole('button', { name: /Review improvements/i })).toBeInTheDocument();
+    expect(within(context).getByRole('button', { name: /Save project/i })).toBeInTheDocument();
+    expect(within(context).getByRole('button', { name: /Scan another project/i })).toBeInTheDocument();
+
+    const chapterNav = screen.getByRole('navigation', { name: /Result chapters/i });
+    expect(chapterNav).toHaveAttribute('data-mobile-layout', 'two-by-two');
+    for (const chapter of ['Understand', 'Improve', 'Verify', 'Deliver']) {
+      expect(within(chapterNav).getByRole('button', { name: new RegExp(chapter, 'i') })).toBeInTheDocument();
+    }
+
+    const toolbar = screen.getByTestId('repository-toolbar-overlay');
+    expect(within(toolbar).getByRole('button', { name: /Search repository/i })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: /Universe 3D/i })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: /Atlas 2D/i })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: /More Universe controls/i })).toBeInTheDocument();
+    expect(within(toolbar).queryByRole('button', { name: /Fullscreen/i })).not.toBeInTheDocument();
+
+    fireEvent.click(within(toolbar).getByRole('button', { name: /Search repository/i }));
+    expect(within(toolbar).getByRole('textbox', { name: /Search repository atlas or universe/i })).toBeInTheDocument();
+    fireEvent.click(within(toolbar).getByRole('button', { name: /Close repository search/i }));
+
+    fireEvent.click(within(toolbar).getByRole('button', { name: /More Universe controls/i }));
+    const controlsSheet = await screen.findByTestId('mobile-universe-controls-sheet');
+    expect(within(controlsSheet).getByRole('button', { name: /Fullscreen/i })).toBeInTheDocument();
+    expect(within(controlsSheet).getByRole('button', { name: /Pause rotation/i })).toBeInTheDocument();
+    expect(within(controlsSheet).getByRole('button', { name: /Zoom in/i })).toBeInTheDocument();
+    expect(within(controlsSheet).getByRole('button', { name: /Zoom out/i })).toBeInTheDocument();
+    expect(within(controlsSheet).getByRole('button', { name: /Reset view/i })).toBeInTheDocument();
+    expect(within(controlsSheet).getByRole('heading', { name: /Layers and filters/i })).toBeInTheDocument();
+    expect(within(controlsSheet).getByLabelText(/Repository Atlas filters/i)).toBeInTheDocument();
+    expect(within(controlsSheet).getByLabelText(/Universe interaction help/i)).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('mobile-universe-controls-sheet')).not.toBeInTheDocument());
+
+    const universe = await screen.findByTestId('repository-universe-canvas');
+    fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
+    const selectedTarget = universe.getAttribute('data-camera-target');
+    const inspector = await screen.findByTestId('repository-inspector-scroll-region');
+    expect(inspector).toHaveAttribute('data-mobile-sheet', 'true');
+    expect(inspector).toHaveAttribute('data-mobile-expanded', 'false');
+    expect(inspector).toHaveClass('max-h-[52dvh]');
+    fireEvent.click(within(inspector).getByRole('button', { name: /Expand details/i }));
+    expect(inspector).toHaveAttribute('data-mobile-expanded', 'true');
+    expect(inspector).toHaveClass('max-h-[82dvh]');
+    fireEvent.click(within(inspector).getByRole('button', { name: /Close inspector/i }));
+    expect(screen.queryByTestId('repository-inspector-scroll-region')).not.toBeInTheDocument();
+    expect(screen.getByTestId('repository-universe-canvas')).toHaveAttribute('data-camera-target', selectedTarget);
+
+    for (const chapter of ['Improve', 'Verify', 'Deliver', 'Understand'] as const) {
+      switchResultChapter(chapter);
+      expect(screen.getAllByRole('navigation', { name: /Result chapters/i })).toHaveLength(1);
+      expect(within(screen.getByRole('navigation', { name: /Result chapters/i })).getByRole('button', { name: new RegExp(chapter, 'i') })).toHaveAttribute('aria-pressed', 'true');
+    }
+    expect(await screen.findByTestId('repository-universe-canvas')).toHaveAttribute('data-camera-target', selectedTarget);
+  }, 20_000);
 
   it('uses compact Delivery Pack summary text that does not truncate the old wording', async () => {
     const report = buildSampleReport();
@@ -351,6 +439,7 @@ describe('Result Workspace composition', () => {
     expect(screen.queryByRole('heading', { name: /Review ShipSeal improvements/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Prepare optimization package/i })).not.toBeInTheDocument();
 
+    switchResultChapter('Understand');
     fireEvent.click(screen.getByRole('button', { name: /^Plan an agent task$/i }));
     expect(within(chapterNav).getByRole('button', { name: /Understand/i })).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => expect(screen.getAllByText(/^Plan an agent task$/i).find(element => element.tagName === 'SUMMARY')?.closest('details')).toHaveAttribute('open'));

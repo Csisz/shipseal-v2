@@ -208,7 +208,7 @@ export function ResultWorkspace({
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
 
-      {(activeResultChapter !== 'understand' || repositoryHealth.overall.score === null) && <PostScanOverview
+      {(!['understand', 'improve'].includes(activeResultChapter) || repositoryHealth.overall.score === null) && <PostScanOverview
         report={report}
         limitedScanReason={limitedScanReason}
         frictions={repositoryFrictions}

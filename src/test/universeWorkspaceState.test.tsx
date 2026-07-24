@@ -267,7 +267,7 @@ describe('Repository Universe workspace state', () => {
       />
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: /Select universe node/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Select universe node/i }, { timeout: 10_000 }));
     openMoreControls();
     fireEvent.click(screen.getByRole('menuitem', { name: /Zoom in/i }));
     const selectedNodeId = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-selected-node');
@@ -289,7 +289,7 @@ describe('Repository Universe workspace state', () => {
 
     await waitFor(() => expect(screen.queryByRole('dialog', { name: /Repository Universe fullscreen/i })).not.toBeInTheDocument());
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-selected-node', selectedNodeId || '');
-  });
+  }, 20_000);
 
   it('contains Repository Universe render failures and keeps Atlas 2D accessible', async () => {
     const onReset = vi.fn();

@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 import type React from 'react';
 import type { ReactNode } from 'react';
 import { useTheme } from 'next-themes';
-import { AlertOctagon, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, Layers, Lightbulb, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { AlertOctagon, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, HelpCircle, Layers, Lightbulb, Maximize2, Minimize2, MoreHorizontal, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { AgentOperatingModeId, AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { evaluateReadiness } from '@/lib/scoring';
 import { ScoreGauge } from '@/components/agentready/ScoreGauge';
@@ -13,6 +13,8 @@ import { ProjectIntakeForm } from '@/components/agentready/ProjectIntakeForm';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { buildRepoContextPackJson, buildScoreJson, downloadJsonFile, downloadTextFile } from '@/lib/exports';
 import { formatFileSize } from '@/lib/uploadValidation';
 import { criticalBlockersEmptyStateText, displayReadinessLevel, readinessStatusMessageForPackage } from '@/lib/uiCopy';
@@ -277,6 +279,7 @@ function RepositoryAtlasVisualization({
   onDiscardVerificationBaseline?: () => void;
 }) {
   const { resolvedTheme } = useTheme();
+  const isMobile = useIsMobile();
   const universeTheme = resolvedTheme === 'light' ? 'light' : 'dark';
   const atlas = useMemo(() => buildRepositoryAtlasModel(report), [report]);
   const universe = useMemo(() => buildRepositoryUniverseModel(report), [report]);
@@ -286,6 +289,7 @@ function RepositoryAtlasVisualization({
   const prefersReducedMotion = usePrefersReducedMotion();
   const atlasRootRef = useRef<HTMLElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const inspectorSheetRef = useRef<HTMLElement | null>(null);
   const fullscreenLayerRef = useRef<HTMLDivElement | null>(null);
   const fullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
   const exitFullscreenButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -323,6 +327,9 @@ function RepositoryAtlasVisualization({
   const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
   const [inspectorScrollActive, setInspectorScrollActive] = useState(false);
   const [inspectorDismissed, setInspectorDismissed] = useState(false);
+  const [mobileInspectorExpanded, setMobileInspectorExpanded] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const [repositoryProfileOpen, setRepositoryProfileOpen] = useState(false);
   const [inspectorTab, setInspectorTab] = useState<ContextualInspectorTab>('overview');
   const [agentFlightPathTask, setAgentFlightPathTask] = useState('');
@@ -427,6 +434,9 @@ function RepositoryAtlasVisualization({
   const atlasNavigationActive = navigationActive || fullscreen;
   const planReadyForChapter = activeResultChapter === 'verify';
   const flightPathUniverseNodeIds = useMemo(() => agentFlightPath?.routeNodeIds.universeNodeIds || [], [agentFlightPath]);
+  const inspectorVisible = !inspectorDismissed && (viewMode === 'universe3d'
+    ? repositoryProfileOpen || selectedUniverseNode?.id !== universe.rootNodeId || flightPathUniverseNodeIds.length > 0
+    : selectedNode?.id !== atlas.rootNodeId);
   const flightPathAtlasNodeIdSet = useMemo(() => new Set(agentFlightPath?.routeNodeIds.atlasNodeIds || []), [agentFlightPath]);
 
   useEffect(() => {
@@ -462,6 +472,9 @@ function RepositoryAtlasVisualization({
     setOptimizationPlanOpen(false);
     setSelectedOptimizationItemId(null);
     setInspectorDismissed(false);
+    setMobileInspectorExpanded(false);
+    setMobileSearchOpen(false);
+    setMobileControlsOpen(false);
     setRepositoryProfileOpen(false);
     setInspectorTab('overview');
     setAgentFlightPathTask('');
@@ -527,12 +540,21 @@ function RepositoryAtlasVisualization({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
+      if (mobileControlsOpen) {
+        setMobileControlsOpen(false);
+        return;
+      }
       if (tooltip) {
         setTooltip(null);
         return;
       }
       if (fullscreen) {
         exitFullscreen();
+        return;
+      }
+      if (isMobile && inspectorVisible) {
+        setInspectorDismissed(true);
+        setMobileInspectorExpanded(false);
         return;
       }
       if (navigationActive) {
@@ -542,7 +564,13 @@ function RepositoryAtlasVisualization({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [exitFullscreen, fullscreen, navigationActive, tooltip]);
+  }, [exitFullscreen, fullscreen, inspectorVisible, isMobile, mobileControlsOpen, navigationActive, tooltip]);
+
+  useEffect(() => {
+    if (!isMobile || !inspectorVisible || fullscreen) return;
+    const frame = requestAnimationFrame(() => inspectorSheetRef.current?.focus({ preventScroll: true }));
+    return () => cancelAnimationFrame(frame);
+  }, [fullscreen, inspectorVisible, isMobile, selectedNodeId, selectedProposalId, selectedUniverseNodeId]);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -584,6 +612,7 @@ function RepositoryAtlasVisualization({
   const selectNode = useCallback((node: RepositoryAtlasNode) => {
     setSelectedNodeId(node.id);
     setInspectorDismissed(false);
+    setMobileInspectorExpanded(false);
     setRepositoryProfileOpen(node.id === atlas.rootNodeId || node.kind === 'repository');
     setInspectorTab(node.evidenceItems.length ? 'evidence' : 'overview');
     const matchingUniverseNode = node.path
@@ -610,6 +639,7 @@ function RepositoryAtlasVisualization({
   const selectUniverseNode = useCallback((node: RepositoryUniverseNode) => {
     setSelectedUniverseNodeId(node.id);
     setInspectorDismissed(false);
+    setMobileInspectorExpanded(false);
     setRepositoryProfileOpen(node.id === universe.rootNodeId || node.kind === 'repository');
     setInspectorTab(node.evidenceItems.length ? 'evidence' : 'overview');
     if (node.clusterId) setFocusedClusterId(node.clusterId);
@@ -664,6 +694,7 @@ function RepositoryAtlasVisualization({
     setTransformationMode('with-shipseal');
     setSelectedProposalId(proposal.id);
     setInspectorDismissed(false);
+    setMobileInspectorExpanded(false);
     setRepositoryProfileOpen(false);
     setFocusedClusterId(current => proposal.graphChanges.proposedNodes[0]?.clusterId || current);
   }, []);
@@ -800,110 +831,128 @@ function RepositoryAtlasVisualization({
     setSelectedProposalId(null);
     setRepositoryProfileOpen(true);
     setInspectorDismissed(false);
+    setMobileInspectorExpanded(false);
     setInspectorTab(tab);
   };
 
   const atlasToolbar = (
-    <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 md:overflow-visible md:pb-0">
-      <label className="relative min-w-[180px] flex-1 xl:w-[220px] xl:flex-none">
-        <span className="sr-only">Search repository atlas or universe</span>
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={query}
-          onChange={event => setQuery(event.target.value)}
-          onFocus={() => setNavigationActive(true)}
-          className="h-9 w-full rounded-full border border-primary/15 bg-background/20 pl-8 pr-3 text-sm outline-none transition hover:border-primary/25 focus:border-accent/45 focus:ring-2 focus:ring-accent/15"
-          placeholder="Search files, paths, roles"
-        />
-      </label>
-      <div className="flex rounded-full border border-primary/15 bg-background/15 p-1" aria-label="Repository view selector">
-        <button
+    isMobile ? (!fullscreen ? (
+      <div className="relative flex min-w-0 items-center gap-1.5" data-mobile-toolbar="true">
+        <Button
           type="button"
-          aria-pressed={viewMode === 'universe3d'}
-          onClick={() => changeViewMode('universe3d')}
-          className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'universe3d' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.2),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_22px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:text-foreground'}`}
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0 rounded-full"
+          aria-label={mobileSearchOpen ? 'Close repository search' : 'Search repository'}
+          aria-expanded={mobileSearchOpen}
+          onClick={() => setMobileSearchOpen(current => !current)}
         >
-          Universe 3D
-        </button>
-        <button
-          type="button"
-          aria-pressed={viewMode === 'atlas2d'}
-          onClick={() => changeViewMode('atlas2d')}
-          className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'atlas2d' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.2),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_22px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:text-foreground'}`}
-        >
-          Atlas 2D
-        </button>
-      </div>
-      <DropdownMenu modal={false}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0 rounded-full border-primary/15 bg-floating/75 text-xs"
-            aria-label="More Universe controls"
-          >
-            More controls
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          side="bottom"
-          sideOffset={8}
-          collisionPadding={12}
-          className="max-h-[min(22rem,calc(100dvh-1.5rem))] w-48 overflow-y-auto p-2"
-          data-testid="universe-more-controls-menu"
-          data-overlay-layer="popover"
-        >
-          {activeResultChapter === 'understand' && (
-            <>
-              <DropdownMenuItem onSelect={() => openRepositoryContext('story')}>
-                Open repository story
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openRepositoryContext('dna')}>
-                Repository DNA
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => openRepositoryContext('mental-model')}>
-                Semantic relationships
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setFlightPathOpen(true)}>
-                Agent Journey
-              </DropdownMenuItem>
-            </>
-          )}
-          {viewMode === 'universe3d' && (
-            <DropdownMenuItem onSelect={() => setUniverseRotationPaused(current => !current)}>
-              {universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}
-            </DropdownMenuItem>
-          )}
-          <DropdownMenuItem onSelect={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) })) : setScale(view.scale + 0.14)}>
-            <ZoomIn className="mr-1.5 h-3.5 w-3.5" /> Zoom in
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.min(1500, current.radius + 80) })) : setScale(view.scale - 0.14)}>
-            <ZoomOut className="mr-1.5 h-3.5 w-3.5" /> Zoom out
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={resetAtlas}>
-            <Crosshair className="mr-1.5 h-3.5 w-3.5" /> Reset view
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      {!fullscreen && (
-        <Button ref={fullscreenButtonRef} type="button" variant="outline" size="sm" onClick={enterFullscreen} className="rounded-full border-accent/25 bg-accent/5 text-accent hover:border-accent/40 hover:bg-accent/10 hover:text-accent">
-          <Maximize2 className="mr-1.5 h-3.5 w-3.5" /> Fullscreen
+          <Search className="h-4 w-4" />
         </Button>
-      )}
-      {fullscreen && (
-        <>
-          <Button type="button" variant="outline" size="sm" onClick={() => setInspectorCollapsed(current => !current)} className="border-border/60 bg-background/25">
-            {inspectorCollapsed ? <PanelRightOpen className="mr-1.5 h-3.5 w-3.5" /> : <PanelRightClose className="mr-1.5 h-3.5 w-3.5" />}
-            {inspectorCollapsed ? 'Expand inspector' : 'Collapse inspector'}
-          </Button>
-          <Button ref={exitFullscreenButtonRef} type="button" variant="outline" size="sm" onClick={exitFullscreen} className="border-primary/45 bg-primary/10 text-primary-glow hover:text-primary-glow">
-            <Minimize2 className="mr-1.5 h-3.5 w-3.5" /> Exit fullscreen
-          </Button>
-        </>
-      )}
-    </div>
+        <div className="flex shrink-0 rounded-full border border-primary/15 bg-background/15 p-1" aria-label="Repository view selector">
+          <button
+            type="button"
+            aria-label="Universe 3D"
+            aria-pressed={viewMode === 'universe3d'}
+            onClick={() => changeViewMode('universe3d')}
+            className={`min-h-8 rounded-full px-3 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'universe3d' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.2),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_22px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            3D
+          </button>
+          <button
+            type="button"
+            aria-label="Atlas 2D"
+            aria-pressed={viewMode === 'atlas2d'}
+            onClick={() => changeViewMode('atlas2d')}
+            className={`min-h-8 rounded-full px-3 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'atlas2d' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.2),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_22px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            2D
+          </button>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-10 shrink-0 rounded-full border-primary/15 bg-floating/75 px-3 text-xs"
+          aria-label="More Universe controls"
+          aria-expanded={mobileControlsOpen}
+          onClick={() => setMobileControlsOpen(true)}
+        >
+          <MoreHorizontal className="mr-1 h-4 w-4" /> More
+        </Button>
+        {mobileSearchOpen && (
+          <label className="absolute right-0 top-[calc(100%+0.5rem)] w-[min(21rem,calc(100vw-1rem))] rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.94)] p-2 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl">
+            <span className="sr-only">Search repository atlas or universe</span>
+            <Search className="pointer-events-none absolute left-5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              autoFocus
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              onFocus={() => setNavigationActive(true)}
+              className="h-10 w-full rounded-full border border-primary/15 bg-background/30 pl-9 pr-3 text-sm outline-none transition focus:border-accent/45 focus:ring-2 focus:ring-accent/15"
+              placeholder="Search files, paths, roles"
+            />
+          </label>
+        )}
+      </div>
+    ) : (
+      <div className="flex min-w-0 items-center justify-end gap-2" data-mobile-toolbar="fullscreen">
+        <Button type="button" variant="outline" size="sm" onClick={() => setInspectorCollapsed(current => !current)} className="h-10 rounded-full border-border/60 bg-background/25 px-3 text-xs">
+          {inspectorCollapsed ? <PanelRightOpen className="mr-1.5 h-3.5 w-3.5" /> : <PanelRightClose className="mr-1.5 h-3.5 w-3.5" />}
+          {inspectorCollapsed ? 'Show inspector' : 'Hide inspector'}
+        </Button>
+        <Button ref={exitFullscreenButtonRef} type="button" variant="outline" size="sm" onClick={exitFullscreen} className="h-10 rounded-full border-primary/45 bg-primary/10 px-3 text-xs text-primary-glow hover:text-primary-glow">
+          <Minimize2 className="mr-1.5 h-3.5 w-3.5" /> Exit
+        </Button>
+      </div>
+    )) : (
+      <div className="flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 md:overflow-visible md:pb-0">
+        <label className="relative min-w-[180px] flex-1 xl:w-[220px] xl:flex-none">
+          <span className="sr-only">Search repository atlas or universe</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={event => setQuery(event.target.value)}
+            onFocus={() => setNavigationActive(true)}
+            className="h-9 w-full rounded-full border border-primary/15 bg-background/20 pl-8 pr-3 text-sm outline-none transition hover:border-primary/25 focus:border-accent/45 focus:ring-2 focus:ring-accent/15"
+            placeholder="Search files, paths, roles"
+          />
+        </label>
+        <div className="flex rounded-full border border-primary/15 bg-background/15 p-1" aria-label="Repository view selector">
+          <button type="button" aria-pressed={viewMode === 'universe3d'} onClick={() => changeViewMode('universe3d')} className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'universe3d' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.2),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_22px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:text-foreground'}`}>Universe 3D</button>
+          <button type="button" aria-pressed={viewMode === 'atlas2d'} onClick={() => changeViewMode('atlas2d')} className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${viewMode === 'atlas2d' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.2),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_22px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:text-foreground'}`}>Atlas 2D</button>
+        </div>
+        <DropdownMenu modal={false}>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" variant="outline" size="sm" className="shrink-0 rounded-full border-primary/15 bg-floating/75 text-xs" aria-label="More Universe controls">More controls</Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="bottom" sideOffset={8} collisionPadding={12} className="max-h-[min(22rem,calc(100dvh-1.5rem))] w-48 overflow-y-auto p-2" data-testid="universe-more-controls-menu" data-overlay-layer="popover">
+            {activeResultChapter === 'understand' && (
+              <>
+                <DropdownMenuItem onSelect={() => openRepositoryContext('story')}>Open repository story</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openRepositoryContext('dna')}>Repository DNA</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => openRepositoryContext('mental-model')}>Semantic relationships</DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setFlightPathOpen(true)}>Agent Journey</DropdownMenuItem>
+              </>
+            )}
+            {viewMode === 'universe3d' && <DropdownMenuItem onSelect={() => setUniverseRotationPaused(current => !current)}>{universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}</DropdownMenuItem>}
+            <DropdownMenuItem onSelect={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) })) : setScale(view.scale + 0.14)}><ZoomIn className="mr-1.5 h-3.5 w-3.5" /> Zoom in</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.min(1500, current.radius + 80) })) : setScale(view.scale - 0.14)}><ZoomOut className="mr-1.5 h-3.5 w-3.5" /> Zoom out</DropdownMenuItem>
+            <DropdownMenuItem onSelect={resetAtlas}><Crosshair className="mr-1.5 h-3.5 w-3.5" /> Reset view</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {!fullscreen && <Button ref={fullscreenButtonRef} type="button" variant="outline" size="sm" onClick={enterFullscreen} className="rounded-full border-accent/25 bg-accent/5 text-accent hover:border-accent/40 hover:bg-accent/10 hover:text-accent"><Maximize2 className="mr-1.5 h-3.5 w-3.5" /> Fullscreen</Button>}
+        {fullscreen && (
+          <>
+            <Button type="button" variant="outline" size="sm" onClick={() => setInspectorCollapsed(current => !current)} className="border-border/60 bg-background/25">
+              {inspectorCollapsed ? <PanelRightOpen className="mr-1.5 h-3.5 w-3.5" /> : <PanelRightClose className="mr-1.5 h-3.5 w-3.5" />}
+              {inspectorCollapsed ? 'Expand inspector' : 'Collapse inspector'}
+            </Button>
+            <Button ref={exitFullscreenButtonRef} type="button" variant="outline" size="sm" onClick={exitFullscreen} className="border-primary/45 bg-primary/10 text-primary-glow hover:text-primary-glow"><Minimize2 className="mr-1.5 h-3.5 w-3.5" /> Exit fullscreen</Button>
+          </>
+        )}
+      </div>
+    )
   );
 
   const atlasFilters = (
@@ -923,7 +972,55 @@ function RepositoryAtlasVisualization({
     : transformationMode === 'after-rescan'
       ? 'Verified rescan comparison'
       : `With ShipSeal · ${transformationDomainSummary}`;
-  const transformationControls = (
+  const transformationControls = isMobile ? (
+    <section
+      data-testid="improve-universe-control-dock"
+      data-mobile-layout="compact"
+      className="pointer-events-auto flex min-w-0 flex-col gap-2 rounded-[1.35rem] border border-accent/20 bg-[linear-gradient(155deg,hsl(var(--universe-surface-raised)/0.92),hsl(var(--universe-stage-bg)/0.76))] p-3 shadow-[0_22px_64px_hsl(var(--universe-stage-bg)/0.62)] backdrop-blur-xl"
+      aria-labelledby="improve-universe-control-heading"
+    >
+      <header className="flex min-w-0 items-center justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-accent/80">Universe comparison</div>
+          <h3 id="improve-universe-control-heading" className="sr-only">Improve the repository universe</h3>
+        </div>
+        <div className="shrink-0 rounded-full border border-accent/20 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent" aria-live="polite">
+          {transformationMode === 'current' ? 'Current' : transformationMode === 'after-rescan' ? 'After rescan' : 'With ShipSeal'}
+        </div>
+      </header>
+      <div className="flex rounded-xl border border-primary/15 bg-background/20 p-1" aria-label="Repository transformation preview mode">
+        <button type="button" aria-pressed={transformationMode === 'current'} onClick={() => changeTransformationMode('current')} className={`min-h-9 flex-1 rounded-lg px-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${transformationMode === 'current' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground' : 'text-muted-foreground'}`}>Current</button>
+        <button type="button" aria-pressed={transformationMode === 'with-shipseal'} disabled={transformation.proposals.length === 0} onClick={() => changeTransformationMode('with-shipseal')} className={`min-h-9 flex-1 rounded-lg px-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45 ${transformationMode === 'with-shipseal' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground' : 'text-muted-foreground'}`}>With ShipSeal</button>
+        {verificationResult && <button type="button" aria-pressed={transformationMode === 'after-rescan'} disabled={!hasVerifiedRescanComparison} onClick={() => changeTransformationMode('after-rescan')} className={`min-h-9 flex-1 rounded-lg px-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45 ${transformationMode === 'after-rescan' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground' : 'text-muted-foreground'}`}>Rescan</button>}
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" aria-live="polite">
+          {transformationMode === 'current'
+            ? `${transformation.summary.currentFiles.toLocaleString()} files · ${transformation.summary.currentClusters.toLocaleString()} clusters`
+            : `${visibleIncludedTransformationProposals.length.toLocaleString()} proposals · ${visibleTransformationArtifactCount.toLocaleString()} artifacts`}
+        </div>
+        <Button type="button" size="sm" onClick={openOptimizationPlan} disabled={activeTransformationArtifactCount === 0} className="h-9 shrink-0 rounded-full bg-primary px-3 text-[11px] text-primary-foreground hover:bg-primary/90" data-mobile-primary-action="true">
+          Review plan
+        </Button>
+      </div>
+      {transformation.proposals.length > 0 && (
+        <details className="rounded-xl border border-primary/10 bg-background/20 px-2.5 py-2 text-[10px]">
+          <summary className="cursor-pointer font-medium text-foreground">Proposal filters and counts</summary>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-muted-foreground" aria-live="polite">
+            <span><strong className="block text-foreground">{visibleIncludedTransformationProposals.length.toLocaleString()}</strong>proposals</span>
+            <span><strong className="block text-foreground">{visibleTransformationArtifactCount.toLocaleString()}</strong>artifacts</span>
+            <span><strong className="block text-foreground">{visibleTransformationRelationshipCount.toLocaleString()}</strong>relationships</span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Transformation domains">
+            <TransformationDomainButton label="All improvements" count={transformation.proposals.length} active={transformationDomain === 'all'} onClick={() => setTransformationDomain('all')} />
+            {(['project-memory', 'agent-routing', 'verification-path'] as RepositoryTransformationDomain[]).filter(domain => domainCounts[domain] > 0).map(domain => (
+              <TransformationDomainButton key={domain} label={transformationDomainLabel(domain)} count={domainCounts[domain]} active={transformationDomain === domain} onClick={() => setTransformationDomain(domain)} />
+            ))}
+          </div>
+        </details>
+      )}
+    </section>
+  ) : (
     <section
       data-testid="improve-universe-control-dock"
       className="pointer-events-auto flex min-w-0 flex-col gap-3 rounded-[1.35rem] border border-accent/20 bg-[linear-gradient(155deg,hsl(var(--universe-surface-raised)/0.9),hsl(var(--universe-stage-bg)/0.72))] p-3.5 shadow-[0_22px_64px_hsl(var(--universe-stage-bg)/0.62),0_0_32px_hsl(var(--accent)/0.05)] backdrop-blur-xl motion-safe:animate-fade-in"
@@ -1070,6 +1167,63 @@ function RepositoryAtlasVisualization({
         ))}
       </div>
     </details>
+  );
+
+  const mobileControlsSheet = isMobile && (
+    <Sheet open={mobileControlsOpen} onOpenChange={setMobileControlsOpen}>
+      <SheetContent
+        side="bottom"
+        className="max-h-[min(78dvh,42rem)] overflow-y-auto overscroll-y-contain rounded-t-[1.75rem] px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-5"
+        data-testid="mobile-universe-controls-sheet"
+      >
+        <SheetHeader className="pr-9 text-left">
+          <SheetTitle>Universe controls</SheetTitle>
+          <SheetDescription>View, navigation, layers, filters, and contextual repository tools.</SheetDescription>
+        </SheetHeader>
+        <div className="mt-4 grid grid-cols-2 gap-2" aria-label="Mobile Universe actions">
+          <Button type="button" variant="outline" size="sm" onClick={() => { setMobileControlsOpen(false); enterFullscreen(); }} className="justify-start">
+            <Maximize2 className="mr-2 h-4 w-4" /> Fullscreen
+          </Button>
+          {viewMode === 'universe3d' && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setUniverseRotationPaused(current => !current)} className="justify-start">
+              {universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}
+            </Button>
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) })) : setScale(view.scale + 0.14)} className="justify-start">
+            <ZoomIn className="mr-2 h-4 w-4" /> Zoom in
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.min(1500, current.radius + 80) })) : setScale(view.scale - 0.14)} className="justify-start">
+            <ZoomOut className="mr-2 h-4 w-4" /> Zoom out
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={resetAtlas} className="col-span-2 justify-start" data-testid="mobile-reset-universe-view">
+            <Crosshair className="mr-2 h-4 w-4" /> Reset view
+          </Button>
+        </div>
+        {activeResultChapter === 'understand' && (
+          <div className="mt-4 grid gap-2 border-t border-border/60 pt-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Repository context</div>
+            <div className="grid grid-cols-2 gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setMobileControlsOpen(false); openRepositoryContext('story'); }} className="justify-start">Story</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setMobileControlsOpen(false); openRepositoryContext('dna'); }} className="justify-start">DNA</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setMobileControlsOpen(false); openRepositoryContext('mental-model'); }} className="justify-start">Mental model</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => { setMobileControlsOpen(false); setFlightPathOpen(true); }} className="justify-start">Agent Journey</Button>
+            </div>
+          </div>
+        )}
+        <section className="mt-4 border-t border-border/60 pt-4" aria-labelledby="mobile-universe-layers-heading">
+          <div className="flex items-center gap-2">
+            <Layers className="h-4 w-4 text-primary-glow" />
+            <h3 id="mobile-universe-layers-heading" className="text-sm font-semibold">Layers and filters</h3>
+          </div>
+          <div className="mt-3">{atlasFilters}</div>
+        </section>
+        {clusterLegend && <div className="mt-4">{clusterLegend}</div>}
+        <section className="mt-4 rounded-2xl border border-border/55 bg-background/25 p-3 text-xs leading-relaxed text-muted-foreground" aria-label="Universe interaction help">
+          <div className="flex items-center gap-2 font-semibold text-foreground"><HelpCircle className="h-4 w-4" /> Interaction help</div>
+          <p className="mt-2">Drag or orbit the graph, select a node for evidence, and use the controls above for precise zoom or reset. Close this sheet to resume graph gestures.</p>
+        </section>
+      </SheetContent>
+    </Sheet>
   );
 
   const optimizationPlanReview = optimizationPlanOpen && optimizationPlan && (
@@ -1400,7 +1554,10 @@ function RepositoryAtlasVisualization({
           collapsed={fullscreen && inspectorCollapsed}
           onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
           onTabChange={setInspectorTab}
-          onClose={() => setInspectorDismissed(true)}
+          onClose={() => {
+            setInspectorDismissed(true);
+            setMobileInspectorExpanded(false);
+          }}
           onFocusNode={() => selectedUniverseNode && focusUniverseNode(selectedUniverseNode)}
           onFocusCluster={() => selectedUniverseNode?.clusterId && setFocusedClusterId(selectedUniverseNode.clusterId)}
           onClearFocus={() => setFocusedClusterId(null)}
@@ -1441,9 +1598,6 @@ function RepositoryAtlasVisualization({
             ? 'Verification requires a saved baseline and a later scan of the changed repository.'
             : 'Client handoff and exports remain available without changing their contents.';
   const showUniverseWorkspace = activeResultChapter === 'understand' || activeResultChapter === 'improve';
-  const inspectorVisible = !inspectorDismissed && (viewMode === 'universe3d'
-    ? repositoryProfileOpen || selectedUniverseNode?.id !== universe.rootNodeId || flightPathUniverseNodeIds.length > 0
-    : selectedNode?.id !== atlas.rootNodeId);
   const showTransformationPanel = activeResultChapter === 'improve';
   const showPlanReview = optimizationPlanReview && (activeResultChapter === 'improve' || activeResultChapter === 'verify');
 
@@ -1482,11 +1636,16 @@ function RepositoryAtlasVisualization({
       )}
 
       {!fullscreen && showUniverseWorkspace && (
-        <div data-testid="repository-universe-workspace-stage" data-universe-theme={universeTheme} className="relative min-h-[calc(100dvh-9rem)] overflow-hidden bg-[hsl(var(--universe-stage-bg))]">
+        <div
+          data-testid="repository-universe-workspace-stage"
+          data-universe-theme={universeTheme}
+          data-mobile-viewport-contract="safe-dynamic"
+          className="relative h-[calc(100dvh-4rem)] min-h-[calc(100svh-4rem)] max-w-full overflow-hidden bg-[hsl(var(--universe-stage-bg))] md:h-auto md:min-h-[calc(100dvh-9rem)]"
+        >
           <div className="absolute inset-0 z-[var(--layer-canvas)] [&>*]:h-full">{viewMode === 'universe3d' ? universeCanvas : atlasCanvas}</div>
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[var(--layer-graph-overlay)] bg-[radial-gradient(circle_at_50%_44%,transparent_36%,hsl(var(--universe-stage-bg)/0.12)_68%,hsl(var(--universe-stage-bg)/0.42)_100%)]" />
           <div
-            className="pointer-events-none absolute inset-x-2 top-2 z-[var(--layer-context)] grid min-w-0 gap-2 lg:grid-cols-[minmax(18rem,23rem)_minmax(0,1fr)] lg:items-start"
+            className="pointer-events-none absolute inset-x-2 top-2 z-[var(--layer-context)] grid min-w-0 gap-2 sm:grid-cols-[minmax(18rem,23rem)_minmax(0,1fr)] sm:items-start"
             onPointerDownCapture={() => setUniverseSceneSettled(true)}
             onFocusCapture={() => setUniverseSceneSettled(true)}
           >
@@ -1494,24 +1653,37 @@ function RepositoryAtlasVisualization({
               {activeResultChapter === 'understand' ? repositoryContextOverlay : null}
             </div>
             {showTransformationPanel && (
-              <div className="min-w-0 lg:col-start-1 lg:row-start-1 lg:w-full lg:max-w-[23rem]">
+              <div className="min-w-0 sm:col-start-1 sm:row-start-1 sm:w-full sm:max-w-[23rem]">
                 {transformationControls}
               </div>
             )}
-            <div data-testid="repository-toolbar-overlay" className="pointer-events-auto relative z-[var(--layer-toolbar)] min-w-0 max-w-full rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.82)] p-1.5 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl motion-safe:animate-fade-in lg:col-start-2 lg:justify-self-end">
+            <div data-testid="repository-toolbar-overlay" className="pointer-events-auto relative z-[var(--layer-toolbar)] min-w-0 max-w-full justify-self-end rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.82)] p-1.5 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl motion-safe:animate-fade-in sm:col-start-2 sm:row-start-1">
               {atlasToolbar}
             </div>
-            <div data-testid="result-chapter-rail-overlay" className="min-w-0 md:mx-auto md:w-[min(46rem,calc(100%-2rem))] lg:col-start-1 lg:row-start-2 lg:mx-0 lg:w-full lg:max-w-[23rem] lg:justify-self-start">
+            {!isMobile && (
+              <div data-testid="result-chapter-rail-overlay" className="min-w-0 sm:col-start-1 sm:row-start-2 sm:w-full sm:max-w-[23rem] sm:justify-self-start lg:col-start-1 lg:max-w-[23rem]">
+                {chapterNavOverlay}
+              </div>
+            )}
+          </div>
+          {isMobile && (
+            <div
+              data-testid="result-chapter-rail-overlay"
+              className="pointer-events-none absolute inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-[var(--layer-context)]"
+            >
               {chapterNavOverlay}
             </div>
-          </div>
+          )}
           {inspectorVisible
             ? (
               <aside
+                ref={inspectorSheetRef}
                 role="region"
                 aria-label="Selected entity inspector. Focus or click to scroll details."
                 tabIndex={0}
                 data-testid="repository-inspector-scroll-region"
+                data-mobile-sheet={isMobile ? 'true' : 'false'}
+                data-mobile-expanded={isMobile && mobileInspectorExpanded ? 'true' : 'false'}
                 data-scroll-mode={inspectorScrollActive ? 'inspector' : 'page'}
                 onPointerDownCapture={() => setInspectorScrollActive(true)}
                 onFocusCapture={() => setInspectorScrollActive(true)}
@@ -1521,8 +1693,22 @@ function RepositoryAtlasVisualization({
                 onPointerLeave={event => {
                   if (!event.currentTarget.contains(document.activeElement)) setInspectorScrollActive(false);
                 }}
-                className={`absolute bottom-3 left-3 right-3 z-[var(--layer-inspector)] max-h-[70dvh] w-auto overscroll-y-auto rounded-[1.6rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:animate-scale-in sm:left-auto sm:w-[min(22rem,calc(100%-1.5rem))] lg:bottom-auto ${inspectorScrollActive ? 'overflow-y-auto' : 'overflow-hidden'} ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}
+                className={`absolute bottom-[max(0.5rem,env(safe-area-inset-bottom))] left-2 right-2 z-[var(--layer-inspector)] w-auto overscroll-y-contain rounded-[1.6rem] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-safe:animate-scale-in sm:left-auto sm:right-3 sm:w-[min(22rem,calc(100%-1.5rem))] sm:max-h-[70dvh] lg:bottom-auto ${mobileInspectorExpanded ? 'max-h-[82dvh]' : 'max-h-[52dvh]'} ${inspectorScrollActive ? 'overflow-y-auto' : 'overflow-hidden'} ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}
               >
+                <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/55 bg-[hsl(var(--universe-surface-raised)/0.96)] px-4 py-2 backdrop-blur-xl sm:hidden">
+                  <span className="h-1.5 w-10 rounded-full bg-border" aria-hidden="true" />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMobileInspectorExpanded(current => !current)}
+                    aria-expanded={mobileInspectorExpanded}
+                    className="h-8 text-xs"
+                  >
+                    {mobileInspectorExpanded ? <Minimize2 className="mr-1.5 h-3.5 w-3.5" /> : <Maximize2 className="mr-1.5 h-3.5 w-3.5" />}
+                    {mobileInspectorExpanded ? 'Medium view' : 'Expand details'}
+                  </Button>
+                </div>
                 {inspector}
                 {!inspectorScrollActive && (
                   <div className="pointer-events-none sticky bottom-2 ml-auto mr-2 mt-[-2.25rem] w-fit rounded-full border border-border/60 bg-floating/90 px-2.5 py-1 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur">
@@ -1531,9 +1717,11 @@ function RepositoryAtlasVisualization({
                 )}
               </aside>
             )
-            : <div className="pointer-events-none absolute bottom-4 right-4 z-[var(--layer-graph-overlay)] flex items-center gap-2 rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.72)] px-3 py-1.5 text-xs text-muted-foreground shadow-[var(--shadow-md-semantic)] backdrop-blur-xl"><span className="h-1.5 w-1.5 rounded-full bg-accent/70 shadow-[0_0_12px_hsl(var(--accent)/0.55)]" />Select a node to inspect evidence</div>}
+            : <div className="pointer-events-none absolute bottom-[7.5rem] left-1/2 z-[var(--layer-graph-overlay)] flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.72)] px-2.5 py-1 text-[10px] text-muted-foreground shadow-[var(--shadow-md-semantic)] backdrop-blur-xl sm:bottom-4 sm:left-auto sm:right-4 sm:translate-x-0 sm:px-3 sm:py-1.5 sm:text-xs"><span className="h-1.5 w-1.5 rounded-full bg-accent/70 shadow-[0_0_12px_hsl(var(--accent)/0.55)]" /><span>{viewMode === 'universe3d' ? visibleUniverseNodeIds.size : visibleNodes.length} entities</span><span aria-hidden="true">·</span><span className="sm:hidden">Select node</span><span className="hidden sm:inline">Select a node to inspect evidence</span></div>}
         </div>
       )}
+
+      {mobileControlsSheet}
 
       {!fullscreen && activeResultChapter === 'improve' && showPlanReview && (
         <div data-testid="improve-supporting-content" className="border-t border-primary/15 bg-background/10 px-3 py-5 md:px-5">
@@ -1544,11 +1732,15 @@ function RepositoryAtlasVisualization({
       {!fullscreen && showUniverseWorkspace && (
         <div className="mt-4 space-y-3">
           {searchResultList}
-          <details className="rounded-2xl border border-border/45 bg-background/20 px-3 py-2">
-            <summary className="cursor-pointer text-sm font-medium text-foreground">Layers and filters</summary>
-            <div className="mt-3">{atlasFilters}</div>
-          </details>
-          {clusterLegend}
+          {!isMobile && (
+            <>
+              <details className="rounded-2xl border border-border/45 bg-background/20 px-3 py-2">
+                <summary className="cursor-pointer text-sm font-medium text-foreground">Layers and filters</summary>
+                <div className="mt-3">{atlasFilters}</div>
+              </details>
+              {clusterLegend}
+            </>
+          )}
           {activeResultChapter === 'understand' && (
             <details open={flightPathOpen} onToggle={event => setFlightPathOpen(event.currentTarget.open)} className="rounded-2xl border border-border/45 bg-background/20 p-3">
               <summary className="cursor-pointer text-sm font-medium text-foreground">Plan an agent task</summary>

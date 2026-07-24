@@ -20,8 +20,8 @@ export function ResultChapterNav({
 }) {
   const stageOverlay = variant === 'overlay';
   return (
-    <nav className={stageOverlay ? 'pointer-events-auto min-w-0 rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.68)] p-1 shadow-[0_18px_55px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl motion-safe:animate-fade-in' : 'mb-2'} aria-label="Result chapters">
-      <div className={stageOverlay ? 'grid min-w-0 grid-cols-4 gap-1' : 'grid grid-cols-2 gap-2 sm:grid-cols-4'}>
+    <nav className={stageOverlay ? 'pointer-events-auto min-w-0 rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.68)] p-1 shadow-[0_18px_55px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl motion-safe:animate-fade-in' : 'mb-2'} aria-label="Result chapters" data-mobile-layout="two-by-two">
+      <div className={stageOverlay ? 'grid min-w-0 grid-cols-2 gap-1 sm:grid-cols-4' : 'grid grid-cols-2 gap-2 sm:grid-cols-4'}>
         {RESULT_CHAPTERS.map(chapter => (
         <button
           key={chapter.id}
@@ -40,7 +40,8 @@ export function ResultChapterNav({
           }`}
         >
           <div className={`${stageOverlay ? 'text-xs' : 'text-sm'} font-semibold`}>{chapter.label}</div>
-          <div className="mt-0.5 truncate text-[10px] text-muted-foreground/80 sm:text-[11px]">{statuses[chapter.id]}</div>
+          <div className="mt-0.5 hidden text-[11px] text-muted-foreground/80 sm:block">{statuses[chapter.id]}</div>
+          <span className="sr-only">Status: {statuses[chapter.id]}</span>
         </button>
         ))}
       </div>
