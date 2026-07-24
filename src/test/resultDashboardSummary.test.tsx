@@ -712,6 +712,54 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.getByText(/proposed improvements selected/i)).toBeInTheDocument();
   });
 
+  it('docks one stateful Improve comparison surface inside the Universe stage', () => {
+    render(
+      <ResultDashboard
+        report={optimizationDashboardReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        onReplayReveal={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByTestId('improve-universe-control-dock')).not.toBeInTheDocument();
+    switchResultChapter('Improve');
+
+    const stage = screen.getByTestId('repository-universe-workspace-stage');
+    const dock = screen.getByTestId('improve-universe-control-dock');
+    expect(stage).toContainElement(dock);
+    expect(screen.getAllByTestId('improve-universe-control-dock')).toHaveLength(1);
+    expect(within(dock).getByRole('heading', { name: /Improve the repository universe/i })).toBeInTheDocument();
+
+    const current = within(dock).getByRole('button', { name: 'Current' });
+    const withShipSeal = within(dock).getByRole('button', { name: 'With ShipSeal' });
+    expect(current).toHaveAttribute('aria-pressed', 'true');
+    expect(withShipSeal).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(withShipSeal);
+    expect(withShipSeal).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dock).getByText(/With ShipSeal · All improvements/i)).toBeInTheDocument();
+
+    const projectMemory = within(dock).getByRole('button', { name: /Project Memory/i });
+    const agentRouting = within(dock).getByRole('button', { name: /Agent Routing/i });
+    const verificationPath = within(dock).getByRole('button', { name: /Verification Path/i });
+    expect(within(dock).getByRole('button', { name: /All improvements/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(agentRouting).toBeInTheDocument();
+    expect(verificationPath).toBeInTheDocument();
+
+    fireEvent.click(projectMemory);
+    expect(projectMemory).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dock).getByText(/With ShipSeal · Project Memory/i)).toBeInTheDocument();
+
+    switchResultChapter('Understand');
+    expect(screen.queryByTestId('improve-universe-control-dock')).not.toBeInTheDocument();
+    switchResultChapter('Improve');
+    expect(screen.getByTestId('repository-universe-workspace-stage')).toContainElement(screen.getByTestId('improve-universe-control-dock'));
+    expect(screen.getByRole('button', { name: 'With ShipSeal' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /Project Memory/i })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('opens the Optimization Plan and updates it from proposal include state without losing it across view switches', async () => {
     const report = optimizationDashboardReport();
     const { universe, atlas, transformation, plan } = optimizationPlanFor(report);

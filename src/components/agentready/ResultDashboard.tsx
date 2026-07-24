@@ -1204,6 +1204,18 @@ function RepositoryAtlasVisualization({
   const selectedProposal = selectedProposalId ? transformation.proposals.find(proposal => proposal.id === selectedProposalId) || null : null;
   const domainCounts = useMemo(() => repositoryTransformationDomainCounts(transformation.proposals), [transformation.proposals]);
   const visibleTransformationProposals = useMemo(() => transformation.proposals.filter(proposal => transformationDomain === 'all' || proposal.domain === transformationDomain), [transformation.proposals, transformationDomain]);
+  const visibleIncludedTransformationProposals = useMemo(
+    () => visibleTransformationProposals.filter(proposal => !excludedProposalIds.has(proposal.id)),
+    [excludedProposalIds, visibleTransformationProposals],
+  );
+  const visibleTransformationArtifactCount = useMemo(
+    () => new Set(visibleIncludedTransformationProposals.flatMap(proposal => proposal.artifactActions.map(action => action.path))).size,
+    [visibleIncludedTransformationProposals],
+  );
+  const visibleTransformationRelationshipCount = useMemo(
+    () => visibleIncludedTransformationProposals.reduce((count, proposal) => count + proposal.graphChanges.proposedEdges.length, 0),
+    [visibleIncludedTransformationProposals],
+  );
   const includedProposalCount = transformation.proposals.filter(proposal => !excludedProposalIds.has(proposal.id)).length;
   const activeTransformationArtifactCount = useMemo(() => new Set(
     transformation.proposals
@@ -1697,15 +1709,43 @@ function RepositoryAtlasVisualization({
     </div>
   );
 
+  const transformationDomainSummary = transformationDomain === 'all' ? 'All improvements' : transformationDomainLabel(transformationDomain);
+  const transformationViewSummary = transformationMode === 'current'
+    ? 'Current repository baseline'
+    : transformationMode === 'after-rescan'
+      ? 'Verified rescan comparison'
+      : `With ShipSeal · ${transformationDomainSummary}`;
   const transformationControls = (
-    <div className="flex flex-col gap-2 rounded-2xl border border-primary/15 bg-background/20 p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex rounded-full border border-border/60 bg-background/25 p-1" aria-label="Repository transformation preview mode">
+    <section
+      data-testid="improve-universe-control-dock"
+      className="pointer-events-auto flex min-w-0 flex-col gap-3 rounded-[1.35rem] border border-accent/20 bg-[linear-gradient(155deg,hsl(var(--universe-surface-raised)/0.9),hsl(var(--universe-stage-bg)/0.72))] p-3.5 shadow-[0_22px_64px_hsl(var(--universe-stage-bg)/0.62),0_0_32px_hsl(var(--accent)/0.05)] backdrop-blur-xl motion-safe:animate-fade-in"
+      aria-labelledby="improve-universe-control-heading"
+    >
+      <header className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[10px] font-mono uppercase tracking-[0.16em] text-accent/80">Universe comparison</div>
+          <h3 id="improve-universe-control-heading" className="mt-1 font-display text-base font-semibold text-foreground">Improve the repository universe</h3>
+        </div>
+        <div className="shrink-0 rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[10px] font-medium text-accent" aria-live="polite">
+          {transformationMode === 'current' ? 'Current' : transformationMode === 'after-rescan' ? 'After rescan' : 'With ShipSeal'}
+        </div>
+      </header>
+
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Compare the graph and focus the proposal impact shown in the Universe.
+      </p>
+
+      <div>
+        <div className="mb-1.5 flex items-center justify-between gap-2">
+          <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Comparison</span>
+          <span className="truncate text-[10px] text-foreground/75" aria-live="polite">{transformationViewSummary}</span>
+        </div>
+        <div className="flex rounded-xl border border-primary/15 bg-background/20 p-1" aria-label="Repository transformation preview mode">
           <button
             type="button"
             aria-pressed={transformationMode === 'current'}
             onClick={() => changeTransformationMode('current')}
-            className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${transformationMode === 'current' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`min-h-9 flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${transformationMode === 'current' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_20px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:bg-background/20 hover:text-foreground'}`}
           >
             Current
           </button>
@@ -1714,7 +1754,7 @@ function RepositoryAtlasVisualization({
             aria-pressed={transformationMode === 'with-shipseal'}
             disabled={transformation.proposals.length === 0}
             onClick={() => changeTransformationMode('with-shipseal')}
-            className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 ${transformationMode === 'with-shipseal' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+            className={`min-h-9 flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 ${transformationMode === 'with-shipseal' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_20px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:bg-background/20 hover:text-foreground'}`}
           >
             With ShipSeal
           </button>
@@ -1724,72 +1764,83 @@ function RepositoryAtlasVisualization({
               aria-pressed={transformationMode === 'after-rescan'}
               disabled={!hasVerifiedRescanComparison}
               onClick={() => changeTransformationMode('after-rescan')}
-              className={`rounded-full px-3 py-1.5 text-xs transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 ${transformationMode === 'after-rescan' ? 'bg-primary/20 text-primary-glow' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`min-h-9 flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 ${transformationMode === 'after-rescan' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground shadow-[0_0_20px_hsl(var(--accent)/0.08)]' : 'text-muted-foreground hover:bg-background/20 hover:text-foreground'}`}
             >
               After rescan
             </button>
           )}
         </div>
-        <div className="text-xs text-muted-foreground" aria-live="polite">
+        <div className="mt-1.5 text-[10px] text-muted-foreground" aria-live="polite">
           {transformationMode === 'current'
             ? `${transformation.summary.currentFiles.toLocaleString()} current files - ${transformation.summary.currentClusters.toLocaleString()} knowledge clusters`
             : transformationMode === 'after-rescan' && verificationResult
               ? `${verificationResult.counts.detected + verificationResult.counts.contentMatched} detected - ${verificationResult.counts.needsReview} need review`
-              : `${transformation.summary.proposedArtifacts.toLocaleString()} proposed artifacts - ${transformation.summary.proposedRelationships.toLocaleString()} proposed relationships`}
+              : `${visibleTransformationArtifactCount.toLocaleString()} proposed artifacts - ${visibleTransformationRelationshipCount.toLocaleString()} proposed relationships`}
         </div>
-        {transformation.proposals.length > 0 && (
-          <div className="ml-auto rounded-full border border-border/45 bg-background/20 px-3 py-1.5 text-xs text-muted-foreground">
-            {includedProposalCount.toLocaleString()} proposed improvements selected
+      </div>
+
+      {transformation.proposals.length > 0 && (
+        <div className="grid grid-cols-3 gap-1.5 text-[10px]" aria-live="polite">
+          <div className="min-w-0 rounded-xl border border-primary/10 bg-background/20 px-2 py-2 text-muted-foreground">
+            <span className="block font-semibold text-foreground">{visibleIncludedTransformationProposals.length.toLocaleString()}</span>
+            <span>{visibleIncludedTransformationProposals.length.toLocaleString()} selected proposals</span>
           </div>
-        )}
-        {transformation.proposals.length > 0 && (
+          <div className="min-w-0 rounded-xl border border-primary/10 bg-background/20 px-2 py-2 text-muted-foreground">
+            <span className="block font-semibold text-foreground">{visibleTransformationArtifactCount.toLocaleString()}</span>
+            <span>{visibleTransformationArtifactCount.toLocaleString()} unique artifacts</span>
+          </div>
+          <div className="min-w-0 rounded-xl border border-primary/10 bg-background/20 px-2 py-2 text-muted-foreground">
+            <span className="block font-semibold text-foreground">{visibleTransformationRelationshipCount.toLocaleString()}</span>
+            <span>{visibleTransformationRelationshipCount.toLocaleString()} proposed relationships</span>
+          </div>
+        </div>
+      )}
+
+      {transformation.proposals.length > 0 ? (
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">Proposal focus</span>
+            <span className="text-[10px] text-foreground/75">{transformationDomainSummary}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5" aria-label="Transformation domains">
+            <TransformationDomainButton label="All improvements" count={transformation.proposals.length} active={transformationDomain === 'all'} onClick={() => setTransformationDomain('all')} />
+            {(['project-memory', 'agent-routing', 'verification-path'] as RepositoryTransformationDomain[]).filter(domain => domainCounts[domain] > 0).map(domain => (
+              <TransformationDomainButton
+                key={domain}
+                label={transformationDomainLabel(domain)}
+                count={domainCounts[domain]}
+                active={transformationDomain === domain}
+                onClick={() => setTransformationDomain(domain)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground">ShipSeal did not find a supported transformation to preview from this scan.</p>
+      )}
+
+      {transformation.proposals.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-t border-primary/10 pt-2.5">
+          <div className="min-w-0 flex-1 text-[10px] text-muted-foreground">
+            {includedProposalCount.toLocaleString()} proposed improvements selected
+            {optimizationPlan ? ` · ${optimizationPlan.summary.readyItemCount.toLocaleString()} ready` : ''}
+          </div>
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={openOptimizationPlan}
             disabled={activeTransformationArtifactCount === 0}
-            className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow"
+            className="h-8 shrink-0 rounded-full border-accent/25 bg-accent/10 px-3 text-[11px] text-accent hover:border-accent/40 hover:bg-accent/20 hover:text-accent"
           >
             Review optimization plan
           </Button>
-        )}
-      </div>
-      {activeTransformationArtifactCount > 0 && (
-        <div className="flex flex-wrap gap-2 text-[11px] text-muted-foreground" aria-live="polite">
-          <span>{includedProposalCount.toLocaleString()} selected proposals</span>
-          <span>-</span>
-          <span>{activeTransformationArtifactCount.toLocaleString()} unique artifacts</span>
-          <span>-</span>
-          <span>{optimizationPlan ? `${optimizationPlan.summary.readyItemCount.toLocaleString()} ready` : 'Open plan for readiness'}</span>
-          {optimizationPlan && (
-            <>
-              <span>-</span>
-              <span>{(optimizationPlan.summary.reviewRequiredItemCount + optimizationPlan.summary.blockedItemCount).toLocaleString()} need review</span>
-            </>
-          )}
         </div>
-      )}
-      {transformation.proposals.length > 0 ? (
-        <div className="flex flex-wrap gap-2" aria-label="Transformation domains">
-          <TransformationDomainButton label="All improvements" count={transformation.proposals.length} active={transformationDomain === 'all'} onClick={() => setTransformationDomain('all')} />
-          {(['project-memory', 'agent-routing', 'verification-path'] as RepositoryTransformationDomain[]).filter(domain => domainCounts[domain] > 0).map(domain => (
-            <TransformationDomainButton
-              key={domain}
-              label={transformationDomainLabel(domain)}
-              count={domainCounts[domain]}
-              active={transformationDomain === domain}
-              onClick={() => setTransformationDomain(domain)}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">ShipSeal did not find a supported transformation to preview from this scan.</p>
       )}
       {transformation.summary.limitedScan && (
         <p className="text-xs text-warning">Limited scan: preview confidence is cautious and based on the available scan boundary.</p>
       )}
-    </div>
+    </section>
   );
 
   const clusterLegend = viewMode === 'universe3d' && (
@@ -2219,7 +2270,6 @@ function RepositoryAtlasVisualization({
             </div>
           )}
 
-          {showTransformationPanel && <div className="mb-4">{transformationControls}</div>}
           {showPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
           {activeResultChapter === 'improve' && !optimizationPlanOpen && (
             <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4">
@@ -2253,6 +2303,11 @@ function RepositoryAtlasVisualization({
             <div data-testid="repository-context-overlay" className={activeResultChapter === 'understand' ? 'w-full min-w-0 max-w-[23rem]' : 'hidden'}>
               {activeResultChapter === 'understand' ? repositoryContextOverlay : null}
             </div>
+            {showTransformationPanel && (
+              <div className="min-w-0 lg:col-start-1 lg:row-start-1 lg:w-full lg:max-w-[23rem]">
+                {transformationControls}
+              </div>
+            )}
             <div data-testid="repository-toolbar-overlay" className="pointer-events-auto min-w-0 max-w-full rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.68)] p-1.5 shadow-[0_18px_55px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl motion-safe:animate-fade-in lg:col-start-2 lg:justify-self-end">
               {atlasToolbar}
             </div>
@@ -2332,7 +2387,7 @@ function RepositoryAtlasVisualization({
             </div>
             {atlasToolbar}
           </div>
-          <div className="mb-4">{transformationControls}</div>
+          {showTransformationPanel && <div className="mb-4">{transformationControls}</div>}
           {optimizationPlanReview && <div className="mb-4">{optimizationPlanReview}</div>}
           <div className="mb-4">{atlasFilters}</div>
           {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
