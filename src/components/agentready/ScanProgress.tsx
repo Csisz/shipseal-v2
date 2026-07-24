@@ -44,7 +44,7 @@ export function ScanProgress({
   const finalReveal = safeProgress >= 96;
 
   return (
-    <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-3 shadow-glow animate-scale-in md:p-4">
+    <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[2rem] border border-primary/25 bg-canvas p-3 shadow-glow animate-scale-in md:p-4">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,hsl(var(--primary)/0.22),transparent_38%),radial-gradient(circle_at_80%_70%,hsl(var(--accent)/0.12),transparent_34%)] pointer-events-none" />
       <div className="relative">
         <div className="mb-3 flex items-start justify-between gap-3">

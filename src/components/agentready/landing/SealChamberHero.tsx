@@ -75,7 +75,7 @@ export function SealChamberHero() {
 
         {/* Right: the sealed Delivery Pack */}
         <div className="relative">
-          <div className="rounded-2xl border border-border/70 bg-[hsl(240_20%_4%)]/90 p-3 md:p-4 font-mono text-[10.5px] md:text-xs leading-relaxed">
+          <div className="rounded-2xl border border-border/70 bg-inset/90 p-3 font-mono text-[10.5px] leading-relaxed md:p-4 md:text-xs">
             <div className="ss-row text-muted-foreground mb-1.5" style={{ '--row-delay': '0.2s' } as CSSProperties}>
               shipseal-delivery-pack-[project]/
             </div>

@@ -66,6 +66,222 @@
 }
 
 @layer base {
+  :root {
+    color-scheme: light;
+    --background: 42 30% 97%;
+    --foreground: 222 28% 15%;
+    --workspace-background: 216 24% 95%;
+    --surface-canvas: 40 36% 99%;
+    --surface-inset: 216 22% 93%;
+    --surface-floating: 40 38% 99%;
+    --surface-popover: 40 38% 99%;
+    --surface-drawer: 40 32% 98%;
+    --surface-dialog: 40 38% 99%;
+    --surface-tooltip: 222 28% 15%;
+    --surface-overlay: 222 32% 10%;
+    --card: 40 36% 99%;
+    --card-foreground: 222 28% 15%;
+    --popover: var(--surface-popover);
+    --popover-foreground: 222 28% 15%;
+    --primary: 252 68% 52%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 252 62% 47%;
+    --secondary: 216 22% 92%;
+    --secondary-foreground: 222 28% 18%;
+    --muted: 216 18% 91%;
+    --muted-foreground: 220 11% 40%;
+    --accent: 190 72% 37%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 4 72% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 151 58% 35%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 88% 42%;
+    --warning-foreground: 24 42% 12%;
+    --border: 220 16% 80%;
+    --border-subtle: 220 18% 87%;
+    --border-strong: 220 16% 64%;
+    --border-selected: 252 68% 52%;
+    --divider: 220 17% 84%;
+    --input: 220 16% 76%;
+    --input-background: 0 0% 100%;
+    --input-foreground: 222 28% 15%;
+    --input-placeholder: 220 10% 46%;
+    --control-disabled: 218 12% 72%;
+    --control-active: 252 68% 52%;
+    --control-hover: 216 22% 90%;
+    --ring: 252 70% 48%;
+    --foreground-secondary: 220 13% 31%;
+    --foreground-muted: var(--muted-foreground);
+    --foreground-inverse: 0 0% 100%;
+    --foreground-emphasis: 252 66% 39%;
+    --link: 244 70% 47%;
+    --code-foreground: 221 40% 24%;
+    --intelligence-accent: 252 68% 52%;
+    --entity-selected: 190 78% 34%;
+    --entity-connected: 210 76% 46%;
+    --entity-faded: 220 12% 64%;
+    --evidence-backed: 151 58% 35%;
+    --heuristic: 35 88% 42%;
+    --missing: 4 72% 48%;
+    --proposed: 270 58% 51%;
+    --applied: 151 58% 35%;
+    --verified: 210 76% 46%;
+    --limited-scan: 28 88% 43%;
+    --perspective-agent-readiness: 214 78% 48%;
+    --perspective-security: 5 76% 53%;
+    --perspective-performance: 174 64% 36%;
+    --perspective-maintainability: 265 60% 52%;
+    --perspective-product-velocity: 27 88% 48%;
+    --universe-stage-bg: 210 28% 94%;
+    --universe-surface: 40 36% 99%;
+    --universe-surface-raised: 210 24% 97%;
+    --universe-border-glow: 190 66% 37%;
+    --graph-background: 210 28% 94%;
+    --graph-fog: 210 24% 96%;
+    --graph-starfield: 214 24% 58%;
+    --graph-primary-node: 214 78% 48%;
+    --graph-selected-node: 190 78% 34%;
+    --graph-connected-node: 210 76% 46%;
+    --graph-faded-node: 220 12% 64%;
+    --graph-primary-edge: 216 28% 42%;
+    --graph-faded-edge: 216 16% 68%;
+    --graph-active-edge: 190 72% 34%;
+    --graph-route: 28 88% 44%;
+    --graph-search: 266 58% 50%;
+    --graph-proposal: 270 58% 51%;
+    --graph-halo: 190 72% 37%;
+    --graph-inspector-backdrop: 40 38% 99%;
+    --gradient-primary: linear-gradient(135deg, hsl(252 68% 52%), hsl(190 72% 37%));
+    --gradient-hero: radial-gradient(ellipse at top, hsl(252 68% 52% / 0.1), transparent 62%),
+                     radial-gradient(ellipse at bottom right, hsl(190 72% 37% / 0.08), transparent 58%),
+                     hsl(var(--background));
+    --gradient-glow: radial-gradient(circle at 50% 50%, hsl(252 68% 52% / 0.14), transparent 72%);
+    --gradient-card: linear-gradient(145deg, hsl(40 36% 99% / 0.96), hsl(216 24% 95% / 0.9));
+    --gradient-text: linear-gradient(135deg, hsl(222 28% 15%), hsl(252 62% 40%) 52%, hsl(190 68% 31%));
+    --shadow-sm-semantic: 0 1px 2px hsl(222 28% 15% / 0.07);
+    --shadow-md-semantic: 0 12px 32px -18px hsl(222 32% 14% / 0.28);
+    --shadow-lg-semantic: 0 24px 60px -28px hsl(222 32% 14% / 0.32);
+    --shadow-floating-panel: 0 24px 65px -30px hsl(222 32% 14% / 0.38);
+    --shadow-glow: 0 12px 38px -18px hsl(252 68% 42% / 0.34);
+    --shadow-elegant: var(--shadow-lg-semantic);
+    --shadow-card: var(--shadow-md-semantic);
+    --layer-canvas: 0;
+    --layer-graph-overlay: 10;
+    --layer-context: 20;
+    --layer-toolbar: 30;
+    --layer-inspector: 40;
+    --layer-popover: 1000;
+    --layer-tooltip: 1100;
+    --layer-dialog: 1200;
+    --layer-toast: 1300;
+    --layer-critical: 1400;
+  }
+
+  .dark {
+    color-scheme: dark;
+    --background: 228 22% 5%;
+    --foreground: 220 20% 96%;
+    --workspace-background: 228 24% 4%;
+    --surface-canvas: 228 22% 6%;
+    --surface-inset: 226 18% 9%;
+    --surface-floating: 228 22% 8%;
+    --surface-popover: 228 22% 8%;
+    --surface-drawer: 228 22% 7%;
+    --surface-dialog: 228 22% 8%;
+    --surface-tooltip: 220 20% 96%;
+    --surface-overlay: 228 32% 1%;
+    --card: 228 22% 7%;
+    --card-foreground: 220 20% 96%;
+    --popover: var(--surface-popover);
+    --popover-foreground: 220 20% 96%;
+    --primary: 258 86% 66%;
+    --primary-foreground: 228 24% 5%;
+    --primary-glow: 266 92% 76%;
+    --secondary: 226 18% 12%;
+    --secondary-foreground: 220 20% 96%;
+    --muted: 226 17% 11%;
+    --muted-foreground: 220 10% 66%;
+    --accent: 190 88% 52%;
+    --accent-foreground: 228 24% 5%;
+    --destructive: 2 78% 62%;
+    --destructive-foreground: 228 24% 5%;
+    --success: 151 68% 48%;
+    --success-foreground: 228 24% 5%;
+    --warning: 38 92% 58%;
+    --warning-foreground: 228 24% 5%;
+    --border: 226 16% 17%;
+    --border-subtle: 226 16% 13%;
+    --border-strong: 224 14% 30%;
+    --border-selected: 258 86% 66%;
+    --divider: 226 16% 15%;
+    --input: 226 16% 20%;
+    --input-background: 228 20% 7%;
+    --input-foreground: 220 20% 96%;
+    --input-placeholder: 220 9% 58%;
+    --control-disabled: 224 9% 34%;
+    --control-active: 258 86% 66%;
+    --control-hover: 226 18% 14%;
+    --ring: 258 86% 70%;
+    --foreground-secondary: 220 14% 78%;
+    --foreground-muted: var(--muted-foreground);
+    --foreground-inverse: 228 24% 5%;
+    --foreground-emphasis: 266 92% 80%;
+    --link: 190 88% 65%;
+    --code-foreground: 190 62% 76%;
+    --intelligence-accent: 258 86% 66%;
+    --entity-selected: 190 88% 62%;
+    --entity-connected: 205 90% 67%;
+    --entity-faded: 220 9% 46%;
+    --evidence-backed: 151 68% 52%;
+    --heuristic: 38 92% 58%;
+    --missing: 2 78% 62%;
+    --proposed: 270 82% 72%;
+    --applied: 151 68% 52%;
+    --verified: 205 90% 67%;
+    --limited-scan: 30 94% 62%;
+    --perspective-agent-readiness: 214 92% 67%;
+    --perspective-security: 5 86% 68%;
+    --perspective-performance: 174 72% 54%;
+    --perspective-maintainability: 265 84% 73%;
+    --perspective-product-velocity: 30 94% 62%;
+    --universe-stage-bg: 230 76% 1.5%;
+    --universe-surface: 228 48% 5%;
+    --universe-surface-raised: 228 40% 8%;
+    --universe-border-glow: 190 88% 72%;
+    --graph-background: 230 76% 1.5%;
+    --graph-fog: 228 70% 2%;
+    --graph-starfield: 205 90% 88%;
+    --graph-primary-node: 214 92% 67%;
+    --graph-selected-node: 190 88% 72%;
+    --graph-connected-node: 205 90% 67%;
+    --graph-faded-node: 220 9% 46%;
+    --graph-primary-edge: 190 88% 68%;
+    --graph-faded-edge: 220 12% 35%;
+    --graph-active-edge: 190 88% 72%;
+    --graph-route: 38 92% 65%;
+    --graph-search: 270 82% 76%;
+    --graph-proposal: 195 72% 78%;
+    --graph-halo: 190 88% 72%;
+    --graph-inspector-backdrop: 228 40% 8%;
+    --gradient-primary: linear-gradient(135deg, hsl(258 86% 66%), hsl(190 88% 52%));
+    --gradient-hero: radial-gradient(ellipse at top, hsl(258 86% 66% / 0.2), transparent 62%),
+                     radial-gradient(ellipse at bottom right, hsl(190 88% 52% / 0.14), transparent 58%),
+                     hsl(var(--background));
+    --gradient-glow: radial-gradient(circle at 50% 50%, hsl(258 86% 66% / 0.3), transparent 72%);
+    --gradient-card: linear-gradient(145deg, hsl(228 22% 9% / 0.88), hsl(228 22% 6% / 0.76));
+    --gradient-text: linear-gradient(135deg, hsl(220 20% 98%), hsl(270 92% 82%) 52%, hsl(190 88% 72%));
+    --shadow-sm-semantic: 0 1px 2px hsl(228 50% 0% / 0.45);
+    --shadow-md-semantic: 0 16px 42px -18px hsl(228 50% 0% / 0.7);
+    --shadow-lg-semantic: 0 28px 70px -30px hsl(228 50% 0% / 0.82);
+    --shadow-floating-panel: 0 28px 75px -30px hsl(228 50% 0% / 0.88);
+    --shadow-glow: 0 0 52px hsl(258 86% 66% / 0.28);
+    --shadow-elegant: var(--shadow-lg-semantic);
+    --shadow-card: var(--shadow-md-semantic);
+  }
+}
+
+@layer base {
   * {
     @apply border-border;
   }
@@ -78,16 +294,16 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
     background-image:
-      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(258 90% 66% / 0.15), transparent),
-      radial-gradient(ellipse 60% 40% at 90% 20%, hsl(190 95% 55% / 0.08), transparent);
+      radial-gradient(ellipse 80% 50% at 50% -10%, hsl(var(--primary) / 0.1), transparent),
+      radial-gradient(ellipse 60% 40% at 90% 20%, hsl(var(--accent) / 0.07), transparent);
     background-attachment: fixed;
   }
 
   /* Subtle grid background */
   .bg-grid {
     background-image:
-      linear-gradient(hsl(240 14% 14% / 0.4) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(240 14% 14% / 0.4) 1px, transparent 1px);
+      linear-gradient(hsl(var(--border) / 0.38) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.38) 1px, transparent 1px);
     background-size: 56px 56px;
     mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black, transparent 75%);
   }
@@ -99,11 +315,23 @@
 
 @layer components {
   .glass {
-    @apply bg-card/40 backdrop-blur-xl border border-border/60;
+    @apply border border-border/70 bg-card/80 backdrop-blur-xl;
+    box-shadow: var(--shadow-sm-semantic);
   }
 
   .glass-strong {
-    @apply bg-card/70 backdrop-blur-2xl border border-border/80;
+    @apply border border-border/80 bg-card/90 backdrop-blur-2xl;
+    box-shadow: var(--shadow-md-semantic);
+  }
+
+  .floating-panel {
+    @apply border border-border/70 bg-floating/90 backdrop-blur-xl;
+    box-shadow: var(--shadow-floating-panel);
+  }
+
+  .stage-popover {
+    @apply border border-border/80 bg-popover text-popover-foreground;
+    box-shadow: var(--shadow-floating-panel);
   }
 
   .text-gradient {

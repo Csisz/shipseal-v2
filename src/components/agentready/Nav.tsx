@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Braces, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 const links = [
   { label: 'Why ShipSeal', href: '#why' },
@@ -30,7 +31,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
 
   return (
     <header className={cn(
-      'fixed top-0 inset-x-0 z-50 transition-all',
+      'fixed top-0 inset-x-0 z-[var(--layer-toolbar)] transition-all',
       scrolled ? 'backdrop-blur-2xl bg-background/70 border-b border-border/60' : 'bg-transparent'
     )}>
       <div className="container flex h-20 items-center justify-between">
@@ -54,14 +55,18 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
           ))}
         </nav>
         <div className="hidden md:flex items-center gap-2">
+          <ThemeToggle />
           <Button asChild variant="ghost"><Link to="/projects">My projects</Link></Button>
           <Button asChild variant="default" className="bg-gradient-primary hover:opacity-90 border-0 shadow-glow">
             <a href="#scan" onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a>
           </Button>
         </div>
-        <button onClick={() => setOpen(!open)} className="md:hidden p-2">
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-1 md:hidden">
+          <ThemeToggle />
+          <button type="button" onClick={() => setOpen(!open)} className="rounded-full p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={open}>
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
       {open && (
         <div className="md:hidden border-t border-border/60 bg-background/95 backdrop-blur-xl">

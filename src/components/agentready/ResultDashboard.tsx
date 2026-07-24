@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import type { ReactNode } from 'react';
+import { useTheme } from 'next-themes';
 import { AlertOctagon, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, Layers, Lightbulb, Maximize2, Minimize2, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { AgentOperatingModeId, AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { evaluateReadiness } from '@/lib/scoring';
@@ -11,6 +12,7 @@ import { AgentPackTabs } from './AgentPackTabs';
 import { ProjectIntakeForm } from './ProjectIntakeForm';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { buildRepoContextPackJson, buildScoreJson, downloadJsonFile, downloadTextFile } from '@/lib/exports';
 import { formatFileSize } from '@/lib/uploadValidation';
 import { criticalBlockersEmptyStateText, displayReadinessLevel, readinessStatusMessageForPackage } from '@/lib/uiCopy';
@@ -892,7 +894,7 @@ export function ResultDashboard({
           <p className="text-xs text-muted-foreground mb-3">
             Sanitized metadata for future server-side AI or coding-agent context. It excludes raw full file contents and secrets.
           </p>
-          <pre className="text-[11px] font-mono leading-relaxed bg-[hsl(240_20%_4%)] rounded-lg p-3 max-h-80 overflow-auto text-foreground/85">
+          <pre className="max-h-80 overflow-auto rounded-lg bg-inset p-3 font-mono text-[11px] leading-relaxed text-foreground/85">
             {report.contextPack}
           </pre>
         </div>
@@ -993,8 +995,8 @@ function AiWorkspaceHero({
 
   return (
     <section className={activeResultChapter === 'understand'
-      ? 'mb-6 overflow-hidden border-y border-primary/25 bg-[hsl(225_28%_7%)] shadow-glow animate-fade-in-up'
-      : 'mb-6 overflow-hidden rounded-[2rem] border border-primary/25 bg-[hsl(225_28%_7%)] p-3 shadow-glow md:p-5 animate-fade-in-up'} aria-label="Repository Intelligence">
+      ? 'mb-6 overflow-hidden border-y border-primary/25 bg-canvas shadow-glow animate-fade-in-up'
+      : 'mb-6 overflow-hidden rounded-[2rem] border border-primary/25 bg-canvas p-3 shadow-glow md:p-5 animate-fade-in-up'} aria-label="Repository Intelligence">
       <div className="relative">
         <div className="absolute inset-0 -m-10 bg-[radial-gradient(circle_at_24%_18%,hsl(var(--primary)/0.22),transparent_34%),radial-gradient(circle_at_78%_26%,hsl(var(--accent)/0.13),transparent_32%),linear-gradient(180deg,hsl(var(--background)/0),hsl(var(--background)/0.2))] pointer-events-none" />
         {unavailable ? (
@@ -1143,6 +1145,8 @@ function RepositoryAtlasVisualization({
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
 }) {
+  const { resolvedTheme } = useTheme();
+  const universeTheme = resolvedTheme === 'light' ? 'light' : 'dark';
   const atlas = useMemo(() => buildRepositoryAtlasModel(report), [report]);
   const universe = useMemo(() => buildRepositoryUniverseModel(report), [report]);
   const transformation = useMemo(() => buildRepositoryTransformationProposalModel(report, universe, atlas), [report, universe, atlas]);
@@ -1675,15 +1679,43 @@ function RepositoryAtlasVisualization({
           Atlas 2D
         </button>
       </div>
-      <details className="relative shrink-0">
-        <summary className="flex h-9 cursor-pointer list-none items-center rounded-full border border-primary/15 bg-background/15 px-3 text-xs font-medium text-foreground transition hover:border-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">More controls</summary>
-        <div className="absolute right-0 z-20 mt-2 flex w-44 flex-col gap-1 rounded-xl border border-border/60 bg-popover p-2 shadow-lg">
-          {viewMode === 'universe3d' && <Button type="button" variant="ghost" size="sm" onClick={() => setUniverseRotationPaused(current => !current)} className="justify-start">{universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}</Button>}
-          <Button type="button" variant="ghost" size="sm" onClick={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) })) : setScale(view.scale + 0.14)} className="justify-start"><ZoomIn className="mr-1.5 h-3.5 w-3.5" /> Zoom in</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.min(1500, current.radius + 80) })) : setScale(view.scale - 0.14)} className="justify-start"><ZoomOut className="mr-1.5 h-3.5 w-3.5" /> Zoom out</Button>
-          <Button type="button" variant="ghost" size="sm" onClick={resetAtlas} className="justify-start"><Crosshair className="mr-1.5 h-3.5 w-3.5" /> Reset view</Button>
-        </div>
-      </details>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0 rounded-full border-primary/15 bg-floating/75 text-xs"
+            aria-label="More Universe controls"
+          >
+            More controls
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          side="bottom"
+          sideOffset={8}
+          collisionPadding={12}
+          className="max-h-[min(22rem,calc(100dvh-1.5rem))] w-48 overflow-y-auto p-2"
+          data-testid="universe-more-controls-menu"
+          data-overlay-layer="popover"
+        >
+          {viewMode === 'universe3d' && (
+            <DropdownMenuItem onSelect={() => setUniverseRotationPaused(current => !current)}>
+              {universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem onSelect={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) })) : setScale(view.scale + 0.14)}>
+            <ZoomIn className="mr-1.5 h-3.5 w-3.5" /> Zoom in
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.min(1500, current.radius + 80) })) : setScale(view.scale - 0.14)}>
+            <ZoomOut className="mr-1.5 h-3.5 w-3.5" /> Zoom out
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={resetAtlas}>
+            <Crosshair className="mr-1.5 h-3.5 w-3.5" /> Reset view
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {!fullscreen && (
         <Button ref={fullscreenButtonRef} type="button" variant="outline" size="sm" onClick={enterFullscreen} className="rounded-full border-accent/25 bg-accent/5 text-accent hover:border-accent/40 hover:bg-accent/10 hover:text-accent">
           <Maximize2 className="mr-1.5 h-3.5 w-3.5" /> Fullscreen
@@ -2113,7 +2145,7 @@ function RepositoryAtlasVisualization({
       {tooltip && (
         <div
           role="tooltip"
-          className="pointer-events-none fixed z-50 max-w-[220px] rounded-xl border border-border/60 bg-background/95 px-3 py-2 text-xs shadow-xl"
+          className="pointer-events-none fixed z-[var(--layer-tooltip)] max-w-[220px] rounded-xl border border-border/70 bg-tooltip px-3 py-2 text-xs text-background shadow-[var(--shadow-md-semantic)]"
           style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}
         >
           <div className="font-semibold text-foreground">{tooltip.label}</div>
@@ -2152,6 +2184,7 @@ function RepositoryAtlasVisualization({
             reducedMotion={prefersReducedMotion}
             animateIn={!universeSceneSettled}
             fullscreen={fullscreen}
+            theme={universeTheme}
             transformation={transformation}
             transformationMode={transformationMode === 'after-rescan' ? 'current' : transformationMode}
             transformationDomain={transformationDomain}
@@ -2290,11 +2323,11 @@ function RepositoryAtlasVisualization({
       )}
 
       {!fullscreen && showUniverseWorkspace && (
-        <div data-testid="repository-universe-workspace-stage" className="relative min-h-[calc(100dvh-9rem)] overflow-hidden bg-[hsl(var(--universe-stage-bg))]">
-          <div className="absolute inset-0 z-0 [&>*]:h-full">{viewMode === 'universe3d' ? universeCanvas : atlasCanvas}</div>
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_50%_44%,transparent_36%,hsl(var(--universe-stage-bg)/0.2)_68%,hsl(var(--universe-stage-bg)/0.68)_100%)]" />
+        <div data-testid="repository-universe-workspace-stage" data-universe-theme={universeTheme} className="relative min-h-[calc(100dvh-9rem)] overflow-hidden bg-[hsl(var(--universe-stage-bg))]">
+          <div className="absolute inset-0 z-[var(--layer-canvas)] [&>*]:h-full">{viewMode === 'universe3d' ? universeCanvas : atlasCanvas}</div>
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[var(--layer-graph-overlay)] bg-[radial-gradient(circle_at_50%_44%,transparent_36%,hsl(var(--universe-stage-bg)/0.12)_68%,hsl(var(--universe-stage-bg)/0.42)_100%)]" />
           <div
-            className="pointer-events-none absolute inset-x-2 top-2 z-20 grid min-w-0 gap-2 lg:grid-cols-[minmax(18rem,23rem)_minmax(0,1fr)] lg:items-start"
+            className="pointer-events-none absolute inset-x-2 top-2 z-[var(--layer-context)] grid min-w-0 gap-2 lg:grid-cols-[minmax(18rem,23rem)_minmax(0,1fr)] lg:items-start"
             onPointerDownCapture={() => setUniverseSceneSettled(true)}
             onFocusCapture={() => setUniverseSceneSettled(true)}
           >
@@ -2306,7 +2339,7 @@ function RepositoryAtlasVisualization({
                 {transformationControls}
               </div>
             )}
-            <div data-testid="repository-toolbar-overlay" className="pointer-events-auto min-w-0 max-w-full rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.68)] p-1.5 shadow-[0_18px_55px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl motion-safe:animate-fade-in lg:col-start-2 lg:justify-self-end">
+            <div data-testid="repository-toolbar-overlay" className="pointer-events-auto relative z-[var(--layer-toolbar)] min-w-0 max-w-full rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.82)] p-1.5 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl motion-safe:animate-fade-in lg:col-start-2 lg:justify-self-end">
               {atlasToolbar}
             </div>
             <div data-testid="result-chapter-rail-overlay" className="min-w-0 md:mx-auto md:w-[min(46rem,calc(100%-2rem))] lg:col-start-1 lg:row-start-2 lg:mx-0 lg:w-full lg:max-w-[23rem] lg:justify-self-start">
@@ -2314,8 +2347,8 @@ function RepositoryAtlasVisualization({
             </div>
           </div>
           {inspectorVisible
-            ? <aside className={`absolute bottom-3 right-3 z-30 max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-auto motion-safe:animate-scale-in lg:bottom-auto ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}>{inspector}</aside>
-            : <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-center gap-2 rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.58)] px-3 py-1.5 text-xs text-muted-foreground shadow-[0_14px_44px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl"><span className="h-1.5 w-1.5 rounded-full bg-accent/70 shadow-[0_0_12px_hsl(var(--accent)/0.55)]" />Select a node to inspect evidence</div>}
+            ? <aside className={`absolute bottom-3 right-3 z-[var(--layer-inspector)] max-h-[45%] w-[min(22rem,calc(100%-1.5rem))] overflow-auto motion-safe:animate-scale-in lg:bottom-auto ${activeResultChapter === 'understand' ? 'lg:top-[5.5rem] lg:max-h-[calc(100%-6.5rem)]' : 'lg:top-[7rem] lg:max-h-[calc(100%-8rem)]'}`}>{inspector}</aside>
+            : <div className="pointer-events-none absolute bottom-4 right-4 z-[var(--layer-graph-overlay)] flex items-center gap-2 rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.72)] px-3 py-1.5 text-xs text-muted-foreground shadow-[var(--shadow-md-semantic)] backdrop-blur-xl"><span className="h-1.5 w-1.5 rounded-full bg-accent/70 shadow-[0_0_12px_hsl(var(--accent)/0.55)]" />Select a node to inspect evidence</div>}
         </div>
       )}
 
@@ -2398,7 +2431,7 @@ function RepositoryAtlasVisualization({
           role="dialog"
           aria-modal="true"
           aria-label={`${viewMode === 'universe3d' ? 'Repository Universe' : 'Repository Atlas'} fullscreen`}
-          className="fixed inset-0 z-[100] flex flex-col bg-[hsl(224_31%_5%)] p-4 text-foreground md:p-6"
+          className="fixed inset-0 z-[var(--layer-dialog)] flex flex-col bg-workspace p-4 text-foreground md:p-6"
         >
           <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
             <div>
@@ -2978,16 +3011,16 @@ function OptimizationApplyFlow({
           Manifest and apply instructions
         </summary>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-inset p-3 text-[11px] leading-relaxed text-muted-foreground">
             {JSON.stringify(applyPlan.manifest, null, 2)}
           </pre>
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-inset p-3 text-[11px] leading-relaxed text-muted-foreground">
             {applyPlan.applyInstructions}
           </pre>
         </div>
         <details className="mt-3 rounded-xl border border-border/45 bg-background/20 p-3">
           <summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">Source Optimization Plan manifest</summary>
-          <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
+          <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-xl bg-inset p-3 text-[11px] leading-relaxed text-muted-foreground">
             {manifestPreview}
           </pre>
         </details>
@@ -3153,7 +3186,7 @@ function OptimizationPrFilePreview({ file }: { file: OptimizationPrPreviewFile }
           {optimizationActionLabel(file.action)}
         </Badge>
       </div>
-      <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-black/20 p-2 text-[11px] text-muted-foreground">
+      <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">
         {file.excerpt || 'No preview available.'}
       </pre>
     </article>
@@ -3276,7 +3309,7 @@ function OptimizationPlanArtifactDetail({
 
       <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
         <summary className="cursor-pointer select-none text-sm font-semibold">Real generated content preview</summary>
-        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">
+        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-inset p-3 text-[11px] leading-relaxed text-muted-foreground">
           {item.artifact.excerpt || 'Generated content could not be prepared for this artifact.'}
         </pre>
       </details>
@@ -3444,7 +3477,7 @@ function TransformationInspector({
                   <div className="mt-3 rounded-xl border border-border/40 bg-background/35 p-3">
                     <div className="text-xs font-medium text-foreground">Preview from existing generator</div>
                     <div className="mt-2 text-xs text-muted-foreground">{action.preview.outline.slice(0, 4).join(' / ')}</div>
-                    <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap rounded-lg bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">{action.preview.excerpt}</pre>
+                    <pre className="mt-3 max-h-44 overflow-auto whitespace-pre-wrap rounded-lg bg-inset p-3 text-[11px] leading-relaxed text-muted-foreground">{action.preview.excerpt}</pre>
                   </div>
                 )}
               </details>
@@ -3469,7 +3502,7 @@ function TransformationInspector({
 
 function RepositoryUniverseLoading({ onOpenAtlas }: { onOpenAtlas: () => void }) {
   return (
-    <div className="grid h-full min-h-[560px] place-items-center rounded-[1.5rem] border border-primary/15 bg-[#050914] p-8 text-center">
+    <div className="grid h-full min-h-[560px] place-items-center rounded-[1.5rem] border border-primary/15 bg-canvas p-8 text-center">
       <div className="max-w-md">
         <div className="font-display text-xl font-semibold">Opening Repository Universe</div>
         <p className="mt-2 text-sm text-muted-foreground">Preparing the WebGL knowledge space. Your scan is already available.</p>
@@ -3483,7 +3516,7 @@ function RepositoryUniverseLoading({ onOpenAtlas }: { onOpenAtlas: () => void })
 
 function RepositoryUniverseRecovery({ onOpenAtlas, onRetry }: { onOpenAtlas: () => void; onRetry: () => void }) {
   return (
-    <div className="grid h-full min-h-[560px] place-items-center rounded-[1.5rem] border border-primary/15 bg-[#050914] p-8 text-center">
+    <div className="grid h-full min-h-[560px] place-items-center rounded-[1.5rem] border border-primary/15 bg-canvas p-8 text-center">
       <div className="max-w-md rounded-3xl border border-primary/20 bg-background/35 p-6 shadow-sm shadow-primary/10">
         <div className="font-display text-xl font-semibold">Repository Universe could not be rendered.</div>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">

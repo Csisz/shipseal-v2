@@ -353,7 +353,7 @@ function RepositoryIntelligenceArtifactDetail({
         {item.previewKind === 'manifest-metadata' ? (
           <p className="mt-3 text-xs text-muted-foreground">The raw evidence manifest is intentionally hidden from the normal preview. Statement provenance remains attached to every review item.</p>
         ) : (
-          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/25 p-3 text-[11px] leading-relaxed text-muted-foreground">{item.renderedContent || 'No generated content is available.'}</pre>
+          <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-inset p-3 text-[11px] leading-relaxed text-muted-foreground">{item.renderedContent || 'No generated content is available.'}</pre>
         )}
       </details>
 

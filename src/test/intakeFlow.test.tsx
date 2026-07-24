@@ -184,12 +184,16 @@ describe('ShipSeal pre-scan intake flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 
     expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 15000 })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Replay reveal/i })).toBeInTheDocument();
+    const resultActionsTrigger = screen.getByRole('button', { name: /More result actions/i });
+    fireEvent.keyDown(resultActionsTrigger, { key: 'ArrowDown' });
+    expect(screen.getByRole('menuitem', { name: /Replay reveal/i })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.click(await screen.findByText(/Workspace story and evidence/i, undefined, { timeout: 15000 }));
     fireEvent.click(screen.getByRole('button', { name: /2 Knowledge and docs/i }));
     expect(screen.getByRole('heading', { name: /Knowledge and docs/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Replay reveal/i }));
+    fireEvent.keyDown(resultActionsTrigger, { key: 'ArrowDown' });
+    fireEvent.click(screen.getByRole('menuitem', { name: /Replay reveal/i }));
     expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 

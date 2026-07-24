@@ -25,6 +25,13 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        workspace: "hsl(var(--workspace-background))",
+        canvas: "hsl(var(--surface-canvas))",
+        inset: "hsl(var(--surface-inset))",
+        floating: "hsl(var(--surface-floating))",
+        dialog: "hsl(var(--surface-dialog))",
+        drawer: "hsl(var(--surface-drawer))",
+        tooltip: "hsl(var(--surface-tooltip))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",

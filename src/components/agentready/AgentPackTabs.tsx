@@ -72,7 +72,7 @@ export function AgentPackTabs({ files, repositoryName, mcpFiles = [], contextFil
           </Button>
         </div>
       </div>
-      <pre className="p-5 text-xs font-mono leading-relaxed overflow-auto max-h-[520px] bg-[hsl(240_20%_4%)] text-foreground/90">
+      <pre className="max-h-[520px] overflow-auto bg-inset p-5 font-mono text-xs leading-relaxed text-foreground/90">
         <code>{file.content}</code>
       </pre>
     </div>

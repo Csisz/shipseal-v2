@@ -8,6 +8,7 @@ import {
   type IntelligenceRevealSignal,
 } from '@/lib/workspace/intelligenceReveal';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 interface Props {
   report: ReadinessReport;
@@ -77,7 +78,8 @@ export function IntelligenceReveal({ report, onComplete }: Props) {
   const signalsVisible = phase !== 'identity';
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[hsl(225_28%_5%)] px-5 py-10 text-foreground animate-fade-in motion-reduce:animate-none">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-workspace px-5 py-10 text-foreground animate-fade-in motion-reduce:animate-none">
+      <ThemeToggle className="absolute left-5 top-5 z-[var(--layer-toolbar)]" />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_36%,hsl(var(--primary)/0.22),transparent_36%),radial-gradient(circle_at_50%_84%,hsl(var(--accent)/0.12),transparent_42%)]" />
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
       <button
@@ -172,7 +174,7 @@ function SignalNode({
   return (
     <article
       className={cn(
-        'absolute z-30 w-[132px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-[hsl(225_28%_7%/0.9)] p-2 text-left backdrop-blur transition-all duration-700 motion-reduce:transition-none sm:w-[210px] sm:p-3 md:w-[240px]',
+        'absolute z-30 w-[132px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border bg-floating/90 p-2 text-left shadow-[var(--shadow-md-semantic)] backdrop-blur transition-all duration-700 motion-reduce:transition-none sm:w-[210px] sm:p-3 md:w-[240px]',
         signal.kind === 'evidence' ? 'border-primary/30' : 'border-border/55',
         connected && signal.kind === 'evidence' && !calm && 'shadow-glow',
         calm && 'border-success/25'

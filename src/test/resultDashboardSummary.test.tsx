@@ -144,6 +144,12 @@ function openDisclosure(title: RegExp | string) {
   fireEvent.click(summary);
 }
 
+function openMoreControls() {
+  const trigger = screen.getByRole('button', { name: /More Universe controls/i });
+  fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+  return { trigger, menu: screen.getByTestId('universe-more-controls-menu') };
+}
+
 function atlasViewport() {
   switchToAtlas2D();
   return screen.getByRole('img', { name: /Repository Atlas knowledge graph/i });
@@ -254,7 +260,9 @@ describe('ResultDashboard summary copy', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /Replay reveal/i }));
+    const resultActions = screen.getByRole('button', { name: /More result actions/i });
+    fireEvent.keyDown(resultActions, { key: 'ArrowDown' });
+    fireEvent.click(screen.getByRole('menuitem', { name: /Replay reveal/i }));
     expect(onReplayReveal).toHaveBeenCalledTimes(1);
     switchResultChapter('Deliver');
     await screen.findByText('Delivery Pack preview mock');
@@ -357,6 +365,41 @@ describe('ResultDashboard summary copy', () => {
     expect(within(chapterNav).getByRole('button', { name: /Understand/i })).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => expect(screen.getAllByText(/^Plan an agent task$/i).find(element => element.tagName === 'SUMMARY')?.closest('details')).toHaveAttribute('open'));
   }, 20_000);
+
+  it('portals More controls above the selected inspector and restores trigger focus on close', async () => {
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    fireEvent.click(await screen.findByRole('button', { name: /Select universe node/i }));
+    expect(screen.getByRole('heading', { name: /Selected entity/i })).toBeInTheDocument();
+
+    const stage = screen.getByTestId('repository-universe-workspace-stage');
+    const { trigger, menu } = openMoreControls();
+    expect(menu).toHaveAttribute('data-overlay-layer', 'popover');
+    expect(stage).not.toContainElement(menu);
+    expect(screen.getByRole('menuitem', { name: /Pause rotation/i })).toBeVisible();
+    expect(screen.getByRole('menuitem', { name: /Zoom in/i })).toBeVisible();
+    expect(screen.getByRole('menuitem', { name: /Zoom out/i })).toBeVisible();
+    expect(screen.getByRole('menuitem', { name: /Reset view/i })).toBeVisible();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByTestId('universe-more-controls-menu')).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
+
+    openMoreControls();
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    const outsideControl = screen.getByRole('button', { name: /Select universe node/i });
+    fireEvent.pointerDown(outsideControl, { button: 0, pointerId: 1, pointerType: 'mouse' });
+    await waitFor(() => expect(screen.queryByTestId('universe-more-controls-menu')).not.toBeInTheDocument());
+  });
 
   it('makes visual understanding the primary dashboard summary and keeps Repository Health secondary', async () => {
     const report = buildSampleReport();
@@ -552,7 +595,8 @@ describe('ResultDashboard summary copy', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Files' }));
     expect(screen.queryByTestId('atlas-node-file:documentation:readme.md')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Reset view/i }));
+    openMoreControls();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Reset view/i }));
     expect(screen.getByLabelText(/Search repository atlas/i)).toHaveValue('');
     expect(screen.getByTestId('atlas-node-file:documentation:readme.md')).toBeInTheDocument();
     expect(onReset).not.toHaveBeenCalled();
@@ -608,7 +652,8 @@ describe('ResultDashboard summary copy', () => {
     expect(screen.queryByText(/Repository Universe could not be rendered/i)).not.toBeInTheDocument();
     expect(universeMockState.models.at(-1)).toBe(initialModel);
 
-    fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
+    openMoreControls();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Zoom in/i }));
     await waitFor(() => expect(Number(screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-radius'))).toBeLessThan(initialRadius));
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toHaveAttribute('data-camera-target', firstFocusTarget || '');
     expect(universeMockState.models.at(-1)).toBe(initialModel);
@@ -618,7 +663,8 @@ describe('ResultDashboard summary copy', () => {
     expect(secondFocus).not.toHaveAttribute('data-camera-target', firstFocusTarget || '');
     expect(secondFocus.getAttribute('data-focus-request')).toMatch(/^3:/);
 
-    fireEvent.click(screen.getByRole('button', { name: /Reset view/i }));
+    openMoreControls();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Reset view/i }));
     const resetUniverse = screen.getByRole('img', { name: /Repository Universe 3D graph/i });
     expect(resetUniverse).toHaveAttribute('data-camera-radius', String(initialRadius));
     expect(resetUniverse).toHaveAttribute('data-camera-target', initialTarget || '');
@@ -1044,7 +1090,8 @@ describe('ResultDashboard summary copy', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /Select universe node/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Zoom in/i }));
+    openMoreControls();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Zoom in/i }));
     const selectedNodeId = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-selected-node');
     const cameraRadius = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-radius');
     const cameraTarget = screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-camera-target');
@@ -1280,7 +1327,8 @@ describe('ResultDashboard summary copy', () => {
     expect(within(dialog).getAllByRole('button', { name: /Expand inspector/i }).length).toBeGreaterThan(0);
     expect(within(dialog).getAllByText(/relationships/i).length).toBeGreaterThan(0);
 
-    fireEvent.click(within(dialog).getByRole('button', { name: /Reset view/i }));
+    openMoreControls();
+    fireEvent.click(screen.getByRole('menuitem', { name: /Reset view/i }));
 
     await waitFor(() => expect(fullscreenAtlas).toHaveAttribute('data-scale', '0.82'));
     expect(onReset).not.toHaveBeenCalled();

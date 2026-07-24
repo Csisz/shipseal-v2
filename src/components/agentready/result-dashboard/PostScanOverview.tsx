@@ -1,6 +1,7 @@
 import { ArrowRight, Compass, MoreHorizontal, RefreshCw, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import type { ReadinessReport } from '@/lib/types';
 import type { RepositoryFriction } from './types';
 import type { ReactNode } from 'react';
@@ -79,13 +80,17 @@ export function PostScanOverview({
               {persistenceControl}
             </div>
           )}
-          <details className="relative">
-            <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full border border-primary/15 bg-background/10 text-muted-foreground transition hover:border-accent/30 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="More result actions"><MoreHorizontal className="h-4 w-4" /></summary>
-            <div className="absolute right-0 z-10 mt-2 flex w-48 flex-col gap-2 rounded-xl border border-border/60 bg-popover p-2 shadow-lg">
-              {onReplayReveal && <Button variant="ghost" size="sm" onClick={onReplayReveal} className="justify-start"><Sparkles className="mr-1.5 h-3.5 w-3.5" /> Replay reveal</Button>}
-              <Button variant="ghost" size="sm" onClick={onReset} className="justify-start"><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Scan another project</Button>
-            </div>
-          </details>
+          <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="icon" className="h-9 w-9 rounded-full border-primary/15 bg-floating/70 text-muted-foreground" aria-label="More result actions">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" collisionPadding={12} className="w-52" data-overlay-layer="popover">
+              {onReplayReveal && <DropdownMenuItem onSelect={onReplayReveal}><Sparkles className="mr-1.5 h-3.5 w-3.5" /> Replay reveal</DropdownMenuItem>}
+              <DropdownMenuItem onSelect={onReset}><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Scan another project</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </section>

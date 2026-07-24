@@ -108,7 +108,7 @@ export function SuggestedReadinessFixPack({ report, githubConnection, selectedPa
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mb-3">{selected.whyUseful}</p>
-              <pre className="max-h-72 overflow-auto rounded-md bg-[hsl(240_20%_4%)] p-3 text-[11px] leading-relaxed text-foreground/85">
+              <pre className="max-h-72 overflow-auto rounded-md bg-inset p-3 text-[11px] leading-relaxed text-foreground/85">
                 {selected.content}
               </pre>
             </>
@@ -191,7 +191,7 @@ export function SuggestedReadinessFixPack({ report, githubConnection, selectedPa
                   <Copy className="h-3.5 w-3.5 mr-1.5" /> {copiedManualSteps ? 'Copied' : 'Copy manual Git steps'}
                 </Button>
               </div>
-              <pre className="max-h-56 overflow-auto rounded-md bg-[hsl(240_20%_4%)] p-3 text-[11px] leading-relaxed text-foreground/85">
+              <pre className="max-h-56 overflow-auto rounded-md bg-inset p-3 text-[11px] leading-relaxed text-foreground/85">
                 {prPlan.manualGitSteps}
               </pre>
               <p className="text-xs text-muted-foreground mt-3">Then open a Pull Request on GitHub.</p>

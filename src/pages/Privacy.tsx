@@ -2,15 +2,19 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Database, FileArchive, Github, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 export default function Privacy() {
   return (
     <main className="min-h-screen bg-background text-foreground">
       <section className="border-b border-border/60 bg-secondary/20">
         <div className="container py-10 md:py-14">
-          <Button asChild variant="ghost" className="mb-8 px-0 text-muted-foreground hover:text-foreground">
-            <Link to="/"><ArrowLeft className="mr-2 h-4 w-4" /> Back to ShipSeal</Link>
-          </Button>
+          <div className="mb-8 flex items-center justify-between gap-4">
+            <Button asChild variant="ghost" className="px-0 text-muted-foreground hover:text-foreground">
+              <Link to="/"><ArrowLeft className="mr-2 h-4 w-4" /> Back to ShipSeal</Link>
+            </Button>
+            <ThemeToggle />
+          </div>
           <div className="max-w-3xl">
             <div className="font-mono text-xs uppercase tracking-[0.22em] text-primary-glow">Privacy</div>
             <h1 className="mt-3 font-display text-4xl font-bold tracking-tight md:text-5xl">Simple privacy boundaries.</h1>

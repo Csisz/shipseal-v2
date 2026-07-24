@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposalModel, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
-import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseVisualPosition, softenClusterColor, blendHex, REPOSITORY_UNIVERSE_CINEMATIC_TOKENS } from '@/lib/workspace/repositoryUniverseVisual';
+import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseVisualPosition, softenClusterColor, blendHex, repositoryUniverseRendererTokens, REPOSITORY_UNIVERSE_CINEMATIC_TOKENS, type RepositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
+import type { ShipSealResolvedTheme } from '@/lib/theme';
 
 export interface UniverseCameraState {
   theta: number;
@@ -23,6 +24,7 @@ interface RepositoryUniverse3DProps {
   reducedMotion: boolean;
   animateIn?: boolean;
   fullscreen?: boolean;
+  theme?: ShipSealResolvedTheme;
   transformationMode?: RepositoryTransformationMode;
   transformationDomain?: RepositoryTransformationDomainFilter;
   selectedProposalId?: string | null;
@@ -93,6 +95,7 @@ export default function RepositoryUniverse3D({
   reducedMotion,
   animateIn = true,
   fullscreen = false,
+  theme = 'dark',
   transformationMode = 'current',
   transformationDomain = 'all',
   selectedProposalId,
@@ -134,6 +137,7 @@ export default function RepositoryUniverse3D({
 
   const visibleNodeSet = useMemo(() => new Set(visibleNodeIds), [visibleNodeIds]);
   const visibleEdgeSet = useMemo(() => new Set(visibleEdgeIds), [visibleEdgeIds]);
+  const visualTokens = useMemo(() => repositoryUniverseRendererTokens(theme), [theme]);
 
   useEffect(() => {
     cameraStateRef.current = cameraState;
@@ -278,25 +282,25 @@ export default function RepositoryUniverse3D({
     let revealInterrupted = !revealEnabled;
     renderCameraStateRef.current = revealStartCamera;
 
-    renderer.setClearColor(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.background, 1);
+    renderer.setClearColor(visualTokens.background, 1);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, fullscreenRef.current ? 1.5 : 1.35));
 
-    scene.fog = new THREE.FogExp2(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.fog, 0.00027);
-    scene.add(new THREE.AmbientLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.ambientLight, 1.18));
-    const directional = new THREE.DirectionalLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.keyLight, 1.8);
+    scene.fog = new THREE.FogExp2(visualTokens.fog, visualTokens.fogDensity);
+    scene.add(new THREE.AmbientLight(visualTokens.ambientLight, visualTokens.ambientIntensity));
+    const directional = new THREE.DirectionalLight(visualTokens.keyLight, visualTokens.keyIntensity);
     directional.position.set(220, 360, 180);
     scene.add(directional);
-    const centerGlow = new THREE.PointLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.coreGlow, 1.25, 860);
+    const centerGlow = new THREE.PointLight(visualTokens.coreGlow, visualTokens.coreIntensity, 860);
     centerGlow.position.set(0, 0, 0);
     scene.add(centerGlow);
-    const violetGlow = new THREE.PointLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.violetGlow, 0.42, 920);
+    const violetGlow = new THREE.PointLight(visualTokens.violetGlow, visualTokens.violetIntensity, 920);
     violetGlow.position.set(-360, 180, -260);
     scene.add(violetGlow);
-    const warmGlow = new THREE.PointLight(REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.warmGlow, 0.24, 680);
+    const warmGlow = new THREE.PointLight(visualTokens.warmGlow, visualTokens.warmIntensity, 680);
     warmGlow.position.set(420, -120, 260);
     scene.add(warmGlow);
 
-    const starField = createStarField();
+    const starField = createStarField(visualTokens);
     scene.add(starField);
 
     const sphereFor = (radius: number) => {
@@ -330,7 +334,7 @@ export default function RepositoryUniverse3D({
       const target = visualPositionByNodeId.get(edge.target);
       if (!source || !target) continue;
       const material = new THREE.LineBasicMaterial({
-        color: colorForEdge(edge),
+        color: colorForEdge(edge, false, false, visualTokens),
         transparent: true,
         opacity: 0.1,
         depthWrite: false,
@@ -350,7 +354,7 @@ export default function RepositoryUniverse3D({
         const material = new THREE.MeshStandardMaterial({
           color: brightenClusterColor(baseColor, 0.2),
           emissive: baseColor,
-          emissiveIntensity: 0.38,
+          emissiveIntensity: visualTokens.nodeEmissivePrimary,
           metalness: 0.08,
           roughness: 0.52,
           transparent: true,
@@ -373,7 +377,7 @@ export default function RepositoryUniverse3D({
         halo.position.copy(position);
         scene.add(halo);
 
-        const { sprite: label, material: labelMaterial, texture } = labelSprite('Proposed', '#e0faff');
+        const { sprite: label, material: labelMaterial, texture } = labelSprite('Proposed', theme === 'light' ? '#493078' : '#e0faff', theme);
         label.position.set(position.x, position.y + 12, position.z);
         label.scale.set(44, 13, 1);
         scene.add(label);
@@ -387,7 +391,7 @@ export default function RepositoryUniverse3D({
         if (!source || !target) continue;
         const sourcePosition = visualPositionFor(source.position);
         const material = new THREE.LineDashedMaterial({
-          color: REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.proposal,
+          color: visualTokens.proposal,
           transparent: true,
           opacity: 0,
           dashSize: 9,
@@ -407,9 +411,9 @@ export default function RepositoryUniverse3D({
       const baseRadius = nodeRadius(node);
       const position = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
       const material = new THREE.MeshStandardMaterial({
-        color: colorForNode(node),
-        emissive: emissiveForNode(node),
-        emissiveIntensity: node.importance === 'primary' ? 0.38 : 0.11,
+        color: colorForNode(node, false, false, false, false, false, visualTokens),
+        emissive: emissiveForNode(node, false, false, false, false, visualTokens),
+        emissiveIntensity: node.importance === 'primary' ? visualTokens.nodeEmissivePrimary : visualTokens.nodeEmissiveQuiet,
         metalness: 0.18,
         roughness: 0.38,
         transparent: true,
@@ -422,7 +426,7 @@ export default function RepositoryUniverse3D({
       scene.add(mesh);
 
       const haloMaterial = new THREE.MeshBasicMaterial({
-        color: 0x67e8f9,
+        color: visualTokens.coreGlow,
         transparent: true,
         opacity: 0,
         depthWrite: false,
@@ -432,7 +436,7 @@ export default function RepositoryUniverse3D({
       halo.position.copy(mesh.position);
       scene.add(halo);
 
-      const { sprite: label, material: labelMaterial, texture } = labelSprite(shortLabel(displayLabel), labelColorForNode(node));
+      const { sprite: label, material: labelMaterial, texture } = labelSprite(shortLabel(displayLabel), labelColorForNode(node, theme), theme);
       label.position.set(position.x, position.y + baseRadius + 5, position.z);
       label.scale.set(node.kind === 'repository' ? 70 : 42, node.kind === 'repository' ? 20 : 14, 1);
       scene.add(label);
@@ -721,7 +725,7 @@ export default function RepositoryUniverse3D({
               : edge.relationship === 'contains'
                 ? selectedId || focusedCluster || routeActive ? 0.02 : 0.045
                 : selectedId || focusedCluster || routeActive ? 0.065 : 0.18;
-        line.material.color.setHex(colorForEdge(edge, directlySelected, focused));
+        line.material.color.setHex(colorForEdge(edge, directlySelected, focused, visualTokens));
       }
 
       for (const item of proposalEdgeItems.values()) {
@@ -731,8 +735,8 @@ export default function RepositoryUniverse3D({
         item.line.visible = visible;
         item.line.material.opacity = !visible ? 0 : excluded ? 0.09 : selected ? 0.56 : 0.26;
         item.line.material.color.setHex(selected
-          ? REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.proposalSelected
-          : REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.proposal);
+          ? visualTokens.proposalSelected
+          : visualTokens.proposal);
       }
 
       const radius = cameraStateRef.current.radius;
@@ -753,8 +757,8 @@ export default function RepositoryUniverse3D({
 
         mesh.visible = opacity > 0.02;
         mesh.material.opacity = opacity;
-        mesh.material.color.setHex(colorForNode(node, selected, matched, routeHighlighted, hovered, connected));
-        mesh.material.emissive.setHex(emissiveForNode(node, selected, matched, routeHighlighted, hovered));
+        mesh.material.color.setHex(colorForNode(node, selected, matched, routeHighlighted, hovered, connected, visualTokens));
+        mesh.material.emissive.setHex(emissiveForNode(node, selected, matched, routeHighlighted, hovered, visualTokens));
         mesh.material.emissiveIntensity = selected ? 1.62 : hovered || matched ? 0.94 : routeHighlighted ? 0.92 : connected ? 0.58 : node.importance === 'primary' ? 0.4 : 0.09;
         mesh.material.wireframe = node.evidenceType === 'missing' || node.kind === 'recommendation';
         mesh.scale.setScalar(scale);
@@ -762,14 +766,14 @@ export default function RepositoryUniverse3D({
         halo.visible = visible && (selected || hovered || matched || routeHighlighted || connected);
         halo.material.opacity = selected ? 0.58 + focusPulse * 0.1 : hovered ? 0.32 : matched ? 0.3 : routeHighlighted ? 0.26 + focusPulse * 0.04 : connected ? 0.15 : 0;
         halo.material.color.setHex(selected
-          ? REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.selected
+          ? visualTokens.selected
           : routeHighlighted
-            ? REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.route
+            ? visualTokens.route
             : matched
-              ? REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.search
+              ? visualTokens.search
               : connected
                 ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16)
-                : REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.coreGlow);
+                : visualTokens.coreGlow);
         halo.scale.setScalar(selected ? 1.58 + focusPulse * 0.08 : routeHighlighted ? 1.3 : connected ? 1.16 : 1);
 
         const labelVisible = visible && shouldRenderLabel(node, {
@@ -871,7 +875,7 @@ export default function RepositoryUniverse3D({
       sphereGeometryCache.forEach(geometry => geometry.dispose());
       renderer.dispose();
     };
-  }, [model, transformation]);
+  }, [model, theme, transformation, visualTokens]);
 
   return (
     <div
@@ -936,17 +940,17 @@ export function repositoryUniverseRevealStartCamera(state: UniverseCameraState, 
   };
 }
 
-function createStarField() {
+function createStarField(tokens: RepositoryUniverseRendererTokens = REPOSITORY_UNIVERSE_CINEMATIC_TOKENS) {
   const count = 320;
   const positions = new Float32Array(count * 3);
   const colors = new Float32Array(count * 3);
   const color = new THREE.Color();
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
   const palette = [
-    REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.starCool,
-    REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.starCool,
-    REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.starViolet,
-    REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.starWarm,
+    tokens.starCool,
+    tokens.starCool,
+    tokens.starViolet,
+    tokens.starWarm,
   ];
 
   for (let index = 0; index < count; index += 1) {
@@ -968,10 +972,10 @@ function createStarField() {
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   const material = new THREE.PointsMaterial({
-    size: 1.35,
+    size: tokens.starSize,
     sizeAttenuation: false,
     transparent: true,
-    opacity: 0.82,
+    opacity: tokens.starOpacity,
     depthWrite: false,
     vertexColors: true,
   });
@@ -987,11 +991,19 @@ function nodeRadius(node: RepositoryUniverseNode) {
   return 2.15;
 }
 
-function colorForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, route?: boolean, hovered?: boolean, connected?: boolean) {
+function colorForNode(
+  node: RepositoryUniverseNode,
+  selected?: boolean,
+  matched?: boolean,
+  route?: boolean,
+  hovered?: boolean,
+  connected?: boolean,
+  tokens: RepositoryUniverseRendererTokens = REPOSITORY_UNIVERSE_CINEMATIC_TOKENS,
+) {
   if (selected) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.5);
   if (hovered) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.38);
-  if (route) return blendHex(repositoryUniverseNodeBaseColor(node), REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.route, 0.42);
-  if (matched) return blendHex(repositoryUniverseNodeBaseColor(node), REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.search, 0.36);
+  if (route) return blendHex(repositoryUniverseNodeBaseColor(node), tokens.route, 0.42);
+  if (matched) return blendHex(repositoryUniverseNodeBaseColor(node), tokens.search, 0.36);
   if (connected) return brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.24);
   return repositoryUniverseNodeBaseColor(node);
 }
@@ -1005,22 +1017,34 @@ export function repositoryUniverseNodeBaseColor(node: Pick<RepositoryUniverseNod
   return node.importance === 'background' ? softenClusterColor(base, 0.16) : base;
 }
 
-function emissiveForNode(node: RepositoryUniverseNode, selected?: boolean, matched?: boolean, route?: boolean, hovered?: boolean) {
-  if (selected) return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.selected;
-  if (hovered) return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.coreGlow;
-  if (route) return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.route;
-  if (matched) return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.search;
-  if (node.kind === 'repository') return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.repositoryEmissive;
-  if (node.importance === 'primary') return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.primaryEmissive;
-  return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.quietEmissive;
+function emissiveForNode(
+  node: RepositoryUniverseNode,
+  selected?: boolean,
+  matched?: boolean,
+  route?: boolean,
+  hovered?: boolean,
+  tokens: RepositoryUniverseRendererTokens = REPOSITORY_UNIVERSE_CINEMATIC_TOKENS,
+) {
+  if (selected) return tokens.selected;
+  if (hovered) return tokens.coreGlow;
+  if (route) return tokens.route;
+  if (matched) return tokens.search;
+  if (node.kind === 'repository') return tokens.repositoryEmissive;
+  if (node.importance === 'primary') return tokens.primaryEmissive;
+  return tokens.quietEmissive;
 }
 
-function colorForEdge(edge: RepositoryUniverseEdge, selected?: boolean, focused?: boolean) {
-  if (selected) return edge.evidenceType === 'heuristic' ? REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.heuristicEdge : REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.evidenceEdge;
-  if (focused) return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.connectedEdge;
-  if (edge.evidenceType === 'heuristic') return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.heuristicEdge;
-  if (edge.relationship === 'contains') return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.containsEdge;
-  return REPOSITORY_UNIVERSE_CINEMATIC_TOKENS.relationshipEdge;
+function colorForEdge(
+  edge: RepositoryUniverseEdge,
+  selected?: boolean,
+  focused?: boolean,
+  tokens: RepositoryUniverseRendererTokens = REPOSITORY_UNIVERSE_CINEMATIC_TOKENS,
+) {
+  if (selected) return edge.evidenceType === 'heuristic' ? tokens.heuristicEdge : tokens.evidenceEdge;
+  if (focused) return tokens.connectedEdge;
+  if (edge.evidenceType === 'heuristic') return tokens.heuristicEdge;
+  if (edge.relationship === 'contains') return tokens.containsEdge;
+  return tokens.relationshipEdge;
 }
 
 function shouldRenderLabel(node: RepositoryUniverseNode, state: {
@@ -1059,7 +1083,13 @@ function labelScaleForNode(node: RepositoryUniverseNode, cameraRadius: number, p
   return { width: baseWidth * zoomBoost, height: baseHeight * zoomBoost };
 }
 
-function labelColorForNode(node: RepositoryUniverseNode) {
+function labelColorForNode(node: RepositoryUniverseNode, theme: ShipSealResolvedTheme = 'dark') {
+  if (theme === 'light') {
+    if (node.kind === 'repository') return '#0f3a42';
+    if (node.evidenceType === 'missing') return '#8c3d12';
+    if (node.evidenceType === 'heuristic') return '#374151';
+    return '#18384a';
+  }
   if (node.kind === 'repository') return '#ecfeff';
   if (node.evidenceType === 'missing') return '#fed7aa';
   if (node.evidenceType === 'heuristic') return '#cbd5e1';
@@ -1077,7 +1107,7 @@ export function repositoryUniverseNodeDisplayLabel(node: Pick<RepositoryUniverse
   return id || 'Unknown repository entity';
 }
 
-function labelSprite(label: string, color: string) {
+function labelSprite(label: string, color: string, theme: ShipSealResolvedTheme = 'dark') {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 128;
@@ -1087,7 +1117,7 @@ function labelSprite(label: string, color: string) {
     context.font = '600 28px Inter, system-ui, sans-serif';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillStyle = 'rgba(5, 9, 20, 0.66)';
+    context.fillStyle = theme === 'light' ? 'rgba(255, 255, 255, 0.82)' : 'rgba(5, 9, 20, 0.66)';
     roundRect(context, 34, 36, 444, 56, 24);
     context.fill();
     context.fillStyle = color;

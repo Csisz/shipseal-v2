@@ -1,4 +1,5 @@
 import type { RepositoryUniverseCluster, RepositoryUniverseNode, RepositoryUniversePosition } from './repositoryUniverse';
+import type { ShipSealResolvedTheme } from '@/lib/theme';
 
 export interface RepositoryUniverseVisualToken {
   id: string;
@@ -19,7 +20,7 @@ const REPOSITORY_UNIVERSE_LAYOUT_SPREAD_Y = 0.78;
 
 // Renderer-only cinematic colors live together so Ω.17.5 can map them onto
 // semantic theme tokens without changing repository or graph semantics.
-export const REPOSITORY_UNIVERSE_CINEMATIC_TOKENS = {
+export const REPOSITORY_UNIVERSE_DARK_TOKENS = {
   background: 0x000106,
   fog: 0x01030a,
   ambientLight: 0x789dff,
@@ -43,7 +44,62 @@ export const REPOSITORY_UNIVERSE_CINEMATIC_TOKENS = {
   starCool: 0xc2ecff,
   starViolet: 0xd8ccff,
   starWarm: 0xffe6a3,
+  starOpacity: 0.82,
+  starSize: 1.35,
+  fogDensity: 0.00027,
+  ambientIntensity: 1.18,
+  keyIntensity: 1.8,
+  coreIntensity: 1.25,
+  violetIntensity: 0.42,
+  warmIntensity: 0.24,
+  nodeEmissivePrimary: 0.38,
+  nodeEmissiveQuiet: 0.11,
 } as const;
+
+export const REPOSITORY_UNIVERSE_LIGHT_TOKENS = {
+  background: 0xe9eef1,
+  fog: 0xf2f4f3,
+  ambientLight: 0xc5d4df,
+  keyLight: 0xffffff,
+  coreGlow: 0x167b8f,
+  violetGlow: 0x7562b8,
+  warmGlow: 0xb97820,
+  selected: 0x087c8d,
+  route: 0xb76b16,
+  search: 0x7251a6,
+  connectedEdge: 0x257a91,
+  evidenceEdge: 0x2b7184,
+  heuristicEdge: 0x667584,
+  containsEdge: 0x256f9d,
+  relationshipEdge: 0x287a6e,
+  repositoryEmissive: 0x0c6074,
+  primaryEmissive: 0x244f96,
+  quietEmissive: 0xc4ccd2,
+  proposal: 0x6b4c9a,
+  proposalSelected: 0x493078,
+  starCool: 0x8194a3,
+  starViolet: 0x9b8db3,
+  starWarm: 0xb69a69,
+  starOpacity: 0.28,
+  starSize: 1.05,
+  fogDensity: 0.00018,
+  ambientIntensity: 1.65,
+  keyIntensity: 1.35,
+  coreIntensity: 0.42,
+  violetIntensity: 0.14,
+  warmIntensity: 0.12,
+  nodeEmissivePrimary: 0.13,
+  nodeEmissiveQuiet: 0.035,
+} as const;
+
+export type RepositoryUniverseRendererTokens = typeof REPOSITORY_UNIVERSE_DARK_TOKENS | typeof REPOSITORY_UNIVERSE_LIGHT_TOKENS;
+
+// Stable dark alias for consumers that do not participate in the application theme.
+export const REPOSITORY_UNIVERSE_CINEMATIC_TOKENS = REPOSITORY_UNIVERSE_DARK_TOKENS;
+
+export function repositoryUniverseRendererTokens(theme: ShipSealResolvedTheme): RepositoryUniverseRendererTokens {
+  return theme === 'light' ? REPOSITORY_UNIVERSE_LIGHT_TOKENS : REPOSITORY_UNIVERSE_DARK_TOKENS;
+}
 
 // Repository Universe visual grammar:
 // hue = cluster membership; size = entity kind and importance;

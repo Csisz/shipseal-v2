@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseRevealStartCamera } from '@/components/agentready/RepositoryUniverse3D';
-import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseFocusCameraState, repositoryUniverseInspectorAwareLookTarget } from '@/lib/workspace/repositoryUniverseVisual';
+import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseFocusCameraState, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryUniverseNode } from '@/lib/workspace';
 
 function node(overrides: Partial<RepositoryUniverseNode>) {
@@ -43,6 +43,18 @@ describe('Repository Universe 3D labels', () => {
     expect(repositoryUniverseNodeBaseColor(documentation)).not.toBe(repositoryUniverseNodeBaseColor(memory));
     expect(brightenClusterColor(repositoryUniverseNodeBaseColor(documentation), 0.44)).not.toBe(0xf8fafc);
     expect(repositoryUniverseNodeBaseColor(node({ clusterId: 'cluster:documentation', evidenceType: 'heuristic', metadata: { category: 'documentation' } }))).not.toBe(repositoryUniverseNodeBaseColor(documentation));
+  });
+
+  it('provides intentionally distinct light and dark renderer configurations', () => {
+    const light = repositoryUniverseRendererTokens('light');
+    const dark = repositoryUniverseRendererTokens('dark');
+
+    expect(light.background).not.toBe(dark.background);
+    expect(light.starOpacity).toBeLessThan(dark.starOpacity);
+    expect(light.fogDensity).toBeLessThan(dark.fogDensity);
+    expect(light.relationshipEdge).not.toBe(dark.relationshipEdge);
+    expect(light.route).not.toBe(dark.route);
+    expect(light.nodeEmissivePrimary).toBeLessThan(dark.nodeEmissivePrimary);
   });
 
   it('keeps the deterministic cluster palette vivid and distinguishable', () => {
