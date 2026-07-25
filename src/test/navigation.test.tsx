@@ -11,12 +11,11 @@ describe('ShipSeal navigation', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole('link', { name: /Why ShipSeal/i })).toHaveAttribute('href', '#why');
-    expect(screen.getByRole('link', { name: /Intelligence/i })).toHaveAttribute('href', '#intelligence');
+    expect(screen.getByRole('link', { name: /^Product$/i })).toHaveAttribute('href', '#intelligence');
     expect(screen.getByRole('link', { name: /How it works/i })).toHaveAttribute('href', '#how');
     expect(screen.getByRole('link', { name: /Pricing/i })).toHaveAttribute('href', '#pricing');
-    expect(screen.getByRole('link', { name: /Contact/i })).toHaveAttribute('href', '#contact');
     expect(screen.getByRole('link', { name: /Scan my repository/i })).toHaveAttribute('href', '#scan');
+    expect(screen.getByRole('link', { name: /My projects/i })).toHaveAttribute('href', '/projects');
     expect(screen.getByRole('link', { name: /ShipSeal home/i })).toHaveAttribute('href', '/');
   });
 
@@ -44,5 +43,21 @@ describe('ShipSeal navigation', () => {
     fireEvent.click(screen.getByRole('link', { name: /ShipSeal home/i }));
 
     expect(onHome).toHaveBeenCalledTimes(1);
+  });
+
+  it('supports a compact keyboard-dismissible mobile menu', () => {
+    render(
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Nav />
+      </MemoryRouter>
+    );
+
+    const trigger = screen.getByRole('button', { name: /Open navigation menu/i });
+    fireEvent.click(trigger);
+    expect(screen.getByRole('navigation', { name: /Mobile navigation/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Close navigation menu/i })).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('navigation', { name: /Mobile navigation/i })).not.toBeInTheDocument();
   });
 });

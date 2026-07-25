@@ -73,20 +73,20 @@ describe('Intelligence Reveal', () => {
       expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
 
       act(() => {
-        vi.advanceTimersByTime(950);
+        vi.advanceTimersByTime(500);
       });
       expect(screen.getByRole('heading', { name: /Reading repository evidence/i })).toBeInTheDocument();
       expect(screen.getByText('Documentation')).toBeInTheDocument();
       expect(screen.getAllByText('Evidence').length).toBeGreaterThan(0);
 
       act(() => {
-        vi.advanceTimersByTime(2200);
+        vi.advanceTimersByTime(1000);
       });
       expect(screen.getByRole('heading', { name: /Connecting repository signals/i })).toBeInTheDocument();
       expect(screen.getByText(/Documentation becomes the entry point/i)).toBeInTheDocument();
 
       act(() => {
-        vi.advanceTimersByTime(1600);
+        vi.advanceTimersByTime(1200);
       });
       expect(screen.getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
       expect(screen.getByText(/Your AI Workspace is ready/i)).toBeInTheDocument();
@@ -136,7 +136,7 @@ describe('Intelligence Reveal', () => {
       expect(screen.getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
 
       act(() => {
-        vi.advanceTimersByTime(950);
+        vi.advanceTimersByTime(700);
       });
 
       expect(onComplete).toHaveBeenCalledTimes(1);

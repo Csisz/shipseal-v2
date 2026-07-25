@@ -19,8 +19,8 @@ export interface IntelligenceRevealModel {
   signals: IntelligenceRevealSignal[];
 }
 
-export const INTELLIGENCE_REVEAL_TOTAL_MS = 4600;
-export const INTELLIGENCE_REVEAL_REDUCED_MOTION_MS = 900;
+export const INTELLIGENCE_REVEAL_TOTAL_MS = 3800;
+export const INTELLIGENCE_REVEAL_REDUCED_MOTION_MS = 650;
 
 export function buildIntelligenceRevealModel(report: ReadinessReport): IntelligenceRevealModel {
   const files = normalizedReportFiles(report);

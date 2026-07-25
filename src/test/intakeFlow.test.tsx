@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter as RouterMemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Index from '@/pages/Index';
@@ -120,15 +120,15 @@ describe('ShipSeal pre-scan intake flow', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Step 1: Which project?')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Scan setup progress')).getByText('Source').closest('li')).toHaveAttribute('aria-current', 'step');
     fireEvent.click(screen.getByRole('button', { name: /analyze repository/i }));
 
-    expect(screen.getByText('Step 2: What do you want?')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Scan setup progress')).getByText('Outcome').closest('li')).toHaveAttribute('aria-current', 'step');
     expect(screen.getByText('Project Source')).toBeInTheDocument();
     expect(screen.getByText('ZIP upload')).toBeInTheDocument();
     expect(screen.getByText('real-repo.zip')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /change project/i })).toBeInTheDocument();
-    expect(screen.getByText('What do you want?')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /What outcome should ShipSeal prepare/i })).toBeInTheDocument();
     expect(screen.getByText('Build with AI')).toBeInTheDocument();
     expect(screen.getByText('Ship to Client')).toBeInTheDocument();
     expect(screen.getByText('Production Readiness')).toBeInTheDocument();
@@ -353,7 +353,7 @@ describe('ShipSeal pre-scan intake flow', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Step 1: Which project?')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Scan setup progress')).getByText('Source').closest('li')).toHaveAttribute('aria-current', 'step');
     expect(scanMocks.startGitHubScan).not.toHaveBeenCalled();
   });
 });

@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Braces, Menu, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 
 const links = [
-  { label: 'Why ShipSeal', href: '#why' },
-  { label: 'Intelligence', href: '#intelligence' },
+  { label: 'Product', href: '#intelligence' },
   { label: 'How it works', href: '#how' },
   { label: 'Pricing', href: '#pricing' },
-  { label: 'Contact', href: '#contact' },
 ];
 
 interface Props {
@@ -19,6 +17,8 @@ interface Props {
 }
 
 export function Nav({ onNavigateAnchor, onHome }: Props) {
+  const location = useLocation();
+  const onLanding = location.pathname === '/';
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -29,12 +29,21 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   return (
     <header className={cn(
-      'fixed top-0 inset-x-0 z-[var(--layer-toolbar)] transition-all',
-      scrolled ? 'backdrop-blur-2xl bg-background/70 border-b border-border/60' : 'bg-transparent'
+      'fixed inset-x-0 top-0 z-[var(--layer-toolbar)] border-b transition-all',
+      scrolled || open ? 'border-border/55 bg-background/80 backdrop-blur-2xl' : 'border-transparent bg-background/35 backdrop-blur-md'
     )}>
-      <div className="container flex h-16 items-center justify-between md:h-20">
+      <div className="container flex h-16 items-center justify-between md:h-[4.5rem]">
 
         <Link
           to="/"
@@ -47,38 +56,40 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
           </span>
           <span className="font-display text-lg font-bold tracking-tight sm:text-xl">ShipSeal</span>
         </Link>
-        <nav className="hidden lg:flex items-center gap-7">
+        <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary navigation">
           {links.map((l) => (
-            <a key={l.href} href={l.href} onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor(l.href); } }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+            <a key={l.href} href={onLanding ? l.href : `/${l.href}`} onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor(l.href); } }} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
               {l.label}
             </a>
           ))}
         </nav>
-        <div className="hidden lg:flex items-center gap-2">
+        <div className="hidden items-center gap-2 lg:flex">
           <ThemeToggle />
-          <Button asChild variant="ghost"><Link to="/projects">My projects</Link></Button>
-          <Button asChild variant="default" className="bg-gradient-primary hover:opacity-90 border-0 shadow-glow">
-            <a href="#scan" onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a>
+          <Button asChild variant="ghost">
+            <Link to="/projects" aria-current={location.pathname.startsWith('/projects') ? 'page' : undefined}>My projects</Link>
+          </Button>
+          <Button asChild variant="default" className="bg-primary text-primary-foreground shadow-sm shadow-primary/20 hover:bg-primary/90">
+            <a href={onLanding ? '#scan' : '/#scan'} onClick={(event) => { if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a>
           </Button>
         </div>
         <div className="flex items-center gap-1 lg:hidden">
           <ThemeToggle />
-          <button type="button" onClick={() => setOpen(!open)} className="rounded-full p-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={open}>
+          <button type="button" onClick={() => setOpen(!open)} className="flex min-h-11 min-w-11 items-center justify-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={open ? 'Close navigation menu' : 'Open navigation menu'} aria-expanded={open} aria-controls="shipseal-mobile-navigation">
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
       {open && (
-        <div className="border-t border-border/60 bg-background/95 backdrop-blur-xl lg:hidden">
-          <div className="container py-4 flex flex-col gap-3">
+        <div id="shipseal-mobile-navigation" className="border-t border-border/60 bg-background/95 backdrop-blur-xl lg:hidden">
+          <nav className="container flex flex-col gap-1 py-3" aria-label="Mobile navigation">
             {links.map((l) => (
-              <a key={l.href} href={l.href} onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor(l.href); } }} className="text-sm text-muted-foreground hover:text-foreground py-1.5">
+              <a key={l.href} href={onLanding ? l.href : `/${l.href}`} onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor(l.href); } }} className="flex min-h-11 items-center rounded-lg px-2 text-sm text-muted-foreground hover:bg-secondary/30 hover:text-foreground">
                 {l.label}
               </a>
             ))}
-            <Link to="/projects" onClick={() => setOpen(false)} className="text-sm text-muted-foreground hover:text-foreground py-1.5">My projects</Link>
-            <Button asChild className="bg-gradient-primary border-0 mt-2"><a href="#scan" onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a></Button>
-          </div>
+            <Link to="/projects" onClick={() => setOpen(false)} aria-current={location.pathname.startsWith('/projects') ? 'page' : undefined} className="flex min-h-11 items-center rounded-lg px-2 text-sm text-muted-foreground hover:bg-secondary/30 hover:text-foreground">My projects</Link>
+            <Button asChild className="mt-2 bg-primary text-primary-foreground hover:bg-primary/90"><a href={onLanding ? '#scan' : '/#scan'} onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a></Button>
+          </nav>
         </div>
       )}
     </header>

@@ -44,7 +44,7 @@ export function ScanProgress({
   const finalReveal = safeProgress >= 96;
 
   return (
-    <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[2rem] border border-primary/25 bg-canvas p-3 shadow-glow animate-scale-in md:p-4">
+    <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[2rem] border border-primary/25 bg-canvas p-3 shadow-glow animate-scale-in motion-reduce:animate-none md:p-4">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,hsl(var(--primary)/0.22),transparent_38%),radial-gradient(circle_at_80%_70%,hsl(var(--accent)/0.12),transparent_34%)] pointer-events-none" />
       <div className="relative">
         <div className="mb-3 flex items-start justify-between gap-3">
@@ -88,7 +88,7 @@ export function ScanProgress({
                 <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Understanding stream</div>
                 <h3 className="mt-1 font-display text-lg font-semibold">{finalReveal ? 'AI Workspace created' : activeSignal.label}</h3>
               </div>
-              <Sparkles className={cn('h-4 w-4 text-primary-glow', !finalReveal && 'animate-pulse')} />
+              <Sparkles className={cn('h-4 w-4 text-primary-glow', !finalReveal && 'animate-pulse motion-reduce:animate-none')} />
             </div>
 
             <div className="rounded-2xl border border-primary/25 bg-primary/10 p-3">
@@ -100,7 +100,7 @@ export function ScanProgress({
                 <span className="font-mono text-xs text-primary-glow">{safeProgress}%</span>
               </div>
               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary/70">
-                <div className="h-full bg-gradient-primary transition-all duration-700 ease-out" style={{ width: `${safeProgress}%` }} />
+                <div className="h-full bg-gradient-primary transition-all duration-700 ease-out motion-reduce:transition-none" style={{ width: `${safeProgress}%` }} />
               </div>
             </div>
 
@@ -194,10 +194,10 @@ function LivingRepositoryCanvas({
 
       <div className="relative flex min-h-[240px] items-center justify-center">
         <div className={cn(
-          'relative z-10 flex h-32 w-32 flex-col items-center justify-center rounded-full border text-center transition-all duration-700',
+          'relative z-10 flex h-32 w-32 flex-col items-center justify-center rounded-full border text-center transition-all duration-700 motion-reduce:transition-none',
           complete ? 'border-success/50 bg-success/10 shadow-[0_0_70px_hsl(var(--success)/0.18)]' : 'border-primary/50 bg-primary/10 shadow-glow'
         )}>
-          <div className="absolute inset-0 rounded-full border border-primary/30 animate-pulse" />
+          <div className="absolute inset-0 rounded-full border border-primary/30 animate-pulse motion-reduce:animate-none" />
           <ActiveIcon className={cn('h-6 w-6', complete ? 'text-success' : 'text-primary-glow')} />
           <div className="mt-2 px-3 font-display text-sm font-semibold leading-tight">
             {complete ? 'Workspace created' : 'Building workspace'}
@@ -240,7 +240,7 @@ function RepositoryNode({ signal, index, total }: { signal: LivingSignal; index:
     <div
       title={`${signal.label} - ${signal.source}`}
       className={cn(
-        'absolute z-20 w-10 -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-1.5 transition-all duration-700 sm:w-28 sm:px-2.5 sm:py-2 xl:w-32',
+        'absolute z-20 w-10 -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-1.5 transition-all duration-700 motion-reduce:transition-none sm:w-28 sm:px-2.5 sm:py-2 xl:w-32',
         signal.active && 'scale-105 border-primary/55 bg-primary/15 shadow-glow',
         signal.done && !signal.active && 'border-success/35 bg-success/10',
         !signal.done && !signal.active && 'border-border/45 bg-background/30 opacity-60'
@@ -257,7 +257,7 @@ function RepositoryNode({ signal, index, total }: { signal: LivingSignal; index:
         <span className="hidden min-w-0 text-xs font-semibold leading-tight text-foreground sm:inline">{signal.label}</span>
       </div>
       <div className="mt-2 hidden items-center gap-1.5 sm:flex">
-        {signal.done ? <CheckCircle2 className="h-3 w-3 text-success" /> : signal.active ? <Sparkles className="h-3 w-3 animate-pulse text-primary-glow" /> : <Circle className="h-3 w-3 text-muted-foreground" />}
+        {signal.done ? <CheckCircle2 className="h-3 w-3 text-success" /> : signal.active ? <Sparkles className="h-3 w-3 animate-pulse text-primary-glow motion-reduce:animate-none" /> : <Circle className="h-3 w-3 text-muted-foreground" />}
         <span className="text-[10px] text-muted-foreground">{signal.source}</span>
       </div>
     </div>

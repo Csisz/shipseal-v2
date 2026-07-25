@@ -1,97 +1,71 @@
 import type { ReactNode } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Github, Lock, ScanLine, ShieldCheck } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { Github, Lock, ScanLine, ShieldCheck } from 'lucide-react';
+import { SecondaryPageShell } from '@/components/agentready/SecondaryPageShell';
 
-const READS = ['README', 'package.json', 'tests', 'docs', 'CI files', 'AGENTS.md', 'env examples'];
-const IGNORES = ['node_modules', 'dist', 'build', 'coverage', 'large generated folders', 'binaries where possible'];
+const READS = ['File paths', 'package manifests', 'README', 'instruction files', 'selected config', 'tests', 'workflow signals'];
+const IGNORES = ['node_modules', 'dist', 'build', '.next', 'coverage', 'caches', 'binaries', 'secret-looking files'];
 
 export default function Security() {
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <section className="border-b border-border/60 bg-secondary/20">
-        <div className="container py-10 md:py-14">
-          <div className="mb-8 flex items-center justify-between gap-4">
-            <Button asChild variant="ghost" className="px-0 text-muted-foreground hover:text-foreground">
-              <Link to="/"><ArrowLeft className="mr-2 h-4 w-4" /> Back to ShipSeal</Link>
-            </Button>
-            <ThemeToggle />
-          </div>
-          <div className="max-w-3xl">
-            <div className="font-mono text-xs uppercase tracking-[0.22em] text-primary-glow">Security</div>
-            <h1 className="mt-3 font-display text-4xl font-bold tracking-tight md:text-5xl">What ShipSeal does, and does not do.</h1>
-            <p className="mt-5 text-lg text-muted-foreground">
-              ShipSeal performs static readiness analysis. It helps you understand project signals without running imported code.
+    <SecondaryPageShell
+      eyebrow="Security"
+      title="What ShipSeal does, and does not do."
+      description="ShipSeal performs static readiness analysis and builds repository intelligence without running imported application code."
+    >
+      <div className="grid gap-3 md:grid-cols-3">
+        <BoundaryCard icon={<Lock className="h-5 w-5" />} title="Code is never executed" text="Package scripts, tests, builds, migrations, and user application code are not run." />
+        <BoundaryCard icon={<ScanLine className="h-5 w-5" />} title="Static scan only" text="The scanner reads structure, metadata, and selected bounded documentation and configuration signals." />
+        <BoundaryCard icon={<ShieldCheck className="h-5 w-5" />} title="Secrets stay out of scope" text="Secret-looking files are flagged by path and should be redacted before upload whenever possible." />
+      </div>
+
+      <div className="mt-6 grid gap-3 md:grid-cols-2">
+        <ListPanel title="What ShipSeal reads" items={READS} />
+        <ListPanel title="What ShipSeal ignores" items={IGNORES} />
+      </div>
+
+      <section className="mt-6 rounded-2xl border border-primary/25 bg-primary/5 p-5 md:p-6">
+        <div className="flex items-start gap-3">
+          <Github className="mt-1 h-5 w-5 shrink-0 text-primary-glow" aria-hidden="true" />
+          <div>
+            <h2 className="font-display text-xl font-semibold">GitHub App permissions</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Access is limited to approved repositories and permissions. ShipSeal can scan a selected ref and, after confirmation, create a reviewed Pull Request. It does not merge or push directly to main.
             </p>
           </div>
         </div>
       </section>
 
-      <section className="container py-12 md:py-16">
-        <div className="grid gap-4 md:grid-cols-3">
-          <BoundaryCard icon={<Lock className="h-5 w-5" />} title="Code is never executed" text="ShipSeal does not run package scripts, tests, build commands, migrations, or user application code." />
-          <BoundaryCard icon={<ScanLine className="h-5 w-5" />} title="Static scan only" text="The scanner reads structure, metadata, and selected documentation/configuration signals." />
-          <BoundaryCard icon={<ShieldCheck className="h-5 w-5" />} title="Secrets are not intentionally exposed" text="Env examples can be used as readiness signals. Real secrets should be redacted before upload where possible." />
+      <details className="group mt-4 rounded-2xl border border-border/55 bg-background/25">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground hover:text-foreground">Account and saved-project security</summary>
+        <div className="border-t border-border/45 px-5 py-5 text-sm leading-relaxed text-muted-foreground">
+          GitHub OAuth identity avoids stored passwords. Opaque sessions use secure HTTP-only cookies and server-side token hashes. Persistence requests verify the session and project owner. GitHub tokens, provider keys, raw provider responses, archives, and environment values are not stored in browser-accessible project records.
         </div>
+      </details>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2">
-          <ListPanel title="What ShipSeal reads" items={READS} />
-          <ListPanel title="What ShipSeal ignores" items={IGNORES} />
-        </div>
-
-        <div className="mt-8 rounded-2xl border border-border/60 bg-card/60 p-6 md:p-8">
-          <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary-glow">
-              <Github className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="font-display text-2xl font-semibold">GitHub App permissions</h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                GitHub access is used so you can select a repository, scan the selected ref, and optionally create a
-                reviewed Readiness PR. ShipSeal cannot merge that PR for you and does not push to your main branch.
-                Access is limited by the repositories and permissions you approve in GitHub.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-8 rounded-2xl border border-warning/30 bg-warning/10 p-6 text-sm leading-6 text-muted-foreground">
-          ShipSeal provides technical readiness guidance and documentation support. It does not provide legal advice
-          or compliance certification.
-        </div>
-        <div className="mt-8 rounded-2xl border border-border/60 bg-card/60 p-6 md:p-8">
-          <h2 className="font-display text-2xl font-semibold">Account and saved-project security</h2>
-          <p className="mt-3 text-sm leading-6 text-muted-foreground">ShipSeal account identity uses GitHub OAuth without storing passwords. Opaque sessions use secure HTTP-only cookies and server-side token hashes. Every persistence request verifies the session and project owner. GitHub OAuth tokens, installation tokens, provider keys, raw provider responses, repository archives, and environment values are not stored in browser-accessible project records.</p>
-        </div>
-      </section>
-    </main>
+      <p className="mt-6 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-muted-foreground">
+        ShipSeal provides technical readiness guidance and documentation support. It does not provide legal advice or compliance certification.
+      </p>
+    </SecondaryPageShell>
   );
 }
 
 function BoundaryCard({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-card/60 p-6">
-      <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-primary/30 bg-primary/10 text-primary-glow">
-        {icon}
-      </div>
-      <h2 className="font-display text-lg font-semibold">{title}</h2>
-      <p className="mt-2 text-sm leading-6 text-muted-foreground">{text}</p>
-    </div>
+    <article className="rounded-2xl border border-border/55 bg-secondary/10 p-5">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-primary-glow">{icon}</div>
+      <h2 className="mt-4 font-display text-lg font-semibold">{title}</h2>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p>
+    </article>
   );
 }
 
 function ListPanel({ title, items }: { title: string; items: string[] }) {
   return (
-    <div className="rounded-2xl border border-border/60 bg-secondary/20 p-6">
-      <h2 className="font-display text-xl font-semibold">{title}</h2>
+    <section className="rounded-2xl border border-border/55 bg-secondary/10 p-5">
+      <h2 className="font-display text-lg font-semibold">{title}</h2>
       <div className="mt-4 flex flex-wrap gap-2">
-        {items.map(item => (
-          <span key={item} className="rounded-full border border-border/60 bg-background/40 px-3 py-1.5 text-xs text-muted-foreground">
-            {item}
-          </span>
-        ))}
+        {items.map(item => <span key={item} className="rounded-full border border-border/50 bg-background/30 px-3 py-1.5 text-xs text-muted-foreground">{item}</span>)}
       </div>
-    </div>
+    </section>
   );
 }

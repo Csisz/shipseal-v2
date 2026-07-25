@@ -1,21 +1,18 @@
-import { ArrowRight, Bot, ChevronDown, FlaskConical, Lock, Mail, Megaphone, PackageCheck, ScanLine, ShieldAlert, Stamp } from 'lucide-react';
-import type { CSSProperties, FormEvent, ReactNode } from 'react';
-import { Fragment, useMemo, useState } from 'react';
+import { ArrowRight, CheckCircle2, ChevronDown, Code2, FileCheck2, Lock, Mail, Network, ScanLine, ShieldCheck } from 'lucide-react';
+import type { FormEvent, ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { SHIPSEAL_VERSION } from '@/lib/version';
 import { PackageCards } from './PackageCards';
+import { RepositoryIntelligencePreview } from './landing/RepositoryIntelligencePreview';
 import { Reveal } from './landing/Reveal';
-import { SealChamberHero } from './landing/SealChamberHero';
-import { SealMark } from './landing/SealMark';
 
 interface Props {
   onSampleReport: () => void;
   onScrollScan: () => void;
-  /** Preselects a package and brings the user to the scan input. */
   onPickPackage?: (id: string) => void;
-  /** The live upload / GitHub import area, rendered directly inside the hero. */
   scanSlot?: ReactNode;
 }
 
@@ -27,384 +24,168 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
 
   return (
     <>
-      {/* ============================= HERO ============================= */}
-      <section className="relative pt-28 pb-16 md:pt-40 md:pb-24 overflow-hidden">
-        <div className="absolute inset-0 bg-grid pointer-events-none" />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[700px] h-[520px] bg-primary/20 rounded-full blur-[150px] pointer-events-none" />
-        <div className="container relative mx-auto text-center">
-          <div className="mx-auto max-w-3xl animate-fade-in-up">
-            <h1 className="font-display text-4xl md:text-6xl font-bold leading-[1.05] tracking-tight text-gradient">
-              Stop wasting AI context.
-            </h1>
-            <p className="mt-6 text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
-              ShipSeal scans your repository and prepares it for Claude Code, Codex, Cursor, Windsurf and other
-              AI coding agents.
-            </p>
-            <p className="mt-4 text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
-              Instead of rereading your entire codebase every session, agents receive structured project memory,
-              context compression, routing guidance and repository intelligence.
-            </p>
-            <div className="mt-7 flex flex-wrap justify-center gap-3">
-              <Button size="lg" onClick={onScrollScan} className="bg-gradient-primary border-0 shadow-glow hover:opacity-90">
-                Scan my repository <ArrowRight className="ml-1.5 h-4 w-4" />
-              </Button>
-              <Button size="lg" variant="outline" onClick={onSampleReport}>
-                Try sample project
-              </Button>
+      <section id="why" className="relative overflow-hidden pb-16 pt-24 md:pb-24 md:pt-32">
+        <div className="pointer-events-none absolute inset-0 bg-grid opacity-70" />
+        <div className="pointer-events-none absolute left-1/2 top-0 h-[460px] w-[760px] -translate-x-1/2 rounded-full bg-primary/15 blur-[150px]" />
+        <div className="container relative">
+          <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.85fr)_minmax(520px,1.15fr)]">
+            <div className="max-w-2xl animate-fade-in-up">
+              <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-primary-glow">AI repository intelligence</div>
+              <h1 className="mt-4 font-display text-4xl font-bold leading-[1.03] tracking-tight text-foreground md:text-6xl">
+                Turn software into knowledge.
+              </h1>
+              <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
+                ShipSeal maps your repository, reveals agent friction, and prepares evidence-backed improvements.
+              </p>
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                <Button size="lg" onClick={onScrollScan} className="bg-primary text-primary-foreground shadow-glow hover:bg-primary/90">
+                  Scan my repository <ArrowRight className="ml-1.5 h-4 w-4" />
+                </Button>
+                <Button size="lg" variant="outline" onClick={onSampleReport} className="border-border/70 bg-background/30">
+                  Try a sample
+                </Button>
+              </div>
+            </div>
+            <div className="animate-fade-in-up [animation-delay:120ms] [animation-fill-mode:backwards]">
+              <RepositoryIntelligencePreview />
             </div>
           </div>
 
-          {/* The scan input lives directly in the hero. */}
-          <div className="mx-auto mt-10 max-w-5xl text-left animate-fade-in-up" style={{ animationDelay: '0.12s', animationFillMode: 'backwards' } as CSSProperties}>
+          <div className="mt-8 grid gap-2 sm:grid-cols-3" aria-label="ShipSeal trust boundaries">
+            <Proof icon={Lock} text="Repository code is not executed." />
+            <Proof icon={FileCheck2} text="Findings are tied to repository evidence." />
+            <Proof icon={ShieldCheck} text="Repository changes require confirmation." />
+          </div>
+        </div>
+      </section>
+
+      <section id="scan" className="scroll-mt-20 border-y border-border/45 bg-secondary/10 py-14 md:py-20">
+        <div className="container">
+          <Reveal className="mx-auto max-w-3xl text-center">
+            <Eyebrow>Start with a repository</Eyebrow>
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">Choose the source you trust.</h2>
+            <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
+              Connect GitHub for the smoothest workflow, or use ZIP, a public URL, or the sample without changing repository contents.
+            </p>
+          </Reveal>
+          <Reveal className="mx-auto mt-8 max-w-5xl" delay={80}>
             {scanSlot}
-          </div>
-
-          <div className="mt-8 flex flex-wrap justify-center items-center gap-x-6 gap-y-2 font-mono text-[11px] text-muted-foreground animate-fade-in" style={{ animationDelay: '0.25s', animationFillMode: 'backwards' } as CSSProperties}>
-            <span className="inline-flex items-center gap-1.5"><Lock className="h-3 w-3 text-accent" /> Your code is never executed</span>
-            <span className="inline-flex items-center gap-1.5"><ScanLine className="h-3 w-3 text-accent" /> Static scan only</span>
-            <span>Optimizes the repository, not the AI model</span>
-            <span>Generated/vendor folders are ignored where possible</span>
-            <span>GitHub App permissions are used for repository access</span>
-            <button type="button" onClick={onSampleReport} className="text-muted-foreground underline-offset-4 hover:text-foreground hover:underline transition-colors">
-              Or try sample project
-            </button>
-          </div>
+          </Reveal>
         </div>
       </section>
 
-      <div className="container"><div className="ss-scanline" /></div>
-
-      {/* ======================== WHY ======================== */}
-      <section id="why" className="container py-20 md:py-24 scroll-mt-20">
-        <Reveal>
-          <SectionHeader
-            title="AI coding gets expensive when the repository has no memory."
-            lead="The model is not the bottleneck. The repository is."
-          />
+      <section id="intelligence" className="container scroll-mt-20 py-16 md:py-24">
+        <Reveal className="mx-auto max-w-3xl text-center">
+          <Eyebrow>Repository intelligence</Eyebrow>
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">From scattered signals to an operating map.</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
+            ShipSeal connects repository structure, project memory, task routes, verification, and delivery context in one workspace.
+          </p>
         </Reveal>
-        <Reveal className="mt-12 max-w-4xl mx-auto" delay={100}>
-          <div className="glass rounded-3xl p-7 md:p-9">
-            <div className="grid gap-5 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-center text-center">
-              {JOURNEY.map((item, index) => (
-                <Fragment key={item.title}>
-                  <div className="min-w-0">
-                    <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-accent/90">{item.kicker}</div>
-                    <div className="mt-2 font-display text-lg md:text-xl font-semibold">{item.title}</div>
-                  </div>
-                  {index < JOURNEY.length - 1 && <div className="hidden md:block ss-scanline w-12" aria-hidden="true" />}
-                </Fragment>
-              ))}
-            </div>
-          </div>
-        </Reveal>
-      </section>
-
-      {/* ======================== PROBLEM / SOLUTION ======================== */}
-      <section id="problems" className="container py-20 md:py-24 scroll-mt-20">
-        <Reveal>
-          <SectionHeader title="Fix the repository context first." lead="ShipSeal turns common AI coding failure modes into reusable repository intelligence." />
-        </Reveal>
-        <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-6xl mx-auto">
-          {PROBLEM_SOLUTIONS.map((item, index) => (
-            <Reveal key={item.problem} delay={index * 70}>
-              <div className="glass rounded-2xl p-6 h-full">
-                <div className="text-sm text-muted-foreground">{item.problem}</div>
-                <div className="my-5 ss-scanline" aria-hidden="true" />
-                <div className="font-display text-xl font-semibold">{item.solution}</div>
-                <p className="mt-2 text-sm text-muted-foreground">{item.benefit}</p>
-              </div>
-            </Reveal>
-          ))}
+        <div className="mx-auto mt-10 grid max-w-5xl gap-3 md:grid-cols-3">
+          <Outcome icon={Network} title="Understand" text="Map the repository and expose the evidence behind its shape." />
+          <Outcome icon={Code2} title="Improve" text="Prepare reviewable changes without implying that files were modified." />
+          <Outcome icon={CheckCircle2} title="Verify and deliver" text="Compare later scans and keep reports, manifests, and handoff outputs available." />
         </div>
       </section>
 
-      {/* ======================== REPOSITORY INTELLIGENCE ======================== */}
-      <section id="intelligence" className="container py-24 md:py-32 scroll-mt-20">
-        <Reveal>
-          <SectionHeader
-            title="Repository Intelligence"
-            lead="One system that gives AI agents the right context before they start editing."
-          />
-        </Reveal>
-        <Reveal className="mt-12 max-w-5xl mx-auto" delay={100}>
-          <div className="glass rounded-3xl p-7 md:p-9">
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {REPOSITORY_INTELLIGENCE.map(item => (
-                <div key={item} className="rounded-xl border border-border/60 bg-secondary/20 px-4 py-3 text-sm text-foreground/90">
-                  {item}
-                </div>
-              ))}
-            </div>
-            <p className="mt-6 text-sm leading-6 text-muted-foreground text-center">
-              These are not disconnected features. Together they form the missing layer between a Git repository and AI coding agents.
-            </p>
-          </div>
-        </Reveal>
-      </section>
-
-      {/* ========================= HOW IT WORKS ========================= */}
-      <section id="how" className="container py-24 md:py-32 scroll-mt-20">
-        <Reveal>
-          <SectionHeader title="How it works." />
-        </Reveal>
-        <div className="mt-14 grid md:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto">
-          {STEPS.map((step, index) => (
-            <Reveal key={step.title} delay={index * 100}>
-              <div className="relative glass rounded-3xl p-7 h-full text-center">
-                <div className="mx-auto mb-5 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-primary font-display text-sm font-bold text-primary-foreground shadow-glow">
-                  {index + 1}
-                </div>
-                <div className="font-display text-lg font-semibold">{step.title}</div>
-                <p className="mt-1.5 text-sm text-muted-foreground">{step.desc}</p>
-              </div>
-            </Reveal>
-          ))}
+      <section id="how" className="scroll-mt-20 border-y border-border/45 bg-secondary/10 py-16 md:py-24">
+        <div className="container">
+          <Reveal className="mx-auto max-w-3xl text-center">
+            <Eyebrow>How it works</Eyebrow>
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">Repository understanding in three steps.</h2>
+          </Reveal>
+          <ol className="mx-auto mt-10 grid max-w-5xl gap-3 md:grid-cols-3">
+            <Step number="01" title="Choose a source" text="Connect GitHub, upload a ZIP, use a public URL, or open the sample." />
+            <Step number="02" title="Build intelligence" text="ShipSeal reads allowed evidence and prepares the repository workspace." />
+            <Step number="03" title="Act with context" text="Review improvements, verification, and delivery outputs from one result." />
+          </ol>
         </div>
       </section>
 
-      {/* ======================== DEMO PATHS ======================== */}
-      <section id="sample-demo" className="container py-20 md:py-24 scroll-mt-20">
-        <Reveal>
-          <SectionHeader title="See it on a sample repository." lead="Preview the agent-ready workspace layer before connecting GitHub or uploading your own ZIP." />
+      <section id="packages" className="container scroll-mt-20 py-16 md:py-24">
+        <Reveal className="mx-auto max-w-3xl text-center">
+          <Eyebrow>Outcomes</Eyebrow>
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">Choose what the scan should prepare.</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+            Start with an outcome. Technical package details remain available when you need them.
+          </p>
         </Reveal>
-        <div className="mt-10 grid md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-          <DemoAction
-            title="Try sample project"
-            desc="Open a prepared repository and see the ShipSeal workflow without setup."
-            cta="Try sample project"
-            onClick={onSampleReport}
-          />
-          <div className="glass rounded-3xl p-6 h-full">
-            <div className="font-display text-lg font-semibold">View before/after context</div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              See how scattered project knowledge becomes repository intelligence agents can use.
-            </p>
-            <Button asChild variant="outline" className="mt-5 border-border/70">
-              <a href="#before-after">View before/after</a>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* ================== WHAT DO YOU WANT SHIPSEAL TO HELP WITH ================== */}
-      <section id="packages" className="container py-24 md:py-32 scroll-mt-20">
-        <Reveal>
-          <SectionHeader title="Choose what to optimize first." lead="Start with the outcome you need. ShipSeal keeps the repository intelligence underneath consistent." />
-        </Reveal>
-        <Reveal className="mt-14 max-w-5xl mx-auto" delay={120}>
+        <Reveal className="mx-auto mt-10 max-w-6xl" delay={80}>
           <PackageCards variant="landing" onPick={pickPackage} />
         </Reveal>
       </section>
 
-      {/* ========================= TRUST BOUNDARIES ========================= */}
-      <section id="trust" className="container py-20 md:py-24 scroll-mt-20">
-        <Reveal>
-          <SectionHeader
-            title="Clear scan boundaries."
-            lead="ShipSeal reads project signals to optimize the repository for AI agents. It does not run imported code."
-          />
-        </Reveal>
-        <div className="mt-10 grid gap-4 md:grid-cols-3 max-w-6xl mx-auto">
-          <TrustPanel title="What ShipSeal reads" items={SCAN_READS} />
-          <TrustPanel title="What ShipSeal ignores" items={SCAN_IGNORES} />
-          <Reveal delay={120}>
-            <div className="glass rounded-3xl p-6 h-full">
-              <div className="font-display text-lg font-semibold">GitHub App permissions</div>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                GitHub access is used to list approved repositories, scan the selected ref, and optionally open a reviewed
-                Repository Intelligence PR. ShipSeal does not merge PRs or push to your main branch.
-              </p>
-              <div className="mt-5 rounded-xl border border-border/60 bg-secondary/25 px-4 py-3 text-xs text-muted-foreground">
-                ShipSeal provides technical readiness guidance and documentation support. It does not provide legal advice or compliance certification.
-              </div>
-            </div>
+      <section id="trust" className="scroll-mt-20 border-y border-border/45 bg-secondary/10 py-16 md:py-24">
+        <div className="container">
+          <Reveal className="mx-auto max-w-3xl text-center">
+            <Eyebrow>Repository boundary</Eyebrow>
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">Read evidence. Never execute imported code.</h2>
           </Reveal>
-        </div>
-      </section>
-
-      {/* ======================== OUTPUT PREVIEW ======================== */}
-      <section id="preview" className="container py-24 md:py-32 scroll-mt-20">
-        <Reveal>
-          <SectionHeader title="The workspace layer agents were missing." lead="A calm, structured layer of repository knowledge before the next AI coding session begins." />
-        </Reveal>
-        <Reveal className="mt-14 max-w-5xl mx-auto" delay={100}>
-          <SealChamberHero />
-        </Reveal>
-        <div className="mt-8 grid grid-cols-2 md:grid-cols-5 gap-3 max-w-5xl mx-auto">
-          {PACKAGE_GROUPS.map((group, index) => (
-            <Reveal key={group.title} delay={index * 70}>
-              <div className="glass rounded-2xl p-5 h-full text-center hover:border-accent/40 transition-colors">
-                <group.icon className="h-5 w-5 text-accent mx-auto mb-3" />
-                <div className="font-display text-sm font-semibold">{group.title}</div>
-                <p className="mt-1 text-xs text-muted-foreground">{group.desc}</p>
-              </div>
-            </Reveal>
-          ))}
-        </div>
-        <Reveal className="mt-8 max-w-5xl mx-auto" delay={150}>
-          <details className="group rounded-2xl border border-border/60 bg-secondary/15">
-            <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-6 py-4 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors [&::-webkit-details-marker]:hidden">
-              <span>Advanced details - what Repository Intelligence can include</span>
-              <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
+          <div className="mx-auto mt-10 grid max-w-5xl gap-3 md:grid-cols-3">
+            <TrustPanel title="Static scan" text="ShipSeal reads structure, metadata, and bounded configuration, documentation, and test signals." />
+            <TrustPanel title="Scoped GitHub access" text="Repository access follows the repositories and permissions approved in GitHub." />
+            <TrustPanel title="Human-controlled changes" text="Generated files and Pull Requests stay reviewable. ShipSeal does not merge or push directly to main." />
+          </div>
+          <details className="group mx-auto mt-4 max-w-5xl rounded-2xl border border-border/55 bg-background/25">
+            <summary className="flex cursor-pointer items-center justify-between gap-3 px-5 py-4 text-sm font-medium text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+              Detailed scan and trust boundaries
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden="true" />
             </summary>
-            <div className="px-6 pb-5 grid gap-3 text-sm text-muted-foreground sm:grid-cols-2">
-              <p>Context packs, agent operating guidance, and folder-level instructions help AI tools work with less repeated discovery.</p>
-              <p>Delivery Pack exports, reports, manifests, and reviewed PR workflows remain available when you need client-ready documentation.</p>
+            <div className="grid gap-4 border-t border-border/45 px-5 py-5 text-sm text-muted-foreground md:grid-cols-2">
+              <div>
+                <div className="font-semibold text-foreground">Typically read</div>
+                <p className="mt-2 leading-relaxed">File paths, package manifests, README and instruction files, selected configuration, tests, and workflow signals within scanner limits.</p>
+              </div>
+              <div>
+                <div className="font-semibold text-foreground">Ignored where possible</div>
+                <p className="mt-2 leading-relaxed">Generated and vendor folders such as node_modules, dist, build, .next, coverage, caches, binaries, and secret-looking files.</p>
+              </div>
+              <p className="md:col-span-2">ShipSeal provides technical readiness guidance and documentation support. This is not legal advice or compliance certification.</p>
             </div>
           </details>
-        </Reveal>
-      </section>
-
-      {/* ======================== BEFORE / AFTER ======================== */}
-      <section id="before-after" className="container py-24 md:py-32 scroll-mt-20">
-        <div className="max-w-5xl mx-auto">
-          <Reveal>
-            <div className="glass rounded-3xl p-8 md:p-10">
-              <div className="grid md:grid-cols-[1fr_auto_1fr] gap-6 md:items-center text-left">
-                <div>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-warning/90 mb-3">Before ShipSeal</div>
-                  <ul className="space-y-2 text-sm text-muted-foreground">
-                    <li>Scattered docs and no shared project memory.</li>
-                    <li>Agents waste tokens rediscovering the same context.</li>
-                    <li>Guidance, ownership, and delivery notes are inconsistent.</li>
-                  </ul>
-                </div>
-                <div className="flex items-center justify-center gap-3" aria-hidden="true">
-                  <span className="hidden md:block ss-scanline w-10" />
-                  <SealMark size={56} ringText={'SHIPSEAL - '} />
-                  <span className="hidden md:block ss-scanline w-10" />
-                </div>
-                <div>
-                  <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-success/90 mb-3">After ShipSeal</div>
-                  <ul className="space-y-2 text-sm text-foreground/90">
-                    <li>Repository intelligence is generated once.</li>
-                    <li>Agents receive compact memory and routing guidance.</li>
-                    <li>Delivery-ready documentation stays available when needed.</li>
-                  </ul>
-                </div>
-              </div>
-              <div className="mt-8 text-center">
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-warning/90 mb-2">Before</div>
-              <p className="font-display text-xl md:text-2xl text-muted-foreground">Repository, scattered context, repeated AI discovery.</p>
-              <div className="my-7 flex items-center justify-center gap-3" aria-hidden="true">
-                <span className="ss-scanline w-16" />
-                  <SealMark size={56} ringText={'SHIPSEAL - '} />
-                <span className="ss-scanline w-16" />
-              </div>
-              <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-success/90 mb-2">After</div>
-              <p className="font-display text-xl md:text-2xl text-foreground">Repository Intelligence, cleaner AI sessions, delivery-ready output.</p>
-              </div>
-            </div>
-          </Reveal>
         </div>
       </section>
 
-      {/* ========================= AUDIENCES ============================ */}
-      <section id="who" className="container py-24 md:py-32 scroll-mt-20">
-        <Reveal>
-          <SectionHeader title="Built for people who build with AI." />
+      <section id="pricing" className="container scroll-mt-20 py-16 md:py-24">
+        <Reveal className="mx-auto max-w-3xl text-center">
+          <Eyebrow>Pricing direction</Eyebrow>
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">Start with one repository.</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">Payment is not enabled in this MVP. Commercial packages remain clearly marked.</p>
         </Reveal>
-        <Reveal className="mt-10 flex flex-wrap justify-center gap-2.5 max-w-3xl mx-auto" delay={100}>
-          {AUDIENCES.map(item => (
-            <span key={item} className="rounded-full glass px-4 py-2 text-sm text-foreground/85">
-              {item}
-            </span>
-          ))}
-        </Reveal>
-      </section>
-
-      {/* ========================== PRICING ============================= */}
-      <section id="pricing" className="container py-24 md:py-32 scroll-mt-20">
-        <Reveal>
-          <SectionHeader title="Optimize the workflow, not just the report." lead="Start with one repository. Scale the same intelligence across teams and clients." />
-        </Reveal>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mt-14 max-w-6xl mx-auto">
-          {PRICING_TIERS.map((tier, index) => (
-            <Reveal key={tier.name} delay={index * 90} className="h-full">
-              <div className={`glass rounded-3xl p-7 flex flex-col h-full transition-transform hover:-translate-y-1 ${tier.featured ? 'border-primary/50 shadow-glow' : ''}`}>
-                <div className="font-display font-semibold">{tier.name}</div>
-                <div className="text-3xl font-display font-bold mt-2">{tier.price}</div>
-                <p className="mt-4 text-sm text-foreground/90">{tier.outcome}</p>
-                <ul className="mt-6 space-y-2.5 text-sm text-muted-foreground flex-1">
-                  {tier.features.map(feature => (
-                    <li key={feature} className="flex gap-2">
-                      <span className="mt-[7px] h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  onClick={onScrollScan}
-                  variant={tier.featured ? 'default' : 'outline'}
-                  className={`mt-7 ${tier.featured ? 'bg-gradient-primary border-0 shadow-glow hover:opacity-90' : 'border-border/70'}`}
-                >
-                  {tier.cta}
-                </Button>
-              </div>
-            </Reveal>
+        <div className="mx-auto mt-10 grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {PRICING.map(item => (
+            <div key={item.name} className={`rounded-2xl border p-5 ${item.featured ? 'border-primary/45 bg-primary/10 shadow-sm shadow-primary/10' : 'border-border/55 bg-secondary/10'}`}>
+              <div className="font-display text-lg font-semibold">{item.name}</div>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.description}</p>
+              <div className="mt-5 text-xs font-medium text-primary-glow">{item.status}</div>
+            </div>
           ))}
         </div>
-        <Reveal className="mt-10 max-w-4xl mx-auto" delay={150}>
-          <details className="group rounded-2xl border border-border/60 bg-secondary/15">
-            <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-6 py-4 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors [&::-webkit-details-marker]:hidden">
-              <span>The honest fine print</span>
-              <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
-            </summary>
-            <ul className="px-6 pb-5 space-y-2 text-sm text-muted-foreground">
-              {DISCLAIMERS.map(item => (
-                <li key={item} className="flex gap-2">
-                  <span className="mt-[7px] h-1.5 w-1.5 rounded-full bg-warning shrink-0" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        </Reveal>
       </section>
 
-      {/* ========================== CONTACT ============================= */}
-      <section id="contact" className="container py-24 md:py-32 scroll-mt-20">
-        <Reveal>
-          <SectionHeader title="Bring ShipSeal into your workflow." lead="Tell us what kind of repositories you want to make easier for AI agents." />
-        </Reveal>
-        <Reveal className="mt-10 max-w-3xl mx-auto" delay={100}>
-          <ContactLeadForm />
-        </Reveal>
-      </section>
-
-      {/* ========================= FINAL CTA ============================ */}
-      <section className="container py-24 md:py-32">
-        <Reveal>
-          <div className="glass-strong rounded-3xl p-10 md:p-16 text-center relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-hero opacity-50 pointer-events-none" />
-            <div className="relative">
-              <div className="flex justify-center mb-6">
-                <SealMark size={110} />
-              </div>
-              <h2 className="font-display text-3xl md:text-5xl font-bold tracking-tight">Turn your repository into an AI-optimized workspace.</h2>
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Button size="lg" onClick={onScrollScan} className="bg-gradient-primary border-0 shadow-glow hover:opacity-90">
-                  Scan my repository <ArrowRight className="ml-1.5 h-4 w-4" />
-                </Button>
-                <Button size="lg" variant="outline" onClick={onSampleReport}>
-                  Try sample project
-                </Button>
-              </div>
+      <section id="contact" className="container scroll-mt-20 pb-16 md:pb-24">
+        <div className="mx-auto max-w-5xl overflow-hidden rounded-[2rem] border border-primary/25 bg-canvas p-6 shadow-glow md:p-10">
+          <div className="grid gap-8 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+            <div>
+              <Eyebrow>Next repository</Eyebrow>
+              <h2 className="mt-3 font-display text-3xl font-semibold">Make the next AI coding session easier.</h2>
+              <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground">Start with a repository scan or use the contact disclosure for commercial access conversations.</p>
             </div>
+            <Button size="lg" onClick={onScrollScan} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              Scan my repository <ArrowRight className="ml-1.5 h-4 w-4" />
+            </Button>
           </div>
-        </Reveal>
+          <ContactDisclosure />
+        </div>
       </section>
 
-      <footer className="border-t border-border/60 py-8">
-        <div className="container flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <div className="h-5 w-5 rounded bg-gradient-primary flex items-center justify-center"><Stamp className="h-3 w-3 text-primary-foreground" /></div>
-            <span>ShipSeal - turn repositories into AI-optimized workspaces.</span>
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-4">
-            <a href="/privacy" className="hover:text-foreground transition-colors">Privacy</a>
-            <a href="/security" className="hover:text-foreground transition-colors">Security</a>
-            <span className="font-mono">ShipSeal MVP v{SHIPSEAL_VERSION}</span>
+      <footer className="border-t border-border/45 py-8">
+        <div className="container flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span>ShipSeal {SHIPSEAL_VERSION} · Repository intelligence without code execution.</span>
+          <div className="flex gap-4">
+            <a href="/privacy" className="hover:text-foreground">Privacy</a>
+            <a href="/security" className="hover:text-foreground">Security</a>
           </div>
         </div>
       </footer>
@@ -412,273 +193,128 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
   );
 }
 
-function SectionHeader({ title, lead }: { title: string; lead?: string }) {
+function Proof({ icon: Icon, text }: { icon: typeof Lock; text: string }) {
   return (
-    <div className="max-w-2xl mx-auto text-center">
-      <h2 className="font-display text-3xl md:text-5xl font-bold tracking-tight">{title}</h2>
-      {lead ? <p className="text-lg text-muted-foreground mt-4">{lead}</p> : null}
+    <div className="flex min-h-11 items-center gap-2 rounded-xl border border-border/50 bg-background/25 px-3 py-2 text-xs text-muted-foreground">
+      <Icon className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
+      <span>{text}</span>
     </div>
   );
 }
 
-function DemoAction({ title, desc, cta, onClick }: { title: string; desc: string; cta: string; onClick: () => void }) {
-  return (
-    <div className="glass rounded-3xl p-6 h-full">
-      <div className="font-display text-lg font-semibold">{title}</div>
-      <p className="mt-2 text-sm text-muted-foreground">{desc}</p>
-      <Button type="button" onClick={onClick} className="mt-5 bg-gradient-primary border-0 shadow-glow hover:opacity-90">
-        {cta}
-      </Button>
-    </div>
-  );
+function Eyebrow({ children }: { children: ReactNode }) {
+  return <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary-glow">{children}</div>;
 }
 
-function TrustPanel({ title, items }: { title: string; items: string[] }) {
+function Outcome({ icon: Icon, title, text }: { icon: typeof Network; title: string; text: string }) {
   return (
     <Reveal>
-      <div className="glass rounded-3xl p-6 h-full">
-        <div className="font-display text-lg font-semibold">{title}</div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {items.map(item => (
-            <span key={item} className="rounded-full border border-border/60 bg-secondary/25 px-3 py-1.5 text-xs text-muted-foreground">
-              {item}
-            </span>
-          ))}
-        </div>
+      <div className="h-full rounded-2xl border border-border/55 bg-secondary/10 p-5">
+        <Icon className="h-5 w-5 text-primary-glow" aria-hidden="true" />
+        <h3 className="mt-4 font-display text-lg font-semibold">{title}</h3>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p>
       </div>
     </Reveal>
   );
 }
 
-function ContactLeadForm() {
-  const [form, setForm] = useState({
+function Step({ number, title, text }: { number: string; title: string; text: string }) {
+  return (
+    <li className="rounded-2xl border border-border/55 bg-background/25 p-5">
+      <div className="font-mono text-xs text-primary-glow">{number}</div>
+      <h3 className="mt-3 font-display text-lg font-semibold">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p>
+    </li>
+  );
+}
+
+function TrustPanel({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-2xl border border-border/55 bg-background/25 p-5">
+      <ScanLine className="h-5 w-5 text-primary-glow" aria-hidden="true" />
+      <h3 className="mt-4 font-display text-lg font-semibold">{title}</h3>
+      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
+const PRICING = [
+  { name: 'Free Demo', description: 'Explore ShipSeal with a sample and repository scan.', status: 'Available now' },
+  { name: 'Builder', description: 'Optimize one repository and prepare focused outputs.', status: 'Coming soon', featured: true },
+  { name: 'AI Workspace Pro', description: 'Support a deeper AI development workflow.', status: 'Coming soon' },
+  { name: 'Agency / White-label', description: 'Prepare repository intelligence across client work.', status: 'Request access' },
+];
+
+function ContactDisclosure() {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState({
     name: '',
     email: '',
     company: '',
     projectType: '',
-    interest: INTEREST_OPTIONS[0],
+    interest: '',
     message: '',
   });
-  const [submitted, setSubmitted] = useState(false);
-
-  const mailtoHref = useMemo(() => {
-    const subject = encodeURIComponent(`ShipSeal workspace request - ${form.interest}`);
-    const body = encodeURIComponent([
-      `Name: ${form.name}`,
-      `Email: ${form.email}`,
-      `Company / agency: ${form.company || 'Not provided'}`,
-      `Project type: ${form.projectType || 'Not provided'}`,
-      `Interest: ${form.interest}`,
+  const [prepared, setPrepared] = useState(false);
+  const mailto = useMemo(() => {
+    const subject = `ShipSeal access request${draft.company ? ` - ${draft.company}` : ''}`;
+    const body = [
+      `Name: ${draft.name}`,
+      `Email: ${draft.email}`,
+      `Company or agency: ${draft.company || 'Not provided'}`,
+      `Project type: ${draft.projectType || 'Not provided'}`,
+      `Interest: ${draft.interest || 'Not provided'}`,
       '',
-      form.message,
-    ].join('\n'));
-    return `mailto:hello@shipseal.dev?subject=${subject}&body=${body}`;
-  }, [form]);
+      draft.message,
+    ].join('\n');
+    return `mailto:hello@shipseal.dev?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }, [draft]);
 
-  const update = (key: keyof typeof form, value: string) => {
-    setForm(current => ({ ...current, [key]: value }));
-    setSubmitted(false);
-  };
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
+  const prepare = (event: FormEvent) => {
     event.preventDefault();
-    setSubmitted(true);
+    setPrepared(true);
   };
 
   return (
-    <form onSubmit={submit} className="glass rounded-3xl p-6 md:p-8 space-y-4">
-      <div className="grid sm:grid-cols-2 gap-4">
-        <LeadField label="Name">
-          <Input required aria-label="Contact name" value={form.name} onChange={event => update('name', event.target.value)} autoComplete="name" />
-        </LeadField>
-        <LeadField label="Email">
-          <Input required type="email" aria-label="Contact email" value={form.email} onChange={event => update('email', event.target.value)} autoComplete="email" />
-        </LeadField>
-        <LeadField label="Company / agency optional">
-          <Input aria-label="Company or agency" value={form.company} onChange={event => update('company', event.target.value)} autoComplete="organization" />
-        </LeadField>
-        <LeadField label="Project type optional">
-          <Input aria-label="Project type" value={form.projectType} onChange={event => update('projectType', event.target.value)} placeholder="AI SaaS, chatbot, internal tool..." />
-        </LeadField>
-        <LeadField label="Selected interest" className="sm:col-span-2">
-          <select
-            aria-label="Selected interest"
-            value={form.interest}
-            onChange={event => update('interest', event.target.value)}
-            className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            {INTEREST_OPTIONS.map(option => <option key={option} value={option}>{option}</option>)}
-          </select>
-        </LeadField>
-        <LeadField label="Message" className="sm:col-span-2">
-          <Textarea
-            required
-            aria-label="Contact message"
-            value={form.message}
-            onChange={event => update('message', event.target.value)}
-            rows={5}
-            placeholder="Tell us what you want ShipSeal to package or make easier for AI agents."
-          />
-        </LeadField>
-      </div>
-      <div className="rounded-xl border border-border/60 bg-secondary/25 px-4 py-3 text-xs text-muted-foreground">
-        No backend delivery is configured in this demo. ShipSeal does not store this message. After submit, open your email draft and send it yourself.
-      </div>
-      {submitted && (
-        <div role="status" className="rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-          No message was sent to a server. Use the email draft link below to send your request.
-        </div>
+    <div className="mt-6 rounded-2xl border border-border/55 bg-background/20">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen(value => !value)}
+        className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
+      >
+        Contact and commercial access
+        <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} aria-hidden="true" />
+      </button>
+      {open && (
+        <form onSubmit={prepare} className="grid gap-4 border-t border-border/45 p-5 md:grid-cols-2">
+          <ContactField label="Contact name"><Input required value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></ContactField>
+          <ContactField label="Contact email"><Input required type="email" value={draft.email} onChange={event => setDraft({ ...draft, email: event.target.value })} /></ContactField>
+          <ContactField label="Company or agency"><Input value={draft.company} onChange={event => setDraft({ ...draft, company: event.target.value })} /></ContactField>
+          <ContactField label="Project type"><Input value={draft.projectType} onChange={event => setDraft({ ...draft, projectType: event.target.value })} /></ContactField>
+          <ContactField label="Selected interest" className="md:col-span-2"><Input value={draft.interest} onChange={event => setDraft({ ...draft, interest: event.target.value })} /></ContactField>
+          <ContactField label="Contact message" className="md:col-span-2"><Textarea value={draft.message} onChange={event => setDraft({ ...draft, message: event.target.value })} /></ContactField>
+          <div className="md:col-span-2">
+            <p className="text-xs text-muted-foreground">No backend delivery is configured in this demo. Preparing a draft does not send or store the message.</p>
+            <Button type="submit" variant="outline" className="mt-3"><Mail className="mr-2 h-4 w-4" />Prepare email draft</Button>
+            {prepared && (
+              <div className="mt-3 rounded-xl border border-primary/25 bg-primary/10 p-3 text-sm">
+                <p className="text-muted-foreground">No message was sent to a server.</p>
+                <a href={mailto} className="mt-2 inline-flex font-medium text-primary-glow hover:underline">Open email draft</a>
+              </div>
+            )}
+          </div>
+        </form>
       )}
-      <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
-        <Button type="submit" variant="outline" className="border-border/70">
-          Prepare email draft
-        </Button>
-        {submitted && (
-          <Button asChild className="bg-gradient-primary border-0 shadow-glow hover:opacity-90">
-            <a href={mailtoHref}><Mail className="h-4 w-4 mr-1.5" /> Open email draft</a>
-          </Button>
-        )}
-      </div>
-    </form>
+    </div>
   );
 }
 
-function LeadField({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
+function ContactField({ label, children, className = '' }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <label className={`block min-w-0 ${className}`}>
-      <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">{label}</span>
+    <label className={className}>
+      <span className="mb-1.5 block text-xs font-mono uppercase tracking-wider text-muted-foreground">{label}</span>
       {children}
     </label>
   );
 }
-
-const JOURNEY = [
-  { kicker: 'You have', title: 'A repository' },
-  { kicker: 'AI coding costs rise', title: 'Context waste' },
-  { kicker: 'ShipSeal adds', title: 'Repository Intelligence' },
-  { kicker: 'Agents get', title: 'Cleaner sessions' },
-];
-
-const PROBLEM_SOLUTIONS = [
-  {
-    problem: 'AI rereads the whole repository every session.',
-    solution: 'Context Compression',
-    benefit: 'Agents start with the signal instead of rediscovering the map.',
-  },
-  {
-    problem: 'AI edits the wrong files.',
-    solution: 'Folder-level AGENTS',
-    benefit: 'Local instructions route work to the right folders and boundaries.',
-  },
-  {
-    problem: 'AI forgets project architecture.',
-    solution: 'Agent Memory',
-    benefit: 'Stable project facts survive beyond one chat window.',
-  },
-  {
-    problem: 'AI lacks project-specific guidance.',
-    solution: 'Skills + MCP Recommendations',
-    benefit: 'Agents get scoped tool guidance without unsafe assumptions.',
-  },
-  {
-    problem: 'AI coding burns through limits.',
-    solution: 'Agent Cost Optimizer',
-    benefit: 'Operating modes help match context depth to the work.',
-  },
-  {
-    problem: 'You still need professional documentation.',
-    solution: 'Delivery Pack',
-    benefit: 'Reports and handoff files remain available as an output.',
-  },
-];
-
-const REPOSITORY_INTELLIGENCE = [
-  'Context Compression',
-  'Folder-level AGENTS',
-  'Specialized Context Packs',
-  'Agent Cost Optimizer',
-  'Skill Recommendations',
-  'MCP Recommendations',
-  'Agent Memory',
-];
-
-const STEPS = [
-  { title: 'Scan repository', desc: 'Connect GitHub or upload a ZIP.' },
-  { title: 'Generate Repository Intelligence', desc: 'ShipSeal builds the workspace layer.' },
-  { title: 'Optimize AI coding workflow', desc: 'Agents receive memory, routes, and context guidance.' },
-  { title: 'Export delivery-ready documentation', desc: 'Reports and Delivery Packs stay available.' },
-];
-
-const SCAN_READS = ['README', 'package.json', 'tests', 'docs', 'CI files', 'AGENTS.md', 'env examples'];
-
-const SCAN_IGNORES = ['node_modules', 'dist', 'build', 'coverage', 'large generated folders', 'binaries where possible'];
-
-const PACKAGE_GROUPS = [
-  { icon: Bot, title: 'Memory', desc: 'Compact project context' },
-  { icon: PackageCheck, title: 'Compression', desc: 'Less context waste' },
-  { icon: FlaskConical, title: 'Packs', desc: 'Task-focused context' },
-  { icon: ShieldAlert, title: 'Guidance', desc: 'Agent boundaries' },
-  { icon: Megaphone, title: 'Delivery', desc: 'Reports and exports' },
-];
-
-const AUDIENCES = [
-  'Vibe coders',
-  'AI freelancers',
-  'Small AI agencies',
-  'No-code builders',
-  'Indie SaaS makers',
-  'Teams preparing a pilot',
-];
-
-const PRICING_TIERS = [
-  {
-    name: 'Free Demo',
-    price: 'Free',
-    featured: false,
-    cta: 'Try demo',
-    outcome: 'Understand the ShipSeal workflow.',
-    features: ['Sample repository', 'Repository Intelligence preview', 'Example output'],
-  },
-  {
-    name: 'Builder',
-    price: 'Request access',
-    featured: false,
-    cta: 'Scan my repository',
-    outcome: 'Optimize one repository.',
-    features: ['Repository scan', 'Context waste reduction', 'Delivery-ready export'],
-  },
-  {
-    name: 'AI Workspace Pro',
-    price: 'Coming soon',
-    featured: true,
-    cta: 'Scan my repository',
-    outcome: 'Optimize your AI development workflow.',
-    features: ['Reusable repository intelligence', 'Agent operating guidance', 'Context packs for repeated work'],
-  },
-  {
-    name: 'Agency / White-label',
-    price: 'Coming soon',
-    featured: false,
-    cta: 'Contact us',
-    outcome: 'Optimize AI development across multiple repositories.',
-    features: ['Multi-project workflow', 'White-label-ready delivery', 'Client handoff exports'],
-  },
-];
-
-const DISCLAIMERS = [
-  'ShipSeal provides technical readiness guidance and documentation support. It does not provide legal advice or compliance certification.',
-  'AI usage and transparency notes are drafts and questions for legal review - not legal advice or compliance certification.',
-  'The risk check highlights obvious issues. It is not a full production security audit.',
-  'ShipSeal reads your project structure and selected text - it never runs your code.',
-  'Everything ShipSeal generates supports review and decision-making. It does not replace it.',
-];
-
-const INTEREST_OPTIONS = [
-  'Client handoff package',
-  'AI agent development pack',
-  'Token/cost optimization',
-  'AI workspace optimization',
-  'Security/data pre-screen',
-  'White-label reports',
-  'General feedback',
-];

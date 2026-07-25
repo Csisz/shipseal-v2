@@ -41,43 +41,58 @@ describe('UploadDropzone GitHub import copy', () => {
   };
 
   it('shows repository source options before scanning', () => {
-    render(<UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} />);
+    const onSampleReport = vi.fn();
+    render(<UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} onSampleReport={onSampleReport} />);
 
-    expect(screen.getAllByText('Connect GitHub').length).toBeGreaterThan(0);
-    expect(screen.getByText('Best for selecting repositories and creating Pull Requests.')).toBeInTheDocument();
-    expect(screen.getByText('Import public GitHub URL')).toBeInTheDocument();
-    expect(screen.getByText('Good for public repo scans. PR creation requires connection later.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /GitHub.*Recommended/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Public URL/i })).toBeInTheDocument();
     expect(screen.getByText('Upload ZIP')).toBeInTheDocument();
-    expect(screen.getByText('Best for local/private review without GitHub access.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try sample/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Select repository')).toHaveAttribute('placeholder', 'Connect GitHub to list repositories');
-    expect(screen.getByText('Code is never executed.')).toBeInTheDocument();
-    expect(screen.getByText('Static analysis only.')).toBeInTheDocument();
-    expect(screen.getByText('Repository structure and metadata are analyzed.')).toBeInTheDocument();
-    expect(screen.getByText('Existing documentation and project signals are used.')).toBeInTheDocument();
+    expect(screen.getByText(/static scan of allowed repository evidence/i)).toBeInTheDocument();
+    expect(screen.getByText(/Imported code is never executed/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Connect GitHub$/i })).toBeEnabled();
     expect(screen.queryByRole('button', { name: /Install or configure ShipSeal GitHub App/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Try sample/i }));
+    expect(onSampleReport).toHaveBeenCalledTimes(1);
   });
 
   it('shows local MVP CORS and ZIP fallback guidance', () => {
     render(<UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /import public github url/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Public URL/i }));
 
     expect(screen.getByText(/Paste a public GitHub repository URL/i)).toBeInTheDocument();
-    expect(screen.getByText(/Public GitHub import may be blocked by browser CORS restrictions in local mode/i)).toBeInTheDocument();
-    expect(screen.getByText(/Hosted demos can use the ShipSeal GitHub archive proxy/i)).toBeInTheDocument();
-    expect(screen.getByText(/Local MVP note: if GitHub import is blocked, use Download ZIP on GitHub and upload it here/i)).toBeInTheDocument();
+    expect(screen.getByText(/Local browser import may be blocked by CORS or network policy/i)).toBeInTheDocument();
+    expect(screen.getByText(/Hosted demos can use the ShipSeal archive proxy/i)).toBeInTheDocument();
+    expect(screen.getByText(/download the repository ZIP from GitHub and upload it here/i)).toBeInTheDocument();
   });
 
   it('shows detected owner and repo for public GitHub URLs', () => {
     render(<UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} />);
 
-    fireEvent.click(screen.getByRole('button', { name: /import public github url/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Public URL/i }));
     fireEvent.change(screen.getByPlaceholderText('https://github.com/Csisz/shipseal'), {
       target: { value: 'https://github.com/Csisz/shipseal' },
     });
 
     expect(screen.getByText('Detected repository: Csisz/shipseal')).toBeInTheDocument();
+  });
+
+  it('offers clear recovery when a selected file is not a valid ZIP', () => {
+    const { container } = render(<UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Upload ZIP/i }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(input).not.toBeNull();
+    fireEvent.change(input!, {
+      target: { files: [new File(['not a zip'], 'notes.txt', { type: 'text/plain' })] },
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/ZIP could not be used/i);
+    expect(screen.getByRole('button', { name: /Choose another ZIP/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Use public URL/i })).toBeInTheDocument();
   });
 
   it('starts popup GitHub Connect when source-level Connect GitHub is configured', () => {

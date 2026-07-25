@@ -1,6 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { GitBranch, Github, Search, Upload, FileArchive, X, Plug, ShieldCheck } from 'lucide-react';
+import { GitBranch, Github, Search, Upload, FileArchive, X, Plug, ShieldCheck, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,6 +14,7 @@ import type { GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryLis
 interface Props {
   onFile: (file: File) => void;
   onGitHubImport?: (url: string, branch?: string) => void;
+  onSampleReport?: () => void;
   disabled?: boolean;
   githubAppConfig?: GitHubAppClientConfig;
   githubInstallationId?: string;
@@ -32,6 +33,7 @@ interface Props {
 export function UploadDropzone({
   onFile,
   onGitHubImport,
+  onSampleReport,
   disabled,
   githubAppConfig,
   githubInstallationId,
@@ -117,12 +119,12 @@ export function UploadDropzone({
 
   return (
     <div className="w-full">
-      <div className="mb-4 grid md:grid-cols-3 gap-3">
+      <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4" aria-label="Repository source choices">
         <SourceOption
           active={mode === 'github-app'}
           icon={<Plug className="h-4 w-4" />}
-          title="Connect GitHub"
-          description="Best for selecting repositories and creating Pull Requests."
+          title="GitHub"
+          description="Select approved repositories and keep the PR path available."
           recommended
           disabled={disabled}
           onClick={() => { setMode('github-app'); setError(null); }}
@@ -130,8 +132,8 @@ export function UploadDropzone({
         <SourceOption
           active={mode === 'github'}
           icon={<Github className="h-4 w-4" />}
-          title="Import public GitHub URL"
-          description="Good for public repo scans. PR creation requires connection later."
+          title="Public URL"
+          description="Scan a supported public GitHub repository."
           disabled={disabled}
           onClick={() => { setMode('github'); setError(null); }}
         />
@@ -139,9 +141,17 @@ export function UploadDropzone({
           active={mode === 'zip'}
           icon={<FileArchive className="h-4 w-4" />}
           title="Upload ZIP"
-          description="Best for local/private review without GitHub access."
+          description="Scan a local archive without connecting GitHub."
           disabled={disabled}
           onClick={() => { setMode('zip'); setError(null); }}
+        />
+        <SourceOption
+          active={false}
+          icon={<Play className="h-4 w-4" />}
+          title="Try sample"
+          description="Open a clearly labeled demonstration repository."
+          disabled={disabled || !onSampleReport}
+          onClick={() => onSampleReport?.()}
         />
       </div>
 
@@ -182,9 +192,11 @@ export function UploadDropzone({
                 </div>
               )}
             </div>
-            <Button type="button" variant="outline" disabled={disabled} onClick={onGitHubConnect}>
-              <Plug className="h-4 w-4 mr-2" /> Connect GitHub
-            </Button>
+            {!githubInstallationId && repositoryListStatus !== 'loading' && (
+              <Button type="button" disabled={disabled} onClick={onGitHubConnect}>
+                <Plug className="mr-2 h-4 w-4" /> Connect GitHub
+              </Button>
+            )}
           </div>
           {githubInstallations.length > 1 && (
             <label className="mb-4 block">
@@ -275,27 +287,38 @@ export function UploadDropzone({
               <Input aria-label="Select repository" disabled placeholder="Connect GitHub to list repositories" />
             )}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubRepositoryRetry}>
-              Retry repository listing
-            </Button>
-            <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubConnect}>
-              Reconnect GitHub
-            </Button>
-            <Button type="button" variant="ghost" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubDisconnect}>
-              Disconnect GitHub
-            </Button>
-            {repositoryListStatus === 'error' && (
+          {(repositoryListStatus === 'error' || repositoryListStatus === 'not_configured') && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Button type="button" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubRepositoryRetry}>
+                Retry repository listing
+              </Button>
+              <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onGitHubConnect}>
+                Reconnect GitHub
+              </Button>
               <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => setMode('github')}>
-                Use public URL instead
+                Use public URL
               </Button>
-            )}
-            {appConfig.installUrl && (
-              <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubInstall}>
-                Install or configure ShipSeal GitHub App
+              <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => setMode('zip')}>
+                Upload ZIP
               </Button>
-            )}
-          </div>
+            </div>
+          )}
+          {(githubInstallationId || appConfig.installUrl) && (
+            <details className="group mt-4 rounded-xl border border-border/50 bg-background/20">
+              <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">GitHub connection controls</summary>
+              <div className="flex flex-wrap gap-2 border-t border-border/45 p-3">
+                {githubInstallationId && (
+                  <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubConnect}>Reconnect</Button>
+                )}
+                <Button type="button" variant="ghost" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubDisconnect}>Disconnect</Button>
+                {appConfig.installUrl && (
+                  <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubInstall}>
+                    Install or configure ShipSeal GitHub App
+                  </Button>
+                )}
+              </div>
+            </details>
+          )}
         </div>
       ) : mode === 'zip' ? (
         <label
@@ -346,12 +369,14 @@ export function UploadDropzone({
           </div>
           <div className="space-y-3">
             <Input
+              aria-label="Public GitHub repository URL"
               value={githubUrl}
               onChange={event => setGithubUrl(event.target.value)}
               placeholder="https://github.com/Csisz/shipseal"
               disabled={disabled}
             />
             <Input
+              aria-label="Optional GitHub branch or ref"
               value={githubBranch}
               onChange={event => setGithubBranch(event.target.value)}
               placeholder="Optional branch, for example main"
@@ -363,14 +388,16 @@ export function UploadDropzone({
               Detected repository: {detectedRepository}
             </div>
           )}
-          <div className="mt-4 text-xs text-muted-foreground/80 space-y-1">
-            <div>Examples: <span className="font-mono text-foreground/80">https://github.com/Csisz/shipseal</span>, <span className="font-mono text-foreground/80">github.com/Csisz/shipseal</span>, or a <span className="font-mono text-foreground/80">.git</span> URL.</div>
-            <div>Only public GitHub repositories are supported in the local MVP. Private repositories are not supported.</div>
-            <div>Public GitHub import may be blocked by browser CORS restrictions in local mode. ZIP upload is the most reliable local MVP path.</div>
-            <div>Hosted demos can use the ShipSeal GitHub archive proxy. In local browser mode, ZIP upload remains the most reliable option.</div>
-            <div>Local MVP note: if GitHub import is blocked, use Download ZIP on GitHub and upload it here.</div>
-            {!githubUrl.trim() && <div className="text-accent">Enter a GitHub URL to enable import.</div>}
+          <div className="mt-3 text-xs text-muted-foreground">
+            Supported example: <span className="font-mono text-foreground/80">https://github.com/Csisz/shipseal</span>. Public repositories only.
           </div>
+          <details className="mt-3 rounded-xl border border-border/50 bg-background/20 text-xs text-muted-foreground">
+            <summary className="cursor-pointer px-3 py-2 font-medium hover:text-foreground">Public import limits and fallback</summary>
+            <div className="space-y-2 border-t border-border/45 px-3 py-3">
+              <p>Local browser import may be blocked by CORS or network policy. Hosted demos can use the ShipSeal archive proxy.</p>
+              <p>If import fails, download the repository ZIP from GitHub and upload it here.</p>
+            </div>
+          </details>
           <Button
             className="mt-5 w-full sm:w-auto"
             onClick={() => onGitHubImport?.(githubUrl, githubBranch || undefined)}
@@ -382,7 +409,14 @@ export function UploadDropzone({
       )}
 
       {error && (
-        <div className="mt-3 text-sm text-destructive">{error}</div>
+        <div role="alert" className="mt-3 rounded-xl border border-destructive/35 bg-destructive/10 p-4">
+          <div className="text-sm font-semibold text-foreground">ZIP could not be used</div>
+          <p className="mt-1 text-sm text-muted-foreground">{error}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={() => inputRef.current?.click()}>Choose another ZIP</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => { setMode('github'); setError(null); }}>Use public URL</Button>
+          </div>
+        </div>
       )}
 
       {selected && (
@@ -396,6 +430,7 @@ export function UploadDropzone({
           </div>
           <Button
             variant="ghost" size="icon" type="button"
+            aria-label="Remove selected ZIP"
             onClick={() => { setSelected(null); if (inputRef.current) inputRef.current.value = ''; }}
           >
             <X className="h-4 w-4" />
@@ -410,21 +445,10 @@ export function UploadDropzone({
 }
 
 function TrustHintStrip() {
-  const hints = [
-    'Code is never executed.',
-    'Static analysis only.',
-    'Repository structure and metadata are analyzed.',
-    'Existing documentation and project signals are used.',
-  ];
-
   return (
-    <div className="mb-4 grid gap-2 rounded-xl border border-border/60 bg-secondary/20 p-3 text-xs text-muted-foreground sm:grid-cols-2">
-      {hints.map(hint => (
-        <div key={hint} className="flex items-center gap-2">
-          <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-accent" />
-          <span>{hint}</span>
-        </div>
-      ))}
+    <div className="mb-4 flex items-start gap-2 rounded-xl border border-border/55 bg-secondary/15 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+      <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
+      <span>ShipSeal performs a static scan of allowed repository evidence. Imported code is never executed.</span>
     </div>
   );
 }
@@ -467,7 +491,7 @@ function SourceOption({
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        'min-h-32 text-left rounded-xl border p-4 transition-colors bg-secondary/25 hover:border-primary/40',
+        'min-h-24 text-left rounded-xl border p-3.5 transition-colors bg-secondary/20 hover:border-primary/40',
         active ? 'border-primary/50 bg-primary/10' : 'border-border/60',
         disabled && 'opacity-60 pointer-events-none'
       )}
@@ -479,7 +503,7 @@ function SourceOption({
           <span className="ml-auto rounded-full border border-success/40 px-2 py-0.5 text-[10px] text-success">Recommended</span>
         )}
       </div>
-      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{description}</p>
+      <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{description}</p>
     </button>
   );
 }

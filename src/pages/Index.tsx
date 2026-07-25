@@ -5,6 +5,7 @@ import { UploadDropzone } from '@/components/agentready/UploadDropzone';
 import { ScanProgress } from '@/components/agentready/ScanProgress';
 import { IntelligenceReveal } from '@/components/agentready/IntelligenceReveal';
 import { ProjectIntakeForm } from '@/components/agentready/ProjectIntakeForm';
+import { SurfaceState } from '@/components/agentready/SurfaceState';
 import { buildSampleReport } from '@/lib/readiness';
 import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
 import { clearScanHistory, getScanHistory, saveScanHistory } from '@/lib/scanHistory';
@@ -542,7 +543,22 @@ const Index = () => {
             onScrollScan={scrollScan}
             onPickPackage={handlePickPackage}
             scanSlot={
-              <div id="scan" ref={scanSectionRef} className="scroll-mt-28">
+              <div ref={scanSectionRef} className="scroll-mt-28" data-testid="source-selection">
+                {(scan.status === 'failed' || scan.status === 'cancelled') && (
+                  <SurfaceState
+                    tone={scan.status === 'cancelled' ? 'empty' : 'error'}
+                    title={scan.status === 'cancelled' ? 'Scan cancelled' : importErrorTitle(scan.errorCategory)}
+                    description={scan.status === 'cancelled'
+                      ? 'The repository was not changed. You can restart when ready.'
+                      : 'ShipSeal could not finish this source. Retry it or choose another source.'}
+                    action={pendingSource
+                      ? <Button type="button" size="sm" onClick={startPendingScan}>Retry scan</Button>
+                      : undefined}
+                    fallback={<Button type="button" size="sm" variant="outline" onClick={() => { scan.resetScan(); setPendingSource(null); }}>Choose another source</Button>}
+                    details={scan.status === 'failed' ? scan.error : undefined}
+                    className="mb-4"
+                  />
+                )}
                 {pendingSource ? (
                   <ProjectContextStep
                     sourceType={pendingSource.type === 'zip' ? 'ZIP upload' : pendingSource.type === 'github-app' ? 'Connected GitHub repository' : 'Public GitHub repository'}
@@ -575,13 +591,11 @@ const Index = () => {
                       onGitHubDisconnect={handleGitHubDisconnect}
                       onGitHubRepositoryRetry={handleGitHubRepositoryRetry}
                       onGitHubInstallationSelect={handleGitHubInstallationSelect}
+                      onSampleReport={handleSample}
                     />
                     <p className="mt-3 text-center text-xs text-muted-foreground">
                       Tip: leave out <span className="font-mono text-foreground/80">node_modules</span>, <span className="font-mono text-foreground/80">dist</span> and <span className="font-mono text-foreground/80">build</span> folders for the fastest scan.
                     </p>
-                    {scan.status === 'cancelled' && (
-                      <div className="mt-2 text-center text-sm text-muted-foreground">Scan cancelled.</div>
-                    )}
                   </>
                 )}
               </div>
@@ -650,7 +664,7 @@ function ProjectContextStep({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="max-w-2xl">
             <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Goal</div>
-            <h2 className="mt-1 font-display text-2xl font-semibold">What do you want?</h2>
+            <h2 className="mt-1 font-display text-2xl font-semibold">What outcome should ShipSeal prepare?</h2>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               Pick one. ShipSeal can scan now; optional details can wait.
             </p>
@@ -771,22 +785,31 @@ function AgentOperatingModeSelector({
 
 function FlowSteps({ activeStep }: { activeStep: number }) {
   const steps = [
-    'Step 1: Which project?',
-    'Step 2: What do you want?',
-    'Step 3: Scan',
+    'Source',
+    'Outcome',
+    'Scan',
   ];
 
   return (
-    <div className="grid sm:grid-cols-3 gap-2">
+    <ol className="flex flex-wrap items-center gap-2 text-xs" aria-label="Scan setup progress">
       {steps.map((step, index) => (
-        <div
+        <li
           key={step}
-          className={`rounded-lg border px-3 py-2 text-xs ${index + 1 === activeStep ? 'border-primary/50 bg-primary/10 text-foreground' : 'border-border/60 bg-secondary/20 text-muted-foreground'}`}
+          aria-current={index + 1 === activeStep ? 'step' : undefined}
+          className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 ${
+            index + 1 === activeStep
+              ? 'border-primary/50 bg-primary/10 font-medium text-foreground'
+              : index + 1 < activeStep
+                ? 'border-success/35 bg-success/5 text-foreground'
+                : 'border-border/55 bg-secondary/15 text-muted-foreground'
+          }`}
         >
-          {step}
-        </div>
+          <span className="font-mono">{index + 1}</span>
+          <span>{step}</span>
+          <span className="sr-only">{index + 1 === activeStep ? 'current step' : index + 1 < activeStep ? 'completed' : 'not started'}</span>
+        </li>
       ))}
-    </div>
+    </ol>
   );
 }
 

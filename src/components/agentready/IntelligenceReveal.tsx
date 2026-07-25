@@ -64,9 +64,9 @@ export function IntelligenceReveal({ report, onComplete }: Props) {
     timersRef.current = prefersReducedMotion
       ? [window.setTimeout(finishReveal, INTELLIGENCE_REVEAL_REDUCED_MOTION_MS)]
       : [
-          window.setTimeout(() => setPhase('signals'), 650),
-          window.setTimeout(() => setPhase('connections'), 2150),
-          window.setTimeout(() => setPhase('meaning'), 3450),
+          window.setTimeout(() => setPhase('signals'), 450),
+          window.setTimeout(() => setPhase('connections'), 1450),
+          window.setTimeout(() => setPhase('meaning'), 2600),
           window.setTimeout(finishReveal, INTELLIGENCE_REVEAL_TOTAL_MS),
         ];
 
