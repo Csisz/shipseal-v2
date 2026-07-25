@@ -325,6 +325,11 @@ describe('Result Workspace composition', () => {
       expect(screen.getAllByRole('navigation', { name: /Result chapters/i })).toHaveLength(1);
       expect(within(screen.getByRole('navigation', { name: /Result chapters/i })).getByRole('button', { name: new RegExp(chapter, 'i') })).toHaveAttribute('aria-pressed', 'true');
       if (chapter === 'Verify') {
+        const journeyScroll = screen.getByTestId('verification-journey-scroll');
+        expect(journeyScroll).toHaveClass('max-w-full', 'overflow-x-auto');
+        const lifecycle = screen.getByRole('list', { name: /Verification lifecycle/i });
+        expect(within(lifecycle).getAllByRole('listitem')).toHaveLength(4);
+        expect(within(lifecycle).getByText('Prepared').closest('li')).toHaveAttribute('aria-current', 'step');
         expect(screen.queryByLabelText(/Optimization Plan artifacts/i)).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: /Review prepared artifacts/i }));
         const reviewSheet = await screen.findByTestId('optimization-artifact-review-sheet');

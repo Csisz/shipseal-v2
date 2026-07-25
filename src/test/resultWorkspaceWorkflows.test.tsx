@@ -558,7 +558,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
   }, 20000);
 
-  it('keeps Verify concise until prepared artifacts are explicitly reviewed', () => {
+  it('keeps Verify concise until prepared artifacts are explicitly reviewed', async () => {
     const report = optimizationDashboardReport();
     render(
       <ResultDashboard
@@ -572,8 +572,12 @@ describe('Result Workspace improvement and verification workflows', () => {
 
     switchResultChapter('Verify');
 
-    expect(screen.getByRole('heading', { name: /Plan prepared — not yet applied/i })).toBeInTheDocument();
-    expect(screen.getByLabelText(/Repository improvement lifecycle/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Plan prepared/i })).toBeInTheDocument();
+    const lifecycle = screen.getByRole('list', { name: /Verification lifecycle/i });
+    expect(lifecycle).toBeInTheDocument();
+    expect(within(lifecycle).getAllByRole('listitem')).toHaveLength(4);
+    expect(within(lifecycle).getByText('Prepared').closest('li')).toHaveAttribute('aria-current', 'step');
+    expect(screen.getByText(/Apply or export the plan. After the repository changes, run a later scan/i)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Optimization Plan artifacts/i)).not.toBeInTheDocument();
 
@@ -583,10 +587,10 @@ describe('Result Workspace improvement and verification workflows', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Close plan/i }));
     expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Plan prepared — not yet applied/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Plan prepared/i })).toBeInTheDocument();
     expect(screen.queryByText(/No Repository Intelligence verification baseline/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /View technical evidence/i }));
-    expect(screen.getByText(/No Repository Intelligence verification baseline/i)).toBeInTheDocument();
+    expect(await screen.findByText(/No Repository Intelligence verification baseline/i)).toBeInTheDocument();
   });
 
   it('previews and creates an Optimization Pack PR only after explicit GitHub App confirmation', async () => {

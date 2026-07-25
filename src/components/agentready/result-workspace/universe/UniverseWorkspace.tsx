@@ -47,7 +47,6 @@ import {
   repositoryTransformationDomainCounts,
   serializeRepositoryOptimizationManifest,
   transformationDomainLabel,
-  workspaceStateLabel,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
   type RepositoryAgentFlightPath,
@@ -85,7 +84,8 @@ import { ResultChapterNav } from '@/components/agentready/result-dashboard/Resul
 import { ResultChapterShell } from '@/components/agentready/result-dashboard/ResultChapterShell';
 import { ResultChapterLoadBoundary, ResultChapterLoading } from '@/components/agentready/result-dashboard/ResultChapterLoadBoundary';
 import { getResultChapterStatuses, workspaceInsights } from '@/components/agentready/result-dashboard/chapterState';
-import { buildVerifyPresentation, type VerifyLifecycleState } from '@/components/agentready/result-dashboard/verifyPresentation';
+import { buildVerifyPresentation } from '@/components/agentready/result-dashboard/verifyPresentation';
+import { VerificationJourney } from '@/components/agentready/result-dashboard/VerificationJourney';
 import { selectRepositoryFrictions } from '@/components/agentready/result-dashboard/repositoryFrictions';
 import type { ResultChapterId } from '@/components/agentready/result-dashboard/types';
 import {
@@ -1679,58 +1679,15 @@ function RepositoryAtlasVisualization({
     focusVerifyTechnicalDetails();
   };
   const verifySummary = activeResultChapter === 'verify' && (
-    <section className="mb-4 rounded-3xl border border-primary/20 bg-[linear-gradient(145deg,hsl(var(--primary)/0.08),hsl(var(--background)/0.22))] p-4 md:p-6" aria-labelledby="verify-lifecycle-heading">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 max-w-3xl">
-          <div className="text-xs font-mono uppercase tracking-wider text-primary-glow">Verification state</div>
-          <h3 id="verify-lifecycle-heading" className="mt-2 font-display text-2xl font-semibold text-foreground">{verifyPresentation.heading}</h3>
-          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{verifyPresentation.explanation}</p>
-          <div className="mt-4 flex flex-wrap gap-2" aria-label="Repository improvement lifecycle">
-            {(['proposed', 'prepared', 'applied', 'verified', 'unresolved'] as VerifyLifecycleState[]).map(state => (
-              <Badge
-                key={state}
-                variant="outline"
-                aria-current={verifyPresentation.state === state ? 'step' : undefined}
-                className={verifyLifecycleClass(state, verifyPresentation.state === state)}
-              >
-                {verifyPresentation.state === state && <Check className="mr-1 h-3 w-3" aria-hidden="true" />}
-                {workspaceStateLabel(state)}
-              </Badge>
-            ))}
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
-          <Button
-            type="button"
-            onClick={handleVerifyPrimaryAction}
-            disabled={verifyPresentation.primaryAction === 'rescan' && (!onRescan || intelligenceVerificationStatus === 'scanning')}
-            className="min-h-11 bg-primary text-primary-foreground hover:bg-primary/90"
-          >
-            {intelligenceVerificationStatus === 'scanning' && verifyPresentation.primaryAction === 'rescan'
-              ? 'Scanning later state…'
-              : verifyPresentation.primaryLabel}
-          </Button>
-          {activeTransformationArtifactCount > 0 && (
-            <Button type="button" variant="outline" onClick={openOptimizationPlan} className="min-h-11 border-primary/35 bg-primary/5">
-              Review prepared artifacts
-            </Button>
-          )}
-          <Button type="button" variant="ghost" onClick={focusVerifyTechnicalDetails} className="min-h-11">
-            View technical evidence
-          </Button>
-        </div>
-      </div>
-      {verifyPresentation.metrics.length > 0 && (
-        <div className="mt-5 grid grid-cols-2 gap-2 md:grid-cols-4" aria-label="Verification summary">
-          {verifyPresentation.metrics.map(metric => (
-            <div key={metric.label} className="rounded-2xl border border-border/45 bg-background/25 px-3 py-2.5">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{metric.label}</div>
-              <div className="mt-1 text-lg font-semibold text-foreground">{metric.value.toLocaleString()}</div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+    <VerificationJourney
+      presentation={verifyPresentation}
+      primaryActionDisabled={verifyPresentation.primaryAction === 'rescan' && (!onRescan || intelligenceVerificationStatus === 'scanning')}
+      primaryActionPending={intelligenceVerificationStatus === 'scanning' && verifyPresentation.primaryAction === 'rescan'}
+      showArtifactReview={activeTransformationArtifactCount > 0}
+      onPrimaryAction={handleVerifyPrimaryAction}
+      onReviewArtifacts={openOptimizationPlan}
+      onViewTechnicalEvidence={focusVerifyTechnicalDetails}
+    />
   );
 
   return (
@@ -3849,15 +3806,6 @@ function optimizationActionLabel(action: RepositoryOptimizationPlanItem['artifac
   if (action === 'update') return 'Update';
   if (action === 'strengthen') return 'Strengthen';
   return 'Unavailable';
-}
-
-function verifyLifecycleClass(state: VerifyLifecycleState, active: boolean) {
-  const emphasis = active ? 'bg-background/45 font-semibold shadow-sm' : 'opacity-55';
-  if (state === 'verified') return `border-success/45 text-success ${emphasis}`;
-  if (state === 'unresolved') return `border-warning/55 text-warning ${emphasis}`;
-  if (state === 'applied') return `border-accent/45 text-accent ${emphasis}`;
-  if (state === 'prepared') return `border-primary/45 text-primary-glow ${emphasis}`;
-  return `border-border/65 text-muted-foreground ${emphasis}`;
 }
 
 function optimizationReadinessLabel(readiness: RepositoryOptimizationReadiness) {
