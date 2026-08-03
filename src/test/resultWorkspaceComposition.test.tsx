@@ -329,13 +329,18 @@ describe('Result Workspace composition', () => {
         expect(journeyScroll).toHaveClass('max-w-full', 'overflow-x-auto');
         const lifecycle = screen.getByRole('list', { name: /Verification lifecycle/i });
         expect(within(lifecycle).getAllByRole('listitem')).toHaveLength(4);
-        expect(within(lifecycle).getByText('Prepared').closest('li')).toHaveAttribute('aria-current', 'step');
+        expect(within(lifecycle).getByText('Proposed').closest('li')).toHaveAttribute('aria-current', 'step');
         expect(screen.queryByLabelText(/Optimization Plan artifacts/i)).not.toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', { name: /Review prepared artifacts/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Prepare optimization plan/i }));
+        fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Review (optimization )?plan/i }));
         const reviewSheet = await screen.findByTestId('optimization-artifact-review-sheet');
         expect(reviewSheet).toHaveClass('max-h-[92dvh]', 'rounded-t-[1.75rem]');
         expect(within(reviewSheet).getByLabelText(/Optimization Plan artifacts/i)).toBeInTheDocument();
+        fireEvent.click(within(reviewSheet).getByRole('button', { name: /Prepare selected plan/i }));
         fireEvent.click(within(reviewSheet).getByRole('button', { name: /Close plan/i }));
+        switchResultChapter('Verify');
+        expect(within(screen.getByRole('list', { name: /Verification lifecycle/i })).getByText('Prepared').closest('li')).toHaveAttribute('aria-current', 'step');
       }
     }
     expect(await screen.findByTestId('repository-universe-canvas')).toHaveAttribute('data-camera-target', selectedTarget);

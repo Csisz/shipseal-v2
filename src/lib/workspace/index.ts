@@ -46,6 +46,15 @@ export {
 } from './repositoryOptimizationPlan';
 
 export {
+  buildRepositoryActionableImprovements,
+} from './repositoryActionableImprovement';
+
+export {
+  prepareRepositoryOptimizationPlan,
+  validateRepositoryOptimizationPlan,
+} from './repositoryOptimizationPreparation';
+
+export {
   buildOptimizationApplyPlan,
   buildOptimizationPackZipBlob,
   buildOptimizationPackZipFilename,
@@ -128,6 +137,21 @@ export type {
   RepositoryOptimizationPlanSummary,
   RepositoryOptimizationReadiness,
 } from './repositoryOptimizationPlan';
+
+export type {
+  ActionableImprovementEvidence,
+  ActionableImprovementLifecycle,
+  ActionableImprovementSupport,
+  RepositoryActionableImprovement,
+} from './repositoryActionableImprovement';
+
+export type {
+  OptimizationPlanValidationIssue,
+  OptimizationPlanValidationIssueKind,
+  PreparedRepositoryOptimizationPlan,
+  PrepareRepositoryOptimizationPlanResult,
+  RepositoryOptimizationPlanValidation,
+} from './repositoryOptimizationPreparation';
 
 export type {
   OptimizationApplyInstruction,

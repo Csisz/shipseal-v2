@@ -28,12 +28,13 @@ import { CreateReadinessPrClientError, createGitHubAppReadinessPr } from '@/lib/
 import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentOperatingMode, resolveAgentOperatingMode, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
 import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
 import {
-  buildOptimizationApplyPlan,
   buildRepositoryAgentFlightPath,
   buildOptimizationPackZipBlob,
   buildOptimizationPackZipFilename,
   buildRepositoryAtlasModel,
   buildRepositoryOptimizationPlan,
+  prepareRepositoryOptimizationPlan,
+  validateRepositoryOptimizationPlan,
   buildRepositoryTransformationProposalModel,
   buildRepositoryVerificationBaseline,
   buildRepositoryVerificationResult,
@@ -59,6 +60,8 @@ import {
   type RepositoryOptimizationPlan,
   type RepositoryOptimizationPlanItem,
   type RepositoryOptimizationReadiness,
+  type RepositoryOptimizationPlanValidation,
+  type PreparedRepositoryOptimizationPlan,
   type RepositoryTransformationDomain,
   type RepositoryTransformationDomainFilter,
   type RepositoryTransformationMode,
@@ -336,6 +339,8 @@ function RepositoryAtlasVisualization({
   const [excludedProposalIds, setExcludedProposalIds] = useState<Set<string>>(() => new Set());
   const [optimizationPlanOpen, setOptimizationPlanOpen] = useState(false);
   const [selectedOptimizationItemId, setSelectedOptimizationItemId] = useState<string | null>(null);
+  const [preparedOptimizationPlan, setPreparedOptimizationPlan] = useState<PreparedRepositoryOptimizationPlan | null>(null);
+  const [planPreparationNotice, setPlanPreparationNotice] = useState('');
   const [selectedUniverseNodeId, setSelectedUniverseNodeId] = useState(universe.rootNodeId);
   const [universeCamera, setUniverseCamera] = useState<UniverseCameraState>(initialUniverseCamera);
   const [universeFocusRequest, setUniverseFocusRequest] = useState({ nodeId: universe.rootNodeId, sequence: 0 });
@@ -400,12 +405,15 @@ function RepositoryAtlasVisualization({
       excludedProposalIds,
     })
     : null, [atlas, excludedProposalIds, optimizationPlanOpen, report, transformation, universe]);
-  const optimizationApplyPlan = useMemo(() => optimizationPlan
-    ? buildOptimizationApplyPlan(optimizationPlan, {
-      githubAvailable: connection.canCreatePullRequest && Boolean(connection.installationId && connection.owner && connection.repo),
-      githubUnavailableReason: githubUnavailableReason(connection),
-    })
-    : null, [connection, optimizationPlan]);
+  const optimizationPlanValidation = useMemo(
+    () => optimizationPlan ? validateRepositoryOptimizationPlan(optimizationPlan) : null,
+    [optimizationPlan],
+  );
+  const activePreparedOptimizationPlan = optimizationPlan
+    && preparedOptimizationPlan?.sourcePlanId === optimizationPlan.id
+    ? preparedOptimizationPlan
+    : null;
+  const optimizationApplyPlan = activePreparedOptimizationPlan?.applyPlan || null;
   const verificationResult = useMemo(() => verificationBaseline
     ? buildRepositoryVerificationResult({ baseline: verificationBaseline, currentReport: report })
     : null, [report, verificationBaseline]);
@@ -430,7 +438,7 @@ function RepositoryAtlasVisualization({
   const hasVerificationEvidence = Boolean(intelligenceVerificationResult || verificationResult?.status === 'matched-rescan');
   const verifyPresentation = buildVerifyPresentation({
     selectedProposalCount: includedProposalCount,
-    preparedArtifactCount: activeTransformationArtifactCount,
+    preparedArtifactCount: preparedOptimizationPlan?.applyPlan.summary.selectedArtifactCount || 0,
     appliedArtifactCount: Math.max(
       verificationBaseline && verificationBaseline.applyMethod !== 'manual-baseline' ? verificationBaseline.artifacts.length : 0,
       intelligenceVerificationBaseline?.artifacts.length || 0,
@@ -810,12 +818,31 @@ function RepositoryAtlasVisualization({
   }, [agentFlightPath, atlas.nodes, focusUniverseNode, universe.nodes]);
 
   const toggleProposalIncluded = (proposalId: string) => {
+    if (preparedOptimizationPlan) {
+      setPreparedOptimizationPlan(null);
+      setPlanPreparationNotice('Selection changed. Review the updated artifacts and prepare the plan again.');
+    }
     setExcludedProposalIds(current => {
       const next = new Set(current);
       if (next.has(proposalId)) next.delete(proposalId);
       else next.add(proposalId);
       return next;
     });
+  };
+
+  const prepareOptimizationPlan = () => {
+    if (!optimizationPlan) return;
+    const result = prepareRepositoryOptimizationPlan(optimizationPlan, {
+      githubAvailable: connection.canCreatePullRequest && Boolean(connection.installationId && connection.owner && connection.repo),
+      githubUnavailableReason: githubUnavailableReason(connection),
+    });
+    if (result.status === 'blocked') {
+      setPreparedOptimizationPlan(null);
+      setPlanPreparationNotice('Preparation is blocked. Resolve the validation issues below and try again.');
+      return;
+    }
+    setPreparedOptimizationPlan(result.prepared);
+    setPlanPreparationNotice('Prepared successfully. ZIP and PR now use this exact validated plan.');
   };
 
   const resetAtlas = () => {
@@ -1282,6 +1309,9 @@ function RepositoryAtlasVisualization({
       report={report}
       plan={optimizationPlan}
       applyPlan={optimizationApplyPlan}
+      validation={optimizationPlanValidation}
+      prepared={activePreparedOptimizationPlan}
+      preparationNotice={planPreparationNotice}
       connection={connection}
       proposals={transformation.proposals}
       excludedProposalIds={excludedProposalIds}
@@ -1290,6 +1320,7 @@ function RepositoryAtlasVisualization({
       selectedItem={selectedOptimizationItem}
       onSelectItem={item => setSelectedOptimizationItemId(item.id)}
       onToggleProposalIncluded={toggleProposalIncluded}
+      onPrepare={prepareOptimizationPlan}
       onSaveVerificationBaseline={onSaveVerificationBaseline}
       onDiscardVerificationBaseline={onDiscardVerificationBaseline}
       onPackDownloaded={onPackagePrepared}
@@ -2134,6 +2165,9 @@ function OptimizationPlanReview({
   report,
   plan,
   applyPlan,
+  validation,
+  prepared,
+  preparationNotice,
   connection,
   proposals,
   excludedProposalIds,
@@ -2142,6 +2176,7 @@ function OptimizationPlanReview({
   selectedItem,
   onSelectItem,
   onToggleProposalIncluded,
+  onPrepare,
   onSaveVerificationBaseline,
   onDiscardVerificationBaseline,
   onPackDownloaded,
@@ -2151,6 +2186,9 @@ function OptimizationPlanReview({
   report: ReadinessReport;
   plan: RepositoryOptimizationPlan;
   applyPlan: OptimizationApplyPlan | null;
+  validation: RepositoryOptimizationPlanValidation | null;
+  prepared: PreparedRepositoryOptimizationPlan | null;
+  preparationNotice: string;
   connection: GitHubConnectionState;
   proposals: RepositoryTransformationProposal[];
   excludedProposalIds: Set<string>;
@@ -2159,6 +2197,7 @@ function OptimizationPlanReview({
   selectedItem: RepositoryOptimizationPlanItem | null;
   onSelectItem: (item: RepositoryOptimizationPlanItem) => void;
   onToggleProposalIncluded: (proposalId: string) => void;
+  onPrepare: () => void;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
   onPackDownloaded?: () => void;
@@ -2228,11 +2267,13 @@ function OptimizationPlanReview({
           <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Optimization Plan</div>
           <h3 id="optimization-plan-heading" className="mt-1 font-display text-xl font-semibold">Review generator-backed artifacts</h3>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Review selected artifacts, package them for human review, or preview a GitHub PR. No repository files have been changed.
+            Review evidence and generated artifacts first. Preparing validates and freezes the selected plan; it does not change repository files.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className="border-primary/40 text-primary-glow">Prepared for review</Badge>
+          <Badge variant="outline" className={prepared ? 'border-success/40 text-success' : 'border-primary/40 text-primary-glow'}>
+            {prepared ? 'Prepared' : 'Proposed - not yet prepared'}
+          </Badge>
           <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Close plan
           </Button>
@@ -2261,6 +2302,42 @@ function OptimizationPlanReview({
               : 'Ready for package'}
         </Badge>
       </div>
+
+      {validation && (
+        <section className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4" aria-label="Plan validation">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Validation and preparation</div>
+              <p className="mt-1 text-sm text-foreground">
+                {validation.summary.validatedArtifactCount} artifact{validation.summary.validatedArtifactCount === 1 ? '' : 's'} validated;
+                {' '}{validation.summary.reviewRequiredCount} need review;
+                {' '}{validation.summary.blockingCount} blocking.
+              </p>
+            </div>
+            <Button type="button" size="sm" onClick={onPrepare} disabled={!validation.canPrepare || Boolean(prepared)} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              {prepared ? 'Plan prepared' : 'Prepare selected plan'}
+            </Button>
+          </div>
+          {preparationNotice && <p className="mt-3 text-xs text-muted-foreground" aria-live="polite">{preparationNotice}</p>}
+          {validation.issues.length > 0 && (
+            <ul className="mt-3 space-y-2">
+              {validation.issues.map(issue => (
+                <li key={issue.id} className="rounded-xl border border-border/45 bg-background/25 p-3 text-xs">
+                  <div className={issue.severity === 'blocking' ? 'font-semibold text-warning' : 'font-semibold text-primary-glow'}>
+                    {issue.severity === 'blocking' ? 'Blocking' : 'Review required'}: {issue.title}
+                  </div>
+                  <p className="mt-1 text-muted-foreground">{issue.explanation} {issue.recovery}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {!prepared && validation.canPrepare && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              Artifact previews remain reviewable below. ZIP download and GitHub PR creation unlock only after explicit preparation.
+            </p>
+          )}
+        </section>
+      )}
 
       {plan.items.length === 0 ? (
         <div className="mt-5 rounded-2xl border border-border/55 bg-secondary/15 p-4 text-sm text-muted-foreground">
@@ -2308,25 +2385,38 @@ function OptimizationPlanReview({
         </div>
       )}
 
-      <OptimizationApplyFlow
-        applyPlan={applyPlan}
-        connection={connection}
-        packState={packState}
-        packError={packError}
-        prConfirmed={prConfirmed}
-        prState={prState}
-        prError={prError}
-        prResult={prResult}
-        manifestPreview={manifestPreview}
-        baseline={verificationBaseline}
-        verificationResult={verificationResult}
-        baselineSavedForCurrentPlan={baselineSavedForCurrentPlan}
-        onDownloadPack={handleDownloadPack}
-        onSaveBaseline={() => saveVerificationBaseline('manual-baseline')}
-        onDiscardBaseline={onDiscardVerificationBaseline}
-        onPrConfirmedChange={setPrConfirmed}
-        onCreatePr={handleCreatePr}
-      />
+      {prepared && (
+        <OptimizationApplyFlow
+          applyPlan={applyPlan}
+          connection={connection}
+          packState={packState}
+          packError={packError}
+          prConfirmed={prConfirmed}
+          prState={prState}
+          prError={prError}
+          prResult={prResult}
+          manifestPreview={manifestPreview}
+          baseline={verificationBaseline}
+          verificationResult={verificationResult}
+          baselineSavedForCurrentPlan={baselineSavedForCurrentPlan}
+          onDownloadPack={handleDownloadPack}
+          onSaveBaseline={() => saveVerificationBaseline('manual-baseline')}
+          onDiscardBaseline={onDiscardVerificationBaseline}
+          onPrConfirmedChange={setPrConfirmed}
+          onCreatePr={handleCreatePr}
+        />
+      )}
+      {!prepared && verificationBaseline && (
+        <div className="mt-5">
+          <RepositoryVerificationPanel
+            baseline={verificationBaseline}
+            verificationResult={verificationResult}
+            baselineSavedForCurrentPlan={false}
+            onSaveBaseline={() => undefined}
+            onDiscardBaseline={onDiscardVerificationBaseline}
+          />
+        </div>
+      )}
     </section>
   );
 }
@@ -2523,7 +2613,7 @@ function RepositoryVerificationPanel({
   onSaveBaseline,
   onDiscardBaseline,
 }: {
-  applyPlan: OptimizationApplyPlan;
+  applyPlan?: OptimizationApplyPlan;
   baseline?: RepositoryVerificationBaseline | null;
   verificationResult?: RepositoryVerificationResult | null;
   baselineSavedForCurrentPlan: boolean;
@@ -2633,7 +2723,7 @@ function RepositoryVerificationPanel({
         </div>
       )}
 
-      {applyPlan.summary.selectedArtifactCount === 0 && (
+      {applyPlan?.summary.selectedArtifactCount === 0 && (
         <p className="mt-3 text-xs text-muted-foreground">No selected artifacts are available for a verification baseline.</p>
       )}
     </section>
@@ -2915,6 +3005,9 @@ function TransformationInspector({
         <Badge variant="outline" className={proposal.confidence === 'low' ? 'border-warning/45 text-warning' : 'border-primary/30 text-muted-foreground'}>
           {proposal.confidence} confidence
         </Badge>
+        <Badge variant="outline" className={proposal.evidenceType === 'heuristic' ? 'border-warning/45 text-warning' : 'border-success/35 text-success'}>
+          {proposal.evidenceType === 'heuristic' ? 'Heuristic' : 'Evidence-backed'}
+        </Badge>
         {onToggleCollapsed && (
           <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} className="ml-auto" aria-label="Collapse inspector">
             <PanelRightClose className="h-3.5 w-3.5" />
@@ -2948,7 +3041,7 @@ function TransformationInspector({
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onToggleIncluded} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
-          {included ? 'Remove from plan' : 'Add to optimization plan'}
+          {included ? 'Remove from plan' : 'Include in plan'}
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={onClear}>
           Return to repository entity
@@ -2969,7 +3062,7 @@ function TransformationInspector({
         </details>
 
         <details className="rounded-xl border border-border/45 bg-background/20 p-3">
-          <summary className="cursor-pointer font-medium text-foreground">Proposed artifacts</summary>
+          <summary className="cursor-pointer font-medium text-foreground">Artifact preview</summary>
           <div className="mt-2 space-y-2">
             {proposal.artifactActions.map(action => (
               <details key={action.path} className="rounded-2xl border border-border/45 bg-background/25 px-3 py-2">
@@ -2995,7 +3088,7 @@ function TransformationInspector({
         </details>
 
         <details className="rounded-xl border border-border/45 bg-background/20 p-3">
-          <summary className="cursor-pointer font-medium text-foreground">Agent impact</summary>
+          <summary className="cursor-pointer font-medium text-foreground">Verification expectation</summary>
           <p className="mt-2 text-muted-foreground">{proposal.expectedEffect.agentBehavior}</p>
           <p className="mt-2 text-muted-foreground">{proposal.expectedEffect.repositoryMeaning}</p>
         </details>

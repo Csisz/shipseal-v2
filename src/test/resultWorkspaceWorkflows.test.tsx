@@ -144,6 +144,11 @@ function openDisclosure(title: RegExp | string) {
   fireEvent.click(summary);
 }
 
+function prepareOpenOptimizationPlan() {
+  fireEvent.click(screen.getByRole('button', { name: /Prepare selected plan/i }));
+  return screen.getByLabelText(/Optimization Apply Flow/i);
+}
+
 function openMoreControls() {
   const trigger = screen.getByRole('button', { name: /More Universe controls/i });
   fireEvent.keyDown(trigger, { key: 'ArrowDown' });
@@ -436,7 +441,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     fireEvent.click(proposedButtons[0]);
     expect(screen.getByText(/Proposed - not yet applied/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Remove from plan/i }));
-    expect(screen.getByRole('button', { name: /Add to optimization plan/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Include in plan/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Universe 3D/i }));
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i }).getAttribute('data-node-count')).toBe(currentNodeCount);
     expect(screen.getByText(/proposed improvements selected/i)).toBeInTheDocument();
@@ -530,7 +535,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Remove from plan/i })[0]);
     expect(screen.getByText(new RegExp(`^${(transformation.proposals.length - 1).toLocaleString()} proposed improvements selected`))).toBeInTheDocument();
 
-    const applyFlow = screen.getByLabelText(/Optimization Apply Flow/i);
+    const applyFlow = prepareOpenOptimizationPlan();
     expect(within(applyFlow).getAllByText(/Optimization Pack ZIP/i).length).toBeGreaterThan(0);
     expect(within(applyFlow).getByText(/GitHub PR Preview/i)).toBeInTheDocument();
     expect(within(applyFlow).getByText(/Manual fallback/i)).toBeInTheDocument();
@@ -548,7 +553,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     switchToAtlas2D();
     const proposedButtons = await screen.findAllByRole('button', { name: /Proposed With ShipSeal entity/i });
     fireEvent.click(proposedButtons[0]);
-    expect(screen.getAllByRole('button', { name: /Add to optimization plan|Remove from plan/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /Include in plan|Remove from plan/i }).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Current' })[0]);
     expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
@@ -571,6 +576,14 @@ describe('Result Workspace improvement and verification workflows', () => {
     );
 
     switchResultChapter('Verify');
+    expect(screen.getByRole('heading', { name: /Improvements proposed/i })).toBeInTheDocument();
+    expect(screen.getByText(/No artifacts have been prepared, applied, or verified/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Prepare optimization plan/i }));
+    fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
+    prepareOpenOptimizationPlan();
+    fireEvent.click(screen.getByRole('button', { name: /Close plan/i }));
+    switchResultChapter('Verify');
 
     expect(screen.getByRole('heading', { name: /Plan prepared/i })).toBeInTheDocument();
     const lifecycle = screen.getByRole('list', { name: /Verification lifecycle/i });
@@ -588,9 +601,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     fireEvent.click(screen.getByRole('button', { name: /Close plan/i }));
     expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Plan prepared/i })).toBeInTheDocument();
-    expect(screen.queryByText(/No Repository Intelligence verification baseline/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /View technical evidence/i }));
-    expect(await screen.findByText(/No Repository Intelligence verification baseline/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /View technical evidence/i })).toBeInTheDocument();
   });
 
   it('previews and creates an Optimization Pack PR only after explicit GitHub App confirmation', async () => {
@@ -619,7 +630,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
     fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
 
-    const applyFlow = screen.getByLabelText(/Optimization Apply Flow/i);
+    const applyFlow = prepareOpenOptimizationPlan();
     expect(within(applyFlow).getAllByText(/^Available$/i).length).toBeGreaterThan(0);
     expect(within(applyFlow).getByText('shipseal/optimization-pack')).toBeInTheDocument();
     expect(within(applyFlow).getByRole('button', { name: /Create GitHub PR/i })).toBeDisabled();
@@ -661,7 +672,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     switchResultChapter('Improve');
     fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
     fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
-    const applyFlow = screen.getByLabelText(/Optimization Apply Flow/i);
+    const applyFlow = prepareOpenOptimizationPlan();
 
     expect(within(applyFlow).getByText(/Rescan Verification/i)).toBeInTheDocument();
     expect(within(applyFlow).getByText(/Verification requires a later scan/i)).toBeInTheDocument();

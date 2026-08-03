@@ -394,12 +394,11 @@ function actionFor(
 ): RepositoryOptimizationAction {
   if (!output) return 'unavailable';
   const actions = unique(accumulator.actions);
-  if (actions.includes('strengthen')) return 'strengthen';
 
   const destinationExists = existingPaths.exact.has(normalizePath(repositoryDestinationPath)) || existingPaths.exact.has(normalizePath(accumulator.path));
-  if (destinationExists && /(^|\/)AGENTS\.md$/i.test(repositoryDestinationPath)) return 'strengthen';
+  if (destinationExists && (actions.includes('strengthen') || /(^|\/)AGENTS\.md$/i.test(repositoryDestinationPath))) return 'strengthen';
   if (destinationExists) return 'update';
-  return actions[0] || 'create';
+  return 'create';
 }
 
 function readinessFor(conflicts: RepositoryOptimizationConflict[]): RepositoryOptimizationReadiness {
