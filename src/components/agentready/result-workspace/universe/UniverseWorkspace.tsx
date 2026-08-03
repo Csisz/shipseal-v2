@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 import type React from 'react';
 import type { ReactNode } from 'react';
 import { useTheme } from 'next-themes';
-import { AlertOctagon, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, HelpCircle, Layers, Lightbulb, Maximize2, Minimize2, MoreHorizontal, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { AlertOctagon, ArrowLeft, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, HelpCircle, Layers, Lightbulb, Maximize2, Minimize2, MoreHorizontal, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { AgentOperatingModeId, AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { evaluateReadiness } from '@/lib/scoring';
 import { ScoreGauge } from '@/components/agentready/ScoreGauge';
@@ -338,6 +338,7 @@ function RepositoryAtlasVisualization({
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [excludedProposalIds, setExcludedProposalIds] = useState<Set<string>>(() => new Set());
   const [optimizationPlanOpen, setOptimizationPlanOpen] = useState(false);
+  const optimizationPlanTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [selectedOptimizationItemId, setSelectedOptimizationItemId] = useState<string | null>(null);
   const [preparedOptimizationPlan, setPreparedOptimizationPlan] = useState<PreparedRepositoryOptimizationPlan | null>(null);
   const [planPreparationNotice, setPlanPreparationNotice] = useState('');
@@ -747,6 +748,13 @@ function RepositoryAtlasVisualization({
     setTransformationMode('with-shipseal');
     setOptimizationPlanOpen(true);
     onPlanReviewed();
+  };
+
+  const handleOptimizationPlanOpenChange = (open: boolean) => {
+    setOptimizationPlanOpen(open);
+    if (!open) {
+      window.setTimeout(() => optimizationPlanTriggerRef.current?.focus(), 0);
+    }
   };
 
   const selectProposal = useCallback((proposal: RepositoryTransformationProposal) => {
@@ -1203,6 +1211,7 @@ function RepositoryAtlasVisualization({
             {optimizationPlan ? ` · ${optimizationPlan.summary.readyItemCount.toLocaleString()} ready` : ''}
           </div>
           <Button
+            ref={optimizationPlanTriggerRef}
             type="button"
             variant="outline"
             size="sm"
@@ -1325,7 +1334,7 @@ function RepositoryAtlasVisualization({
       onDiscardVerificationBaseline={onDiscardVerificationBaseline}
       onPackDownloaded={onPackagePrepared}
       onPrCreated={onPrCreated}
-      onClose={() => setOptimizationPlanOpen(false)}
+      mobile={isMobile}
     />
   );
 
@@ -1929,13 +1938,14 @@ function RepositoryAtlasVisualization({
         </div>
       )}
 
-      <Sheet open={optimizationPlanOpen} onOpenChange={setOptimizationPlanOpen}>
+      <Sheet open={optimizationPlanOpen} onOpenChange={handleOptimizationPlanOpenChange}>
         <SheetContent
-          side={isMobile ? 'bottom' : 'right'}
+          side="bottom"
           className={isMobile
-            ? 'max-h-[92dvh] overflow-y-auto overscroll-y-contain rounded-t-[1.75rem] px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-10'
-            : 'h-dvh w-[min(58rem,92vw)] max-w-none overflow-y-auto overscroll-y-contain px-5 pb-6 pt-10'}
+            ? 'inset-0 h-dvh max-h-none w-full max-w-none overflow-hidden rounded-none border-0 p-0 pb-[env(safe-area-inset-bottom)]'
+            : 'inset-x-[2vw] bottom-[2dvh] mx-auto h-[96dvh] max-h-[96dvh] w-[96vw] max-w-[1440px] overflow-hidden rounded-[1.75rem] border border-primary/20 p-0 shadow-2xl'}
           data-testid="optimization-artifact-review-sheet"
+          data-review-presentation={isMobile ? 'mobile-fullscreen' : 'desktop-workspace'}
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Review prepared artifacts</SheetTitle>
@@ -2181,7 +2191,7 @@ function OptimizationPlanReview({
   onDiscardVerificationBaseline,
   onPackDownloaded,
   onPrCreated,
-  onClose,
+  mobile,
 }: {
   report: ReadinessReport;
   plan: RepositoryOptimizationPlan;
@@ -2202,7 +2212,7 @@ function OptimizationPlanReview({
   onDiscardVerificationBaseline?: () => void;
   onPackDownloaded?: () => void;
   onPrCreated?: () => void;
-  onClose: () => void;
+  mobile: boolean;
 }) {
   const manifestPreview = serializeRepositoryOptimizationManifest(plan.manifest);
   const [packState, setPackState] = useState<'idle' | 'building' | 'downloaded' | 'error'>('idle');
@@ -2211,7 +2221,28 @@ function OptimizationPlanReview({
   const [prState, setPrState] = useState<'idle' | 'creating' | 'created' | 'error'>('idle');
   const [prError, setPrError] = useState('');
   const [prResult, setPrResult] = useState<{ url: string; branchName: string } | null>(null);
+  const [mobileReviewView, setMobileReviewView] = useState<'artifacts' | 'detail'>('artifacts');
+  const artifactButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const baselineSavedForCurrentPlan = Boolean(verificationBaseline && applyPlan && verificationBaseline.applyPlanId === applyPlan.id);
+
+  const selectReviewItem = (item: RepositoryOptimizationPlanItem) => {
+    onSelectItem(item);
+    if (mobile) setMobileReviewView('detail');
+  };
+
+  const moveArtifactFocus = (index: number, direction: 'next' | 'previous' | 'first' | 'last') => {
+    const nextIndex = direction === 'first'
+      ? 0
+      : direction === 'last'
+        ? plan.items.length - 1
+        : direction === 'next'
+          ? Math.min(index + 1, plan.items.length - 1)
+          : Math.max(index - 1, 0);
+    const nextItem = plan.items[nextIndex];
+    if (!nextItem) return;
+    onSelectItem(nextItem);
+    artifactButtonRefs.current.get(nextItem.id)?.focus();
+  };
 
   const saveVerificationBaseline = (method: VerificationBaselineMethod) => {
     if (!applyPlan || !onSaveVerificationBaseline) return;
@@ -2261,171 +2292,167 @@ function OptimizationPlanReview({
   };
 
   return (
-    <section className="rounded-[1.5rem] border border-primary/20 bg-background/25 p-4 md:p-5" aria-labelledby="optimization-plan-heading">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Optimization Plan</div>
-          <h3 id="optimization-plan-heading" className="mt-1 font-display text-xl font-semibold">Review generator-backed artifacts</h3>
-          <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Review evidence and generated artifacts first. Preparing validates and freezes the selected plan; it does not change repository files.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="outline" className={prepared ? 'border-success/40 text-success' : 'border-primary/40 text-primary-glow'}>
-            {prepared ? 'Prepared' : 'Proposed - not yet prepared'}
-          </Badge>
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Close plan
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <OptimizationPlanMetric label="Selected proposals" value={plan.summary.selectedProposalCount} />
-        <OptimizationPlanMetric label="Unique artifacts" value={plan.summary.artifactCount} />
-        <OptimizationPlanMetric label="Create" value={plan.summary.actionCounts.create} />
-        <OptimizationPlanMetric label="Update" value={plan.summary.actionCounts.update} />
-        <OptimizationPlanMetric label="Strengthen" value={plan.summary.actionCounts.strengthen} />
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {plan.summary.selectedDomains.map(domain => (
-          <Badge key={domain} variant="outline" className="border-border/60 text-muted-foreground">
-            {transformationDomainLabel(domain)}
-          </Badge>
-        ))}
-        <Badge variant="outline" className={plan.summary.blockedItemCount > 0 ? 'border-warning/50 text-warning' : plan.summary.reviewRequiredItemCount > 0 ? 'border-primary/35 text-primary-glow' : 'border-success/40 text-success'}>
-          {plan.summary.blockedItemCount > 0
-            ? `${plan.summary.blockedItemCount} blocked`
-            : plan.summary.reviewRequiredItemCount > 0
-              ? `${plan.summary.reviewRequiredItemCount} review required`
-              : 'Ready for package'}
-        </Badge>
-      </div>
-
-      {validation && (
-        <section className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4" aria-label="Plan validation">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Validation and preparation</div>
-              <p className="mt-1 text-sm text-foreground">
-                {validation.summary.validatedArtifactCount} artifact{validation.summary.validatedArtifactCount === 1 ? '' : 's'} validated;
-                {' '}{validation.summary.reviewRequiredCount} need review;
-                {' '}{validation.summary.blockingCount} blocking.
-              </p>
-            </div>
-            <Button type="button" size="sm" onClick={onPrepare} disabled={!validation.canPrepare || Boolean(prepared)} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              {prepared ? 'Plan prepared' : 'Prepare selected plan'}
-            </Button>
+    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[hsl(var(--universe-stage-bg))]" aria-labelledby="optimization-plan-heading">
+      <header className="flex-none border-b border-border/50 bg-background/80 px-4 py-3 pr-12 backdrop-blur-xl sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Prepared plan review</div>
+            <h3 id="optimization-plan-heading" className="mt-0.5 font-display text-xl font-semibold">Review generated artifacts</h3>
+            <p className="mt-1 max-w-3xl text-xs text-muted-foreground sm:text-sm">Reviewing and preparing this snapshot does not change repository files.</p>
           </div>
-          {preparationNotice && <p className="mt-3 text-xs text-muted-foreground" aria-live="polite">{preparationNotice}</p>}
-          {validation.issues.length > 0 && (
-            <ul className="mt-3 space-y-2">
-              {validation.issues.map(issue => (
-                <li key={issue.id} className="rounded-xl border border-border/45 bg-background/25 p-3 text-xs">
-                  <div className={issue.severity === 'blocking' ? 'font-semibold text-warning' : 'font-semibold text-primary-glow'}>
-                    {issue.severity === 'blocking' ? 'Blocking' : 'Review required'}: {issue.title}
-                  </div>
-                  <p className="mt-1 text-muted-foreground">{issue.explanation} {issue.recovery}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-          {!prepared && validation.canPrepare && (
-            <p className="mt-3 text-xs text-muted-foreground">
-              Artifact previews remain reviewable below. ZIP download and GitHub PR creation unlock only after explicit preparation.
-            </p>
-          )}
-        </section>
-      )}
+          <Badge variant="outline" className={prepared ? 'border-success/40 text-success' : 'border-primary/40 text-primary-glow'}>
+            {prepared ? 'Prepared' : 'Proposed'}
+          </Badge>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Optimization plan summary">
+          <OptimizationPlanMetric compact label="Proposals" value={plan.summary.selectedProposalCount} />
+          <OptimizationPlanMetric compact label="Artifacts" value={plan.summary.artifactCount} />
+          {plan.summary.actionCounts.create > 0 && <OptimizationPlanMetric compact label="Create" value={plan.summary.actionCounts.create} />}
+          {plan.summary.actionCounts.update > 0 && <OptimizationPlanMetric compact label="Update" value={plan.summary.actionCounts.update} />}
+          {plan.summary.actionCounts.strengthen > 0 && <OptimizationPlanMetric compact label="Strengthen" value={plan.summary.actionCounts.strengthen} />}
+          <span className="mx-1 hidden h-5 w-px bg-border/60 sm:block" aria-hidden="true" />
+          {plan.summary.selectedDomains.map(domain => (
+            <Badge key={domain} variant="outline" className="border-border/60 text-muted-foreground">{transformationDomainLabel(domain)}</Badge>
+          ))}
+        </div>
+
+        {validation && (
+          <section className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/55 bg-secondary/15 px-3 py-2.5" aria-label="Plan validation">
+            <div className="min-w-0 text-xs">
+              <span className="font-semibold text-foreground">{prepared ? 'Prepared snapshot' : 'Validation ready'}</span>
+              <span className="ml-2 text-muted-foreground">
+                {validation.summary.validatedArtifactCount} validated · {validation.summary.reviewRequiredCount} review · {validation.summary.blockingCount} blocking
+              </span>
+              {prepared && <span className="ml-2 text-success">Manifest matches {applyPlan?.summary.selectedArtifactCount || 0} selected artifacts.</span>}
+            </div>
+            {!prepared && (
+              <Button type="button" size="sm" onClick={onPrepare} disabled={!validation.canPrepare} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                Prepare selected plan
+              </Button>
+            )}
+            {preparationNotice && <p className="basis-full text-xs text-muted-foreground" aria-live="polite">{preparationNotice}</p>}
+            {validation.issues.length > 0 && (
+              <details className="basis-full rounded-lg border border-border/45 bg-background/25 px-3 py-2">
+                <summary className="cursor-pointer text-xs font-semibold">Review {validation.issues.length} validation issue{validation.issues.length === 1 ? '' : 's'}</summary>
+                <ul className="mt-2 space-y-2">
+                  {validation.issues.map(issue => (
+                    <li key={issue.id} className="text-xs">
+                      <span className={issue.severity === 'blocking' ? 'font-semibold text-warning' : 'font-semibold text-primary-glow'}>{issue.title}:</span>{' '}
+                      <span className="text-muted-foreground">{issue.explanation} {issue.recovery}</span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </section>
+        )}
+      </header>
 
       {plan.items.length === 0 ? (
-        <div className="mt-5 rounded-2xl border border-border/55 bg-secondary/15 p-4 text-sm text-muted-foreground">
+        <div className="m-4 rounded-2xl border border-border/55 bg-secondary/15 p-4 text-sm text-muted-foreground">
           No selected proposals are active. Re-include a proposed improvement to restore its deterministic plan item.
         </div>
       ) : (
-        <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.2fr)]">
-          <div className="space-y-2" aria-label="Optimization Plan artifacts">
-            {plan.items.map(item => (
-              <button
-                key={item.id}
-                type="button"
-                aria-pressed={selectedItem?.id === item.id}
-                onClick={() => onSelectItem(item)}
-                className={`block w-full rounded-2xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  selectedItem?.id === item.id
-                    ? 'border-primary/50 bg-primary/10'
-                    : 'border-border/55 bg-background/20 hover:border-primary/35'
-                }`}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="min-w-0 flex-1 break-all text-sm font-medium text-foreground">{item.artifact.path}</span>
-                  <Badge variant="outline" className={optimizationReadinessClass(item.readiness)}>
-                    {optimizationReadinessLabel(item.readiness)}
-                  </Badge>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-muted-foreground">
-                  <span>{optimizationActionLabel(item.artifact.action)}</span>
-                  <span>-</span>
-                  <span>{transformationDomainLabel(item.domains[0])}</span>
-                  <span>-</span>
-                  <span>{item.proposalIds.length} proposal{item.proposalIds.length === 1 ? '' : 's'}</span>
-                </div>
-                <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{item.purpose}</p>
-              </button>
-            ))}
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto xl:grid xl:grid-cols-[minmax(20rem,0.38fr)_minmax(0,0.62fr)] xl:overflow-hidden" data-review-layout={mobile ? 'single-pane' : 'master-detail'}>
+          <section
+            className={`${mobile && mobileReviewView === 'detail' ? 'hidden' : 'block'} border-border/50 bg-background/30 p-3 sm:p-4 xl:min-h-0 xl:overflow-y-auto xl:border-r`}
+            aria-label="Optimization Plan artifacts"
+            data-review-pane="artifact-list"
+          >
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h4 className="font-display text-base font-semibold">Artifacts</h4>
+                <p className="text-xs text-muted-foreground">{plan.items.length} generated file{plan.items.length === 1 ? '' : 's'}</p>
+              </div>
+            </div>
+            <div className="space-y-2" role="listbox" aria-label="Prepared plan artifact list">
+              {plan.items.map((item, index) => (
+                <button
+                  key={item.id}
+                  ref={node => {
+                    if (node) artifactButtonRefs.current.set(item.id, node);
+                    else artifactButtonRefs.current.delete(item.id);
+                  }}
+                  type="button"
+                  role="option"
+                  aria-selected={selectedItem?.id === item.id}
+                  title={item.artifact.path}
+                  onClick={() => selectReviewItem(item)}
+                  onKeyDown={event => {
+                    const direction = event.key === 'ArrowDown' ? 'next' : event.key === 'ArrowUp' ? 'previous' : event.key === 'Home' ? 'first' : event.key === 'End' ? 'last' : null;
+                    if (!direction) return;
+                    event.preventDefault();
+                    moveArtifactFocus(index, direction);
+                  }}
+                  className={`block w-full rounded-xl border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${selectedItem?.id === item.id ? 'border-primary/55 bg-primary/10 shadow-sm shadow-primary/10' : 'border-border/50 bg-background/20 hover:border-primary/35'}`}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{item.artifact.path}</span>
+                    {item.readiness !== 'ready' && <Badge variant="outline" className={optimizationReadinessClass(item.readiness)}>{optimizationReadinessLabel(item.readiness)}</Badge>}
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1 text-[11px] text-muted-foreground">
+                    <span className="font-medium text-foreground/80">{optimizationActionLabel(item.artifact.action)}</span>
+                    <span>{transformationDomainLabel(item.domains[0])}</span>
+                    <span>{item.proposalIds.length} proposal{item.proposalIds.length === 1 ? '' : 's'}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
 
-          <OptimizationPlanArtifactDetail
-            item={selectedItem}
-            proposals={proposals}
-            excludedProposalIds={excludedProposalIds}
-            onToggleProposalIncluded={onToggleProposalIncluded}
-          />
-        </div>
-      )}
+          <section
+            className={`${mobile && mobileReviewView === 'artifacts' ? 'hidden' : 'block'} min-w-0 p-3 sm:p-4 xl:min-h-0 xl:overflow-y-auto`}
+            data-review-pane="artifact-detail"
+          >
+            {mobile && (
+              <Button type="button" variant="ghost" size="sm" onClick={() => setMobileReviewView('artifacts')} className="mb-3">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to artifacts
+              </Button>
+            )}
+            <OptimizationPlanArtifactDetail item={selectedItem} proposals={proposals} excludedProposalIds={excludedProposalIds} onToggleProposalIncluded={onToggleProposalIncluded} />
 
-      {prepared && (
-        <OptimizationApplyFlow
-          applyPlan={applyPlan}
-          connection={connection}
-          packState={packState}
-          packError={packError}
-          prConfirmed={prConfirmed}
-          prState={prState}
-          prError={prError}
-          prResult={prResult}
-          manifestPreview={manifestPreview}
-          baseline={verificationBaseline}
-          verificationResult={verificationResult}
-          baselineSavedForCurrentPlan={baselineSavedForCurrentPlan}
-          onDownloadPack={handleDownloadPack}
-          onSaveBaseline={() => saveVerificationBaseline('manual-baseline')}
-          onDiscardBaseline={onDiscardVerificationBaseline}
-          onPrConfirmedChange={setPrConfirmed}
-          onCreatePr={handleCreatePr}
-        />
-      )}
-      {!prepared && verificationBaseline && (
-        <div className="mt-5">
-          <RepositoryVerificationPanel
-            baseline={verificationBaseline}
-            verificationResult={verificationResult}
-            baselineSavedForCurrentPlan={false}
-            onSaveBaseline={() => undefined}
-            onDiscardBaseline={onDiscardVerificationBaseline}
-          />
+            {prepared && (
+              <OptimizationApplyFlow
+                applyPlan={applyPlan}
+                connection={connection}
+                packState={packState}
+                packError={packError}
+                prConfirmed={prConfirmed}
+                prState={prState}
+                prError={prError}
+                prResult={prResult}
+                manifestPreview={manifestPreview}
+                baseline={verificationBaseline}
+                verificationResult={verificationResult}
+                baselineSavedForCurrentPlan={baselineSavedForCurrentPlan}
+                onDownloadPack={handleDownloadPack}
+                onSaveBaseline={() => saveVerificationBaseline('manual-baseline')}
+                onDiscardBaseline={onDiscardVerificationBaseline}
+                onPrConfirmedChange={setPrConfirmed}
+                onCreatePr={handleCreatePr}
+              />
+            )}
+            {!prepared && verificationBaseline && (
+              <details className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+                <summary className="cursor-pointer text-sm font-semibold">Verification baseline details</summary>
+                <div className="mt-3">
+                  <RepositoryVerificationPanel baseline={verificationBaseline} verificationResult={verificationResult} baselineSavedForCurrentPlan={false} onSaveBaseline={() => undefined} onDiscardBaseline={onDiscardVerificationBaseline} />
+                </div>
+              </details>
+            )}
+          </section>
         </div>
       )}
     </section>
   );
 }
 
-function OptimizationPlanMetric({ label, value }: { label: string; value: number }) {
+function OptimizationPlanMetric({ label, value, compact = false }: { label: string; value: number; compact?: boolean }) {
   return (
-    <div className="rounded-2xl border border-border/50 bg-secondary/15 p-3">
-      <div className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 font-display text-2xl font-semibold text-foreground">{value.toLocaleString()}</div>
+    <div className={compact ? 'inline-flex items-baseline gap-1.5 rounded-full border border-border/50 bg-secondary/15 px-2.5 py-1' : 'rounded-2xl border border-border/50 bg-secondary/15 p-3'}>
+      <div className={compact ? 'font-display text-sm font-semibold text-foreground' : 'mt-1 font-display text-2xl font-semibold text-foreground'}>{value.toLocaleString()}</div>
+      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -2467,6 +2494,7 @@ function OptimizationApplyFlow({
   onPrConfirmedChange: (confirmed: boolean) => void;
   onCreatePr: () => void;
 }) {
+  const [prPreviewOpen, setPrPreviewOpen] = useState(false);
   if (!applyPlan) return null;
   const prPreview = applyPlan.prPreview;
   const canCreatePr = prPreview.canUseGitHubApp && prConfirmed && prState !== 'creating';
@@ -2474,24 +2502,19 @@ function OptimizationApplyFlow({
   const blockedCount = applyPlan.summary.blockedCount;
 
   return (
-    <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]" aria-label="Optimization Apply Flow">
+    <div className="mt-4 grid gap-3 lg:grid-cols-2" aria-label="Optimization Apply Flow">
       <section className="rounded-2xl border border-primary/20 bg-background/20 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Optimization Pack ZIP</div>
-            <h4 className="mt-1 font-display text-lg font-semibold">Download review package</h4>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Export package</div>
+            <h4 className="mt-1 font-display text-lg font-semibold">Download Optimization Package</h4>
           </div>
           <Badge variant="outline" className={blockedCount > 0 ? 'border-warning/50 text-warning' : reviewCount > 0 ? 'border-primary/35 text-primary-glow' : 'border-success/40 text-success'}>
             {applyPlan.summary.zipFileCount} files
           </Badge>
         </div>
-        <div className="mt-4 grid grid-cols-3 gap-2">
-          <OptimizationPlanMetric label="Ready" value={applyPlan.summary.readyCount} />
-          <OptimizationPlanMetric label="Review" value={reviewCount} />
-          <OptimizationPlanMetric label="Blocked" value={blockedCount} />
-        </div>
         <p className="mt-4 text-sm text-muted-foreground">
-          Includes selected artifacts, `optimization-manifest.json`, `APPLY_INSTRUCTIONS.md` and `REVIEW_NOTES.md`.
+          Includes the prepared artifacts, manifest, apply instructions, and review notes. Downloading does not modify the repository.
         </p>
         <Button
           type="button"
@@ -2513,25 +2536,32 @@ function OptimizationApplyFlow({
       <section className="rounded-2xl border border-primary/20 bg-background/20 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">GitHub PR Preview</div>
-            <h4 className="mt-1 font-display text-lg font-semibold">Create through GitHub App</h4>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">GitHub</div>
+            <h4 className="mt-1 font-display text-lg font-semibold">Preview pull request</h4>
           </div>
           <Badge variant="outline" className={prPreview.canUseGitHubApp ? 'border-success/40 text-success' : 'border-border/60 text-muted-foreground'}>
             {prPreview.canUseGitHubApp ? 'Available' : 'Manual fallback'}
           </Badge>
         </div>
 
-        <div className="mt-4 grid gap-2 text-sm">
-          <Row label="Repository" value={connection.owner && connection.repo ? `${connection.owner}/${connection.repo}` : 'Not connected'} />
-          <Row label="Branch" value={prPreview.branchName} />
-          <Row label="Title" value={prPreview.title} />
-          <Row label="Files in PR" value={`${prPreview.files.length}`} />
-          <Row label="Review-required" value={`${prPreview.reviewRequiredFiles.length}`} />
-          <Row label="Blocked" value={`${prPreview.blockedFiles.length}`} />
-        </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Review {prPreview.files.length} file action{prPreview.files.length === 1 ? '' : 's'}, branch, title, and diff before confirmation. Opening the preview does not mutate GitHub.
+        </p>
+        <Button type="button" variant="outline" size="sm" onClick={() => setPrPreviewOpen(current => !current)} className="mt-4 border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+          {prPreviewOpen ? 'Close GitHub PR preview' : 'Preview GitHub PR'}
+        </Button>
 
-        {prPreview.canUseGitHubApp ? (
-          <div className="mt-4 space-y-3">
+        {prPreviewOpen && (
+          <div className="mt-4 space-y-3 rounded-xl border border-border/55 bg-secondary/10 p-3" aria-label="GitHub PR confirmation preview">
+            <div className="grid gap-2 text-sm">
+              <Row label="Repository" value={connection.owner && connection.repo ? `${connection.owner}/${connection.repo}` : 'Not connected'} />
+              <Row label="Branch" value={prPreview.branchName} />
+              <Row label="Title" value={prPreview.title} />
+              <Row label="Files in PR" value={`${prPreview.files.length}`} />
+              <Row label="Review-required" value={`${prPreview.reviewRequiredFiles.length}`} />
+              <Row label="Blocked" value={`${prPreview.blockedFiles.length}`} />
+            </div>
+            {prPreview.canUseGitHubApp ? <>
             <label className="flex gap-3 rounded-2xl border border-border/55 bg-secondary/15 p-3 text-sm">
               <input
                 type="checkbox"
@@ -2554,33 +2584,31 @@ function OptimizationApplyFlow({
               )}
               {prState === 'error' && <span className="text-warning">{prError}</span>}
             </div>
-          </div>
-        ) : (
-          <div className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-3 text-sm text-muted-foreground">
-            <p>{prPreview.unavailableReason}</p>
-            <p className="mt-2">Use the Optimization Pack ZIP and manual git flow, or reconnect with the GitHub App and rescan the selected repository.</p>
+            </> : (
+              <div className="rounded-2xl border border-border/55 bg-secondary/15 p-3 text-sm text-muted-foreground">
+                <p>{prPreview.unavailableReason}</p>
+                <p className="mt-2">Use the Optimization Pack ZIP and manual git flow, or reconnect with the GitHub App and rescan the selected repository.</p>
+              </div>
+            )}
+
+            <details className="rounded-2xl border border-border/55 bg-secondary/15 p-4">
+              <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Diff preview</summary>
+              <div className="mt-3 space-y-3">
+                {prPreview.files.slice(0, 8).map(file => <OptimizationPrFilePreview key={file.path} file={file} />)}
+                {prPreview.files.length === 0 && <p className="text-sm text-muted-foreground">No PR-ready files are selected.</p>}
+              </div>
+            </details>
           </div>
         )}
-
-        <details className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
-          <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            Diff preview
-          </summary>
-          <div className="mt-3 space-y-3">
-            {prPreview.files.slice(0, 8).map(file => <OptimizationPrFilePreview key={file.path} file={file} />)}
-            {prPreview.files.length === 0 && <p className="text-sm text-muted-foreground">No PR-ready files are selected.</p>}
-          </div>
-        </details>
       </section>
 
-      <RepositoryVerificationPanel
-        applyPlan={applyPlan}
-        baseline={baseline}
-        verificationResult={verificationResult}
-        baselineSavedForCurrentPlan={baselineSavedForCurrentPlan}
-        onSaveBaseline={onSaveBaseline}
-        onDiscardBaseline={onDiscardBaseline}
-      />
+      <details className="lg:col-span-2 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+        <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">After applying changes · verification baseline</summary>
+        <p className="mt-2 text-sm text-muted-foreground">Run a later scan to verify the prepared artifacts. Verify remains the primary lifecycle surface.</p>
+        <div className="mt-3">
+          <RepositoryVerificationPanel applyPlan={applyPlan} baseline={baseline} verificationResult={verificationResult} baselineSavedForCurrentPlan={baselineSavedForCurrentPlan} onSaveBaseline={onSaveBaseline} onDiscardBaseline={onDiscardBaseline} />
+        </div>
+      </details>
 
       <details className="xl:col-span-2 rounded-2xl border border-border/55 bg-secondary/15 p-4">
         <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -2780,6 +2808,13 @@ function OptimizationPlanArtifactDetail({
   excludedProposalIds: Set<string>;
   onToggleProposalIncluded: (proposalId: string) => void;
 }) {
+  const [contentCopied, setContentCopied] = useState(false);
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  useEffect(() => {
+    setContentCopied(false);
+    setEvidenceOpen(false);
+  }, [item?.id]);
+
   if (!item) {
     return (
       <aside className="rounded-2xl border border-border/55 bg-secondary/15 p-5 text-sm text-muted-foreground">
@@ -2793,9 +2828,20 @@ function OptimizationPlanArtifactDetail({
     .sort((left, right) => left.title.localeCompare(right.title));
   const activeRelatedProposals = relatedProposals.filter(proposal => !excludedProposalIds.has(proposal.id));
   const excludedRelatedProposals = relatedProposals.filter(proposal => excludedProposalIds.has(proposal.id));
+  const decisionProposal = activeRelatedProposals[0] || excludedRelatedProposals[0];
+  const decisionIncluded = decisionProposal ? !excludedProposalIds.has(decisionProposal.id) : false;
+
+  const copyGeneratedContent = async () => {
+    try {
+      await navigator.clipboard.writeText(item.artifact.content);
+      setContentCopied(true);
+    } catch {
+      setContentCopied(false);
+    }
+  };
 
   return (
-    <aside className="rounded-2xl border border-primary/15 bg-background/25 p-5" aria-labelledby="optimization-artifact-heading">
+    <aside className="min-w-0 rounded-2xl border border-primary/15 bg-background/25 p-4 sm:p-5" aria-labelledby="optimization-artifact-heading">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="outline" className={optimizationReadinessClass(item.readiness)}>
           {optimizationReadinessLabel(item.readiness)}
@@ -2806,54 +2852,77 @@ function OptimizationPlanArtifactDetail({
         </Badge>
       </div>
 
-      <h4 id="optimization-artifact-heading" className="mt-3 break-words font-display text-lg font-semibold">{item.title}</h4>
+      <h4 id="optimization-artifact-heading" className="mt-3 break-words font-display text-xl font-semibold">{item.title}</h4>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.purpose}</p>
 
-      <div className="mt-4 grid gap-2 text-sm">
+      <div className="mt-4 grid gap-2 rounded-xl border border-border/50 bg-secondary/10 p-3 text-sm">
         <Row label="Generated path" value={item.artifact.path} />
         <Row label="Future destination" value={item.artifact.repositoryDestinationPath} />
-        <Row label="Generator" value={item.artifact.generatorId} />
-        <Row label="Contributors" value={item.proposalIds.join(', ')} />
+        <Row label="Action" value={optimizationActionLabel(item.artifact.action)} />
+        <Row label="Domain" value={item.domains.map(transformationDomainLabel).join(', ')} />
       </div>
 
-      <details open className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
+      {decisionProposal && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/5 p-3">
+          <div className="min-w-0">
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Plan decision</div>
+            <div className="mt-1 truncate text-sm font-medium" title={decisionProposal.title}>{decisionProposal.title}</div>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={() => onToggleProposalIncluded(decisionProposal.id)} className={decisionIncluded ? 'border-border/60 bg-background/25' : 'border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow'}>
+            {decisionIncluded ? 'Remove from plan' : 'Include in plan'}
+          </Button>
+        </div>
+      )}
+
+      <section className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4" aria-label="Generated content preview">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Generated content</div>
+            <h5 className="mt-1 text-sm font-semibold">Prepared artifact preview</h5>
+          </div>
+          <Button type="button" variant="outline" size="sm" onClick={copyGeneratedContent} className="border-border/60 bg-background/25">
+            <Copy className="mr-2 h-3.5 w-3.5" /> {contentCopied ? 'Copied' : 'Copy content'}
+          </Button>
+        </div>
+        <pre className="mt-3 max-h-[24rem] overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-xl bg-inset p-3 font-mono text-[11px] leading-relaxed text-muted-foreground" tabIndex={0}>
+          {item.artifact.content || 'Generated content could not be prepared for this artifact.'}
+        </pre>
+      </section>
+
+      <details className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
         <summary className="cursor-pointer select-none text-sm font-semibold">Contributing proposals</summary>
         <div className="mt-3 space-y-2">
           {activeRelatedProposals.map(proposal => (
-            <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/45 bg-background/20 px-3 py-2">
+            <div key={proposal.id} className="rounded-xl border border-border/45 bg-background/20 px-3 py-2">
               <div className="min-w-0">
                 <div className="break-words text-sm font-medium text-foreground">{proposal.title}</div>
                 <div className="text-xs text-muted-foreground">{transformationDomainLabel(proposal.domain)}</div>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => onToggleProposalIncluded(proposal.id)} className="border-border/60 bg-background/25">
-                Remove from plan
-              </Button>
             </div>
           ))}
           {excludedRelatedProposals.map(proposal => (
-            <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/45 bg-background/10 px-3 py-2 opacity-85">
+            <div key={proposal.id} className="rounded-xl border border-border/45 bg-background/10 px-3 py-2 opacity-85">
               <div className="min-w-0">
                 <div className="break-words text-sm font-medium text-muted-foreground">{proposal.title}</div>
                 <div className="text-xs text-muted-foreground">Excluded from current plan</div>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={() => onToggleProposalIncluded(proposal.id)} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
-                Add back to plan
-              </Button>
             </div>
           ))}
         </div>
       </details>
 
-      <details open className="mt-4 rounded-2xl border border-border/55 bg-secondary/15 p-4">
-        <summary className="cursor-pointer select-none text-sm font-semibold">Scan evidence</summary>
-        <ul className="mt-3 space-y-2">
-          {item.evidenceReferences.slice(0, 6).map(evidence => (
-            <li key={`${evidence.state}:${evidence.label}:${evidence.detail || ''}`} className="rounded-xl border border-border/45 bg-background/20 px-3 py-2">
-              <div className="text-sm font-medium text-foreground">{evidence.label}</div>
-              {evidence.detail && <div className="mt-1 text-xs text-muted-foreground">{evidence.detail}</div>}
-            </li>
-          ))}
-        </ul>
+      <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4" onToggle={event => setEvidenceOpen(event.currentTarget.open)}>
+        <summary className="cursor-pointer select-none text-sm font-semibold">Complete scan evidence</summary>
+        {evidenceOpen && (
+          <ul className="mt-3 space-y-2">
+            {item.evidenceReferences.slice(0, 6).map(evidence => (
+              <li key={`${evidence.state}:${evidence.label}:${evidence.detail || ''}`} className="rounded-xl border border-border/45 bg-background/20 px-3 py-2">
+                <div className="text-sm font-medium text-foreground">{evidence.label}</div>
+                {evidence.detail && <div className="mt-1 text-xs text-muted-foreground">{evidence.detail}</div>}
+              </li>
+            ))}
+          </ul>
+        )}
       </details>
 
       <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
@@ -2870,24 +2939,21 @@ function OptimizationPlanArtifactDetail({
       </details>
 
       <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
-        <summary className="cursor-pointer select-none text-sm font-semibold">Expected agent behavior</summary>
+        <summary className="cursor-pointer select-none text-sm font-semibold">Verification expectation</summary>
         <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
           {item.expectedAgentBehavior.map(text => <li key={text}>{text}</li>)}
         </ul>
       </details>
 
       <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
-        <summary className="cursor-pointer select-none text-sm font-semibold">Generated content outline</summary>
+        <summary className="cursor-pointer select-none text-sm font-semibold">Advanced generator metadata</summary>
+        <div className="mt-3 grid gap-2 text-sm">
+          <Row label="Generator" value={item.artifact.generatorId} />
+          <Row label="Contributors" value={item.proposalIds.join(', ')} />
+        </div>
         <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
           {item.artifact.outline.map(line => <li key={line} className="break-words">{line}</li>)}
         </ul>
-      </details>
-
-      <details className="mt-3 rounded-2xl border border-border/55 bg-secondary/15 p-4">
-        <summary className="cursor-pointer select-none text-sm font-semibold">Real generated content preview</summary>
-        <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-inset p-3 text-[11px] leading-relaxed text-muted-foreground">
-          {item.artifact.excerpt || 'Generated content could not be prepared for this artifact.'}
-        </pre>
       </details>
 
       {item.conflicts.length > 0 && (

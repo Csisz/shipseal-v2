@@ -149,6 +149,11 @@ function prepareOpenOptimizationPlan() {
   return screen.getByLabelText(/Optimization Apply Flow/i);
 }
 
+function closeOpenOptimizationPlan() {
+  const review = screen.getByTestId('optimization-artifact-review-sheet');
+  fireEvent.click(within(review).getByRole('button', { name: /^Close$/i }));
+}
+
 function openMoreControls() {
   const trigger = screen.getByRole('button', { name: /More Universe controls/i });
   fireEvent.keyDown(trigger, { key: 'ArrowDown' });
@@ -520,26 +525,53 @@ describe('Result Workspace improvement and verification workflows', () => {
 
     switchResultChapter('Improve');
     fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
+    expect(screen.queryByTestId('optimization-artifact-review-sheet')).not.toBeInTheDocument();
+    const reviewTrigger = screen.getByRole('button', { name: /Review optimization plan/i });
+    reviewTrigger.focus();
+    fireEvent.click(reviewTrigger);
 
-    expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Review generated artifacts/i })).toBeInTheDocument();
+    const reviewWorkspace = screen.getByTestId('optimization-artifact-review-sheet');
+    expect(reviewWorkspace).toHaveAttribute('data-review-presentation', 'desktop-workspace');
+    expect(screen.getByRole('dialog', { name: /Review prepared artifacts/i })).toBe(reviewWorkspace);
+    expect(within(reviewWorkspace).getByRole('listbox', { name: /Prepared plan artifact list/i })).toBeInTheDocument();
     expect(screen.getByText(new RegExp(`^${transformation.proposals.length.toLocaleString()} proposed improvements selected`))).toBeInTheDocument();
     openDisclosure('Proposal summary');
     expect(screen.getByText('artifacts')).toBeInTheDocument();
     expect(screen.getAllByText(/Ready for package|Review required|Blocked/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Create|Update|Strengthen/i).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: new RegExp(firstItem.artifact.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }));
+    const artifactOptions = within(reviewWorkspace).getAllByRole('option');
+    expect(artifactOptions[0]).toHaveAttribute('title');
+    fireEvent.keyDown(artifactOptions[0], { key: 'ArrowDown' });
+    expect(artifactOptions[1]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(within(reviewWorkspace).getByRole('option', { name: new RegExp(firstItem.artifact.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }));
+    const generatedPreview = within(reviewWorkspace).getByLabelText(/Generated content preview/i);
+    const normalizeWhitespace = (value: string) => value.replace(/\s+/g, ' ').trim();
+    expect(normalizeWhitespace(generatedPreview.querySelector('pre')?.textContent ?? '')).toContain(
+      normalizeWhitespace(firstItem.artifact.content.slice(0, 80)),
+    );
+    expect(within(reviewWorkspace).getAllByRole('heading', { name: firstItem.title })).toHaveLength(1);
+    const evidenceDisclosure = screen.getByText(/Complete scan evidence/i).closest('details');
+    if (!evidenceDisclosure) throw new Error('Expected complete scan evidence disclosure.');
+    expect(evidenceDisclosure).not.toHaveAttribute('open');
+    expect(within(evidenceDisclosure).queryByText(firstItem.evidenceReferences[0].label)).not.toBeInTheDocument();
+    fireEvent.click(within(evidenceDisclosure).getByText(/Complete scan evidence/i));
+    expect(await within(evidenceDisclosure).findByText(firstItem.evidenceReferences[0].label)).toBeInTheDocument();
     expect(screen.getByText(firstItem.artifact.generatorId)).toBeInTheDocument();
     expect(screen.getByText(/Contributing proposals/i)).toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: /Remove from plan/i })[0]);
     expect(screen.getByText(new RegExp(`^${(transformation.proposals.length - 1).toLocaleString()} proposed improvements selected`))).toBeInTheDocument();
 
     const applyFlow = prepareOpenOptimizationPlan();
-    expect(within(applyFlow).getAllByText(/Optimization Pack ZIP/i).length).toBeGreaterThan(0);
-    expect(within(applyFlow).getByText(/GitHub PR Preview/i)).toBeInTheDocument();
+    expect(within(applyFlow).getByText(/Export package/i)).toBeInTheDocument();
+    expect(within(applyFlow).getByRole('heading', { name: /Preview pull request/i })).toBeInTheDocument();
+    fireEvent.click(within(applyFlow).getByRole('button', { name: /Preview GitHub PR/i }));
     expect(within(applyFlow).getByText(/Manual fallback/i)).toBeInTheDocument();
-    expect(within(applyFlow).getByText(/APPLY_INSTRUCTIONS.md/i)).toBeInTheDocument();
+    const manifestDisclosure = within(applyFlow).getByText(/Manifest and apply instructions/i).closest('details');
+    expect(manifestDisclosure).not.toHaveAttribute('open');
+    fireEvent.click(within(applyFlow).getByText(/Manifest and apply instructions/i));
+    expect(within(applyFlow).getByText(/This ZIP did not change repository files/i)).toBeInTheDocument();
     expect(within(applyFlow).queryByText(/\bApplied\b|\bVerified\b/i)).not.toBeInTheDocument();
 
     fireEvent.click(within(applyFlow).getByRole('button', { name: /Download Optimization Pack/i }));
@@ -549,18 +581,19 @@ describe('Result Workspace improvement and verification workflows', () => {
     expect(screen.getByText(/Manifest and apply instructions/i)).toBeInTheDocument();
     expect(screen.getAllByText(/ShipSeal Delivery Pack/i).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /Close plan/i }));
+    closeOpenOptimizationPlan();
+    await waitFor(() => expect(reviewTrigger).toHaveFocus());
     switchToAtlas2D();
     const proposedButtons = await screen.findAllByRole('button', { name: /Proposed With ShipSeal entity/i });
     fireEvent.click(proposedButtons[0]);
     expect(screen.getAllByRole('button', { name: /Include in plan|Remove from plan/i }).length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Current' })[0]);
-    expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Review generated artifacts/i })).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: 'With ShipSeal' })[0]);
     fireEvent.click(screen.getByRole('button', { name: /Universe 3D/i }));
     fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
-    expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Review generated artifacts/i })).toBeInTheDocument();
   }, 20000);
 
   it('keeps Verify concise until prepared artifacts are explicitly reviewed', async () => {
@@ -582,7 +615,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
     fireEvent.click(screen.getByRole('button', { name: /Review optimization plan/i }));
     prepareOpenOptimizationPlan();
-    fireEvent.click(screen.getByRole('button', { name: /Close plan/i }));
+    closeOpenOptimizationPlan();
     switchResultChapter('Verify');
 
     expect(screen.getByRole('heading', { name: /Plan prepared/i })).toBeInTheDocument();
@@ -591,15 +624,15 @@ describe('Result Workspace improvement and verification workflows', () => {
     expect(within(lifecycle).getAllByRole('listitem')).toHaveLength(4);
     expect(within(lifecycle).getByText('Prepared').closest('li')).toHaveAttribute('aria-current', 'step');
     expect(screen.getByText(/Apply or export the plan. After the repository changes, run a later scan/i)).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Review generated artifacts/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Optimization Plan artifacts/i)).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Review prepared artifacts/i }));
     expect(screen.getByTestId('optimization-artifact-review-sheet')).toHaveAttribute('data-state', 'open');
-    expect(screen.getByRole('heading', { name: /Review generator-backed artifacts/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Review generated artifacts/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Close plan/i }));
-    expect(screen.queryByRole('heading', { name: /Review generator-backed artifacts/i })).not.toBeInTheDocument();
+    closeOpenOptimizationPlan();
+    expect(screen.queryByRole('heading', { name: /Review generated artifacts/i })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Plan prepared/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /View technical evidence/i })).toBeInTheDocument();
   });
@@ -632,6 +665,8 @@ describe('Result Workspace improvement and verification workflows', () => {
 
     const applyFlow = prepareOpenOptimizationPlan();
     expect(within(applyFlow).getAllByText(/^Available$/i).length).toBeGreaterThan(0);
+    expect(within(applyFlow).queryByRole('button', { name: /Create GitHub PR/i })).not.toBeInTheDocument();
+    fireEvent.click(within(applyFlow).getByRole('button', { name: /Preview GitHub PR/i }));
     expect(within(applyFlow).getByText('shipseal/optimization-pack')).toBeInTheDocument();
     expect(within(applyFlow).getByRole('button', { name: /Create GitHub PR/i })).toBeDisabled();
     expect(githubWriteMock.createGitHubAppReadinessPr).not.toHaveBeenCalled();

@@ -335,10 +335,17 @@ describe('Result Workspace composition', () => {
         fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
         fireEvent.click(screen.getByRole('button', { name: /Review (optimization )?plan/i }));
         const reviewSheet = await screen.findByTestId('optimization-artifact-review-sheet');
-        expect(reviewSheet).toHaveClass('max-h-[92dvh]', 'rounded-t-[1.75rem]');
+        expect(reviewSheet).toHaveAttribute('data-review-presentation', 'mobile-fullscreen');
+        expect(reviewSheet).toHaveClass('h-dvh', 'rounded-none', 'overflow-hidden');
+        expect(within(reviewSheet).getByLabelText(/Optimization Plan artifacts/i)).toBeInTheDocument();
+        const firstArtifact = within(reviewSheet).getAllByRole('option')[0];
+        fireEvent.click(firstArtifact);
+        expect(within(reviewSheet).getByRole('button', { name: /Back to artifacts/i })).toBeInTheDocument();
+        expect(within(reviewSheet).getByLabelText(/Generated content preview/i)).toBeInTheDocument();
+        fireEvent.click(within(reviewSheet).getByRole('button', { name: /Back to artifacts/i }));
         expect(within(reviewSheet).getByLabelText(/Optimization Plan artifacts/i)).toBeInTheDocument();
         fireEvent.click(within(reviewSheet).getByRole('button', { name: /Prepare selected plan/i }));
-        fireEvent.click(within(reviewSheet).getByRole('button', { name: /Close plan/i }));
+        fireEvent.click(within(reviewSheet).getByRole('button', { name: /^Close$/i }));
         switchResultChapter('Verify');
         expect(within(screen.getByRole('list', { name: /Verification lifecycle/i })).getByText('Prepared').closest('li')).toHaveAttribute('aria-current', 'step');
       }
