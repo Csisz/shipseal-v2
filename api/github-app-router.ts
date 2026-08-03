@@ -3,6 +3,7 @@ import archive from './_routes/github-app/archive.js';
 import callback from './_routes/github-app/callback.js';
 import createReadinessPr from './_routes/github-app/create-readiness-pr.js';
 import createRepositoryIntelligencePr from './_routes/github-app/create-repository-intelligence-pr.js';
+import createOptimizationPr from './_routes/github-app/create-optimization-pr.js';
 import installations from './_routes/github-app/installations.js';
 import login from './_routes/github-app/login.js';
 import oauthCallback from './_routes/github-app/oauth-callback.js';
@@ -16,6 +17,7 @@ const handlers: Readonly<Record<string, GitHubAppHandler>> = {
   callback,
   'create-readiness-pr': createReadinessPr,
   'create-repository-intelligence-pr': createRepositoryIntelligencePr,
+  'create-optimization-pr': createOptimizationPr,
   installations,
   login,
   'oauth-callback': oauthCallback,

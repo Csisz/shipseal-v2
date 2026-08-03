@@ -23,3 +23,5 @@ export {
 } from './readinessPrPayload';
 export { submitRepositoryIntelligencePrRequest, RepositoryIntelligencePrClientError } from './repositoryIntelligencePrClient';
 export type { RepositoryIntelligencePrPreviewResponse, RepositoryIntelligencePrApplyResponse } from './repositoryIntelligencePrClient';
+export { OptimizationPrClientError, submitOptimizationPrRequest } from './optimizationPrClient';
+export type { OptimizationPrApplyResponse, OptimizationPrPreviewResponse } from './optimizationPrClient';

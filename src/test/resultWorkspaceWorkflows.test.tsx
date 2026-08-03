@@ -12,6 +12,7 @@ import {
   buildRepositoryVerificationBaseline,
   buildRepositoryUniverseModel,
 } from '@/lib/workspace';
+import type { OptimizationGithubApplyRequest } from '@/lib/workspace';
 
 const universeMockState = vi.hoisted(() => ({
   models: [] as unknown[],
@@ -24,6 +25,7 @@ const universeMockState = vi.hoisted(() => ({
 
 const githubWriteMock = vi.hoisted(() => ({
   createGitHubAppReadinessPr: vi.fn(),
+  submitOptimizationPrRequest: vi.fn(),
 }));
 
 vi.mock('@/components/agentready/ScoreGauge', () => ({
@@ -118,6 +120,7 @@ vi.mock('@/lib/github/write', async () => {
   return {
     ...actual,
     createGitHubAppReadinessPr: githubWriteMock.createGitHubAppReadinessPr,
+    submitOptimizationPrRequest: githubWriteMock.submitOptimizationPrRequest,
   };
 });
 
@@ -245,6 +248,71 @@ describe('Result Workspace improvement and verification workflows', () => {
       branchName: 'shipseal/optimization-pack',
       baseBranch: 'main',
       fileCount: 3,
+    });
+    githubWriteMock.submitOptimizationPrRequest.mockReset();
+    githubWriteMock.submitOptimizationPrRequest.mockImplementation(async (request: OptimizationGithubApplyRequest) => {
+      if (request.mode === 'apply') {
+        return {
+          mode: 'apply',
+          ok: true,
+          existing: false,
+          resumed: false,
+          prUrl: 'https://github.com/Csisz/shipseal-v2/pull/123',
+          prNumber: 123,
+          repository: `${request.owner}/${request.repo}`,
+          baseBranch: request.baseBranch,
+          branchName: request.prepared.suggestedBranchName,
+          fileCount: request.prepared.files.length,
+          operationCounts: {
+            create: request.prepared.files.filter(file => file.action === 'create').length,
+            update: request.prepared.files.filter(file => file.action === 'update').length,
+            strengthen: request.prepared.files.filter(file => file.action === 'strengthen').length,
+          },
+          preparedPlanId: request.prepared.preparedPlanId,
+          applyPlanId: request.prepared.applyPlanId,
+          appliedAt: '2026-08-03T12:00:00.000Z',
+        };
+      }
+      const files = request.prepared.files.map(file => ({
+        ...file,
+        previousContent: file.action === 'create' ? undefined : '# Current repository content\n',
+        previousSha: file.action === 'create' ? undefined : `sha-${file.artifactId}`,
+        previousContentHash: file.action === 'create' ? undefined : 'current-content-hash',
+        diff: `--- a/${file.path}\n+++ b/${file.path}\n@@ -0,0 +1 @@\n+${file.nextContent.split('\n')[0]}`,
+        addedLines: 1,
+        removedLines: 0,
+        diffTruncated: false,
+        status: 'ready',
+        validationMessage: 'Repository state matches the reviewed prepared action.',
+      }));
+      return {
+        mode: 'preview',
+        plan: {
+          version: request.version,
+          preparedPlanId: request.prepared.preparedPlanId,
+          applyPlanId: request.prepared.applyPlanId,
+          repository: {
+            owner: request.owner,
+            repo: request.repo,
+            baseBranch: request.baseBranch,
+            baseCommit: 'base-commit-123',
+          },
+          branch: { suggestedName: request.prepared.suggestedBranchName, existingState: 'available' },
+          files,
+          pullRequest: { title: request.prepared.pullRequestTitle, body: request.prepared.pullRequestBody },
+          summary: {
+            totalFiles: files.length,
+            createCount: files.filter(file => file.action === 'create').length,
+            updateCount: files.filter(file => file.action === 'update').length,
+            strengthenCount: files.filter(file => file.action === 'strengthen').length,
+            totalBytes: files.reduce((total, file) => total + file.sizeBytes, 0),
+            alreadyAppliedCount: 0,
+          },
+          validation: { blockingIssues: [], warnings: [] },
+          applyReady: true,
+          fingerprint: 'reviewed-preview-fingerprint',
+        },
+      };
     });
     Object.defineProperty(URL, 'createObjectURL', {
       configurable: true,
@@ -639,6 +707,7 @@ describe('Result Workspace improvement and verification workflows', () => {
 
   it('previews and creates an Optimization Pack PR only after explicit GitHub App confirmation', async () => {
     const report = optimizationDashboardReport();
+    const onSaveVerificationBaseline = vi.fn();
     render(
       <ResultDashboard
         report={report}
@@ -646,6 +715,7 @@ describe('Result Workspace improvement and verification workflows', () => {
         onReset={vi.fn()}
         onClearHistory={vi.fn()}
         onReplayReveal={vi.fn()}
+        onSaveVerificationBaseline={onSaveVerificationBaseline}
         githubConnection={{
           connectionStatus: 'connected',
           sourceMode: 'github-app',
@@ -665,28 +735,45 @@ describe('Result Workspace improvement and verification workflows', () => {
 
     const applyFlow = prepareOpenOptimizationPlan();
     expect(within(applyFlow).getAllByText(/^Available$/i).length).toBeGreaterThan(0);
-    expect(within(applyFlow).queryByRole('button', { name: /Create GitHub PR/i })).not.toBeInTheDocument();
+    expect(within(applyFlow).queryByRole('button', { name: /Create reviewed branch and pull request/i })).not.toBeInTheDocument();
     fireEvent.click(within(applyFlow).getByRole('button', { name: /Preview GitHub PR/i }));
-    expect(within(applyFlow).getByText('shipseal/optimization-pack')).toBeInTheDocument();
-    expect(within(applyFlow).getByRole('button', { name: /Create GitHub PR/i })).toBeDisabled();
+    expect((await within(applyFlow).findAllByText(/shipseal\/optimization-pack-/i)).length).toBeGreaterThan(0);
+    expect(within(applyFlow).getByRole('button', { name: /Create reviewed branch and pull request/i })).toBeDisabled();
     expect(githubWriteMock.createGitHubAppReadinessPr).not.toHaveBeenCalled();
-
-    fireEvent.click(within(applyFlow).getByRole('checkbox'));
-    fireEvent.click(within(applyFlow).getByRole('button', { name: /Create GitHub PR/i }));
-
-    await waitFor(() => expect(githubWriteMock.createGitHubAppReadinessPr).toHaveBeenCalledTimes(1));
-    const payload = githubWriteMock.createGitHubAppReadinessPr.mock.calls[0][0];
-    expect(payload).toMatchObject({
+    expect(githubWriteMock.submitOptimizationPrRequest).toHaveBeenCalledTimes(1);
+    expect(githubWriteMock.submitOptimizationPrRequest.mock.calls[0][0]).toMatchObject({
+      mode: 'preview',
+      confirmed: false,
       installationId: 'installation-123',
       owner: 'Csisz',
       repo: 'shipseal-v2',
       baseBranch: 'main',
-      branchName: 'shipseal/optimization-pack',
-      prTitle: 'Add ShipSeal optimization pack',
     });
-    expect(payload.files.length).toBeGreaterThan(0);
-    expect(payload.files.every((file: { path: string }) => !file.path.startsWith('ready/'))).toBe(true);
-    expect(await within(applyFlow).findByText(/PR created/i)).toBeInTheDocument();
+    expect(onSaveVerificationBaseline).not.toHaveBeenCalled();
+
+    fireEvent.click(within(applyFlow).getByRole('checkbox'));
+    const confirmationButton = within(applyFlow).getByRole('button', { name: /Create reviewed branch and pull request/i });
+    fireEvent.click(confirmationButton);
+    fireEvent.click(confirmationButton);
+
+    await waitFor(() => expect(githubWriteMock.submitOptimizationPrRequest).toHaveBeenCalledTimes(2));
+    const payload = githubWriteMock.submitOptimizationPrRequest.mock.calls[1][0];
+    expect(payload).toMatchObject({
+      mode: 'apply',
+      confirmed: true,
+      installationId: 'installation-123',
+      owner: 'Csisz',
+      repo: 'shipseal-v2',
+      baseBranch: 'main',
+      expectedPreviewFingerprint: 'reviewed-preview-fingerprint',
+      expectedBaseCommit: 'base-commit-123',
+    });
+    expect(payload.prepared.files.length).toBeGreaterThan(0);
+    expect(payload.prepared.files.every((file: { path: string }) => !file.path.startsWith('ready/'))).toBe(true);
+    expect(await screen.findByText(/Pull request created/i)).toBeInTheDocument();
+    expect(screen.getByText(/Lifecycle is Applied, not Verified/i)).toBeInTheDocument();
+    expect(onSaveVerificationBaseline).toHaveBeenCalledTimes(1);
+    expect(onSaveVerificationBaseline.mock.calls[0][0]).toMatchObject({ applyMethod: 'github-pr-created' });
   });
 
   it('saves a verification baseline after Optimization Pack download and keeps verification truthful before rescan', async () => {

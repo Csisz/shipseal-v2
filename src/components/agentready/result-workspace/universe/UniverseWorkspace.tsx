@@ -24,13 +24,19 @@ import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages } from '@/
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import { getFolderAgentSuggestionPaths } from '@/lib/deliveryPack/folderAgents';
 import { buildGitHubConnectionFromReport, type GitHubConnectionState } from '@/lib/githubConnection/types';
-import { CreateReadinessPrClientError, createGitHubAppReadinessPr } from '@/lib/github/write';
+import {
+  OptimizationPrClientError,
+  submitOptimizationPrRequest,
+  type OptimizationPrApplyResponse,
+  type OptimizationPrPreviewResponse,
+} from '@/lib/github/write';
 import { DEFAULT_AGENT_OPERATING_MODE, applyAgentOperatingModeToFiles, getAgentOperatingMode, resolveAgentOperatingMode, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
 import { buildToolingRecommendationBundle, recommendationCounts } from '@/lib/toolingRecommendations';
 import {
   buildRepositoryAgentFlightPath,
   buildOptimizationPackZipBlob,
   buildOptimizationPackZipFilename,
+  buildOptimizationGithubPreparedSnapshot,
   buildRepositoryAtlasModel,
   buildRepositoryOptimizationPlan,
   prepareRepositoryOptimizationPlan,
@@ -47,12 +53,14 @@ import {
   repositoryUniverseVisibleNodeIds,
   repositoryTransformationDomainCounts,
   serializeRepositoryOptimizationManifest,
+  OPTIMIZATION_GITHUB_APPLY_VERSION,
   transformationDomainLabel,
   type RepositoryAtlasModel,
   type RepositoryAtlasNode,
   type RepositoryAgentFlightPath,
   type OptimizationApplyPlan,
-  type OptimizationPrPreviewFile,
+  type OptimizationGithubApplyProgress,
+  type OptimizationGithubApplyPlanFile,
   type RepositoryVerificationBaseline,
   type RepositoryVerificationResult,
   type VerificationBaselineMethod,
@@ -2218,12 +2226,23 @@ function OptimizationPlanReview({
   const [packState, setPackState] = useState<'idle' | 'building' | 'downloaded' | 'error'>('idle');
   const [packError, setPackError] = useState('');
   const [prConfirmed, setPrConfirmed] = useState(false);
-  const [prState, setPrState] = useState<'idle' | 'creating' | 'created' | 'error'>('idle');
-  const [prError, setPrError] = useState('');
-  const [prResult, setPrResult] = useState<{ url: string; branchName: string } | null>(null);
+  const [prState, setPrState] = useState<'idle' | 'previewing' | 'preview-ready' | 'applying' | 'created' | 'error'>('idle');
+  const [prPreviewResult, setPrPreviewResult] = useState<OptimizationPrPreviewResponse['plan'] | null>(null);
+  const [prError, setPrError] = useState<{ message: string; nextAction: string; progress?: OptimizationGithubApplyProgress } | null>(null);
+  const [prResult, setPrResult] = useState<OptimizationPrApplyResponse | null>(null);
   const [mobileReviewView, setMobileReviewView] = useState<'artifacts' | 'detail'>('artifacts');
   const artifactButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const prSubmissionRef = useRef(false);
   const baselineSavedForCurrentPlan = Boolean(verificationBaseline && applyPlan && verificationBaseline.applyPlanId === applyPlan.id);
+  const preparedSnapshot = useMemo(() => prepared ? buildOptimizationGithubPreparedSnapshot(prepared) : null, [prepared]);
+
+  useEffect(() => {
+    setPrConfirmed(false);
+    setPrState('idle');
+    setPrPreviewResult(null);
+    setPrError(null);
+    setPrResult(null);
+  }, [connection.defaultBranch, connection.installationId, connection.owner, connection.repo, preparedSnapshot?.fingerprint]);
 
   const selectReviewItem = (item: RepositoryOptimizationPlanItem) => {
     onSelectItem(item);
@@ -2265,29 +2284,66 @@ function OptimizationPlanReview({
     }
   };
 
+  const optimizationPrRequest = (mode: 'preview' | 'apply') => {
+    const baseBranch = connection.defaultBranch || preparedSnapshot?.repository.ref;
+    if (!preparedSnapshot || !connection.installationId || !connection.owner || !connection.repo || !baseBranch) return null;
+    return {
+      version: OPTIMIZATION_GITHUB_APPLY_VERSION,
+      mode,
+      installationId: connection.installationId,
+      owner: connection.owner,
+      repo: connection.repo,
+      baseBranch,
+      prepared: preparedSnapshot,
+      confirmed: mode === 'apply',
+      ...(mode === 'apply' && prPreviewResult ? {
+        expectedPreviewFingerprint: prPreviewResult.fingerprint,
+        expectedBaseCommit: prPreviewResult.repository.baseCommit,
+      } : {}),
+    } as const;
+  };
+
+  const handlePreviewPr = async () => {
+    const request = optimizationPrRequest('preview');
+    if (!request || prSubmissionRef.current) return;
+    prSubmissionRef.current = true;
+    setPrState('previewing');
+    setPrError(null);
+    setPrPreviewResult(null);
+    setPrResult(null);
+    setPrConfirmed(false);
+    try {
+      const result = await submitOptimizationPrRequest(request);
+      if (result.mode !== 'preview') throw new Error('Expected an Optimization PR preview.');
+      setPrPreviewResult(result.plan);
+      setPrState('preview-ready');
+    } catch (error) {
+      setPrState('error');
+      setPrError(optimizationPrFailure(error));
+    } finally {
+      prSubmissionRef.current = false;
+    }
+  };
+
   const handleCreatePr = async () => {
-    if (!applyPlan?.prPreview.canUseGitHubApp || !connection.installationId || !connection.owner || !connection.repo || !prConfirmed) return;
-    setPrState('creating');
-    setPrError('');
+    const request = optimizationPrRequest('apply');
+    if (!request || !applyPlan?.prPreview.canUseGitHubApp || !prConfirmed || !prPreviewResult?.applyReady || prSubmissionRef.current) return;
+    prSubmissionRef.current = true;
+    setPrState('applying');
+    setPrError(null);
     setPrResult(null);
     try {
-      const result = await createGitHubAppReadinessPr({
-        installationId: connection.installationId,
-        owner: connection.owner,
-        repo: connection.repo,
-        baseBranch: connection.defaultBranch,
-        branchName: applyPlan.prPreview.branchName,
-        prTitle: applyPlan.prPreview.title,
-        prBody: applyPlan.prPreview.body,
-        files: applyPlan.prPreview.files.map(file => ({ path: file.path, content: file.content })),
-      });
+      const result = await submitOptimizationPrRequest(request);
+      if (result.mode !== 'apply') throw new Error('Expected an Optimization PR apply result.');
       setPrState('created');
-      setPrResult({ url: result.prUrl, branchName: result.branchName });
+      setPrResult(result);
       saveVerificationBaseline('github-pr-created');
       onPrCreated?.();
     } catch (error) {
       setPrState('error');
-      setPrError(friendlyOptimizationPrError(error));
+      setPrError(optimizationPrFailure(error));
+    } finally {
+      prSubmissionRef.current = false;
     }
   };
 
@@ -2421,6 +2477,7 @@ function OptimizationPlanReview({
                 prConfirmed={prConfirmed}
                 prState={prState}
                 prError={prError}
+                prPreviewResult={prPreviewResult}
                 prResult={prResult}
                 manifestPreview={manifestPreview}
                 baseline={verificationBaseline}
@@ -2430,6 +2487,7 @@ function OptimizationPlanReview({
                 onSaveBaseline={() => saveVerificationBaseline('manual-baseline')}
                 onDiscardBaseline={onDiscardVerificationBaseline}
                 onPrConfirmedChange={setPrConfirmed}
+                onPreviewPr={handlePreviewPr}
                 onCreatePr={handleCreatePr}
               />
             )}
@@ -2465,6 +2523,7 @@ function OptimizationApplyFlow({
   prConfirmed,
   prState,
   prError,
+  prPreviewResult,
   prResult,
   manifestPreview,
   baseline,
@@ -2474,6 +2533,7 @@ function OptimizationApplyFlow({
   onSaveBaseline,
   onDiscardBaseline,
   onPrConfirmedChange,
+  onPreviewPr,
   onCreatePr,
 }: {
   applyPlan: OptimizationApplyPlan | null;
@@ -2481,9 +2541,10 @@ function OptimizationApplyFlow({
   packState: 'idle' | 'building' | 'downloaded' | 'error';
   packError: string;
   prConfirmed: boolean;
-  prState: 'idle' | 'creating' | 'created' | 'error';
-  prError: string;
-  prResult: { url: string; branchName: string } | null;
+  prState: 'idle' | 'previewing' | 'preview-ready' | 'applying' | 'created' | 'error';
+  prError: { message: string; nextAction: string; progress?: OptimizationGithubApplyProgress } | null;
+  prPreviewResult: OptimizationPrPreviewResponse['plan'] | null;
+  prResult: OptimizationPrApplyResponse | null;
   manifestPreview: string;
   baseline?: RepositoryVerificationBaseline | null;
   verificationResult?: RepositoryVerificationResult | null;
@@ -2492,14 +2553,19 @@ function OptimizationApplyFlow({
   onSaveBaseline: () => void;
   onDiscardBaseline?: () => void;
   onPrConfirmedChange: (confirmed: boolean) => void;
+  onPreviewPr: () => void;
   onCreatePr: () => void;
 }) {
   const [prPreviewOpen, setPrPreviewOpen] = useState(false);
   if (!applyPlan) return null;
   const prPreview = applyPlan.prPreview;
-  const canCreatePr = prPreview.canUseGitHubApp && prConfirmed && prState !== 'creating';
+  const canCreatePr = prPreview.canUseGitHubApp && prConfirmed && prPreviewResult?.applyReady && prState !== 'applying';
   const reviewCount = applyPlan.summary.reviewRequiredCount;
   const blockedCount = applyPlan.summary.blockedCount;
+  const openPrPreview = () => {
+    setPrPreviewOpen(true);
+    if (prPreview.canUseGitHubApp) onPreviewPr();
+  };
 
   return (
     <div className="mt-4 grid gap-3 lg:grid-cols-2" aria-label="Optimization Apply Flow">
@@ -2547,57 +2613,116 @@ function OptimizationApplyFlow({
         <p className="mt-4 text-sm text-muted-foreground">
           Review {prPreview.files.length} file action{prPreview.files.length === 1 ? '' : 's'}, branch, title, and diff before confirmation. Opening the preview does not mutate GitHub.
         </p>
-        <Button type="button" variant="outline" size="sm" onClick={() => setPrPreviewOpen(current => !current)} className="mt-4 border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
-          {prPreviewOpen ? 'Close GitHub PR preview' : 'Preview GitHub PR'}
-        </Button>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {!prPreviewOpen ? (
+            <Button type="button" variant="outline" size="sm" onClick={openPrPreview} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">Preview GitHub PR</Button>
+          ) : (
+            <Button type="button" variant="ghost" size="sm" onClick={() => setPrPreviewOpen(false)}>Close GitHub PR preview</Button>
+          )}
+          {prPreviewOpen && prPreview.canUseGitHubApp && prState !== 'previewing' && (
+            <Button type="button" variant="outline" size="sm" onClick={onPreviewPr}><RefreshCw className="mr-2 h-3.5 w-3.5" />Refresh repository state</Button>
+          )}
+        </div>
 
         {prPreviewOpen && (
           <div className="mt-4 space-y-3 rounded-xl border border-border/55 bg-secondary/10 p-3" aria-label="GitHub PR confirmation preview">
-            <div className="grid gap-2 text-sm">
-              <Row label="Repository" value={connection.owner && connection.repo ? `${connection.owner}/${connection.repo}` : 'Not connected'} />
-              <Row label="Branch" value={prPreview.branchName} />
-              <Row label="Title" value={prPreview.title} />
-              <Row label="Files in PR" value={`${prPreview.files.length}`} />
-              <Row label="Review-required" value={`${prPreview.reviewRequiredFiles.length}`} />
-              <Row label="Blocked" value={`${prPreview.blockedFiles.length}`} />
-            </div>
-            {prPreview.canUseGitHubApp ? <>
-            <label className="flex gap-3 rounded-2xl border border-border/55 bg-secondary/15 p-3 text-sm">
-              <input
-                type="checkbox"
-                checked={prConfirmed}
-                onChange={event => onPrConfirmedChange(event.target.checked)}
-                className="mt-1 h-4 w-4 accent-primary"
-              />
-              <span>
-                I understand ShipSeal will open a Pull Request only after this confirmation. Human review is still required.
-              </span>
-            </label>
-            <Button type="button" size="sm" onClick={onCreatePr} disabled={!canCreatePr} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              {prState === 'creating' ? 'Creating PR' : 'Create GitHub PR'}
-            </Button>
-            <div className="min-h-5 text-xs" aria-live="polite">
-              {prState === 'created' && prResult && (
-                <span className="text-success">
-                  PR created on `{prResult.branchName}`. <a href={prResult.url} className="underline underline-offset-4" target="_blank" rel="noreferrer">Open pull request</a>
-                </span>
-              )}
-              {prState === 'error' && <span className="text-warning">{prError}</span>}
-            </div>
-            </> : (
+            {!prPreview.canUseGitHubApp ? (
               <div className="rounded-2xl border border-border/55 bg-secondary/15 p-3 text-sm text-muted-foreground">
                 <p>{prPreview.unavailableReason}</p>
                 <p className="mt-2">Use the Optimization Pack ZIP and manual git flow, or reconnect with the GitHub App and rescan the selected repository.</p>
               </div>
+            ) : prState === 'previewing' ? (
+              <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 text-sm" aria-live="polite">
+                <div className="font-semibold">Validating repository</div>
+                <p className="mt-1 text-muted-foreground">Checking the base ref, target files, branch state, permissions, and matching pull requests. No repository changes are being made.</p>
+              </div>
+            ) : prPreviewResult ? (
+              <>
+                <section className="rounded-xl border border-border/55 bg-background/20 p-3" aria-label="Repository target">
+                  <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Repository target</div>
+                  <div className="mt-2 grid gap-2 text-sm">
+                    <Row label="Repository" value={`${prPreviewResult.repository.owner}/${prPreviewResult.repository.repo}`} />
+                    <Row label="Base branch" value={prPreviewResult.repository.baseBranch} />
+                    <Row label="Base commit" value={prPreviewResult.repository.baseCommit.slice(0, 12)} />
+                    <Row label="Proposed branch" value={prPreviewResult.branch.suggestedName} />
+                    <Row label="Branch state" value={optimizationBranchStateLabel(prPreviewResult.branch.existingState)} />
+                    <Row label="GitHub App" value={connection.connectionStatus === 'connected' ? 'Connected' : connection.connectionStatus} />
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-border/55 bg-background/20 p-3" aria-label="Pull request file summary">
+                  <div className="flex flex-wrap gap-2">
+                    <OptimizationPlanMetric compact label="Files" value={prPreviewResult.summary.totalFiles} />
+                    {prPreviewResult.summary.createCount > 0 && <OptimizationPlanMetric compact label="Create" value={prPreviewResult.summary.createCount} />}
+                    {prPreviewResult.summary.updateCount > 0 && <OptimizationPlanMetric compact label="Update" value={prPreviewResult.summary.updateCount} />}
+                    {prPreviewResult.summary.strengthenCount > 0 && <OptimizationPlanMetric compact label="Strengthen" value={prPreviewResult.summary.strengthenCount} />}
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">{formatFileSize(prPreviewResult.summary.totalBytes)} reviewed payload · {prPreviewResult.validation.blockingIssues.length} blocking · {prPreviewResult.validation.warnings.length} warnings</p>
+                </section>
+
+                {prPreviewResult.validation.blockingIssues.length > 0 && (
+                  <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning" role="alert">
+                    <div className="font-semibold">Confirmation blocked</div>
+                    {prPreviewResult.validation.blockingIssues.map(issue => <p key={`${issue.code}:${issue.path || ''}`} className="mt-1">{issue.path ? `${issue.path}: ` : ''}{issue.message} {issue.nextAction}</p>)}
+                  </div>
+                )}
+
+                <details open className="rounded-xl border border-border/55 bg-secondary/15 p-3">
+                  <summary className="cursor-pointer text-sm font-semibold">Reviewed files and diffs</summary>
+                  <div className="mt-3 space-y-2">
+                    {prPreviewResult.files.map(file => <OptimizationGithubPrFilePreview key={file.path} file={file} />)}
+                  </div>
+                </details>
+
+                <details className="rounded-xl border border-border/55 bg-secondary/15 p-3">
+                  <summary className="cursor-pointer text-sm font-semibold">Pull request metadata</summary>
+                  <div className="mt-3 grid gap-2 text-sm">
+                    <Row label="Title" value={prPreviewResult.pullRequest.title} />
+                    <Row label="Base" value={prPreviewResult.repository.baseBranch} />
+                    <Row label="Head" value={prPreviewResult.branch.suggestedName} />
+                  </div>
+                  <pre className="mt-3 max-h-60 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-inset p-3 text-[11px] text-muted-foreground">{prPreviewResult.pullRequest.body}</pre>
+                </details>
+
+                <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  No repository change has happened yet. Confirmation creates or resumes only the reviewed ShipSeal branch, writes the reviewed files, and opens the pull request. ShipSeal does not push directly to the default or protected branch. Verification still requires a later scan.
+                </div>
+
+                {prPreviewResult.existingPullRequest?.matching ? (
+                  <div className="rounded-xl border border-success/35 bg-success/10 p-3 text-sm text-success">
+                    A matching pull request already exists. Confirmation returns that PR without creating a duplicate.
+                  </div>
+                ) : null}
+
+                <label className="flex gap-3 rounded-xl border border-border/55 bg-secondary/15 p-3 text-sm">
+                  <input type="checkbox" checked={prConfirmed} onChange={event => onPrConfirmedChange(event.target.checked)} disabled={!prPreviewResult.applyReady || prState === 'applying'} className="mt-1 h-4 w-4 accent-primary" />
+                  <span>Create the reviewed ShipSeal branch and open this pull request. The payload, base commit, file actions, and diffs shown above must still match at confirmation time.</span>
+                </label>
+                <Button type="button" size="sm" onClick={onCreatePr} disabled={!canCreatePr} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  {prState === 'applying' ? 'Validating and applying reviewed plan' : 'Create reviewed branch and pull request'}
+                </Button>
+              </>
+            ) : null}
+
+            {prState === 'error' && prError && (
+              <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm" role="alert" aria-live="assertive">
+                <div className="font-semibold text-warning">{prError.message}</div>
+                <p className="mt-1 text-muted-foreground">{prError.nextAction}</p>
+                {prError.progress && <OptimizationPrProgress progress={prError.progress} />}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {prError.progress?.branchUrl && <a href={prError.progress.branchUrl} target="_blank" rel="noreferrer" className="text-xs font-semibold underline underline-offset-4">Open existing branch</a>}
+                  <button type="button" onClick={prPreviewResult ? onCreatePr : onPreviewPr} className="text-xs font-semibold underline underline-offset-4">{prPreviewResult ? 'Retry reviewed step' : 'Retry repository preview'}</button>
+                </div>
+              </div>
             )}
 
-            <details className="rounded-2xl border border-border/55 bg-secondary/15 p-4">
-              <summary className="cursor-pointer select-none text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Diff preview</summary>
-              <div className="mt-3 space-y-3">
-                {prPreview.files.slice(0, 8).map(file => <OptimizationPrFilePreview key={file.path} file={file} />)}
-                {prPreview.files.length === 0 && <p className="text-sm text-muted-foreground">No PR-ready files are selected.</p>}
+            {prState === 'created' && prResult && (
+              <div className="rounded-xl border border-success/40 bg-success/10 p-3 text-sm text-success" aria-live="polite">
+                <div className="font-semibold">{prResult.existing ? 'Existing matching pull request found' : 'Pull request created'}</div>
+                <p className="mt-1">{prResult.fileCount} reviewed files on <code>{prResult.branchName}</code>. Lifecycle is Applied, not Verified.</p>
+                <a href={prResult.prUrl} className="mt-2 inline-block font-semibold underline underline-offset-4" target="_blank" rel="noreferrer">Open pull request</a>
               </div>
-            </details>
+            )}
           </div>
         )}
       </section>
@@ -2778,22 +2903,63 @@ function RepositoryVerificationArtifactRow({ artifact }: { artifact: VerifiedArt
   );
 }
 
-function OptimizationPrFilePreview({ file }: { file: OptimizationPrPreviewFile }) {
+function OptimizationGithubPrFilePreview({ file }: { file: OptimizationGithubApplyPlanFile }) {
+  const [diffCopied, setDiffCopied] = useState(false);
+  const copyDiff = async () => {
+    try {
+      await navigator.clipboard.writeText(file.diff);
+      setDiffCopied(true);
+    } catch {
+      setDiffCopied(false);
+    }
+  };
   return (
     <article className="rounded-xl border border-border/45 bg-background/20 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 break-all text-sm font-medium">{file.path}</span>
-        <Badge variant="outline" className={optimizationReadinessClass(file.readiness)}>
-          {optimizationReadinessLabel(file.readiness)}
-        </Badge>
+        <span className="min-w-0 flex-1 break-words text-sm font-medium" title={file.path}>{file.path}</span>
         <Badge variant="outline" className="border-border/60 text-muted-foreground">
           {optimizationActionLabel(file.action)}
         </Badge>
+        <Badge variant="outline" className={file.status === 'blocked' ? 'border-warning/50 text-warning' : file.status === 'already-applied' ? 'border-success/40 text-success' : 'border-primary/35 text-primary-glow'}>
+          {file.status === 'already-applied' ? 'Already on branch' : file.status === 'blocked' ? 'Blocked' : 'Validated'}
+        </Badge>
       </div>
-      <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">
-        {file.excerpt || 'No preview available.'}
-      </pre>
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        <span>{formatFileSize(file.sizeBytes)}</span>
+        <span>+{file.addedLines} / -{file.removedLines} lines</span>
+        {file.previousSha && <span>Previous SHA {file.previousSha.slice(0, 12)}</span>}
+      </div>
+      <p className="mt-2 text-xs text-muted-foreground">{file.validationMessage}</p>
+      <details className="mt-2 rounded-lg border border-border/45 bg-secondary/10 p-2">
+        <summary className="cursor-pointer text-xs font-semibold">Diff preview</summary>
+        <div className="mt-2 flex justify-end">
+          <Button type="button" variant="ghost" size="sm" onClick={copyDiff} className="h-7 px-2 text-[11px]"><Copy className="mr-1.5 h-3 w-3" />{diffCopied ? 'Copied' : 'Copy diff'}</Button>
+        </div>
+        <pre className="max-h-72 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">{file.diff}</pre>
+        {file.diffTruncated && <p className="mt-2 text-[11px] text-warning">The rendered diff is bounded; the reviewed full content remains the write payload.</p>}
+      </details>
+      {file.previousContent !== undefined && (
+        <details className="mt-2 rounded-lg border border-border/45 bg-secondary/10 p-2">
+          <summary className="cursor-pointer text-xs font-semibold">Current repository content</summary>
+          <pre className="mt-2 max-h-56 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">{file.previousContent}</pre>
+        </details>
+      )}
+      <details className="mt-2 rounded-lg border border-border/45 bg-secondary/10 p-2">
+        <summary className="cursor-pointer text-xs font-semibold">Prepared next content</summary>
+        <pre className="mt-2 max-h-56 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">{file.nextContent}</pre>
+      </details>
     </article>
+  );
+}
+
+function OptimizationPrProgress({ progress }: { progress: OptimizationGithubApplyProgress }) {
+  return (
+    <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
+      <span>Completed: {progress.completedSteps.length ? progress.completedSteps.map(step => step.replace(/-/g, ' ')).join(', ') : 'No repository mutation step completed'}</span>
+      {progress.failedStep && <span>Failed stage: {progress.failedStep.replace(/-/g, ' ')}</span>}
+      <span>Files present on branch: {progress.writtenFileCount}/{progress.totalFileCount}</span>
+      {progress.branchName && <span>Branch: {progress.branchName}</span>}
+    </div>
   );
 }
 
@@ -4017,13 +4183,18 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function friendlyOptimizationPrError(error: unknown) {
-  if (error instanceof CreateReadinessPrClientError) {
-    if (error.status === 401 || error.status === 403) return 'GitHub permission was denied. Reconnect the GitHub App and try again.';
-    if (error.status === 413) return 'The PR preview contains a file larger than the GitHub App limit. Download the ZIP for manual review.';
-    return error.message.replace(/Readiness Fix Pack|Readiness PR|Readiness/gi, 'Optimization Pack');
+function optimizationPrFailure(error: unknown) {
+  if (error instanceof OptimizationPrClientError) {
+    return { message: error.issue.message, nextAction: error.issue.nextAction, progress: error.progress };
   }
-  return 'The GitHub PR could not be created. Download the Optimization Pack and use the manual flow.';
+  return { message: 'The GitHub PR request could not be completed.', nextAction: 'Refresh repository state, reconnect GitHub, or download the unchanged Optimization Package.' };
+}
+
+function optimizationBranchStateLabel(state: OptimizationPrPreviewResponse['plan']['branch']['existingState']) {
+  if (state === 'available') return 'Available for reviewed branch creation';
+  if (state === 'matching') return 'Existing branch matches reviewed content';
+  if (state === 'partial') return 'Existing branch can resume safely';
+  return 'Existing branch conflicts with reviewed content';
 }
 
 function optimizationConflictLabel(kind: RepositoryOptimizationPlanItem['conflicts'][number]['kind']) {

@@ -62,6 +62,17 @@ export {
 } from './repositoryOptimizationApply';
 
 export {
+  OPTIMIZATION_GITHUB_APPLY_LIMITS,
+  OPTIMIZATION_GITHUB_APPLY_VERSION,
+  buildOptimizationFileDiff,
+  buildOptimizationGithubApplyPlan,
+  buildOptimizationGithubPreparedSnapshot,
+  optimizationContentFingerprint,
+  optimizationPlanMarker,
+  validateOptimizationGithubApplyRequest,
+} from './repositoryOptimizationGithubApply';
+
+export {
   buildRepositoryVerificationBaseline,
   buildRepositoryVerificationResult,
 } from './repositoryVerification';
@@ -163,6 +174,20 @@ export type {
   OptimizationPrPreview,
   OptimizationPrPreviewFile,
 } from './repositoryOptimizationApply';
+
+export type {
+  OptimizationGithubApplyAction,
+  OptimizationGithubApplyIssue,
+  OptimizationGithubApplyIssueCode,
+  OptimizationGithubApplyPlan,
+  OptimizationGithubApplyPlanFile,
+  OptimizationGithubApplyProgress,
+  OptimizationGithubApplyRequest,
+  OptimizationGithubCurrentFile,
+  OptimizationGithubPreparedFile,
+  OptimizationGithubPreparedSnapshot,
+  OptimizationGithubRepositoryState,
+} from './repositoryOptimizationGithubApply';
 
 export type {
   RepositoryVerificationBaseline,
