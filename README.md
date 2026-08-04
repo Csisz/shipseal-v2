@@ -201,6 +201,17 @@ Server-side Vercel env for OAuth connect, repository listing, App archive downlo
 
 Keep `GITHUB_APP_PRIVATE_KEY` server-side only. If Vercel stores the key on one line, preserve newlines as `\n`; ShipSeal normalizes escaped newlines before signing the GitHub App JWT.
 
+Production configuration is validated centrally before an auth redirect or installation-token request is attempted. Set the variables for the Production environment (and Preview separately if it should support auth), then redeploy so the functions receive the new values. The GitHub App OAuth callback must exactly be `https://YOUR_DOMAIN/api/github-app/oauth-callback`; the GitHub App setup callback remains `https://YOUR_DOMAIN/api/github-app/callback`. Missing or malformed settings return a safe configuration state to the popup and leave ZIP/public URL scanning available; diagnostics report field names and error codes, never credential values.
+
+Account identity and saved-project persistence use a separate GitHub OAuth App and require all four server-side variables:
+
+- `SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID`
+- `SHIPSEAL_ACCOUNT_GITHUB_CLIENT_SECRET`
+- `SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL` set exactly to `https://YOUR_DOMAIN/api/account/callback`
+- `DATABASE_URL`
+
+Do not substitute the GitHub App OAuth credentials for the account OAuth App: their registered callback paths and responsibilities are intentionally separate. If account auth is absent, scans and exports stay anonymous and available; only private saved-project history is unavailable.
+
 Next:
 
 - callback/session hardening,

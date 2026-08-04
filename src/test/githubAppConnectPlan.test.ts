@@ -153,7 +153,7 @@ describe('GitHub App Connect plan', () => {
     try {
       await startHandler({ method: 'GET', headers: { host: 'shipseal.test' } } as never, res as never);
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(503);
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8');
       expect(res.body).toContain('GitHub login is not configured correctly.');
       expect(res.body).toContain('missing_client_id');
@@ -180,7 +180,7 @@ describe('GitHub App Connect plan', () => {
     try {
       await startHandler({ method: 'GET', headers: { host: 'shipseal-v2.vercel.app' } } as never, res as never);
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(503);
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8');
       expect(res.body).toContain('invalid_callback_url');
       expect(res.body).toContain('GitHub App callback URL must point to /api/github-app/oauth-callback.');
@@ -291,7 +291,7 @@ describe('GitHub App Connect plan', () => {
         headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
       } as never, res as never);
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(503);
       expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/html; charset=utf-8');
       expect(res.body).toContain('GitHub login is not configured correctly.');
       expect(res.body).toContain('invalid_client_id_format');
@@ -320,7 +320,7 @@ describe('GitHub App Connect plan', () => {
         headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
       } as never, res as never);
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(503);
       expect(res.body).toContain('missing_client_secret');
       expect(res.body).toContain('GITHUB_APP_CLIENT_SECRET');
       expect(res.body).not.toContain('github.com/settings/installations');
@@ -349,7 +349,7 @@ describe('GitHub App Connect plan', () => {
         headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
       } as never, res as never);
 
-      expect(res.statusCode).toBe(500);
+      expect(res.statusCode).toBe(503);
       expect(res.json()).toMatchObject({
         ok: false,
         flow: 'oauth_authorize',

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AccountProvider } from '@/components/account/AccountProvider';
@@ -39,6 +39,22 @@ describe('Omega 18.1 account and persistence UI', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
     expect(open).toHaveBeenCalledWith(expect.stringContaining('/api/account/login'), 'shipseal-account', expect.any(String));
     expect(screen.getByText(/This scan remains open/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled();
+  });
+
+  it('surfaces a recoverable popup configuration failure without closing the scan', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => json({ user: null })));
+    render(<AccountProvider><SaveProjectControl report={buildSampleReport()} /></AccountProvider>);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled());
+
+    act(() => {
+      window.dispatchEvent(new MessageEvent('message', {
+        origin: window.location.origin,
+        data: { source: 'shipseal-account', status: 'unavailable', message: 'Account sign-in is unavailable. Anonymous scanning remains available.' },
+      }));
+    });
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Anonymous scanning remains available');
     expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled();
   });
 

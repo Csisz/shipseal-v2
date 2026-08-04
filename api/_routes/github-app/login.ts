@@ -1,4 +1,5 @@
 import type { ServerResponse, IncomingMessage } from 'node:http';
+import { AuthConfigurationError, getGitHubOAuthConfig, resolveGitHubOAuthCallbackUrl, validateGitHubClientId } from '../../_lib/authConfig.js';
 
 type QueryValue = string | string[] | undefined;
 type VercelLikeRequest = IncomingMessage & {
@@ -10,6 +11,7 @@ type LoginErrorCode =
   | 'missing_client_id'
   | 'missing_client_secret'
   | 'invalid_client_id_format'
+  | 'invalid_api_base_url'
   | 'invalid_oauth_config'
   | 'invalid_callback_url'
   | 'missing_install_url'
@@ -36,7 +38,7 @@ interface LoginDecision {
 }
 
 class GitHubLoginError extends Error {
-  constructor(public readonly code: LoginErrorCode, message: string, public readonly status = 500) {
+  constructor(public readonly code: LoginErrorCode, message: string, public readonly status = 503) {
     super(message);
     this.name = 'GitHubLoginError';
   }
@@ -75,6 +77,13 @@ function htmlEscape(value: string) {
 }
 
 function sendPopupError(res: ServerResponse, status: number, input: { code: LoginErrorCode; message: string; missingEnv?: string[] }) {
+  const safePayload = JSON.stringify({
+    type: 'shipseal:github-error',
+    source: 'shipseal-github-connect',
+    status: 'error',
+    code: input.code,
+    message: input.message,
+  }).replace(/</g, '\\u003c');
   res.statusCode = status;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.end(`<!doctype html>
@@ -96,6 +105,12 @@ function sendPopupError(res: ServerResponse, status: number, input: { code: Logi
     ${input.missingEnv?.length ? `<p>Missing configuration: <code>${htmlEscape(input.missingEnv.join(', '))}</code></p>` : ''}
     <button type="button" onclick="window.close()">Close and retry</button>
     <a href="/#scan" target="_self">Use public GitHub URL instead</a>
+    <p><a href="/#scan" target="_self">Upload a repository ZIP</a></p>
+    <script>
+      (function () {
+        if (window.opener && !window.opener.closed) window.opener.postMessage(${safePayload}, window.location.origin);
+      }());
+    </script>
   </body>
 </html>`);
 }
@@ -158,16 +173,7 @@ function serverEnv(env: NodeJS.ProcessEnv = process.env) {
 }
 
 function clientIdInvalidReasons(clientId: string) {
-  const reasons: string[] = [];
-  if (!clientId) return reasons;
-  if (/\s/.test(clientId)) reasons.push('GITHUB_APP_CLIENT_ID');
-  if (clientId.length < 8 || clientId.length > 128) reasons.push('GITHUB_APP_CLIENT_ID');
-  if (!/^[A-Za-z0-9._-]+$/.test(clientId)) reasons.push('GITHUB_APP_CLIENT_ID');
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(clientId)) reasons.push('GITHUB_APP_CLIENT_ID');
-  if (/PRIVATE_KEY|BEGIN|END|-----|github_pat_|ghp_|gho_|ghu_|ghs_|ghr_|sk-/i.test(clientId)) {
-    reasons.push('GITHUB_APP_CLIENT_ID');
-  }
-  return Array.from(new Set(reasons));
+  return clientId && !validateGitHubClientId(clientId) ? ['GITHUB_APP_CLIENT_ID'] : [];
 }
 
 function buildInstallUrl(input: { installUrl?: string; slug?: string }) {
@@ -201,37 +207,17 @@ function assertGitHubUrl(value: string, requiredPathPrefix?: string) {
 }
 
 export function resolveCallbackUrl(req: VercelLikeRequest, explicit?: string, configured?: string, env: NodeJS.ProcessEnv = process.env) {
-  const candidate = explicit?.trim() || configured?.trim();
-  if (candidate) return assertValidCallbackUrl(candidate, env);
-
-  const host = safeHeader(req.headers?.host) || 'localhost:8080';
-  const forwardedProto = safeHeader(req.headers?.['x-forwarded-proto']);
-  const forwardedHost = safeHeader(req.headers?.['x-forwarded-host']);
-  const proto = (forwardedProto || (host.includes('localhost') ? 'http' : 'https')).split(',')[0].trim();
-  const publicHost = (forwardedHost || host).split(',')[0].trim();
-
-  return assertValidCallbackUrl(`${proto}://${publicHost}/api/github-app/oauth-callback`, env);
-}
-
-function assertValidCallbackUrl(value: string, env: NodeJS.ProcessEnv = process.env) {
-  let parsed: URL;
   try {
-    parsed = new URL(value);
-  } catch {
-    throw new GitHubLoginError('invalid_callback_url', 'GitHub App callback URL is invalid.', 500);
+    return resolveGitHubOAuthCallbackUrl(req, explicit?.trim() || configured?.trim(), env);
+  } catch (error) {
+    if (error instanceof AuthConfigurationError) {
+      const message = error.invalidFields.includes('GITHUB_APP_CALLBACK_URL')
+        ? 'GitHub App callback URL must point to /api/github-app/oauth-callback.'
+        : error.message;
+      throw new GitHubLoginError('invalid_callback_url', message, 503);
+    }
+    throw error;
   }
-
-  if (!['http:', 'https:'].includes(parsed.protocol) || parsed.pathname !== '/api/github-app/oauth-callback') {
-    throw new GitHubLoginError('invalid_callback_url', 'GitHub App callback URL must point to /api/github-app/oauth-callback.', 500);
-  }
-  if (env.VERCEL === '1' && parsed.protocol !== 'https:') {
-    throw new GitHubLoginError('invalid_callback_url', 'GitHub App callback URL must be HTTPS in production.', 500);
-  }
-  if (env.VERCEL === '1' && /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)) {
-    throw new GitHubLoginError('invalid_callback_url', 'GitHub App callback URL cannot be localhost in production.', 500);
-  }
-
-  return parsed.toString();
 }
 
 async function createState() {
@@ -307,7 +293,20 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
   if (!clientSecretPresent) missingEnv.push('GITHUB_APP_CLIENT_SECRET');
   if (!clientIdPresent) missingEnv.push('GITHUB_APP_CLIENT_ID');
 
-  if (clientIdPresent && clientSecretPresent && clientIdLooksValid) {
+  let oauthConfigError: AuthConfigurationError | null = null;
+  try {
+    getGitHubOAuthConfig();
+  } catch (error) {
+    if (error instanceof AuthConfigurationError) {
+      oauthConfigError = error;
+      missingEnv.push(...error.missingEnv.filter(field => !missingEnv.includes(field)));
+      invalidFields.push(...error.invalidFields.filter(field => !invalidFields.includes(field)));
+    } else {
+      throw error;
+    }
+  }
+
+  if (!oauthConfigError && clientIdPresent && clientSecretPresent && clientIdLooksValid) {
     const authorizeUrl = buildGitHubLoginAuthorizeUrl({
       clientId: env.clientId,
       redirectUri,
@@ -331,7 +330,9 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
     };
   }
 
-  const errorCode: LoginErrorCode = !clientIdPresent
+  const errorCode: LoginErrorCode = oauthConfigError?.code === 'invalid_api_base_url'
+    ? 'invalid_api_base_url'
+    : !clientIdPresent
     ? 'missing_client_id'
     : !clientSecretPresent
       ? 'missing_client_secret'
@@ -403,12 +404,12 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
     }
 
     if (debug) {
-      sendJson(res, decision.ok ? 200 : 500, debugPayload(decision));
+      sendJson(res, decision.ok ? 200 : 503, debugPayload(decision));
       return;
     }
 
     if (!decision.ok || !decision.redirectUrl) {
-      sendPopupError(res, 500, {
+      sendPopupError(res, 503, {
         code: decision.errorCode || 'login_redirect_failed',
         message: decision.message || 'GitHub login redirect could not be created.',
         missingEnv: decision.missingEnv,

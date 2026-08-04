@@ -1,15 +1,4 @@
-import {
-  Archive,
-  CheckCircle2,
-  Circle,
-  Github,
-  Layers,
-  Network,
-  ShieldCheck,
-  Sparkles,
-  X,
-  type LucideIcon,
-} from 'lucide-react';
+import { Archive, Check, Github, Layers, Network, ShieldCheck, X, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +14,18 @@ interface Props {
   onCancel?: () => void;
 }
 
+interface ScanSignal {
+  label: string;
+  icon: LucideIcon;
+  state: 'complete' | 'active' | 'pending';
+}
+
+const SIGNAL_POINTS = [
+  { x: 19, y: 24 },
+  { x: 81, y: 24 },
+  { x: 50, y: 82 },
+];
+
 export function ScanProgress({
   steps,
   currentStepIndex,
@@ -37,285 +38,132 @@ export function ScanProgress({
   onCancel,
 }: Props) {
   const safeProgress = Math.min(100, Math.max(0, Math.round(progress)));
-  const understanding = repositoryUnderstandingLevel(safeProgress, steps, currentStepIndex);
-  const skippedFiles = skippedFileCount(discoveredFileCount, analyzedFileCount);
-  const livingSignals = buildLivingSignals(safeProgress, steps, currentStepIndex);
-  const activeSignal = livingSignals.find(signal => signal.active) || livingSignals.filter(signal => signal.done).at(-1) || livingSignals[0];
-  const finalReveal = safeProgress >= 96;
+  const complete = safeProgress >= 96;
+  const signals = buildSignals(safeProgress, steps, currentStepIndex);
+  const current = signals.find(signal => signal.state === 'active') || signals.filter(signal => signal.state === 'complete').at(-1) || signals[0];
+  const skipped = skippedFileCount(discoveredFileCount, analyzedFileCount);
 
   return (
-    <div className="relative mx-auto w-full max-w-6xl overflow-hidden rounded-[2rem] border border-primary/25 bg-canvas p-3 shadow-glow animate-scale-in motion-reduce:animate-none md:p-4">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_10%,hsl(var(--primary)/0.22),transparent_38%),radial-gradient(circle_at_80%_70%,hsl(var(--accent)/0.12),transparent_34%)] pointer-events-none" />
-      <div className="relative">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-xs font-mono uppercase tracking-wider text-muted-foreground">
-              <Network className="h-3.5 w-3.5 text-primary-glow" />
-              <span>Living Repository</span>
-              {sourceLabel && <span className="rounded-full border border-primary/30 px-2 py-0.5 text-primary-glow">{sourceLabel}</span>}
-            </div>
-            <h2 className="mt-1.5 font-display text-2xl font-semibold text-foreground md:text-3xl">
-              {finalReveal ? 'Repository understood.' : 'The workspace is forming.'}
-            </h2>
-            <p className="mt-1.5 hidden max-w-2xl text-sm leading-relaxed text-muted-foreground sm:block">
-              {finalReveal
-                ? 'AI Workspace created. Ready for intelligent development.'
-                : 'ShipSeal is turning repository evidence into a usable AI workspace map.'}
-            </p>
-            <div className="mt-2 flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <Github className="h-4 w-4 text-primary-glow" />
-              <span className="truncate text-foreground/90">{repositoryLabel || 'Preparing repository'}</span>
-            </div>
+    <section className="relative mx-auto w-full max-w-5xl overflow-hidden border-y border-border/70 bg-canvas text-foreground sm:rounded-[1.75rem] sm:border" aria-labelledby="scan-progress-title">
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_42%,hsl(var(--primary)/0.14),transparent_30%),linear-gradient(180deg,hsl(var(--background)/0.04),transparent_65%)]" />
+
+      <header className="relative flex items-start justify-between gap-4 border-b border-border/55 px-4 py-4 sm:px-6">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            <span className="text-primary-glow">Living Repository</span>
+            <span>Live scan</span>
+            {sourceLabel && <span aria-label={`Source: ${sourceLabel}`} className="border-l border-border/70 pl-2 normal-case tracking-normal">{sourceLabel}</span>}
           </div>
-          {onCancel && (
-            <Button variant="ghost" size="sm" onClick={onCancel} className="text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5 mr-1.5" /> Cancel
-            </Button>
-          )}
+          <h2 className="mt-2 font-display text-xl font-semibold sm:text-2xl">{safeProgress >= 96 ? 'Repository understood.' : 'The workspace is forming.'}</h2>
+          <div className="mt-2 flex min-w-0 items-center gap-2 text-sm">
+            <Github className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <span className="truncate">{repositoryLabel || 'Preparing repository'}</span>
+          </div>
         </div>
+        {onCancel && <Button variant="ghost" size="sm" onClick={onCancel} className="shrink-0 text-muted-foreground hover:text-foreground"><X className="mr-1.5 h-3.5 w-3.5" />Cancel</Button>}
+      </header>
 
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(300px,0.8fr)]">
-          <LivingRepositoryCanvas
-            progress={safeProgress}
-            understanding={understanding}
-            activeSignal={activeSignal}
-            signals={livingSignals}
-          />
+      <div className="relative px-4 pb-5 pt-6 sm:px-6 sm:pb-6">
+        <div className="relative mx-auto min-h-[270px] max-w-3xl sm:min-h-[330px]" data-testid="repository-assembly">
+          <AssemblyLines signals={signals} />
 
-          <aside className="rounded-3xl border border-border/60 bg-secondary/15 p-3">
-            <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="absolute left-1/2 top-[43%] z-20 -translate-x-1/2 -translate-y-1/2 text-center">
+            <div className={cn(
+              'relative mx-auto flex h-32 w-32 items-center justify-center rounded-full border bg-background/75 shadow-[0_0_48px_hsl(var(--primary)/0.12)] backdrop-blur-sm transition-colors duration-500 motion-reduce:transition-none sm:h-40 sm:w-40',
+              complete ? 'border-success/55' : 'border-primary/55'
+            )}>
+              {!complete && <span className="absolute inset-2 rounded-full border border-primary/20 motion-safe:animate-pulse" aria-hidden="true" />}
               <div>
-                <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Understanding stream</div>
-                <h3 className="mt-1 font-display text-lg font-semibold">{finalReveal ? 'AI Workspace created' : activeSignal.label}</h3>
-              </div>
-              <Sparkles className={cn('h-4 w-4 text-primary-glow', !finalReveal && 'animate-pulse motion-reduce:animate-none')} />
-            </div>
-
-            <div className="rounded-2xl border border-primary/25 bg-primary/10 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Repository understanding</div>
-                  <div className="mt-1 text-xl font-semibold text-foreground">{understanding}</div>
-                </div>
-                <span className="font-mono text-xs text-primary-glow">{safeProgress}%</span>
-              </div>
-              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-secondary/70">
-                <div className="h-full bg-gradient-primary transition-all duration-700 ease-out motion-reduce:transition-none" style={{ width: `${safeProgress}%` }} />
+                {complete ? <Check className="mx-auto h-5 w-5 text-success" /> : <Network className="mx-auto h-5 w-5 text-primary-glow" />}
+                <div className="mt-2 font-display text-base font-semibold sm:text-lg">{safeProgress}%</div>
+                <div className="mt-1 max-w-[112px] text-[11px] leading-snug text-muted-foreground sm:max-w-[132px]">{complete ? 'Repository understood' : current?.label || 'Reading repository'}</div>
               </div>
             </div>
-
-            <div className="mt-3 rounded-2xl border border-border/60 bg-background/25 p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <activeSignal.icon className="h-4 w-4 text-primary-glow" />
-                <span className="text-sm font-semibold text-foreground">{finalReveal ? 'Repository understood' : activeSignal.label}</span>
-                <span className={cn(
-                  'rounded-full border px-2 py-0.5 text-[10px]',
-                  activeSignal.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/60 text-muted-foreground'
-                )}>
-                  {finalReveal ? 'Evidence-backed' : activeSignal.source}
-                </span>
-              </div>
-              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                {finalReveal ? 'ShipSeal has created the first AI workspace view from static repository evidence.' : activeSignal.detail}
-              </p>
-            </div>
-
-            <div className="mt-3 grid grid-cols-2 gap-1.5 xl:grid-cols-4">
-              {livingSignals.map(signal => (
-                <SignalPill key={signal.label} signal={signal} />
-              ))}
-            </div>
-
-            <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-              <ProgressMetric label="Files found" value={discoveredFileCount == null ? 'Reading' : discoveredFileCount.toLocaleString()} />
-              <ProgressMetric label="Files analyzed" value={analyzedFileCount == null ? 'Pending' : analyzedFileCount.toLocaleString()} />
-              <ProgressMetric label="Context skipped" value={skippedFiles == null ? 'Pending' : skippedFiles.toLocaleString()} />
-            </div>
-          </aside>
-        </div>
-
-        <details className="group mt-3 rounded-xl border border-border/60 bg-secondary/15">
-          <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
-            <span>Scan boundary</span>
-            <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-primary-glow" />
-          </summary>
-          <div className="border-t border-border/50 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-            ShipSeal does not execute code. It performs a structural/static scan, reads repository metadata plus key config/docs/test files, and ignores generated/vendor folders such as node_modules, dist, build, .next, and coverage.
           </div>
-        </details>
 
-        {warnings.length > 0 && (
-          <ul className="mt-3 space-y-1 text-xs text-warning">
-            {warnings.map(warning => <li key={warning}>{warning}</li>)}
-          </ul>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ProgressMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-border/60 bg-secondary/20 px-2.5 py-2">
-      <div className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-foreground">{value}</div>
-    </div>
-  );
-}
-
-interface LivingSignal {
-  label: string;
-  detail: string;
-  source: 'Evidence';
-  icon: LucideIcon;
-  done: boolean;
-  active: boolean;
-}
-
-function LivingRepositoryCanvas({
-  progress,
-  understanding,
-  activeSignal,
-  signals,
-}: {
-  progress: number;
-  understanding: string;
-  activeSignal: LivingSignal;
-  signals: LivingSignal[];
-}) {
-  const complete = progress >= 96;
-  const ActiveIcon = complete ? CheckCircle2 : activeSignal.icon;
-  return (
-    <div className="relative min-h-[320px] overflow-hidden rounded-3xl border border-primary/20 bg-background/15 p-3 md:p-4">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,hsl(var(--primary)/0.16),transparent_42%)]" />
-      <div className="absolute left-1/2 top-[45%] h-[260px] w-[260px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/10" />
-      <div className="absolute left-1/2 top-[45%] h-[180px] w-[180px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/15" />
-      <div className="absolute left-1/2 top-[45%] h-[112px] w-[112px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/25" />
-
-      <div className="relative flex min-h-[240px] items-center justify-center">
-        <div className={cn(
-          'relative z-10 flex h-32 w-32 flex-col items-center justify-center rounded-full border text-center transition-all duration-700 motion-reduce:transition-none',
-          complete ? 'border-success/50 bg-success/10 shadow-[0_0_70px_hsl(var(--success)/0.18)]' : 'border-primary/50 bg-primary/10 shadow-glow'
-        )}>
-          <div className="absolute inset-0 rounded-full border border-primary/30 animate-pulse motion-reduce:animate-none" />
-          <ActiveIcon className={cn('h-6 w-6', complete ? 'text-success' : 'text-primary-glow')} />
-          <div className="mt-2 px-3 font-display text-sm font-semibold leading-tight">
-            {complete ? 'Workspace created' : 'Building workspace'}
+          <div className="hidden sm:block">
+            {signals.slice(0, 3).map((signal, index) => <SignalNode key={signal.label} signal={signal} point={SIGNAL_POINTS[index]} />)}
           </div>
-          <div className="mt-1 px-3 text-xs leading-relaxed text-muted-foreground">{understanding}</div>
+
+          <div className="absolute inset-x-0 bottom-0 grid grid-cols-3 gap-2 sm:hidden">
+            {signals.slice(0, 3).map(signal => <CompactSignal key={signal.label} signal={signal} />)}
+          </div>
         </div>
 
-        {signals.map((signal, index) => (
-          <RepositoryNode key={signal.label} signal={signal} index={index} total={signals.length} />
-        ))}
-      </div>
+        <div className="mx-auto mt-2 max-w-3xl">
+          <div className="flex items-center justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.16em] text-muted-foreground">
+            <span id="scan-progress-title">{complete ? 'Workspace ready' : current?.label || 'Repository scan'}</span>
+            <span>{safeProgress}% complete</span>
+          </div>
+          <div className="mt-2 h-px overflow-hidden bg-border/70" role="progressbar" aria-label="Repository scan progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={safeProgress}>
+            <div className="h-full bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none" style={{ width: `${safeProgress}%` }} />
+          </div>
 
-      <div className="relative rounded-2xl border border-border/60 bg-background/35 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <activeSignal.icon className="h-4 w-4 text-primary-glow" />
-          <span className="text-sm font-semibold text-foreground">{complete ? 'Repository understood' : activeSignal.label}</span>
-          <span className={cn(
-            'rounded-full border px-2 py-0.5 text-[10px]',
-            activeSignal.source === 'Evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/60 text-muted-foreground'
-          )}>
-            {complete ? 'Evidence-backed' : activeSignal.source}
-          </span>
+          <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground">
+            <Metric label="Files found" value={discoveredFileCount == null ? 'Reading' : discoveredFileCount.toLocaleString()} />
+            <Metric label="Analyzed" value={analyzedFileCount == null ? 'Pending' : analyzedFileCount.toLocaleString()} />
+            <Metric label="Skipped by boundary" value={skipped == null ? 'Pending' : skipped.toLocaleString()} />
+          </dl>
+
+          <details className="group mt-4 border-t border-border/55 pt-3">
+            <summary className="flex cursor-pointer list-none items-center gap-2 text-xs text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <ShieldCheck className="h-3.5 w-3.5 text-primary-glow" />
+              Static scan boundary
+            </summary>
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-muted-foreground">ShipSeal does not execute code. It reads allowed repository structure, metadata, configuration, documentation, and tests while excluding generated and vendor folders.</p>
+          </details>
+
+          {warnings.length > 0 && <ul className="mt-3 space-y-1 text-xs text-warning">{warnings.map(warning => <li key={warning}>{warning}</li>)}</ul>}
         </div>
-        <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
-          {complete ? 'ShipSeal has created the first AI workspace view from static repository evidence.' : activeSignal.detail}
-        </p>
       </div>
-    </div>
+    </section>
   );
 }
 
-function RepositoryNode({ signal, index, total }: { signal: LivingSignal; index: number; total: number }) {
-  const angle = (index / total) * Math.PI * 2 - Math.PI / 2;
-  const radius = 40;
-  const x = 50 + Math.cos(angle) * radius;
-  const y = 50 + Math.sin(angle) * radius;
-  const Icon = signal.icon;
-
+function AssemblyLines({ signals }: { signals: ScanSignal[] }) {
   return (
-    <div
-      title={`${signal.label} - ${signal.source}`}
-      className={cn(
-        'absolute z-20 w-10 -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-1.5 transition-all duration-700 motion-reduce:transition-none sm:w-28 sm:px-2.5 sm:py-2 xl:w-32',
-        signal.active && 'scale-105 border-primary/55 bg-primary/15 shadow-glow',
-        signal.done && !signal.active && 'border-success/35 bg-success/10',
-        !signal.done && !signal.active && 'border-border/45 bg-background/30 opacity-60'
-      )}
-      style={{ left: `${x}%`, top: `${y}%` }}
-    >
-      <div className="flex items-center justify-center gap-2 sm:justify-start">
-        <span className={cn(
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border',
-          signal.active ? 'border-primary/50 text-primary-glow' : signal.done ? 'border-success/40 text-success' : 'border-border/60 text-muted-foreground'
-        )}>
-          <Icon className="h-3.5 w-3.5" />
-        </span>
-        <span className="hidden min-w-0 text-xs font-semibold leading-tight text-foreground sm:inline">{signal.label}</span>
-      </div>
-      <div className="mt-2 hidden items-center gap-1.5 sm:flex">
-        {signal.done ? <CheckCircle2 className="h-3 w-3 text-success" /> : signal.active ? <Sparkles className="h-3 w-3 animate-pulse text-primary-glow motion-reduce:animate-none" /> : <Circle className="h-3 w-3 text-muted-foreground" />}
-        <span className="text-[10px] text-muted-foreground">{signal.source}</span>
-      </div>
-    </div>
+    <svg className="absolute inset-0 hidden h-full w-full sm:block" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      {signals.slice(0, 3).map((signal, index) => {
+        const point = SIGNAL_POINTS[index];
+        return <line key={signal.label} x1={point.x} y1={point.y} x2="50" y2="43" strokeWidth="0.22" strokeDasharray={signal.state === 'active' ? '1.2 1.2' : undefined} className={cn(signal.state === 'complete' ? 'stroke-success/45' : signal.state === 'active' ? 'stroke-primary/60 motion-safe:animate-pulse' : 'stroke-border/55')} />;
+      })}
+    </svg>
   );
 }
 
-function SignalPill({ signal }: { signal: LivingSignal }) {
+function SignalNode({ signal, point }: { signal: ScanSignal; point: { x: number; y: number } }) {
   const Icon = signal.icon;
   return (
-    <div
-      title={`${signal.label} - ${signal.source}`}
-      aria-label={`${signal.label} - ${signal.source}`}
-      className={cn(
-        'min-w-0 rounded-xl border px-2 py-1.5 transition-all duration-500',
-        signal.active && 'border-primary/45 bg-primary/10 shadow-sm shadow-primary/10',
-        signal.done && !signal.active && 'border-success/30 bg-success/5',
-        !signal.done && !signal.active && 'border-border/50 bg-background/20 opacity-70'
-      )}
-    >
+    <div className={cn('absolute z-10 w-40 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-500 motion-reduce:transition-none', signal.state === 'pending' && 'opacity-45')} style={{ left: `${point.x}%`, top: `${point.y}%` }} aria-label={`${signal.label}: ${signal.state}`}>
       <div className="flex items-center gap-2">
-        <span className={cn(
-          'flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border',
-          signal.active ? 'border-primary/50 text-primary-glow' : signal.done ? 'border-success/40 text-success' : 'border-border/60 text-muted-foreground'
-        )}>
-          {signal.done ? <CheckCircle2 className="h-3 w-3" /> : <Icon className="h-3 w-3" />}
+        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-full border bg-background/70', signal.state === 'complete' ? 'border-success/45 text-success' : signal.state === 'active' ? 'border-primary/55 text-primary-glow motion-safe:animate-pulse' : 'border-border text-muted-foreground')}>
+          {signal.state === 'complete' ? <Check className="h-3.5 w-3.5" /> : <Icon className="h-3.5 w-3.5" />}
         </span>
-        <div className="min-w-0 flex-1 xl:hidden">
-          <div className="text-[11px] font-semibold leading-tight text-foreground break-words">{signal.label}</div>
-          <div className="text-[10px] text-muted-foreground">{signal.source}</div>
-        </div>
+        <div className="min-w-0"><div className="text-xs font-medium leading-tight">{signal.label}</div><div className="mt-0.5 font-mono text-[9px] uppercase tracking-wider text-muted-foreground">{signal.state}</div></div>
       </div>
     </div>
   );
 }
 
-function repositoryUnderstandingLevel(progress: number, steps: readonly string[], currentStepIndex: number) {
-  if (progress >= 96) return 'Workspace ready';
-  return steps[currentStepIndex] || 'Reading repository';
+function CompactSignal({ signal }: { signal: ScanSignal }) {
+  const Icon = signal.icon;
+  return <div aria-label={`${signal.label}: ${signal.state}`} className={cn('min-w-0 border-t pt-2 text-center', signal.state === 'complete' ? 'border-success/45' : signal.state === 'active' ? 'border-primary/55' : 'border-border/55 opacity-50')}><div className="flex justify-center">{signal.state === 'complete' ? <Check className="h-3.5 w-3.5 text-success" /> : <Icon className="h-3.5 w-3.5 text-primary-glow" />}</div><div className="mt-1 truncate text-[10px]">{signal.label}</div></div>;
 }
 
-function skippedFileCount(discoveredFileCount?: number | null, analyzedFileCount?: number | null) {
-  if (discoveredFileCount == null || analyzedFileCount == null) return null;
-  return Math.max(0, discoveredFileCount - analyzedFileCount);
+function Metric({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-baseline gap-1.5"><dt>{label}</dt><dd className="font-mono text-foreground">{value}</dd></div>;
 }
 
-function buildLivingSignals(progress: number, steps: readonly string[], currentStepIndex: number): LivingSignal[] {
-  const details = [
-    'Reading and validating the repository archive, then indexing the files allowed by scanner limits.',
-    'Building the deterministic report and repository intelligence from the indexed evidence.',
-    'Publishing scan counters and preparing bounded workspace and verification inputs.',
-  ];
+function skippedFileCount(discovered?: number | null, analyzed?: number | null) {
+  if (discovered == null || analyzed == null) return null;
+  return Math.max(0, discovered - analyzed);
+}
+
+function buildSignals(progress: number, steps: readonly string[], currentStepIndex: number): ScanSignal[] {
   const icons: LucideIcon[] = [Archive, Network, Layers];
   return steps.map((label, index) => ({
     label,
-    detail: details[index] || 'Completing the current repository operation.',
-    source: 'Evidence',
     icon: icons[index] || Layers,
-    done: progress >= 96 || index < currentStepIndex,
-    active: progress < 96 && index === currentStepIndex,
+    state: progress >= 96 || index < currentStepIndex ? 'complete' : index === currentStepIndex ? 'active' : 'pending',
   }));
 }

@@ -36,7 +36,7 @@ export default function Projects() {
 
         {account.status === 'loading' && <SurfaceState className="mt-8" tone="loading" title="Checking your session" description="Preparing private project access." />}
         {(account.status === 'anonymous' || account.status === 'unavailable') && (
-          <SurfaceState className="mt-8" tone="empty" title="Sign in to view saved work" description="Anonymous scanning remains available. Sign-in is required only for durable private history." action={<Button onClick={account.beginSignIn}><LogIn className="mr-2 h-4 w-4" />Sign in with GitHub</Button>} />
+          <SurfaceState className="mt-8" tone={account.status === 'unavailable' ? 'error' : 'empty'} title={account.status === 'unavailable' ? 'Account sign-in is unavailable' : 'Sign in to view saved work'} description={account.availabilityMessage || 'Anonymous scanning remains available. Sign-in is required only for durable private history.'} action={<div className="flex flex-wrap justify-center gap-2"><Button onClick={account.beginSignIn}><LogIn className="mr-2 h-4 w-4" />{account.status === 'unavailable' ? 'Retry sign-in' : 'Sign in with GitHub'}</Button><Button variant="outline" asChild><a href="/#scan">Scan without an account</a></Button></div>} />
         )}
         {account.user && status === 'loading' && <SurfaceState className="mt-8" tone="loading" title="Loading projects" description="Retrieving your private project list." />}
         {account.user && status === 'failed' && <SurfaceState className="mt-8" tone="error" title="Saved projects are unavailable" description="ShipSeal could not load the project list." action={<Button variant="outline" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" />Retry</Button>} />}

@@ -26,7 +26,7 @@ describe('hosted deployment configuration', () => {
       { source: '/api/projects/:projectId', destination: '/api/persistence-router?route=project&projectId=:projectId' },
       { source: '/api/projects', destination: '/api/persistence-router?route=projects' },
       { source: '/api/scans/:scanId', destination: '/api/persistence-router?route=scan&scanId=:scanId' },
-      { source: '/api/github-app/:route(archive|callback|create-readiness-pr|create-repository-intelligence-pr|installations|login|oauth-callback|repositories|start)', destination: '/api/github-app-router?route=:route' },
+      { source: '/api/github-app/:route(archive|callback|create-optimization-pr|create-readiness-pr|create-repository-intelligence-pr|installations|login|oauth-callback|repositories|start)', destination: '/api/github-app-router?route=:route' },
       { source: '/(.*)', destination: '/index.html' },
     ]);
   });

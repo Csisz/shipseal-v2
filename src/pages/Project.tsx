@@ -29,7 +29,7 @@ export default function Project() {
 
   return <div className="min-h-screen bg-background"><Nav /><main className="container max-w-5xl pb-20 pt-28">
     <Button variant="ghost" asChild><a href="/projects"><ArrowLeft className="mr-2 h-4 w-4" />Saved projects</a></Button>
-    {!account.user && account.status !== 'loading' && <SurfaceState className="mt-6" tone="empty" title="Sign in required" description="Sign in to open this private project." action={<Button onClick={account.beginSignIn}>Sign in with GitHub</Button>} />}
+    {!account.user && account.status !== 'loading' && <SurfaceState className="mt-6" tone={account.status === 'unavailable' ? 'error' : 'empty'} title={account.status === 'unavailable' ? 'Account sign-in is unavailable' : 'Sign in required'} description={account.availabilityMessage || 'Sign in to open this private project.'} action={<Button onClick={account.beginSignIn}>{account.status === 'unavailable' ? 'Retry sign-in' : 'Sign in with GitHub'}</Button>} />}
     {account.user && status === 'loading' && <SurfaceState className="mt-8" tone="loading" title="Loading saved project" description="Retrieving immutable scan history." />}
     {account.user && status === 'not-found' && <SurfaceState className="mt-8" tone="empty" title="Saved project not found" description="The project may have been deleted or the address may be incomplete." action={<Button asChild variant="outline"><a href="/projects">Back to projects</a></Button>} />}
     {account.user && status === 'failed' && <SurfaceState className="mt-8" tone="error" title="Project history could not be loaded" description="Retry the private project request." action={<Button variant="outline" onClick={() => void load()}><RefreshCw className="mr-2 h-4 w-4" />Retry</Button>} />}

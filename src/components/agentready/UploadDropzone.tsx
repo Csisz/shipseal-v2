@@ -178,9 +178,9 @@ export function UploadDropzone({
                   GitHub connected. Select a repository to scan.
                 </div>
               )}
-              {githubInstallationId && repositoryListStatus === 'not_configured' && (
+              {repositoryListStatus === 'not_configured' && (
                 <div className="mt-2 text-xs text-warning">
-                  {repositoryListMessage || 'GitHub connection is configured, but ShipSeal could not create an installation token.'}
+                  {repositoryListMessage || 'GitHub connection is unavailable on this deployment. Upload a ZIP or use a public repository URL.'}
                 </div>
               )}
               {repositoryListStatus === 'error' && repositoryListMessage && (
@@ -288,19 +288,22 @@ export function UploadDropzone({
             )}
           </div>
           {(repositoryListStatus === 'error' || repositoryListStatus === 'not_configured') && (
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button type="button" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubRepositoryRetry}>
-                Retry repository listing
-              </Button>
-              <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onGitHubConnect}>
-                Reconnect GitHub
-              </Button>
-              <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => setMode('github')}>
-                Use public URL
-              </Button>
-              <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => setMode('zip')}>
-                Upload ZIP
-              </Button>
+            <div className="mt-4 rounded-xl border border-warning/25 bg-warning/5 p-3">
+              <p className="mb-2 text-xs text-muted-foreground">Your scan is not blocked. Continue without connected GitHub:</p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubRepositoryRetry}>
+                  Retry repository listing
+                </Button>
+                <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onGitHubConnect}>
+                  Reconnect GitHub
+                </Button>
+                <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => setMode('github')}>
+                  Use public URL
+                </Button>
+                <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={() => setMode('zip')}>
+                  Upload ZIP
+                </Button>
+              </div>
             </div>
           )}
           {(githubInstallationId || appConfig.installUrl) && (

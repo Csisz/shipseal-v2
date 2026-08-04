@@ -60,7 +60,12 @@ function repositoryListFriendlyMessage(code?: string, fallback?: string) {
       return 'GitHub App private key is missing or invalid in Vercel.';
     case 'missing_client_id':
     case 'missing_client_secret':
+    case 'invalid_client_id_format':
       return 'GitHub OAuth client credentials are missing in Vercel.';
+    case 'invalid_callback_url':
+      return 'GitHub OAuth callback URL is invalid in Vercel.';
+    case 'invalid_api_base_url':
+      return 'GitHub API base URL is invalid in Vercel.';
     case 'installation_not_found':
       return 'GitHub App installation was not found. Reconnect GitHub.';
     case 'user_authorization_failed':
@@ -225,7 +230,7 @@ const Index = () => {
       if (!data || data.source !== 'shipseal-github-connect') return;
       if (data.status === 'error') {
         setGithubRepositories([]);
-        setRepositoryListStatus('error');
+        setRepositoryListStatus(['missing_client_id', 'missing_client_secret', 'invalid_client_id_format', 'invalid_callback_url', 'invalid_api_base_url'].includes(data.code || '') ? 'not_configured' : 'error');
         setRepositoryListMessage(repositoryListFriendlyMessage(data.code, data.message));
         return;
       }

@@ -1,14 +1,19 @@
 import type { GitHubAppAuthOptions, GitHubAppInstallationSummary, GitHubAppOAuthConfig } from './githubAppTypes.js';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from './githubAppTypes.js';
+import { AuthConfigurationError, getGitHubOAuthConfig as readGitHubOAuthConfig } from './authConfig.js';
 
 export function getGitHubAppOAuthConfig(env: NodeJS.ProcessEnv = process.env): GitHubAppOAuthConfig {
-  const clientId = (env.GITHUB_APP_CLIENT_ID || '').trim();
-  const clientSecret = (env.GITHUB_APP_CLIENT_SECRET || '').trim();
-  const apiBaseUrl = (env.GITHUB_API_BASE_URL || 'https://api.github.com').trim().replace(/\/+$/, '');
-
-  if (!clientId) throw new GitHubAppNotConfiguredError('missing_client_id', 'GitHub App OAuth client ID is missing.');
-  if (!clientSecret) throw new GitHubAppNotConfiguredError('missing_client_secret', 'GitHub App OAuth client secret is missing.');
-  return { clientId, clientSecret, apiBaseUrl };
+  try {
+    return readGitHubOAuthConfig(env);
+  } catch (error) {
+    if (error instanceof AuthConfigurationError) {
+      const code = error.code === 'missing_client_id' || error.code === 'missing_client_secret' || error.code === 'invalid_client_id_format' || error.code === 'invalid_api_base_url'
+        ? error.code
+        : 'missing_client_secret';
+      throw new GitHubAppNotConfiguredError(code, error.message);
+    }
+    throw error;
+  }
 }
 
 export function buildGitHubOAuthAuthorizeUrl(input: { clientId: string; state?: string; redirectUri?: string }) {

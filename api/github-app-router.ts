@@ -1,37 +1,39 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import archive from './_routes/github-app/archive.js';
-import callback from './_routes/github-app/callback.js';
-import createReadinessPr from './_routes/github-app/create-readiness-pr.js';
-import createRepositoryIntelligencePr from './_routes/github-app/create-repository-intelligence-pr.js';
-import createOptimizationPr from './_routes/github-app/create-optimization-pr.js';
-import installations from './_routes/github-app/installations.js';
-import login from './_routes/github-app/login.js';
-import oauthCallback from './_routes/github-app/oauth-callback.js';
-import repositories from './_routes/github-app/repositories.js';
+import { safeAuthDiagnostic } from './_lib/authConfig.js';
 
 type RoutedRequest = IncomingMessage & { query?: Record<string, string | string[] | undefined> };
 type GitHubAppHandler = (req: RoutedRequest, res: ServerResponse) => Promise<void>;
+type GitHubAppModule = { default: GitHubAppHandler };
 
-const handlers: Readonly<Record<string, GitHubAppHandler>> = {
-  archive,
-  callback,
-  'create-readiness-pr': createReadinessPr,
-  'create-repository-intelligence-pr': createRepositoryIntelligencePr,
-  'create-optimization-pr': createOptimizationPr,
-  installations,
-  login,
-  'oauth-callback': oauthCallback,
-  repositories,
-  start: login,
+const loaders: Readonly<Record<string, () => Promise<GitHubAppModule>>> = {
+  archive: () => import('./_routes/github-app/archive.js'),
+  callback: () => import('./_routes/github-app/callback.js'),
+  'create-readiness-pr': () => import('./_routes/github-app/create-readiness-pr.js'),
+  'create-repository-intelligence-pr': () => import('./_routes/github-app/create-repository-intelligence-pr.js'),
+  'create-optimization-pr': () => import('./_routes/github-app/create-optimization-pr.js'),
+  installations: () => import('./_routes/github-app/installations.js'),
+  login: () => import('./_routes/github-app/login.js'),
+  'oauth-callback': () => import('./_routes/github-app/oauth-callback.js'),
+  repositories: () => import('./_routes/github-app/repositories.js'),
+  start: () => import('./_routes/github-app/login.js'),
 };
 
 export default async function handler(req: RoutedRequest, res: ServerResponse) {
   const route = Array.isArray(req.query?.route) ? req.query.route[0] : req.query?.route;
-  const selected = route ? handlers[route] : undefined;
-  if (!selected) {
+  const load = route ? loaders[route] : undefined;
+  if (!load) {
     res.statusCode = 404;
     res.end();
     return;
   }
-  await selected(req, res);
+  try {
+    const selected = await load();
+    await selected.default(req, res);
+  } catch (error) {
+    console.error('[shipseal-github-router]', { route, ...safeAuthDiagnostic(error) });
+    if (res.headersSent) { res.end(); return; }
+    res.statusCode = 503;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({ error: { code: 'github_route_unavailable', message: 'GitHub connection is temporarily unavailable. Use ZIP upload or a public repository URL.' } }));
+  }
 }

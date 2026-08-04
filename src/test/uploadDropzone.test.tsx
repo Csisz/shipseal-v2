@@ -69,6 +69,15 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(screen.getByText(/download the repository ZIP from GitHub and upload it here/i)).toBeInTheDocument();
   });
 
+  it('emphasizes independent scan paths when connected GitHub is not configured', () => {
+    render(<UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} repositoryListStatus="not_configured" repositoryListMessage="GitHub OAuth is not configured for this deployment." />);
+
+    expect(screen.getByText(/GitHub OAuth is not configured/i)).toBeInTheDocument();
+    expect(screen.getByText(/Your scan is not blocked/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use public URL' })).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Upload ZIP' }).every(button => !button.hasAttribute('disabled'))).toBe(true);
+  });
+
   it('shows detected owner and repo for public GitHub URLs', () => {
     render(<UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} />);
 

@@ -39,6 +39,7 @@ export function SaveProjectControl({ report, providerStatus }: { report: Readine
         {state === 'failed' && <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />}
       </div>
       {message && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{message}</p>}
+      {account.availabilityMessage && <p role="status" className="mt-2 text-xs leading-relaxed text-warning">{account.availabilityMessage}</p>}
       {savedProject && <a className="mt-1 block break-all text-xs text-primary-glow underline-offset-4 hover:underline" href={`/projects/${savedProject.id}`}>Open saved project</a>}
     </div>
   );

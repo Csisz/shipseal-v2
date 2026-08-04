@@ -4,6 +4,7 @@ import type { PersistedUser } from '@/lib/persistence';
 export interface AccountContextValue {
   user: PersistedUser | null;
   status: 'loading' | 'anonymous' | 'authenticated' | 'unavailable';
+  availabilityMessage: string;
   refresh: () => Promise<void>;
   beginSignIn: () => void;
   logout: () => Promise<void>;
@@ -22,6 +23,7 @@ export function useOptionalAccount(): AccountContextValue {
   return value || {
     user: null,
     status: 'anonymous',
+    availabilityMessage: '',
     refresh: async () => undefined,
     beginSignIn: () => window.location.assign('/api/account/login?returnTo=%2F'),
     logout: async () => undefined,

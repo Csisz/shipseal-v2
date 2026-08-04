@@ -1,22 +1,24 @@
 import { createSign } from 'node:crypto';
 import type { GitHubAppAuthOptions, GitHubAppServerConfig } from './githubAppTypes.js';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from './githubAppTypes.js';
+import { AuthConfigurationError, getGitHubInstallationConfig, normalizeGitHubPrivateKey } from './authConfig.js';
 
 export function normalizeGitHubAppPrivateKey(value: string) {
-  return value.trim().replace(/\\n/g, '\n');
+  return normalizeGitHubPrivateKey(value);
 }
 
 export function getGitHubAppServerConfig(env: NodeJS.ProcessEnv = process.env): GitHubAppServerConfig {
-  const appId = (env.GITHUB_APP_ID || '').trim();
-  const privateKey = normalizeGitHubAppPrivateKey(env.GITHUB_APP_PRIVATE_KEY || '');
-  const apiBaseUrl = (env.GITHUB_API_BASE_URL || 'https://api.github.com').trim().replace(/\/+$/, '');
-
-  if (!appId) throw new GitHubAppNotConfiguredError('missing_app_id', 'GitHub App ID is missing.');
-  if (!privateKey) throw new GitHubAppNotConfiguredError('missing_private_key', 'GitHub App private key is missing.');
-  if (!/-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(privateKey) || !/-----END [A-Z ]*PRIVATE KEY-----/.test(privateKey)) {
-    throw new GitHubAppNotConfiguredError('invalid_private_key_format', 'GitHub App private key is missing or invalid.');
+  try {
+    return getGitHubInstallationConfig(env);
+  } catch (error) {
+    if (error instanceof AuthConfigurationError) {
+      const code = error.code === 'missing_app_id' || error.code === 'missing_private_key' || error.code === 'invalid_private_key_format' || error.code === 'invalid_api_base_url'
+        ? error.code
+        : 'invalid_private_key_format';
+      throw new GitHubAppNotConfiguredError(code, error.message);
+    }
+    throw error;
   }
-  return { appId, privateKey, apiBaseUrl };
 }
 
 function base64url(value: string | Buffer) {

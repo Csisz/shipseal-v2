@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { authorizeAndListInstallations } from '../../_lib/githubAppOAuth.js';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../../_lib/githubAppTypes.js';
+import { AuthConfigurationError, resolveGitHubOAuthCallbackUrl, safeAuthDiagnostic } from '../../_lib/authConfig.js';
 
 type QueryValue = string | string[] | undefined;
 type VercelLikeRequest = IncomingMessage & {
@@ -20,10 +21,6 @@ function queryFromRequest(req: VercelLikeRequest) {
     error_description: parsed.searchParams.get('error_description') || undefined,
     debug: parsed.searchParams.get('debug') || undefined,
   };
-}
-
-function safeHeader(value: string | string[] | undefined) {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 function htmlEscape(value: string) {
@@ -100,21 +97,12 @@ function sendJson(res: ServerResponse, status: number, payload: Record<string, u
 }
 
 function resolveCallbackUrl(req: VercelLikeRequest, env: NodeJS.ProcessEnv = process.env) {
-  const configured = (env.GITHUB_APP_CALLBACK_URL || '').trim();
-  if (configured) return configured;
-  const host = safeHeader(req.headers?.host) || 'localhost:8080';
-  const forwardedProto = safeHeader(req.headers?.['x-forwarded-proto']);
-  const proto = (forwardedProto || (host.includes('localhost') ? 'http' : 'https')).split(',')[0].trim();
-  return `${proto}://${host.split(',')[0].trim()}/api/github-app/oauth-callback`;
+  return resolveGitHubOAuthCallbackUrl(req, '', env);
 }
 
 function isCallbackUrlUsable(value: string, env: NodeJS.ProcessEnv = process.env) {
   try {
-    const parsed = new URL(value);
-    if (!['http:', 'https:'].includes(parsed.protocol)) return false;
-    if (parsed.pathname !== '/api/github-app/oauth-callback') return false;
-    if (env.VERCEL === '1' && parsed.protocol !== 'https:') return false;
-    if (env.VERCEL === '1' && /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)) return false;
+    resolveGitHubOAuthCallbackUrl({ headers: {} }, value, env);
     return true;
   } catch {
     return false;
@@ -122,6 +110,10 @@ function isCallbackUrlUsable(value: string, env: NodeJS.ProcessEnv = process.env
 }
 
 function sendSafeFailure(res: ServerResponse, error: unknown, title = 'GitHub connection failed.') {
+  if (error instanceof AuthConfigurationError) {
+    sendHtml(res, 503, errorPayload(error.code, error.message), 'GitHub connection is not configured.');
+    return;
+  }
   if (error instanceof GitHubAppNotConfiguredError) {
     sendHtml(res, 501, errorPayload(error.code, error.message), 'GitHub connection is not configured.');
     return;
@@ -232,6 +224,7 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
     };
     sendHtml(res, 200, payload, 'GitHub connected. You can return to ShipSeal.');
   } catch (err) {
+    console.error('[shipseal-github-oauth-callback]', safeAuthDiagnostic(err));
     sendSafeFailure(res, err);
   }
 }
