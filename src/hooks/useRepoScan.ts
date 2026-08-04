@@ -56,7 +56,7 @@ const initialState: RepoScanState = {
   repositoryIntelligenceReview: null,
   repositoryIntelligenceReviewPreparing: false,
   repositoryIntelligenceReviewError: null,
-  repositoryIntelligenceProviderStatus: { state: 'deterministic', message: 'Deterministic repository intelligence is ready for review.', retryable: false },
+  repositoryIntelligenceProviderStatus: { state: 'deterministic', deepState: 'disabled', message: 'Deterministic repository intelligence is ready for review.', retryable: false },
   repositoryIntelligenceVerification: null,
   repositoryIntelligenceVerificationStatus: 'idle',
   repositoryIntelligenceVerificationError: null,
@@ -434,7 +434,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       providerAbortRef.current = controller;
       setState(current => ({
         ...current,
-        repositoryIntelligenceProviderStatus: { state: 'preparing', message: 'Preparing optional enhanced intelligence from bounded repository context.', retryable: false },
+        repositoryIntelligenceProviderStatus: { state: 'preparing', deepState: 'pending', message: 'Preparing optional deep analysis from bounded, redacted repository context.', retryable: false },
       }));
       try {
         const [requestModule, reviewModule, clientModule] = await Promise.all([
@@ -468,23 +468,36 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
             ...current,
             repositoryIntelligenceReview: { artifactSet: enhanced.artifactSet, review: enhanced.review },
             repositoryIntelligenceProviderStatus: {
-              state: 'enhanced', message: 'Validated enhanced intelligence contributed to this review.', retryable: false,
-              providerId: response.providerId, modelId: response.modelId,
+              state: 'enhanced', deepState: response.deepState, message: 'Validated deep analysis is available alongside deterministic findings.', retryable: false,
+              providerId: response.providerId, modelId: response.modelId, diagnostics: response.diagnostics,
+              insights: response.result.findings.map(finding => ({
+                id: finding.id,
+                title: finding.title,
+                confidence: finding.acceptedConfidence,
+                validationState: finding.validationState,
+                evidencePaths: finding.acceptedPaths,
+                evidenceCount: finding.supportingEvidenceIds.length,
+                heuristic: finding.inferenceType !== 'verified',
+                futureDirection: finding.futureDirectionCandidate ? {
+                  goal: finding.futureDirectionCandidate.goal,
+                  verificationMethod: finding.futureDirectionCandidate.verificationMethod,
+                } : undefined,
+              })),
             },
           }));
           return;
         }
         const fallbackStatus: RepositoryIntelligenceProviderStatus = response.category === 'request_cancelled'
-          ? { state: 'cancelled', message: response.message, retryable: true, category: 'request_cancelled' }
-          : { state: 'fallback', message: response.message, retryable: response.retryable, category: response.category };
+          ? { state: 'cancelled', deepState: response.deepState, message: response.message, retryable: true, category: 'request_cancelled', diagnostics: response.diagnostics }
+          : { state: 'fallback', deepState: response.deepState, message: response.message, retryable: response.retryable, category: response.category, diagnostics: response.diagnostics };
         setState(current => ({ ...current, repositoryIntelligenceProviderStatus: fallbackStatus }));
       } catch (error) {
         if (scanTokenRef.current !== token) return;
         setState(current => ({
           ...current,
           repositoryIntelligenceProviderStatus: controller.signal.aborted
-            ? { state: 'cancelled', category: 'request_cancelled', retryable: true, message: 'Enhanced intelligence preparation was cancelled. Deterministic repository intelligence remains ready.' }
-            : { state: 'fallback', category: 'provider_unavailable', retryable: true, message: 'Enhanced intelligence is unavailable. Deterministic repository intelligence remains ready for review.' },
+            ? { state: 'cancelled', deepState: 'failed', category: 'request_cancelled', retryable: true, message: 'Deep analysis was cancelled. Deterministic repository intelligence remains ready.' }
+            : { state: 'fallback', deepState: 'failed', category: 'provider_unavailable', retryable: true, message: 'Deep analysis is unavailable. Deterministic repository intelligence remains ready for review.' },
         }));
       } finally {
         if (providerAbortRef.current === controller) providerAbortRef.current = null;
@@ -538,7 +551,7 @@ async function setRepositoryIntelligenceReview(
       repositoryIntelligenceReview: { artifactSet: result.artifactSet, review: result.review },
       repositoryIntelligenceReviewPreparing: false,
       repositoryIntelligenceReviewError: null,
-      repositoryIntelligenceProviderStatus: { state: 'deterministic', message: 'Deterministic repository intelligence is ready for review.', retryable: false },
+      repositoryIntelligenceProviderStatus: { state: 'deterministic', deepState: 'disabled', message: 'Deterministic repository intelligence is ready for review.', retryable: false },
     }));
   } catch (error) {
     if (!isCurrent()) return;

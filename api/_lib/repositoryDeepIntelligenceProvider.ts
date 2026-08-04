@@ -1,5 +1,7 @@
 import {
   REPOSITORY_DEEP_INTELLIGENCE_CAPABILITIES,
+  REPOSITORY_DEEP_INTELLIGENCE_PROMPT_CONTRACT_VERSION,
+  REPOSITORY_DEEP_INTELLIGENCE_REQUEST_VERSION,
   REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
   resolveRepositoryDeepIntelligenceResultPolicy,
   type RepositoryDeepIntelligenceCapability,
@@ -12,6 +14,11 @@ import {
   type RepositoryDeepIntelligenceProvider,
   type RepositoryDeepIntelligenceRunOptions,
 } from '../../src/lib/repositoryIntelligence/deepIntelligenceProvider.js';
+import {
+  PRODUCTION_DEEP_INTELLIGENCE_CONTEXT_VERSION,
+  PRODUCTION_DEEP_INTELLIGENCE_REDACTION_VERSION,
+  estimateDeepIntelligenceInputTokens,
+} from './repositoryDeepIntelligenceContext.js';
 
 export const PRODUCTION_PROVIDER_POLICY_VERSION = 'shipseal.production-provider-policy.v1' as const;
 
@@ -19,10 +26,15 @@ export interface ProductionProviderPolicy {
   version: typeof PRODUCTION_PROVIDER_POLICY_VERSION;
   maximumRequestBytes: number;
   maximumContextCharacters: number;
+  maximumContextBytes: number;
+  maximumInputTokens: number;
+  maximumSelectedFiles: number;
+  maximumExcerptBytesPerFile: number;
   maximumResponseBytes: number;
   maximumOutputTokens: number;
   timeoutMs: number;
-  maximumRetryCount: 0 | 1;
+  maximumProviderAttempts: number;
+  maximumRetryCount: number;
   maximumRetryDelayMs: number;
 }
 
@@ -33,6 +45,7 @@ export interface ProductionProviderConfig {
   apiKey: string;
   endpoint: string;
   environmentLabel?: string;
+  configurationWarnings: string[];
   policy: ProductionProviderPolicy;
 }
 
@@ -41,23 +54,40 @@ export type ProductionProviderLogEvent = {
   requestId: string;
   providerId: string;
   modelId: string;
-  outcome: 'success' | 'retry' | 'failure';
+  outcome: 'success' | 'retry' | 'failure' | 'validated';
   durationMs: number;
   requestBytes: number;
   retryCount: number;
   statusCategory?: string;
   validationCategory?: string;
+  repositoryIdentityHash?: string;
+  promptVersion?: string;
+  schemaVersion?: string;
+  contextVersion?: string;
+  redactionVersion?: string;
+  inputTokenEstimate?: number;
+  outputUnits?: number;
+  resultState?: string;
+  acceptedFindingCount?: number;
+  rejectedFindingCount?: number;
+  validationWarningCount?: number;
+  outputBytes?: number;
 };
 
 export type ProductionProviderLogger = (event: ProductionProviderLogEvent) => void;
 
 const DEFAULT_POLICY: ProductionProviderPolicy = Object.freeze({
   version: PRODUCTION_PROVIDER_POLICY_VERSION,
-  maximumRequestBytes: 700_000,
-  maximumContextCharacters: 350_000,
+  maximumRequestBytes: 512_000,
+  maximumContextCharacters: 240_000,
+  maximumContextBytes: 240_000,
+  maximumInputTokens: 80_000,
+  maximumSelectedFiles: 40,
+  maximumExcerptBytesPerFile: 16_384,
   maximumResponseBytes: 1_000_000,
-  maximumOutputTokens: 6_000,
+  maximumOutputTokens: 4_000,
   timeoutMs: 45_000,
+  maximumProviderAttempts: 2,
   maximumRetryCount: 1,
   maximumRetryDelayMs: 1_500,
 });
@@ -66,6 +96,7 @@ const SECRET_VALUE_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|\b(?:sk|ghp|githu
 const ABSOLUTE_PATH_RE = /(?:[A-Za-z]:[\\/](?:Users|Documents|home)[\\/]|file:\/\/\/|\/Users\/[^/]+\/|\/home\/[^/]+\/)/i;
 
 export function resolveProductionProviderConfig(env: NodeJS.ProcessEnv = process.env): ProductionProviderConfig {
+  const configurationWarnings: string[] = [];
   const provider = (env.SHIPSEAL_DEEP_INTELLIGENCE_PROVIDER || 'openai-compatible').trim();
   if (provider !== 'openai-compatible') throw configurationError('Unsupported deep-intelligence provider configuration.');
   const endpoint = normalizeEndpoint(env.SHIPSEAL_DEEP_INTELLIGENCE_BASE_URL || 'https://api.openai.com/v1');
@@ -76,12 +107,20 @@ export function resolveProductionProviderConfig(env: NodeJS.ProcessEnv = process
     apiKey: cleanConfig(env.SHIPSEAL_DEEP_INTELLIGENCE_API_KEY, 8_000),
     endpoint,
     environmentLabel: cleanConfig(env.SHIPSEAL_DEEP_INTELLIGENCE_ENVIRONMENT, 80) || undefined,
+    configurationWarnings,
     policy: {
       ...DEFAULT_POLICY,
-      timeoutMs: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_TIMEOUT_MS, DEFAULT_POLICY.timeoutMs, 1_000, 120_000),
-      maximumOutputTokens: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_OUTPUT_TOKENS, DEFAULT_POLICY.maximumOutputTokens, 256, 16_000),
-      maximumRequestBytes: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_REQUEST_BYTES, DEFAULT_POLICY.maximumRequestBytes, 32_000, 900_000),
-      maximumResponseBytes: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_RESPONSE_BYTES, DEFAULT_POLICY.maximumResponseBytes, 16_000, 1_000_000),
+      timeoutMs: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_TIMEOUT_MS, DEFAULT_POLICY.timeoutMs, 1_000, 120_000, 'timeout', configurationWarnings),
+      maximumInputTokens: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_INPUT_TOKENS, DEFAULT_POLICY.maximumInputTokens, 1_000, 200_000, 'input tokens', configurationWarnings),
+      maximumOutputTokens: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_OUTPUT_TOKENS, DEFAULT_POLICY.maximumOutputTokens, 256, 16_000, 'output tokens', configurationWarnings),
+      maximumSelectedFiles: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_SELECTED_FILES, DEFAULT_POLICY.maximumSelectedFiles, 1, 120, 'selected files', configurationWarnings),
+      maximumExcerptBytesPerFile: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_EXCERPT_BYTES, DEFAULT_POLICY.maximumExcerptBytesPerFile, 512, 64_000, 'excerpt bytes', configurationWarnings),
+      maximumContextBytes: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_CONTEXT_BYTES, DEFAULT_POLICY.maximumContextBytes, 8_000, 600_000, 'context bytes', configurationWarnings),
+      maximumContextCharacters: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_CONTEXT_BYTES, DEFAULT_POLICY.maximumContextCharacters, 8_000, 600_000, 'context bytes', []),
+      maximumRequestBytes: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_REQUEST_BYTES, DEFAULT_POLICY.maximumRequestBytes, 32_000, 900_000, 'request bytes', configurationWarnings),
+      maximumResponseBytes: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_RESPONSE_BYTES, DEFAULT_POLICY.maximumResponseBytes, 16_000, 1_000_000, 'response bytes', configurationWarnings),
+      maximumProviderAttempts: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_ATTEMPTS, DEFAULT_POLICY.maximumProviderAttempts, 1, 3, 'provider attempts', configurationWarnings),
+      maximumRetryCount: boundedInteger(env.SHIPSEAL_DEEP_INTELLIGENCE_MAX_ATTEMPTS, DEFAULT_POLICY.maximumProviderAttempts, 1, 3, 'provider attempts', []) - 1,
     },
   };
 }
@@ -89,17 +128,21 @@ export function resolveProductionProviderConfig(env: NodeJS.ProcessEnv = process
 export function validateProductionProviderRequest(
   input: unknown,
   policy: ProductionProviderPolicy,
+  options: { allowSensitiveContent?: boolean; allowConfiguredBudgetOverflow?: boolean } = {},
 ): { valid: true; request: RepositoryDeepIntelligenceRequest; requestBytes: number } | { valid: false; message: string } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return { valid: false, message: 'Bounded intelligence request is invalid.' };
   let serialized: string;
   try { serialized = JSON.stringify(input); } catch { return { valid: false, message: 'Bounded intelligence request could not be serialized.' }; }
   const requestBytes = Buffer.byteLength(serialized, 'utf8');
-  if (requestBytes > policy.maximumRequestBytes) return { valid: false, message: 'Bounded intelligence request exceeds the server request budget.' };
-  if (SECRET_VALUE_RE.test(serialized) || ABSOLUTE_PATH_RE.test(serialized)) return { valid: false, message: 'Bounded intelligence request failed content safety validation.' };
+  if (requestBytes > (options.allowConfiguredBudgetOverflow ? 900_000 : policy.maximumRequestBytes)) return { valid: false, message: 'Bounded intelligence request exceeds the server request budget.' };
+  const safetySerialized = serialized
+    .replace(/(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|secret|password|passwd|private[_-]?key|client[_-]?secret|connection[_-]?string)\s*[:=]\s*(?:\\?["'`]?)\[REDACTED:[A-Z0-9_]+\](?:\\?["'`]?)/gi, '[REDACTED_ASSIGNMENT]')
+    .replace(/\[REDACTED:[A-Z0-9_]+\]/g, '[REDACTED_VALUE]');
+  if (!options.allowSensitiveContent && (SECRET_VALUE_RE.test(safetySerialized) || ABSOLUTE_PATH_RE.test(safetySerialized))) return { valid: false, message: 'Bounded intelligence request failed content safety validation.' };
   const request = input as Partial<RepositoryDeepIntelligenceRequest>;
-  if (request.schemaVersion !== 'shipseal.deep-intelligence-request.v1'
+  if (request.schemaVersion !== REPOSITORY_DEEP_INTELLIGENCE_REQUEST_VERSION
     || request.responseSchemaVersion !== REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION
-    || request.promptContractVersion !== 'shipseal.deep-intelligence-contract.v1'
+    || request.promptContractVersion !== REPOSITORY_DEEP_INTELLIGENCE_PROMPT_CONTRACT_VERSION
     || typeof request.fingerprint !== 'string'
     || request.fingerprint.length < 8
     || !Array.isArray(request.contextItems)
@@ -115,7 +158,7 @@ export function validateProductionProviderRequest(
     return { valid: false, message: 'Bounded intelligence request exceeds structural limits.' };
   }
   const contextCharacters = request.contextItems.reduce((total, item) => total + (typeof item?.content === 'string' ? item.content.length : 0), 0);
-  if (contextCharacters > policy.maximumContextCharacters) return { valid: false, message: 'Bounded repository context exceeds the transmission budget.' };
+  if (!options.allowConfiguredBudgetOverflow && contextCharacters > policy.maximumContextCharacters) return { valid: false, message: 'Bounded repository context exceeds the transmission budget.' };
   const evidenceIds = new Set(request.evidenceReferences.map(item => item?.id).filter((id): id is string => typeof id === 'string'));
   if (evidenceIds.size !== request.evidenceReferences.length
     || request.contextItems.some(item => !safeRelativePath(item?.path)
@@ -174,9 +217,21 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
           }
           throw failure;
         }
+        const contentType = response.headers.get('Content-Type') || '';
+        if (!contentType.toLowerCase().includes('application/json')) {
+          throw new RepositoryDeepIntelligenceProviderError('invalid_response', 'Provider response content type was not JSON.');
+        }
         const rawText = await readBoundedResponseText(response, config.policy.maximumResponseBytes, runOptions?.signal);
         const payload = parseProviderEnvelope(rawText);
-        this.log(requestId, 'success', startedAt, validation.requestBytes, retryCount);
+        this.log(requestId, 'success', startedAt, validation.requestBytes, retryCount, undefined, {
+          repositoryIdentityHash: stableContextFingerprint(request.repository),
+          promptVersion: request.promptContractVersion,
+          schemaVersion: request.responseSchemaVersion,
+          contextVersion: request.transmission?.contextVersion || request.selectionPolicyVersion,
+          redactionVersion: request.transmission?.redactionVersion,
+          inputTokenEstimate: estimateDeepIntelligenceInputTokens(validation.requestBytes),
+          outputBytes: Buffer.byteLength(rawText, 'utf8'),
+        });
         return payload;
       } catch (error) {
         if (error instanceof RepositoryDeepIntelligenceProviderError) {
@@ -196,11 +251,12 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
     }
   }
 
-  private log(requestId: string, outcome: ProductionProviderLogEvent['outcome'], startedAt: number, requestBytes: number, retryCount: number, statusCategory?: string) {
+  private log(requestId: string, outcome: ProductionProviderLogEvent['outcome'], startedAt: number, requestBytes: number, retryCount: number, statusCategory?: string, details: Partial<ProductionProviderLogEvent> = {}) {
     this.options.logger?.({
       event: 'repository_intelligence_provider', requestId, providerId: this.providerId,
       modelId: this.options.config.model, outcome,
       durationMs: Math.max(0, (this.options.now || Date.now)() - startedAt), requestBytes, retryCount, statusCategory,
+      ...details,
     });
   }
 }
@@ -218,8 +274,12 @@ function buildProviderBody(request: RepositoryDeepIntelligenceRequest, config: P
           `The object must use schemaVersion ${REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION} and providerId openai-compatible.`,
           'Use only the supplied bounded request. Every repository-specific finding must cite supplied paths and evidence IDs.',
           'Deterministic evidence is authoritative. Mark interpretation as model-inference. Never claim code execution or certification.',
+          'Never invent files, entities, relationships, benefits, savings, compliance, or guaranteed outcomes. State uncertainty explicitly.',
+          'Do not reveal chain-of-thought. Provide concise rationale and cited evidence only.',
           'Required top-level keys: schemaVersion, providerId, modelId, returnedCapabilities, findings, warnings.',
           'Each finding requires id, category, title, statement, referencedPaths, referencedEvidenceIds, providerConfidence, inferenceType, limitations, and artifactTargets.',
+          'Optional evidenceQuotes must contain only short verbatim text present in the supplied excerpt for the same path.',
+          'Future directions are optional, non-executable hypotheses using the futureDirection category and must include goal, rationale, dependencies, expectedArtifactFamilies, repository evidence, and a verification method.',
         ].join(' '),
       },
       { role: 'user', content: JSON.stringify(request) },
@@ -233,7 +293,23 @@ function parseProviderEnvelope(rawText: string): unknown {
   const content = extractMessageContent(envelope);
   if (typeof content !== 'string') throw new RepositoryDeepIntelligenceProviderError('invalid_response', 'Provider response did not contain structured message content.');
   const normalized = stripSingleJsonFence(content);
-  try { return JSON.parse(normalized); } catch { throw new RepositoryDeepIntelligenceProviderError('invalid_response', 'Provider structured content was not valid JSON.'); }
+  try {
+    const payload = JSON.parse(normalized) as Record<string, unknown>;
+    const usage = extractUsage(envelope);
+    return usage ? { ...payload, usage } : payload;
+  } catch { throw new RepositoryDeepIntelligenceProviderError('invalid_response', 'Provider structured content was not valid JSON.'); }
+}
+
+function extractUsage(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const usage = (value as { usage?: unknown }).usage;
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return undefined;
+  const record = usage as Record<string, unknown>;
+  const inputUnits = finiteNonnegative(record.prompt_tokens);
+  const outputUnits = finiteNonnegative(record.completion_tokens);
+  const totalUnits = finiteNonnegative(record.total_tokens);
+  if (inputUnits === undefined && outputUnits === undefined && totalUnits === undefined) return undefined;
+  return { ...(inputUnits === undefined ? {} : { inputUnits }), ...(outputUnits === undefined ? {} : { outputUnits }), ...(totalUnits === undefined ? {} : { totalUnits }), cacheUsed: false };
 }
 
 function extractMessageContent(value: unknown): unknown {
@@ -304,10 +380,13 @@ function normalizeEndpoint(value: string) {
   return parsed.toString().replace(/\/$/, '');
 }
 
-function boundedInteger(value: string | undefined, fallback: number, minimum: number, maximum: number) {
+function boundedInteger(value: string | undefined, fallback: number, minimum: number, maximum: number, label: string, warnings: string[]) {
   if (!value) return fallback;
   const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) throw configurationError('Deep-intelligence numeric configuration is outside safe bounds.');
+  if (!Number.isSafeInteger(parsed) || parsed < minimum || parsed > maximum) {
+    warnings.push(`Invalid ${label} configuration used the safe default.`);
+    return fallback;
+  }
   return parsed;
 }
 
@@ -322,3 +401,13 @@ function configurationError(message: string) {
 export function supportedProviderCapabilities(): RepositoryDeepIntelligenceCapability[] {
   return [...REPOSITORY_DEEP_INTELLIGENCE_CAPABILITIES];
 }
+
+export function productionProviderVersions() {
+  return {
+    contextVersion: PRODUCTION_DEEP_INTELLIGENCE_CONTEXT_VERSION,
+    redactionVersion: PRODUCTION_DEEP_INTELLIGENCE_REDACTION_VERSION,
+    responseSchemaVersion: REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
+  };
+}
+
+function finiteNonnegative(value: unknown) { return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined; }

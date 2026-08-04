@@ -35,6 +35,16 @@ export default function Security() {
         </div>
       </section>
 
+      <section className="mt-4 rounded-2xl border border-border/55 bg-secondary/10 p-5 md:p-6">
+        <h2 className="font-display text-xl font-semibold">Deep analysis boundary</h2>
+        <ul className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
+          <li>Provider calls happen server-side with bounded file, excerpt, context, token, output, timeout, and attempt limits.</li>
+          <li>Common credentials, authorization headers, connection strings, environment values, keys, and certificates are redacted or excluded before transmission.</li>
+          <li>Redaction is best-effort: ShipSeal is not a secret scanner, and users should not submit live credentials.</li>
+          <li>Deep analysis does not execute code, mutate repositories, override deterministic evidence, certify compliance, or mark work Applied or Verified.</li>
+        </ul>
+      </section>
+
       <details className="group mt-4 rounded-2xl border border-border/55 bg-background/25">
         <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground hover:text-foreground">Account and saved-project security</summary>
         <div className="border-t border-border/45 px-5 py-5 text-sm leading-relaxed text-muted-foreground">

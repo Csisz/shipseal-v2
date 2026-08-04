@@ -103,7 +103,10 @@ describe('production Repository Intelligence provider', () => {
     const logs: ProductionProviderLogEvent[] = [];
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const body = String(init?.body || '');
-      expect(body).toContain(request.fingerprint);
+      const providerBody = JSON.parse(body) as { messages: Array<{ role: string; content: string }> };
+      const transmitted = JSON.parse(providerBody.messages.find(message => message.role === 'user')!.content);
+      expect(transmitted.transmission).toMatchObject({ preparedServerSide: true });
+      expect(transmitted.fingerprint).not.toBe(request.fingerprint);
       expect(body).not.toContain('never-transmit-value');
       expect(body).not.toContain('node_modules/pkg');
       expect(body).not.toContain('installationToken');

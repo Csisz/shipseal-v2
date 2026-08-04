@@ -42,6 +42,15 @@ export default function Privacy() {
         </ul>
       </section>
 
+      <section className="mt-4 rounded-2xl border border-primary/25 bg-primary/5 p-5 md:p-6">
+        <h2 className="font-display text-xl font-semibold">Optional Deep analysis</h2>
+        <div className="mt-3 space-y-2 text-sm leading-relaxed text-muted-foreground">
+          <p>The deterministic scan works independently. If Deep analysis is enabled, ShipSeal sends only bounded repository metadata and selected excerpts to the configured provider after server-side, best-effort redaction.</p>
+          <p>Provider processing and retention depend on that provider&apos;s configured service and terms. ShipSeal does not claim that redaction detects every secret, so replace or remove credentials before scanning.</p>
+          <p>Provider keys remain server-side. A provider failure, timeout, or budget limit does not prevent the deterministic workspace, exports, or reviewed repository workflows.</p>
+        </div>
+      </section>
+
       <details className="group mt-4 rounded-2xl border border-border/55 bg-background/25">
         <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-muted-foreground hover:text-foreground">Processing and retention details</summary>
         <div className="space-y-3 border-t border-border/45 px-5 py-5 text-sm leading-relaxed text-muted-foreground">

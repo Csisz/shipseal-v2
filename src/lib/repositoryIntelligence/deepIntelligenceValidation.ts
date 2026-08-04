@@ -33,6 +33,8 @@ const ABSOLUTE_PATH_RE = /(?:[A-Za-z]:[\\/](?:Users|Documents|home)[\\/]|file:\/
 const PROMPT_LEAK_RE = /\b(?:system prompt|hidden reasoning|chain[- ]of[- ]thought|developer message|ignore previous instructions)\b/i;
 const EXECUTION_CLAIM_RE = /\b(?:shipseal|we|i)\s+(?:ran|executed|started|deployed|migrated)\b/i;
 const CERTIFICATION_RE = /\b(?:certified|guaranteed compliant|fully compliant|legally compliant|security guarantee)\b/i;
+const GUARANTEED_OUTCOME_RE = /\b(?:guarantees?|guaranteed|certain to|will definitely)\b/i;
+const RAW_HTML_RE = /<\/?[A-Za-z][^>]*>/;
 
 export function validateRepositoryDeepIntelligenceResponse({
   request,
@@ -139,6 +141,8 @@ export function validateRepositoryDeepIntelligenceResponse({
     requestFingerprint: request.fingerprint,
     promptContractVersion: request.promptContractVersion,
     validatorVersion: REPOSITORY_DEEP_INTELLIGENCE_VALIDATOR_VERSION,
+    contextSelectionVersion: request.transmission?.contextVersion || request.selectionPolicyVersion,
+    redactionVersion: request.transmission?.redactionVersion,
     requestedCapabilities: [...request.requestedCapabilities],
     returnedCapabilities: sortedUnique(response.returnedCapabilities),
     usage: response.usage ? { ...response.usage } : undefined,
@@ -178,15 +182,31 @@ function validateFinding(
   indexes: ValidationIndexes,
 ): { finding: RepositoryDeepIntelligenceValidatedFinding; confidenceDowngraded: boolean } | RepositoryDeepIntelligenceRejectedFinding {
   if (!finding.id.trim() || finding.id.length > 200) return rejection(undefined, finding.category, ['invalid-provider-id'], 'Provider finding ID is invalid.');
-  const textFields = [finding.title, finding.statement.subject, finding.statement.predicate, finding.statement.value, ...finding.limitations];
+  const textFields = [
+    finding.title, finding.statement.subject, finding.statement.predicate, finding.statement.value, ...finding.limitations,
+    ...(finding.evidenceQuotes || []).flatMap(item => [item.quote, item.summary]),
+    ...(finding.futureDirection ? [
+      finding.futureDirection.goal,
+      finding.futureDirection.rationale,
+      ...finding.futureDirection.dependencies,
+      ...(finding.futureDirection.verificationMethod ? [finding.futureDirection.verificationMethod] : []),
+      ...(finding.futureDirection.compatibilityHints || []),
+    ] : []),
+  ];
   if (textFields.some(text => text.length > indexes.policy.maximumTextLengthPerField)) {
     return rejection(finding.id, finding.category, ['text-limit'], 'Finding text exceeded the bounded field limit.');
   }
   if (textFields.some(unsafeText)) return rejection(finding.id, finding.category, ['prohibited-output'], 'Finding contained prohibited or sensitive output.');
+  if (textFields.some(text => EXECUTION_CLAIM_RE.test(text))) return rejection(finding.id, finding.category, ['code-execution-claim'], 'Finding claimed repository code execution that ShipSeal did not perform.');
+  if (textFields.some(text => CERTIFICATION_RE.test(text) || GUARANTEED_OUTCOME_RE.test(text))) return rejection(finding.id, finding.category, ['unsupported-outcome-claim'], 'Finding claimed unsupported certification or guaranteed outcomes.');
   if (finding.referencedPaths.length > indexes.policy.maximumPathsPerFinding
     || finding.referencedEvidenceIds.length > indexes.policy.maximumEvidenceReferencesPerFinding
     || (finding.relationshipClaims?.length || 0) > indexes.policy.maximumRelationshipsPerFinding
-    || finding.artifactTargets.length > indexes.policy.maximumArtifactTargets) {
+    || finding.artifactTargets.length > indexes.policy.maximumArtifactTargets
+    || (finding.evidenceQuotes?.length || 0) > indexes.policy.maximumQuotesPerFinding
+    || (finding.futureDirection?.dependencies.length || 0) > indexes.policy.maximumFutureDependencies
+    || (finding.futureDirection?.expectedArtifactFamilies.length || 0) > indexes.policy.maximumArtifactTargets
+    || (finding.futureDirection?.compatibilityHints?.length || 0) > indexes.policy.maximumCompatibilityHints) {
     return rejection(finding.id, finding.category, ['result-limit'], 'Finding exceeded a bounded result-policy limit.');
   }
   if (finding.inferenceType === 'unavailable' || finding.category === 'unsupported-or-unavailable-conclusion') {
@@ -194,6 +214,10 @@ function validateFinding(
   }
   const paths = normalizeFindingPaths(finding.referencedPaths, indexes.knownPaths);
   if (paths.success === false) return rejection(finding.id, finding.category, ['invalid-path'], paths.message);
+  if (paths.paths.some(path => indexes.fileByPath.get(path)?.primary === 'generated-or-vendor-content'
+    || indexes.folderByPath.get(path)?.generatedOrVendor)) {
+    return rejection(finding.id, finding.category, ['generated-path'], 'Finding referenced generated or vendor content excluded from provider evidence.');
+  }
   const evidenceIds = sortedUnique(finding.referencedEvidenceIds);
   if (!evidenceIds.length) return rejection(finding.id, finding.category, ['missing-evidence'], 'Repository-specific finding did not cite deterministic evidence.');
   if (evidenceIds.some(id => !indexes.evidenceById.has(id))) {
@@ -210,9 +234,18 @@ function validateFinding(
   if (command === 'unsupported') return rejection(finding.id, finding.category, ['unsupported-command'], 'Command was not supported by deterministic command evidence.');
   const relationships = validateRelationships(finding, evidenceIds, indexes);
   if (!relationships.valid) return rejection(finding.id, finding.category, ['relationship-contradiction'], relationships.message);
+  if (finding.category === 'future-direction' && !finding.futureDirection) {
+    return rejection(finding.id, finding.category, ['missing-future-direction'], 'Future-direction finding did not include the bounded future-direction contract.');
+  }
+  if (finding.futureDirection && (!finding.futureDirection.goal.trim() || !finding.futureDirection.rationale.trim()
+    || !finding.futureDirection.expectedArtifactFamilies.length)) {
+    return rejection(finding.id, finding.category, ['invalid-future-direction'], 'Future-direction candidate lacked a goal, repository rationale, or expected artifact family.');
+  }
+  const quoteValidation = validateEvidenceQuotes(finding, paths.paths, indexes);
 
   const evidence = evidenceIds.map(id => indexes.evidenceById.get(id)!);
-  const confidence = normalizeConfidence(finding, evidence, paths.paths, indexes);
+  let confidence = normalizeConfidence(finding, evidence, paths.paths, indexes);
+  if (quoteValidation.removedCount) confidence = downgradeConfidence(confidence);
   const confidenceDowngraded = confidenceRank(confidence) < providerConfidenceRank(finding.providerConfidence);
   const humanReviewRequired = finding.requiresHumanReview === true
     || finding.proposedResponsibility === 'authentication-or-authorization-area'
@@ -220,6 +253,7 @@ function validateFinding(
   const validationMessages = sortedUnique([
     ...responsibility.messages,
     ...relationships.messages,
+    ...(quoteValidation.removedCount ? ['Unsupported evidence quotes were removed and confidence was reduced.'] : []),
     ...(confidenceDowngraded ? ['Provider confidence was capped by deterministic evidence quality.'] : []),
     ...(command === 'inferred' ? ['Command is inferred and must not be presented as known runnable behavior.'] : []),
     ...(humanReviewRequired ? ['High-impact subject requires human review.'] : []),
@@ -229,17 +263,21 @@ function validateFinding(
     ...evidence.flatMap(item => item.assertionState === 'limited' ? ['Supporting deterministic evidence is limited.'] : []),
     ...paths.paths.flatMap(path => indexes.request.contextItems.find(item => item.path === path)?.truncation.truncated
       ? ['Referenced source context was truncated.'] : []),
+    ...(quoteValidation.removedCount ? ['One or more supplied quotes did not occur in the bounded source excerpt.'] : []),
   ]);
   const validationState = humanReviewRequired
     ? 'requires-human-review' as const
-    : finding.inferenceType === 'model-inference' || limitations.length || confidenceDowngraded || command === 'inferred'
+    : finding.inferenceType === 'model-inference' || limitations.length || confidenceDowngraded || command === 'inferred' || quoteValidation.removedCount > 0
       ? 'accepted-with-limitations' as const
       : 'accepted' as const;
   const providerSymbols = (finding.referencedSymbols || []).filter((symbol): symbol is { path: string; name: string } => (
     typeof symbol.path === 'string' && typeof symbol.name === 'string'
   ));
   const referencedSymbols = sortedSymbols(providerSymbols, paths.paths, indexes);
-  const removedFields = referencedSymbols.length === (finding.referencedSymbols?.length || 0) ? [] : ['referencedSymbols'];
+  const removedFields = [
+    ...(referencedSymbols.length === (finding.referencedSymbols?.length || 0) ? [] : ['referencedSymbols']),
+    ...(quoteValidation.removedCount ? ['evidenceQuotes'] : []),
+  ];
   if (removedFields.length) validationMessages.push('Uncorroborated symbol references were removed.');
   validationMessages.sort();
   const stableId = stableContextFingerprint({
@@ -249,6 +287,8 @@ function validateFinding(
     evidenceIds,
     proposedResponsibility: finding.proposedResponsibility,
     relationships: relationships.relationships,
+    evidenceQuotes: quoteValidation.quotes,
+    futureDirection: finding.futureDirection,
   });
   return {
     confidenceDowngraded,
@@ -271,9 +311,21 @@ function validateFinding(
       validationMessages,
       limitations,
       humanReviewState: humanReviewRequired ? 'required' : 'not-required',
-      eligibleForArtifactGeneration: true,
       permittedArtifactTargets: sortedUnique(finding.artifactTargets),
       artifactRelevance: sortedUnique(finding.artifactRelevance || []),
+      evidenceQuotes: quoteValidation.quotes,
+      futureDirectionCandidate: finding.futureDirection ? {
+        goal: finding.futureDirection.goal.trim(),
+        repositorySpecificRationale: finding.futureDirection.rationale.trim(),
+        evidencePaths: paths.paths,
+        evidenceIds,
+        dependencies: sortedUnique(finding.futureDirection.dependencies.map(item => item.trim()).filter(Boolean)),
+        expectedArtifactFamilies: sortedUnique(finding.futureDirection.expectedArtifactFamilies),
+        confidence,
+        verificationMethod: finding.futureDirection.verificationMethod?.trim() || undefined,
+        compatibilityHints: sortedUnique((finding.futureDirection.compatibilityHints || []).map(item => item.trim()).filter(Boolean)),
+      } : undefined,
+      eligibleForArtifactGeneration: finding.category !== 'future-direction',
     },
   };
 }
@@ -286,6 +338,29 @@ interface ValidationIndexes {
   knownPaths: Set<string>;
   deterministicRelationships: Map<string, RepositoryDeepIntelligenceRequest['relationshipSummary'][number]>;
   policy: ReturnType<typeof resolveRepositoryDeepIntelligenceResultPolicy>;
+}
+
+function validateEvidenceQuotes(
+  finding: RepositoryDeepIntelligenceRawFinding,
+  acceptedPaths: string[],
+  indexes: ValidationIndexes,
+) {
+  const quotes: Array<{ path: string; quote: string; summary: string }> = [];
+  let removedCount = 0;
+  for (const candidate of finding.evidenceQuotes || []) {
+    let path: string;
+    try { path = normalizeEvidencePath(candidate.path); } catch { removedCount += 1; continue; }
+    const quote = candidate.quote.trim().replace(/\r\n?/g, '\n');
+    const source = indexes.request.contextItems.find(item => item.path === path)?.content?.replace(/\r\n?/g, '\n');
+    if (!acceptedPaths.includes(path) || !source || !quote || quote.length > indexes.policy.maximumQuoteCharacters
+      || unsafeText(quote) || !source.includes(quote)) {
+      removedCount += 1;
+      continue;
+    }
+    quotes.push({ path, quote, summary: candidate.summary.trim() });
+  }
+  quotes.sort((left, right) => `${left.path}:${left.quote}`.localeCompare(`${right.path}:${right.quote}`));
+  return { quotes, removedCount };
 }
 
 function normalizeFindingPaths(paths: string[], knownPaths: Set<string>): { success: true; paths: string[] } | { success: false; message: string } {
@@ -402,7 +477,8 @@ function normalizeConfidence(
   const minimumEvidenceConfidence = Math.min(...evidence.map(item => item.confidence));
   const strongValidation = evidence.every(item => ['validated', 'observed'].includes(item.validationState));
   const limited = evidence.some(item => item.assertionState === 'limited' || item.validationState === 'inferred')
-    || paths.some(path => indexes.request.contextItems.find(item => item.path === path)?.truncation.truncated);
+    || paths.some(path => indexes.request.contextItems.find(item => item.path === path)?.truncation.truncated)
+    || indexes.request.knownLimitations.some(item => /\b(?:limited|incomplete|truncated|omitted|unavailable|partial)\b/i.test(item));
   if (finding.providerConfidence >= 0.85 && minimumEvidenceConfidence >= 0.85 && strongValidation && !limited
     && finding.inferenceType === 'verified') return 'high';
   if (finding.providerConfidence >= 0.5 && minimumEvidenceConfidence >= 0.5 && !limited) return 'medium';
@@ -437,7 +513,7 @@ function invalid(code: string, message: string): RepositoryDeepIntelligenceValid
 }
 
 function unsafeText(value: string) {
-  return SECRET_RE.test(value) || ABSOLUTE_PATH_RE.test(value) || PROMPT_LEAK_RE.test(value);
+  return SECRET_RE.test(value) || ABSOLUTE_PATH_RE.test(value) || PROMPT_LEAK_RE.test(value) || RAW_HTML_RE.test(value);
 }
 
 function safeSerializedSize(value: unknown) {
@@ -454,6 +530,10 @@ function confidenceRank(confidence: RepositoryDeepIntelligenceConfidence) {
 
 function providerConfidenceRank(confidence: number) {
   return confidence >= 0.85 ? 3 : confidence >= 0.5 ? 2 : 1;
+}
+
+function downgradeConfidence(confidence: RepositoryDeepIntelligenceConfidence): RepositoryDeepIntelligenceConfidence {
+  return confidence === 'high' ? 'medium' : 'low';
 }
 
 function sortedUnique<T extends string>(values: T[]): T[] {

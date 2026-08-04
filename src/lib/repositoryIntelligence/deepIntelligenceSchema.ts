@@ -7,11 +7,11 @@ import type {
 } from './evidence.js';
 
 export const REPOSITORY_DEEP_INTELLIGENCE_REQUEST_VERSION = 'shipseal.deep-intelligence-request.v1' as const;
-export const REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION = 'shipseal.deep-intelligence-response.v1' as const;
+export const REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION = 'shipseal.deep-intelligence-response.v2' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_RESULT_VERSION = 'shipseal.deep-intelligence-result.v1' as const;
-export const REPOSITORY_DEEP_INTELLIGENCE_PROMPT_CONTRACT_VERSION = 'shipseal.deep-intelligence-contract.v1' as const;
-export const REPOSITORY_DEEP_INTELLIGENCE_VALIDATOR_VERSION = 'shipseal.deep-intelligence-validator.v1' as const;
-export const REPOSITORY_DEEP_INTELLIGENCE_RESULT_POLICY_VERSION = 'shipseal.deep-intelligence-result-policy.v1' as const;
+export const REPOSITORY_DEEP_INTELLIGENCE_PROMPT_CONTRACT_VERSION = 'shipseal.deep-intelligence-contract.v2' as const;
+export const REPOSITORY_DEEP_INTELLIGENCE_VALIDATOR_VERSION = 'shipseal.deep-intelligence-validator.v2' as const;
+export const REPOSITORY_DEEP_INTELLIGENCE_RESULT_POLICY_VERSION = 'shipseal.deep-intelligence-result-policy.v2' as const;
 
 export const REPOSITORY_DEEP_INTELLIGENCE_CAPABILITIES = [
   'architecture-analysis',
@@ -37,6 +37,7 @@ export const REPOSITORY_DEEP_INTELLIGENCE_FINDING_CATEGORIES = [
   'documentation-conflict',
   'verification-recommendation',
   'context-loading-recommendation',
+  'future-direction',
   'unsupported-or-unavailable-conclusion',
 ] as const;
 export type RepositoryDeepIntelligenceFindingCategory = typeof REPOSITORY_DEEP_INTELLIGENCE_FINDING_CATEGORIES[number];
@@ -66,6 +67,10 @@ export interface RepositoryDeepIntelligenceResultPolicy {
   maximumRelationshipsPerFinding: number;
   maximumTextLengthPerField: number;
   maximumArtifactTargets: number;
+  maximumQuotesPerFinding: number;
+  maximumQuoteCharacters: number;
+  maximumFutureDependencies: number;
+  maximumCompatibilityHints: number;
   maximumWarnings: number;
   maximumRawResponseCharacters: number;
   defaultTimeoutMs: number;
@@ -84,6 +89,10 @@ export const DEFAULT_REPOSITORY_DEEP_INTELLIGENCE_RESULT_POLICY: RepositoryDeepI
   maximumRelationshipsPerFinding: 8,
   maximumTextLengthPerField: 2_000,
   maximumArtifactTargets: 8,
+  maximumQuotesPerFinding: 4,
+  maximumQuoteCharacters: 240,
+  maximumFutureDependencies: 8,
+  maximumCompatibilityHints: 8,
   maximumWarnings: 20,
   maximumRawResponseCharacters: 1_000_000,
   defaultTimeoutMs: 45_000,
@@ -103,6 +112,7 @@ export function resolveRepositoryDeepIntelligenceResultPolicy(
   const integerFields: Array<keyof RepositoryDeepIntelligenceResultPolicy> = [
     'maximumFindings', 'maximumPathsPerFinding', 'maximumEvidenceReferencesPerFinding',
     'maximumRelationshipsPerFinding', 'maximumTextLengthPerField', 'maximumArtifactTargets',
+    'maximumQuotesPerFinding', 'maximumQuoteCharacters', 'maximumFutureDependencies', 'maximumCompatibilityHints',
     'maximumWarnings', 'maximumRawResponseCharacters', 'defaultTimeoutMs',
   ];
   for (const field of integerFields) {
@@ -154,6 +164,21 @@ const relationshipClaimSchema = z.object({
   evidenceIds: z.array(z.string()),
 }).strict();
 
+const evidenceQuoteSchema = z.object({
+  path: z.string(),
+  quote: z.string(),
+  summary: z.string(),
+}).strict();
+
+const futureDirectionSchema = z.object({
+  goal: z.string(),
+  rationale: z.string(),
+  dependencies: z.array(z.string()),
+  expectedArtifactFamilies: z.array(artifactTargetSchema),
+  verificationMethod: z.string().optional(),
+  compatibilityHints: z.array(z.string()).optional(),
+}).strict();
+
 const rawFindingSchema = z.object({
   id: z.string(),
   category: categorySchema,
@@ -170,6 +195,8 @@ const rawFindingSchema = z.object({
   proposedResponsibility: responsibilitySchema.optional(),
   requiresHumanReview: z.boolean().optional(),
   artifactRelevance: z.array(z.enum(['create', 'update', 'strengthen'])).optional(),
+  evidenceQuotes: z.array(evidenceQuoteSchema).optional(),
+  futureDirection: futureDirectionSchema.optional(),
 }).strict();
 
 const usageSchema = z.object({
@@ -228,6 +255,20 @@ export interface RepositoryDeepIntelligenceValidatedFinding {
   eligibleForArtifactGeneration: boolean;
   permittedArtifactTargets: FutureArtifactCategory[];
   artifactRelevance: RepositoryDeepIntelligenceArtifactRelevance[];
+  evidenceQuotes?: Array<{ path: string; quote: string; summary: string }>;
+  futureDirectionCandidate?: RepositoryDeepIntelligenceFutureDirectionCandidate;
+}
+
+export interface RepositoryDeepIntelligenceFutureDirectionCandidate {
+  goal: string;
+  repositorySpecificRationale: string;
+  evidencePaths: string[];
+  evidenceIds: string[];
+  dependencies: string[];
+  expectedArtifactFamilies: FutureArtifactCategory[];
+  confidence: RepositoryDeepIntelligenceConfidence;
+  verificationMethod?: string;
+  compatibilityHints: string[];
 }
 
 export interface RepositoryDeepIntelligenceRejectedFinding {
@@ -263,6 +304,8 @@ export interface RepositoryDeepIntelligenceRunMetadata {
   usage?: RepositoryDeepIntelligenceNormalizedProviderResponse['usage'];
   truncated: boolean;
   providerWarnings: string[];
+  contextSelectionVersion?: string;
+  redactionVersion?: string;
 }
 
 export interface RepositoryDeepIntelligenceValidatedResult {

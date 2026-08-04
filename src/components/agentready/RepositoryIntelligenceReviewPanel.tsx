@@ -216,20 +216,57 @@ function RepositoryIntelligenceProviderDisclosure({ status, onPrepare }: { statu
   const enhanced = status.state === 'enhanced';
   const preparing = status.state === 'preparing';
   const fallback = status.state === 'fallback' || status.state === 'cancelled';
+  const insights = status.state === 'enhanced' ? status.insights || [] : [];
+  const diagnostics = status.state === 'enhanced' || status.state === 'fallback' || status.state === 'cancelled'
+    ? status.diagnostics : undefined;
   return (
     <section className={`rounded-2xl border p-4 ${enhanced ? 'border-success/35 bg-success/5' : fallback ? 'border-warning/35 bg-warning/5' : 'border-primary/25 bg-primary/5'}`} aria-live="polite" aria-busy={preparing}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Intelligence source</div>
-          <div className="mt-1 text-sm font-semibold text-foreground">{enhanced ? 'Enhanced intelligence validated' : fallback ? 'Deterministic fallback ready' : preparing ? 'Preparing optional enhanced intelligence' : 'Deterministic intelligence ready'}</div>
+          <div className="flex flex-wrap items-center gap-2 text-xs font-mono uppercase tracking-wider text-muted-foreground">
+            <span>Optional Deep analysis</span>
+            <Badge variant="outline">{status.deepState || status.state}</Badge>
+          </div>
+          <div className="mt-1 text-sm font-semibold text-foreground">{enhanced ? 'Deep analysis validated' : fallback ? 'Provider unavailable · deterministic fallback ready' : preparing ? 'Preparing optional Deep analysis' : 'Deterministic finding layer ready'}</div>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted-foreground">{status.message} Deterministic repository evidence remains authoritative.</p>
+          <p className="mt-2 max-w-3xl text-[11px] leading-relaxed text-muted-foreground">When enabled, bounded excerpts are redacted on a best-effort basis and sent to the configured provider. Repository code is not executed; ShipSeal is not a secret scanner.</p>
         </div>
         {onPrepare && !enhanced && !preparing && (!fallback || status.retryable) && (
           <Button type="button" size="sm" variant="outline" onClick={() => void onPrepare()}>
-            {fallback ? 'Retry enhanced intelligence' : 'Prepare enhanced intelligence'}
+            {fallback ? 'Retry Deep analysis' : 'Prepare Deep analysis'}
           </Button>
         )}
       </div>
+      {enhanced && insights.length > 0 && (
+        <details className="mt-4 rounded-xl border border-border/55 bg-background/45 p-3">
+          <summary className="cursor-pointer text-xs font-semibold text-foreground">Inspect accepted Deep analysis evidence ({insights.length})</summary>
+          <div className="mt-3 space-y-3">
+            {insights.map(insight => (
+              <article key={insight.id} className="rounded-lg border border-border/45 bg-secondary/15 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-foreground">{insight.title}</span>
+                  <Badge variant="outline">{insight.heuristic ? 'Heuristic' : 'Evidence-backed'}</Badge>
+                  <Badge variant="outline">{insight.confidence} confidence</Badge>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">{insight.evidenceCount} validated evidence reference(s)</p>
+                {insight.evidencePaths.length > 0 && <ul className="mt-1 space-y-1 font-mono text-[11px] text-muted-foreground">{insight.evidencePaths.map(path => <li key={path} className="break-all">{path}</li>)}</ul>}
+                {insight.futureDirection && (
+                  <div className="mt-2 rounded-md border border-primary/20 bg-primary/5 p-2 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Future-direction preview:</span> {insight.futureDirection.goal}
+                    {insight.futureDirection.verificationMethod && <span> · Verify: {insight.futureDirection.verificationMethod}</span>}
+                  </div>
+                )}
+              </article>
+            ))}
+          </div>
+        </details>
+      )}
+      {diagnostics && (
+        <details className="mt-3 text-[11px] text-muted-foreground">
+          <summary className="cursor-pointer">Safe request diagnostics</summary>
+          <p className="mt-2">{diagnostics.selectedFiles ?? 0} selected files · {diagnostics.estimatedInputTokens ?? 0} estimated input tokens · {diagnostics.redactedValueCount ?? 0} redacted values · cost estimate unavailable</p>
+        </details>
+      )}
     </section>
   );
 }

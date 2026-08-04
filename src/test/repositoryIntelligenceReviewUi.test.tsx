@@ -66,15 +66,44 @@ describe('Repository Intelligence artifact review UI', () => {
     const prepareEnhancement = vi.fn(async () => undefined);
     const { rerender } = render(<Harness result={result} providerStatus={{ state: 'deterministic', message: 'Deterministic repository intelligence is ready for review.', retryable: false }} prepareEnhancement={prepareEnhancement} />);
     fireEvent.click(screen.getByRole('button', { name: 'Review proposed files' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Prepare enhanced intelligence' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare Deep analysis' }));
     expect(prepareEnhancement).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('Repository Intelligence artifacts')).toBeInTheDocument();
 
     rerender(<Harness result={result} providerStatus={{ state: 'fallback', category: 'rate_limited', retryable: true, message: 'Enhanced intelligence is unavailable. Deterministic repository intelligence remains ready for review.' }} prepareEnhancement={prepareEnhancement} />);
-    expect(screen.getByText('Deterministic fallback ready')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry enhanced intelligence' }));
+    expect(screen.getByText('Provider unavailable · deterministic fallback ready')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Deep analysis' }));
     expect(prepareEnhancement).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/API key|provider response body/i)).not.toBeInTheDocument();
+  });
+
+  it('labels accepted Deep analysis evidence and heuristic future previews without exposing rejected findings', () => {
+    const result = buildRepositoryIntelligenceArtifactReview({ scanInput: fixture() });
+    render(<Harness result={result} providerStatus={{
+      state: 'enhanced',
+      deepState: 'completed-with-warnings',
+      message: 'Validated Deep analysis is available.',
+      retryable: false,
+      providerId: 'fixture-provider',
+      diagnostics: { selectedFiles: 3, estimatedInputTokens: 420, redactedValueCount: 1, costEstimate: 'unavailable' },
+      insights: [{
+        id: 'accepted-deep-finding',
+        title: 'Bootstrap ownership can be clarified',
+        confidence: 'medium',
+        validationState: 'accepted-with-limitations',
+        evidencePaths: ['src/main.tsx'],
+        evidenceCount: 2,
+        heuristic: true,
+        futureDirection: { goal: 'Clarify bootstrap ownership', verificationMethod: 'Run the existing build.' },
+      }],
+    }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Review proposed files' }));
+    expect(screen.getByText('Deep analysis validated')).toBeInTheDocument();
+    expect(screen.getByText('Heuristic')).toBeInTheDocument();
+    expect(screen.getByText('medium confidence')).toBeInTheDocument();
+    expect(screen.getAllByText('src/main.tsx').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Future-direction preview:/)).toBeInTheDocument();
+    expect(screen.queryByText('rejected-provider-finding')).not.toBeInTheDocument();
   });
 
   it('filters artifacts and opens the correct repository-specific detail', () => {

@@ -40,7 +40,7 @@ export {
 export { buildRepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest';
 export { validateRepositoryDeepIntelligenceResponse, isResponsibilityCompatible } from './deepIntelligenceValidation';
 export { runRepositoryDeepIntelligence } from './deepIntelligenceExecution';
-export { requestRepositoryIntelligenceEnhancement } from './deepIntelligenceClient';
+export { clearRepositoryIntelligenceEnhancementSessionCache, requestRepositoryIntelligenceEnhancement } from './deepIntelligenceClient';
 export {
   DETERMINISTIC_REPOSITORY_INTELLIGENCE_STATUS,
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,

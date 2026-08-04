@@ -375,3 +375,71 @@ describe('provider output security and result limits', () => {
     expect(result.result.findings.every(item => !item.id.includes('provider-finding'))).toBe(true);
   });
 });
+
+describe('evidence quotes and future-direction preparation', () => {
+  it('retains quotes found in bounded excerpts and removes fabricated quotes with reduced confidence', () => {
+    const { request } = preparedFixture();
+    const excerpt = request.contextItems.find(item => item.path === 'src/main.tsx')?.content;
+    expect(excerpt).toBeTruthy();
+    const supportedQuote = excerpt!.slice(0, 28);
+    const result = validate(request, [
+      finding(request, { id: 'quoted-valid', evidenceQuotes: [{ path: 'src/main.tsx', quote: supportedQuote, summary: 'Bounded entry excerpt.' }] }),
+      finding(request, { id: 'quoted-fabricated', evidenceQuotes: [{ path: 'src/main.tsx', quote: 'this text is not in the selected excerpt', summary: 'Unsupported quote.' }] }),
+    ]);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.result.findings.find(item => item.originalProviderFindingId === 'quoted-valid')?.evidenceQuotes).toEqual([
+      { path: 'src/main.tsx', quote: supportedQuote, summary: 'Bounded entry excerpt.' },
+    ]);
+    const fabricated = result.result.findings.find(item => item.originalProviderFindingId === 'quoted-fabricated')!;
+    expect(fabricated.evidenceQuotes).toEqual([]);
+    expect(fabricated.removedFields).toContain('evidenceQuotes');
+    expect(fabricated.acceptedConfidence).not.toBe('high');
+  });
+
+  it('emits a provider-neutral bounded future candidate and rejects unsupported or oversized candidates', () => {
+    const { request } = preparedFixture();
+    const future = finding(request, {
+      id: 'future-supported',
+      category: 'future-direction',
+      inferenceType: 'model-inference',
+      futureDirection: {
+        goal: 'Clarify application bootstrap ownership',
+        rationale: 'The bounded entry-point evidence spans bootstrap and application composition.',
+        dependencies: ['Preserve the existing Vite entry contract'],
+        expectedArtifactFamilies: ['architecture', 'critical-files'],
+        verificationMethod: 'Run the existing test and build commands after a reviewed change.',
+        compatibilityHints: ['Keep the current default export path.'],
+      },
+    });
+    const accepted = validate(request, [future]);
+    expect(accepted.success).toBe(true);
+    if (!accepted.success) return;
+    expect(accepted.result.findings[0].futureDirectionCandidate).toMatchObject({
+      goal: 'Clarify application bootstrap ownership',
+      expectedArtifactFamilies: ['architecture', 'critical-files'],
+      confidence: 'medium',
+    });
+    expect(accepted.result.findings[0].eligibleForArtifactGeneration).toBe(false);
+
+    const unsupported = validate(request, [{ ...future, id: 'future-no-evidence', referencedEvidenceIds: [] }]);
+    expect(unsupported.success && unsupported.result.rejectedFindings[0].reasonCodes).toContain('missing-evidence');
+    const oversized = validateRepositoryDeepIntelligenceResponse({
+      request,
+      rawResponse: response(request, [future]),
+      policy: { maximumFutureDependencies: 0 },
+    });
+    expect(oversized.success && oversized.result.rejectedFindings[0].reasonCodes).toContain('result-limit');
+  });
+
+  it('caps confidence when deterministic scan limitations are declared and rejects unknown schema fields', () => {
+    const { request } = preparedFixture();
+    const limitedRequest = { ...request, knownLimitations: [...request.knownLimitations, 'Repository scan was incomplete.'] };
+    const limited = validate(limitedRequest, [finding(limitedRequest)]);
+    expect(limited.success && limited.result.findings[0].acceptedConfidence).not.toBe('high');
+
+    const unknown = response(request, [finding(request)]) as ReturnType<typeof response> & { findings: Array<Record<string, unknown>> };
+    unknown.findings[0].arbitraryNestedOutput = { executable: true };
+    expect(validateRepositoryDeepIntelligenceResponse({ request, rawResponse: unknown }).success).toBe(false);
+  });
+});
