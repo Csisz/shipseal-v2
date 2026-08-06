@@ -1,6 +1,10 @@
 import type { IncomingMessage } from 'node:http';
 
 export type AuthConfigArea = 'github-oauth' | 'github-app' | 'account-oauth';
+export const SHIPSEAL_PRODUCTION_ORIGIN = 'https://www.getshipseal.com';
+export const ACCOUNT_CALLBACK_PATH = '/api/account/callback';
+export const ACCOUNT_AUTH_PROVIDER = 'github';
+export const ACCOUNT_OAUTH_SCOPE = 'read:user user:email';
 
 export class AuthConfigurationError extends Error {
   constructor(
@@ -22,8 +26,11 @@ export interface AuthConfigDiagnostics {
   invalidFields: string[];
   callbackUrlConfigured?: boolean;
   callbackUrlUsable?: boolean;
+  applicationOriginConfigured?: boolean;
+  applicationOriginUsable?: boolean;
   apiBaseUrlUsable?: boolean;
   persistenceConfigured?: boolean;
+  databaseUrlUsable?: boolean;
 }
 
 type HeaderRequest = Pick<IncomingMessage, 'headers'>;
@@ -38,6 +45,10 @@ function firstHeader(value: string | string[] | undefined) {
 
 function isProduction(env: NodeJS.ProcessEnv) {
   return env.VERCEL === '1' || env.VERCEL_ENV === 'production' || env.NODE_ENV === 'production';
+}
+
+function isDeployedEnvironment(env: NodeJS.ProcessEnv) {
+  return env.VERCEL === '1' || env.VERCEL_ENV === 'production' || env.VERCEL_ENV === 'preview';
 }
 
 function parseHttpsServiceUrl(value: string, field: string, env: NodeJS.ProcessEnv, area: AuthConfigArea) {
@@ -134,32 +145,107 @@ export function getGitHubInstallationConfig(env: NodeJS.ProcessEnv = process.env
   return { appId, privateKey, apiBaseUrl: getGitHubApiBaseUrl(env, 'github-app') };
 }
 
-export function getAccountOAuthConfig(env: NodeJS.ProcessEnv = process.env) {
+function parseApplicationOrigin(value: string, env: NodeJS.ProcessEnv) {
+  let parsed: URL;
+  try { parsed = new URL(value); } catch {
+    throw new AuthConfigurationError('account-oauth', 'invalid_application_origin', 'ShipSeal application origin is invalid.', [], ['SHIPSEAL_APP_ORIGIN']);
+  }
+  if (parsed.protocol !== 'https:' || parsed.pathname !== '/' || parsed.search || parsed.hash || parsed.username || parsed.password
+    || /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)) {
+    throw new AuthConfigurationError('account-oauth', 'invalid_application_origin', 'ShipSeal application origin must be a public HTTPS origin.', [], ['SHIPSEAL_APP_ORIGIN']);
+  }
+  if (isProduction(env) && parsed.origin !== SHIPSEAL_PRODUCTION_ORIGIN) {
+    throw new AuthConfigurationError('account-oauth', 'production_origin_mismatch', 'ShipSeal Production must use the canonical application origin.', [], ['SHIPSEAL_APP_ORIGIN']);
+  }
+  return parsed.origin;
+}
+
+function parseAccountCallbackUrl(value: string, applicationOrigin: string, env: NodeJS.ProcessEnv) {
+  let parsed: URL;
+  try { parsed = new URL(value); } catch {
+    throw new AuthConfigurationError('account-oauth', 'invalid_account_callback_url', 'ShipSeal account callback URL is invalid.', [], ['SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL']);
+  }
+  const expected = `${applicationOrigin}${ACCOUNT_CALLBACK_PATH}`;
+  if (parsed.protocol !== 'https:' || parsed.pathname !== ACCOUNT_CALLBACK_PATH || parsed.search || parsed.hash
+    || parsed.username || parsed.password || parsed.toString() !== expected) {
+    const code = parsed.origin !== applicationOrigin ? 'account_callback_origin_mismatch' : 'invalid_account_callback_url';
+    throw new AuthConfigurationError('account-oauth', code, 'ShipSeal account callback URL must exactly match the configured application origin and callback route.', [], ['SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL']);
+  }
+  if (isProduction(env) && parsed.origin !== SHIPSEAL_PRODUCTION_ORIGIN) {
+    throw new AuthConfigurationError('account-oauth', 'production_origin_mismatch', 'ShipSeal Production account callback must use the canonical origin.', [], ['SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL']);
+  }
+  return parsed.toString();
+}
+
+export function validateAccountDatabaseUrl(value: string) {
+  let parsed: URL;
+  try { parsed = new URL(value); } catch {
+    throw new AuthConfigurationError('account-oauth', 'invalid_database_url', 'Account persistence requires a valid PostgreSQL connection string.', [], ['DATABASE_URL']);
+  }
+  if (!['postgres:', 'postgresql:'].includes(parsed.protocol) || !parsed.hostname || parsed.pathname.length < 2) {
+    throw new AuthConfigurationError('account-oauth', 'invalid_database_url', 'Account persistence requires a valid PostgreSQL connection string.', [], ['DATABASE_URL']);
+  }
+  return value;
+}
+
+export interface AccountOAuthConfig {
+  clientId: string;
+  clientSecret: string;
+  callbackUrl: string;
+  applicationOrigin: string;
+  databaseUrl: string;
+  provider: typeof ACCOUNT_AUTH_PROVIDER;
+  scope: typeof ACCOUNT_OAUTH_SCOPE;
+}
+
+export function getAccountOAuthConfig(env: NodeJS.ProcessEnv = process.env): AccountOAuthConfig {
   const clientId = clean(env.SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID);
   const clientSecret = clean(env.SHIPSEAL_ACCOUNT_GITHUB_CLIENT_SECRET);
   const callbackUrl = clean(env.SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL);
+  const applicationOrigin = clean(env.SHIPSEAL_APP_ORIGIN);
   const databaseUrl = clean(env.DATABASE_URL);
   const missingEnv = [
     ...(!clientId ? ['SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID'] : []),
     ...(!clientSecret ? ['SHIPSEAL_ACCOUNT_GITHUB_CLIENT_SECRET'] : []),
     ...(!callbackUrl ? ['SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL'] : []),
+    ...(!applicationOrigin ? ['SHIPSEAL_APP_ORIGIN'] : []),
     ...(!databaseUrl ? ['DATABASE_URL'] : []),
   ];
-  const invalidFields: string[] = [];
-  let parsed: URL | undefined;
-  if (callbackUrl) {
-    try { parsed = new URL(callbackUrl); } catch { invalidFields.push('SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL'); }
-    if (parsed && (!['http:', 'https:'].includes(parsed.protocol) || parsed.pathname !== '/api/account/callback'
-      || (isProduction(env) && parsed.protocol !== 'https:')
-      || (isProduction(env) && /^(localhost|127\.0\.0\.1)$/i.test(parsed.hostname)))) {
-      invalidFields.push('SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL');
-    }
+  if (missingEnv.length) {
+    const code = !clientId ? 'missing_account_client_id'
+      : !clientSecret ? 'missing_account_client_secret'
+        : !callbackUrl ? 'missing_account_callback_url'
+          : !applicationOrigin ? 'missing_application_origin'
+            : 'missing_database_url';
+    throw new AuthConfigurationError('account-oauth', code, 'ShipSeal account sign-in is unavailable on this deployment.', missingEnv);
   }
-  if (clientId && !validateGitHubClientId(clientId)) invalidFields.push('SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID');
-  if (missingEnv.length || invalidFields.length) {
-    throw new AuthConfigurationError('account-oauth', 'account_auth_not_configured', 'ShipSeal account sign-in is unavailable on this deployment.', missingEnv, invalidFields);
+  if (!validateGitHubClientId(clientId)) {
+    throw new AuthConfigurationError('account-oauth', 'invalid_account_client_id', 'ShipSeal account OAuth client ID is invalid.', [], ['SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID']);
   }
-  return { clientId, clientSecret, callbackUrl: parsed!.toString(), databaseUrl };
+  const normalizedOrigin = parseApplicationOrigin(applicationOrigin, env);
+  const normalizedCallback = parseAccountCallbackUrl(callbackUrl, normalizedOrigin, env);
+  validateAccountDatabaseUrl(databaseUrl);
+  return {
+    clientId,
+    clientSecret,
+    callbackUrl: normalizedCallback,
+    applicationOrigin: normalizedOrigin,
+    databaseUrl,
+    provider: ACCOUNT_AUTH_PROVIDER,
+    scope: ACCOUNT_OAUTH_SCOPE,
+  };
+}
+
+export function validateAccountRequestOrigin(req: HeaderRequest, config: AccountOAuthConfig, env: NodeJS.ProcessEnv = process.env) {
+  if (!isDeployedEnvironment(env)) return config.applicationOrigin;
+  const host = firstHeader(req.headers?.['x-forwarded-host']) || firstHeader(req.headers?.host);
+  const proto = firstHeader(req.headers?.['x-forwarded-proto']) || 'https';
+  let requestOrigin = '';
+  try { requestOrigin = new URL(`${proto}://${host}`).origin; } catch { /* Typed below. */ }
+  if (!host || requestOrigin !== config.applicationOrigin) {
+    throw new AuthConfigurationError('account-oauth', 'request_origin_mismatch', 'Account sign-in request origin does not match this deployment configuration.', [], ['SHIPSEAL_APP_ORIGIN']);
+  }
+  return requestOrigin;
 }
 
 export function inspectAuthConfiguration(area: AuthConfigArea, env: NodeJS.ProcessEnv = process.env): AuthConfigDiagnostics {
@@ -173,7 +259,7 @@ export function inspectAuthConfiguration(area: AuthConfigArea, env: NodeJS.Proce
       return { area, configured: true, missingEnv: [], invalidFields: [], apiBaseUrlUsable: true };
     }
     getAccountOAuthConfig(env);
-    return { area, configured: true, missingEnv: [], invalidFields: [], callbackUrlConfigured: true, callbackUrlUsable: true, persistenceConfigured: true };
+    return { area, configured: true, missingEnv: [], invalidFields: [], callbackUrlConfigured: true, callbackUrlUsable: true, applicationOriginConfigured: true, applicationOriginUsable: true, persistenceConfigured: true, databaseUrlUsable: true };
   } catch (error) {
     if (error instanceof AuthConfigurationError) {
       return {
@@ -183,8 +269,11 @@ export function inspectAuthConfiguration(area: AuthConfigArea, env: NodeJS.Proce
         invalidFields: error.invalidFields,
         callbackUrlConfigured: area === 'account-oauth' ? !!clean(env.SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL) : area === 'github-oauth' ? !!clean(env.GITHUB_APP_CALLBACK_URL) : undefined,
         callbackUrlUsable: error.invalidFields.every(field => !field.includes('CALLBACK_URL')),
+        applicationOriginConfigured: area === 'account-oauth' ? !!clean(env.SHIPSEAL_APP_ORIGIN) : undefined,
+        applicationOriginUsable: area === 'account-oauth' ? !error.invalidFields.includes('SHIPSEAL_APP_ORIGIN') : undefined,
         apiBaseUrlUsable: !error.invalidFields.includes('GITHUB_API_BASE_URL'),
         persistenceConfigured: area === 'account-oauth' ? !!clean(env.DATABASE_URL) : undefined,
+        databaseUrlUsable: area === 'account-oauth' ? !error.invalidFields.includes('DATABASE_URL') && !!clean(env.DATABASE_URL) : undefined,
       };
     }
     return { area, configured: false, missingEnv: [], invalidFields: ['unknown_configuration_error'] };

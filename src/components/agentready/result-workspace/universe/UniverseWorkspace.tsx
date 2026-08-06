@@ -87,7 +87,7 @@ import {
   type WorkspaceStoryMentalNodeId,
 } from '@/lib/workspace';
 import { repositoryUniverseClusterLegend, repositoryUniverseFocusCameraState } from '@/lib/workspace/repositoryUniverseVisual';
-import type { UniverseCameraState } from '@/components/agentready/RepositoryUniverse3D';
+import type { RepositoryVerificationNodeOverlayState, UniverseCameraState } from '@/components/agentready/RepositoryUniverse3D';
 import type { RepositoryIntelligenceReviewUiSession } from '@/components/agentready/RepositoryIntelligenceReviewPanel';
 import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
 import { PostScanOverview } from '@/components/agentready/result-dashboard/PostScanOverview';
@@ -464,10 +464,34 @@ function RepositoryAtlasVisualization({
   const universeSearchMatches = useMemo(() => matchingUniverseNodeIds(universe, query), [universe, query]);
   const universeFilterCounts = useMemo(() => repositoryUniverseFilterCounts(universe), [universe]);
   const universeClusterLegend = useMemo(() => repositoryUniverseClusterLegend(universe.clusters), [universe.clusters]);
-  const hasVerifiedRescanComparison = verificationResult?.status === 'matched-rescan';
-  const verifiedDestinationPaths = useMemo(() => new Set((verificationResult?.artifacts || [])
-    .filter(artifact => artifact.state === 'verified-file-presence' || artifact.state === 'verified-content-match')
-    .map(artifact => normalizeWorkspacePath(artifact.destinationPath))), [verificationResult?.artifacts]);
+  const hasVerifiedRescanComparison = verificationResult?.status === 'matched-rescan' || Boolean(intelligenceVerificationResult);
+  const verificationPathStates = useMemo(() => {
+    const states = new Map<string, RepositoryVerificationNodeOverlayState>();
+    for (const artifact of verificationResult?.artifacts || []) {
+      const state: RepositoryVerificationNodeOverlayState = artifact.state === 'verified-file-presence' || artifact.state === 'verified-content-match'
+        ? 'verified-change' : artifact.state === 'needs-human-review' ? 'partially-verified'
+          : artifact.state === 'missing-after-rescan' ? 'regressed' : 'unresolved';
+      states.set(normalizeWorkspacePath(artifact.destinationPath), state);
+    }
+    for (const artifact of intelligenceVerificationResult?.artifacts || []) {
+      const state: RepositoryVerificationNodeOverlayState = artifact.state === 'verified-exact' || artifact.state === 'verified-strengthened'
+        ? 'verified-change' : artifact.state === 'verified-present-with-modifications' || artifact.state === 'partially-verified' || artifact.state === 'requires-human-review'
+          ? 'partially-verified' : artifact.state === 'conflicting' || artifact.state === 'stale'
+            ? 'regressed' : artifact.state === 'missing' || artifact.state === 'unavailable' ? 'unresolved' : 'unchanged';
+      states.set(normalizeWorkspacePath(artifact.targetPath), state);
+    }
+    return states;
+  }, [intelligenceVerificationResult?.artifacts, verificationResult?.artifacts]);
+  const verificationUniverseNodeStates = useMemo(() => Object.fromEntries(universe.nodes.flatMap(node => {
+    const state = node.path ? verificationPathStates.get(normalizeWorkspacePath(node.path)) : undefined;
+    return state ? [[node.id, state]] : [];
+  })), [universe.nodes, verificationPathStates]);
+  const verificationOverlayCounts = useMemo(() => ({
+    verified: [...verificationPathStates.values()].filter(state => state === 'verified-change').length,
+    partial: [...verificationPathStates.values()].filter(state => state === 'partially-verified').length,
+    unresolved: [...verificationPathStates.values()].filter(state => state === 'unresolved').length,
+    regressed: [...verificationPathStates.values()].filter(state => state === 'regressed').length,
+  }), [verificationPathStates]);
   const visibleNodes = useMemo(() => atlas.nodes.filter(node => nodeVisibleInAtlas(node, filters)), [atlas.nodes, filters]);
   const visibleNodeIds = useMemo(() => new Set(visibleNodes.map(node => node.id)), [visibleNodes]);
   const visibleEdges = useMemo(
@@ -1085,13 +1109,15 @@ function RepositoryAtlasVisualization({
       <div className="flex rounded-xl border border-primary/15 bg-background/20 p-1" aria-label="Repository transformation preview mode">
         <button type="button" aria-pressed={transformationMode === 'current'} onClick={() => changeTransformationMode('current')} className={`min-h-9 flex-1 rounded-lg px-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${transformationMode === 'current' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground' : 'text-muted-foreground'}`}>Current</button>
         <button type="button" aria-pressed={transformationMode === 'with-shipseal'} disabled={transformation.proposals.length === 0} onClick={() => changeTransformationMode('with-shipseal')} className={`min-h-9 flex-1 rounded-lg px-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45 ${transformationMode === 'with-shipseal' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground' : 'text-muted-foreground'}`}>With ShipSeal</button>
-        {verificationResult && <button type="button" aria-pressed={transformationMode === 'after-rescan'} disabled={!hasVerifiedRescanComparison} onClick={() => changeTransformationMode('after-rescan')} className={`min-h-9 flex-1 rounded-lg px-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45 ${transformationMode === 'after-rescan' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground' : 'text-muted-foreground'}`}>Rescan</button>}
+        {hasVerificationEvidence && <button type="button" aria-pressed={transformationMode === 'after-rescan'} disabled={!hasVerifiedRescanComparison} onClick={() => changeTransformationMode('after-rescan')} className={`min-h-9 flex-1 rounded-lg px-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-45 ${transformationMode === 'after-rescan' ? 'bg-[linear-gradient(135deg,hsl(var(--primary)/0.24),hsl(var(--accent)/0.12))] text-foreground' : 'text-muted-foreground'}`}>Verify</button>}
       </div>
       <div className="flex items-center gap-2">
         <div className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground" aria-live="polite">
           {transformationMode === 'current'
             ? `${transformation.summary.currentFiles.toLocaleString()} files · ${transformation.summary.currentClusters.toLocaleString()} clusters`
-            : `${visibleIncludedTransformationProposals.length.toLocaleString()} proposals · ${visibleTransformationArtifactCount.toLocaleString()} artifacts`}
+            : transformationMode === 'after-rescan'
+              ? `${verificationOverlayCounts.verified} verified · ${verificationOverlayCounts.unresolved + verificationOverlayCounts.regressed} unresolved`
+              : `${visibleIncludedTransformationProposals.length.toLocaleString()} proposals · ${visibleTransformationArtifactCount.toLocaleString()} artifacts`}
         </div>
         <Button type="button" size="sm" onClick={openOptimizationPlan} disabled={activeTransformationArtifactCount === 0} className="h-9 shrink-0 rounded-full bg-primary px-3 text-[11px] text-primary-foreground hover:bg-primary/90" data-mobile-primary-action="true">
           Review plan
@@ -1157,7 +1183,7 @@ function RepositoryAtlasVisualization({
           >
             With ShipSeal
           </button>
-          {verificationResult && (
+          {hasVerificationEvidence && (
             <button
               type="button"
               aria-pressed={transformationMode === 'after-rescan'}
@@ -1172,10 +1198,14 @@ function RepositoryAtlasVisualization({
         <div className="mt-1.5 text-[10px] text-muted-foreground" aria-live="polite">
           {transformationMode === 'current'
             ? `${transformation.summary.currentFiles.toLocaleString()} current files - ${transformation.summary.currentClusters.toLocaleString()} knowledge clusters`
-            : transformationMode === 'after-rescan' && verificationResult
-              ? `${verificationResult.counts.detected + verificationResult.counts.contentMatched} detected - ${verificationResult.counts.needsReview} need review`
+            : transformationMode === 'after-rescan'
+              ? `${verificationOverlayCounts.verified} verified - ${verificationOverlayCounts.partial} partial - ${verificationOverlayCounts.unresolved + verificationOverlayCounts.regressed} unresolved`
               : `${visibleTransformationArtifactCount.toLocaleString()} proposed artifacts - ${visibleTransformationRelationshipCount.toLocaleString()} proposed relationships`}
         </div>
+        {transformationMode === 'after-rescan' && <details className="mt-2 rounded-lg border border-border/45 bg-background/20 px-2.5 py-2 text-[10px]" aria-label="Verification overlay legend">
+          <summary className="cursor-pointer font-medium text-foreground">Verification lens legend</summary>
+          <div className="mt-2 flex flex-wrap gap-2 text-muted-foreground"><span className="text-success">Verified change</span><span className="text-primary-glow">Partially verified</span><span className="text-warning">Unresolved</span><span className="text-destructive">Regressed</span><span className="text-accent">Newly detected</span><span>Unchanged</span></div>
+        </details>}
       </div>
 
       {transformation.proposals.length > 0 && (
@@ -1454,7 +1484,7 @@ function RepositoryAtlasVisualization({
         {visibleNodes.map((node, index) => {
           const selected = selectedNode?.id === node.id;
           const transformationAffected = proposalAffectedAtlasNodeIds.has(node.id);
-          const verifiedByRescan = transformationMode === 'after-rescan' && Boolean(node.path && verifiedDestinationPaths.has(normalizeWorkspacePath(node.path)));
+          const verificationOverlayState = transformationMode === 'after-rescan' && node.path ? verificationPathStates.get(normalizeWorkspacePath(node.path)) : undefined;
           const routeHighlighted = flightPathAtlasNodeIdSet.has(node.id);
           const related = relatedNodeIds.has(node.id) || transformationAffected || routeHighlighted;
           const matched = searchMatches.has(node.id);
@@ -1466,6 +1496,7 @@ function RepositoryAtlasVisualization({
               type="button"
               data-testid={`atlas-node-${node.id}`}
               data-route-node={routeHighlighted ? 'true' : 'false'}
+              data-verification-state={verificationOverlayState || 'unchanged'}
               aria-pressed={selected}
               aria-label={`${node.label} ${node.kind} ${evidenceStateLabel(node.evidenceType)}`}
               onClick={() => selectNode(node)}
@@ -1485,7 +1516,7 @@ function RepositoryAtlasVisualization({
                     : node.evidenceType === 'missing'
                       ? 'z-10 border-warning/45 bg-background/45 text-warning'
                       : 'z-10 border-border/60 bg-background/45 text-muted-foreground'
-              } ${matched ? 'ring-2 ring-accent/55' : ''} ${routeHighlighted ? 'ring-2 ring-primary/55 shadow-sm shadow-primary/20' : ''} ${transformationAffected ? 'ring-2 ring-primary/30' : ''} ${verifiedByRescan ? 'ring-2 ring-success/60' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
+              } ${matched ? 'ring-2 ring-accent/55' : ''} ${routeHighlighted ? 'ring-2 ring-primary/55 shadow-sm shadow-primary/20' : ''} ${transformationAffected ? 'ring-2 ring-primary/30' : ''} ${verificationOverlayState === 'verified-change' ? 'ring-2 ring-success/60' : verificationOverlayState === 'partially-verified' ? 'ring-2 ring-primary/55' : verificationOverlayState === 'regressed' ? 'ring-2 ring-destructive/70' : verificationOverlayState === 'unresolved' ? 'ring-2 ring-warning/65' : verificationOverlayState === 'newly-detected' ? 'ring-2 ring-accent/60' : ''} ${dimmed ? 'opacity-28' : 'opacity-100'} ${!atlasReady && node.kind !== 'repository' && !prefersReducedMotion ? 'scale-50 opacity-0' : 'scale-100'}`}
               style={{
                 left: node.x + 460,
                 top: node.y + 320,
@@ -1608,6 +1639,7 @@ function RepositoryAtlasVisualization({
             fullscreen={fullscreen}
             theme={universeTheme}
             transformation={transformation}
+            verificationNodeStates={transformationMode === 'after-rescan' ? verificationUniverseNodeStates : {}}
             transformationMode={transformationMode === 'after-rescan' ? 'current' : transformationMode}
             transformationDomain={transformationDomain}
             selectedProposalId={selectedProposalId}

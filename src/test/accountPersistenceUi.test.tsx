@@ -3,6 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AccountProvider } from '@/components/account/AccountProvider';
 import { SaveProjectControl } from '@/components/account/SaveProjectControl';
+import { UploadDropzone } from '@/components/agentready/UploadDropzone';
 import Projects from '@/pages/Projects';
 import Project from '@/pages/Project';
 import { buildSampleReport } from '@/lib/readiness';
@@ -58,6 +59,16 @@ describe('Omega 18.1 account and persistence UI', () => {
     expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled();
   });
 
+  it('keeps anonymous ZIP and public URL sources available when account auth is unavailable', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => json({ error: { code: 'unavailable', message: 'Account sign-in is unavailable.' } }, 503)));
+    render(<AccountProvider><UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} /></AccountProvider>);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /Public URL/i })).toBeEnabled());
+    expect(screen.getByRole('button', { name: /Upload ZIP/i })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: /Public URL/i }));
+    expect(screen.getByLabelText('Public GitHub repository URL')).toBeEnabled();
+  });
+
   it('saves explicitly for an authenticated user and exposes the private project link', async () => {
     const fetcher = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -97,6 +108,7 @@ describe('Omega 18.1 account and persistence UI', () => {
     expect(await screen.findByRole('heading', { name: 'Scan history' })).toBeInTheDocument();
     expect(screen.getByText('feature/a-very-long-mobile-branch-name')).toBeInTheDocument();
     expect(screen.getByText(/does not rescan, call a provider, or mutate GitHub/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Verify from this baseline' })).toHaveAttribute('href', `/?projectId=${project.id}&baselineScanId=${scan.id}#scan`);
     fireEvent.click(screen.getByRole('button', { name: 'Delete scan' }));
     expect(screen.getAllByRole('button', { name: 'Delete scan' })).toHaveLength(2);
     fireEvent.click(screen.getByRole('button', { name: 'Delete project' }));

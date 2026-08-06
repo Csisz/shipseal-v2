@@ -25,7 +25,9 @@ import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/l
 import { ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
 import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import type { RepositoryVerificationBaseline, WorkspaceStoryChapterId } from '@/lib/workspace';
-import type { RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
+import { validateRepositoryIntelligenceVerificationBaseline, type RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
+import { getScan } from '@/lib/persistence';
+import { useOptionalAccount } from '@/components/account/accountContext';
 
 type PendingSource =
   | { type: 'zip'; file: File; projectName: string }
@@ -115,7 +117,10 @@ function importErrorTitle(category?: string | null) {
 }
 
 const Index = () => {
+  const account = useOptionalAccount();
   const [repositoryIntelligenceVerificationBaseline, setRepositoryIntelligenceVerificationBaseline] = useState<RepositoryIntelligenceVerificationBaseline | null>(null);
+  const [verificationProjectContext, setVerificationProjectContext] = useState<{ projectId: string; baselineScanId: string } | null>(null);
+  const [verificationContextMessage, setVerificationContextMessage] = useState('');
   const scan = useRepoScan(repositoryIntelligenceVerificationBaseline);
   const [sampleReport, setSampleReport] = useState<ReadinessReport | null>(null);
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
@@ -148,6 +153,34 @@ const Index = () => {
     intelligenceReveal?.key === activeReportKey &&
     intelligenceReveal.visible
   );
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get('projectId');
+    const baselineScanId = params.get('baselineScanId');
+    if (!projectId || !baselineScanId) return;
+    if (account.status === 'loading') return;
+    if (!account.user) {
+      setVerificationContextMessage('Sign in to load this private verification baseline. You can still run an anonymous scan without attaching it.');
+      return;
+    }
+    let active = true;
+    setVerificationContextMessage('Loading the immutable verification baseline…');
+    getScan(baselineScanId).then(saved => {
+      if (!active) return;
+      if (saved.scan.projectId !== projectId) throw new Error('Baseline does not belong to the selected project.');
+      const validated = validateRepositoryIntelligenceVerificationBaseline(saved.snapshot.verificationBaseline);
+      if (!validated.valid || !validated.baseline) throw new Error('This scan does not contain a compatible applied-plan baseline.');
+      setRepositoryIntelligenceVerificationBaseline(validated.baseline);
+      setVerificationProjectContext({ projectId, baselineScanId });
+      setVerificationContextMessage(`Verification baseline loaded for ${validated.baseline.repository.owner}/${validated.baseline.repository.repo}. Run a later scan, then save it to attach the evidence.`);
+    }).catch(error => {
+      if (!active) return;
+      setVerificationProjectContext(null);
+      setVerificationContextMessage(error instanceof Error ? error.message : 'The verification baseline could not be loaded.');
+    });
+    return () => { active = false; };
+  }, [account.status, account.user]);
 
   useEffect(() => {
     if (!isScanning) return;
@@ -486,6 +519,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
       {!showIntelligenceReveal && <Nav onNavigateAnchor={handleNavAnchor} onHome={handleHome} />}
+      {!showIntelligenceReveal && verificationContextMessage && <div role="status" className="container relative z-10 pt-20 md:pt-24"><div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">{verificationContextMessage}</div></div>}
 
       {showIntelligenceReveal && activeReport ? (
         <IntelligenceReveal key={activeReportKey || activeReport.scannedAt} report={activeReport} onComplete={completeIntelligenceReveal} />
@@ -521,7 +555,7 @@ const Index = () => {
               onSaveRepositoryIntelligenceVerificationBaseline={setRepositoryIntelligenceVerificationBaseline}
               onDiscardRepositoryIntelligenceVerificationBaseline={() => setRepositoryIntelligenceVerificationBaseline(null)}
               onRescanRepositoryIntelligence={pendingSource?.type === 'github' || pendingSource?.type === 'github-app' ? rescanRepositoryIntelligence : undefined}
-              persistenceControl={<Suspense fallback={<div className="text-xs text-muted-foreground">Preparing private save…</div>}><SaveProjectControl report={activeReport} providerStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus} /></Suspense>}
+              persistenceControl={<Suspense fallback={<div className="text-xs text-muted-foreground">Preparing private save…</div>}><SaveProjectControl report={activeReport} providerStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus} verificationBaseline={sampleReport ? undefined : repositoryIntelligenceVerificationBaseline} verificationResult={sampleReport ? undefined : scan.repositoryIntelligenceVerification} projectId={verificationProjectContext?.projectId} baselineScanId={verificationProjectContext?.baselineScanId} /></Suspense>}
             />
           </Suspense>
         </main>

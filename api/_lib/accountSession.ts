@@ -27,7 +27,8 @@ function cookie(name: string, value: string, options: { maxAge: number; producti
 
 export function isProductionRequest(req: IncomingMessage, env: NodeJS.ProcessEnv = process.env) {
   const forwarded = Array.isArray(req.headers['x-forwarded-proto']) ? req.headers['x-forwarded-proto'][0] : req.headers['x-forwarded-proto'];
-  return env.VERCEL_ENV === 'production' || env.NODE_ENV === 'production' || forwarded === 'https';
+  const forwardedProtocol = (forwarded || '').split(',')[0].trim();
+  return env.VERCEL === '1' || env.VERCEL_ENV === 'production' || env.VERCEL_ENV === 'preview' || env.NODE_ENV === 'production' || forwardedProtocol === 'https';
 }
 
 export function appendSetCookies(res: ServerResponse, values: string[]) {
@@ -58,8 +59,22 @@ export function consumeOAuthState(req: IncomingMessage, res: ServerResponse, rec
 }
 
 export function safeReturnPath(value: string) {
-  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\0') || value.length > 500) return '/';
-  return value;
+  const hasControlCharacter = (candidate: string) => [...candidate].some((character) => {
+    const codePoint = character.codePointAt(0) || 0;
+    return codePoint < 32 || codePoint === 127;
+  });
+  if (!value.startsWith('/') || value.startsWith('//') || value.includes('\\') || hasControlCharacter(value) || value.length > 500) return '/';
+  let decoded: string;
+  try { decoded = decodeURIComponent(value); } catch { return '/'; }
+  if (!decoded.startsWith('/') || decoded.startsWith('//') || decoded.includes('\\') || hasControlCharacter(decoded)) return '/';
+  try {
+    const base = new URL('https://www.getshipseal.com');
+    const parsed = new URL(value, base);
+    if (parsed.origin !== base.origin) return '/';
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return '/';
+  }
 }
 
 export function hashSessionToken(token: string) {
@@ -89,4 +104,3 @@ export async function revokeAccountSession(req: IncomingMessage, res: ServerResp
 export function sessionCookieValue(req: IncomingMessage) {
   return cookies(req).get(ACCOUNT_SESSION_COOKIE) || null;
 }
-

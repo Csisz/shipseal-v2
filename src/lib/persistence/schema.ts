@@ -1,9 +1,14 @@
 import { z } from 'zod';
 import type { ReadinessReport } from '../types.js';
+import {
+  REPOSITORY_VERIFICATION_ALGORITHM_VERSION,
+  REPOSITORY_VERIFICATION_RELATIONSHIP_VERSION,
+} from '../workspace/repositoryVerificationRelationship.js';
 
 export const PERSISTENCE_SCHEMA_VERSION = 'shipseal.persistence.v1' as const;
 export const SCAN_SNAPSHOT_SCHEMA_VERSION = 'shipseal.scan-snapshot.v1' as const;
-export const VERIFICATION_RELATIONSHIP_SCHEMA_VERSION = 'shipseal.verification-relationship.v1' as const;
+export const LEGACY_VERIFICATION_RELATIONSHIP_SCHEMA_VERSION = 'shipseal.verification-relationship.v1' as const;
+export const VERIFICATION_RELATIONSHIP_SCHEMA_VERSION = REPOSITORY_VERIFICATION_RELATIONSHIP_VERSION;
 
 const idSchema = z.string().regex(/^[A-Za-z0-9_-]{20,80}$/);
 const safeText = (max: number) => z.string().trim().min(1).max(max);
@@ -15,7 +20,8 @@ export const projectSourceTypeSchema = z.enum(['zip-upload', 'github-url', 'gith
 export const scanStatusSchema = z.enum(['completed', 'failed']);
 export const intelligenceModeSchema = z.enum(['deterministic', 'enhanced', 'fallback']);
 export const persistedVerificationStateSchema = z.enum([
-  'not-started', 'awaiting-repository-change', 'partially-verified', 'verified', 'changes-detected', 'unavailable',
+  'not-started', 'awaiting-repository-change', 'pending', 'partially-verified', 'verified', 'unresolved', 'regressed',
+  'incompatible', 'changes-detected', 'unavailable',
 ]);
 
 const forbiddenValuePattern = /(?:github_pat_|gh[opusr]_[A-Za-z0-9]{12,}|sk-[A-Za-z0-9_-]{16,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)/i;
@@ -136,13 +142,60 @@ export const persistedScanSummarySchema = z.object({
   safeFailureCategory: z.string().max(100).nullable(),
 }).strict();
 
-export const verificationRelationshipInputSchema = z.object({
-  version: z.literal(VERIFICATION_RELATIONSHIP_SCHEMA_VERSION),
+const legacyVerificationRelationshipInputSchema = z.object({
+  version: z.literal(LEGACY_VERIFICATION_RELATIONSHIP_SCHEMA_VERSION),
   baselineScanId: idSchema,
   state: persistedVerificationStateSchema,
   verifiedAt: timestampSchema.nullable(),
   algorithmVersion: safeText(120),
   expectedArtifactIds: z.array(z.string().max(160)).max(500),
+}).strict();
+
+const verificationRelationshipV2InputSchema = z.object({
+  version: z.literal(VERIFICATION_RELATIONSHIP_SCHEMA_VERSION),
+  baselineScanId: idSchema,
+  state: z.enum(['pending', 'verified', 'partially-verified', 'unresolved', 'regressed', 'incompatible']),
+  verifiedAt: timestampSchema.nullable(),
+  algorithmVersion: z.literal(REPOSITORY_VERIFICATION_ALGORITHM_VERSION),
+  preparedPlanId: safeText(200),
+  preparedPlanFingerprint: z.string().regex(/^[a-z0-9]{8,128}$/i),
+  appliedOperationId: z.string().trim().min(1).max(200).nullable(),
+  pullRequestUrl: z.string().url().max(500).refine(value => value.startsWith('https://'), 'Pull request URL must use HTTPS.').nullable(),
+  branch: z.string().trim().min(1).max(250).nullable(),
+  repositoryIdentity: safeText(250),
+  measurementVersion: safeText(120),
+  expectedArtifactIds: z.array(z.string().max(160)).max(500),
+  expectedStatementIds: z.array(z.string().max(160)).max(2_000),
+  evidence: derivedObjectSchema,
+  relationshipFingerprint: z.string().regex(/^[a-z0-9]{8,128}$/i),
+}).strict();
+
+export const verificationRelationshipInputSchema = z.discriminatedUnion('version', [
+  legacyVerificationRelationshipInputSchema,
+  verificationRelationshipV2InputSchema,
+]);
+
+export const persistedVerificationRelationshipSchema = z.object({
+  version: z.union([z.literal(LEGACY_VERIFICATION_RELATIONSHIP_SCHEMA_VERSION), z.literal(VERIFICATION_RELATIONSHIP_SCHEMA_VERSION)]),
+  id: idSchema,
+  projectId: idSchema,
+  baselineScanId: idSchema,
+  laterScanId: idSchema,
+  state: persistedVerificationStateSchema,
+  verifiedAt: timestampSchema.nullable(),
+  algorithmVersion: safeText(120),
+  preparedPlanId: z.string().max(200).nullable(),
+  preparedPlanFingerprint: z.string().max(128).nullable(),
+  appliedOperationId: z.string().max(200).nullable(),
+  pullRequestUrl: z.string().url().max(500).nullable(),
+  branch: z.string().max(250).nullable(),
+  repositoryIdentity: z.string().max(250).nullable(),
+  measurementVersion: z.string().max(120).nullable(),
+  expectedArtifactIds: z.array(z.string().max(160)).max(500),
+  expectedStatementIds: z.array(z.string().max(160)).max(2_000),
+  evidence: derivedObjectSchema.nullable(),
+  relationshipFingerprint: z.string().max(128).nullable(),
+  createdAt: timestampSchema,
 }).strict();
 
 export const scanSnapshotSchema = z.object({
@@ -163,6 +216,7 @@ export const scanSnapshotSchema = z.object({
     verifiedArtifactCount: z.number().int().nonnegative().max(10_000),
     unresolvedArtifactCount: z.number().int().nonnegative().max(10_000),
   }).strict().optional(),
+  verificationBaseline: derivedObjectSchema.optional(),
   policyVersions: z.record(z.string().max(100), z.string().max(160)).refine(value => Object.keys(value).length <= 40),
 }).strict();
 
@@ -205,6 +259,8 @@ export type PersistedUser = z.infer<typeof persistedUserSchema>;
 export type PersistedProject = z.infer<typeof persistedProjectSchema>;
 export type PersistedScanSummary = z.infer<typeof persistedScanSummarySchema>;
 export type PersistedScanSnapshot = z.infer<typeof scanSnapshotSchema>;
+export type PersistedVerificationRelationship = z.infer<typeof persistedVerificationRelationshipSchema>;
+export type VerificationRelationshipInput = z.infer<typeof verificationRelationshipInputSchema>;
 export type SaveProjectRequest = z.infer<typeof saveProjectRequestSchema>;
 
 export type PersistenceApiErrorCode = 'authentication_required' | 'session_expired' | 'invalid_request' | 'not_found' | 'unsupported_version' | 'conflict' | 'unavailable' | 'unknown_error';

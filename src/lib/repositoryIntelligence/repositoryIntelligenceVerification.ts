@@ -46,6 +46,8 @@ export interface RepositoryIntelligenceVerificationBaseline {
   baseBranch: string;
   prBranch: string;
   selectedPlanFingerprint: string;
+  preparedPlanId?: string;
+  appliedOperationId?: string;
   artifacts: RepositoryIntelligenceVerificationBaselineArtifact[];
   prUrl: string;
   prNumber?: number;

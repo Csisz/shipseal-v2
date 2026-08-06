@@ -1,6 +1,7 @@
 import {
   persistedProjectSchema,
   persistedScanSummarySchema,
+  persistedVerificationRelationshipSchema,
   persistedUserSchema,
   scanSnapshotSchema,
   saveProjectRequestSchema,
@@ -8,6 +9,7 @@ import {
   type PersistedScanSnapshot,
   type PersistedScanSummary,
   type PersistedUser,
+  type PersistedVerificationRelationship,
   type PersistenceApiErrorCode,
   type SaveProjectRequest,
 } from './schema';
@@ -51,14 +53,24 @@ export async function saveProject(request: SaveProjectRequest): Promise<{ projec
   return { project: persistedProjectSchema.parse(body.project), scan: persistedScanSummarySchema.parse(body.scan) };
 }
 
+export async function saveProjectScan(projectId: string, request: SaveProjectRequest): Promise<PersistedScanSummary> {
+  const safeRequest = saveProjectRequestSchema.parse(request);
+  const body = await requestJson(`/api/projects/${encodeURIComponent(projectId)}/scans`, { method: 'POST', body: JSON.stringify(safeRequest) }) as { scan: unknown };
+  return persistedScanSummarySchema.parse(body.scan);
+}
+
 export async function getProject(projectId: string): Promise<{ project: PersistedProject; scans: PersistedScanSummary[] }> {
   const body = await requestJson(`/api/projects/${encodeURIComponent(projectId)}?scanLimit=50`) as { project: unknown; scans?: unknown[] };
   return { project: persistedProjectSchema.parse(body.project), scans: (body.scans || []).map(scan => persistedScanSummarySchema.parse(scan)) };
 }
 
-export async function getScan(scanId: string): Promise<{ scan: PersistedScanSummary; snapshot: PersistedScanSnapshot }> {
-  const body = await requestJson(`/api/scans/${encodeURIComponent(scanId)}`) as { scan: unknown; snapshot: unknown };
-  return { scan: persistedScanSummarySchema.parse(body.scan), snapshot: scanSnapshotSchema.parse(body.snapshot) };
+export async function getScan(scanId: string): Promise<{ scan: PersistedScanSummary; snapshot: PersistedScanSnapshot; verificationRelationship: PersistedVerificationRelationship | null }> {
+  const body = await requestJson(`/api/scans/${encodeURIComponent(scanId)}`) as { scan: unknown; snapshot: unknown; verificationRelationship?: unknown };
+  return {
+    scan: persistedScanSummarySchema.parse(body.scan),
+    snapshot: scanSnapshotSchema.parse(body.snapshot),
+    verificationRelationship: body.verificationRelationship ? persistedVerificationRelationshipSchema.parse(body.verificationRelationship) : null,
+  };
 }
 
 export async function deleteScan(scanId: string) {
@@ -72,4 +84,3 @@ export async function deleteProject(projectId: string) {
 export async function deleteAccount(confirmation: string) {
   await requestJson('/api/account/delete', { method: 'POST', body: JSON.stringify({ confirmation }) });
 }
-

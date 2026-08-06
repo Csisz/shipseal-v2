@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { consumeOAuthState, createAccountSession, revokeAccountSession } from '../../_lib/accountSession.js';
 import { getAccountPersistenceStore } from '../../_lib/accountPersistence.js';
-import { AuthConfigurationError, getAccountOAuthConfig, safeAuthDiagnostic } from '../../_lib/authConfig.js';
+import { AuthConfigurationError, getAccountOAuthConfig, safeAuthDiagnostic, validateAccountRequestOrigin } from '../../_lib/authConfig.js';
 
 interface GitHubUser { id?: number; login?: string; name?: string | null; email?: string | null; avatar_url?: string | null }
 
@@ -13,6 +13,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const consumed = consumeOAuthState(req, res, state);
     if (!consumed.valid || !code) throw new Error('OAuth state is invalid or expired.');
     const config = getAccountOAuthConfig();
+    validateAccountRequestOrigin(req, config);
     const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
       method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: JSON.stringify({ client_id: config.clientId, client_secret: config.clientSecret, redirect_uri: config.callbackUrl, code }),

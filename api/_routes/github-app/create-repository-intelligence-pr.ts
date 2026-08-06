@@ -152,6 +152,8 @@ function successResult(plan: ReturnType<typeof buildRepositoryIntelligenceGithub
       baseBranch: plan.baseBranch,
       prBranch: branchName,
       selectedPlanFingerprint: plan.selectedPlanFingerprint,
+      preparedPlanId: `prepared:${plan.selectedPlanFingerprint}`,
+      appliedOperationId: `github-pr:${plan.selectedPlanFingerprint}:${prNumber || branchName}`,
       artifacts: plan.files.map(file => ({
         artifactId: file.artifactId, category: file.category, artifactFingerprint: file.artifactFingerprint,
         targetPath: file.path, operation: file.operation, finalContentFingerprint: file.finalContentFingerprint,

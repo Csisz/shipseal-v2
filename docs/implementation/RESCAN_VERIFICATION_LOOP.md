@@ -1,6 +1,6 @@
 # Rescan Verification Loop
 
-Sprint Omega.15 adds the first session-local verification loop for ShipSeal Optimization Packs.
+Sprint Omega.15 introduced the session-local Optimization Pack loop. Omega 18.4 adds the durable authoritative relationship for prepared Repository Intelligence plans and later scans. See [Authoritative Verification Relationship](AUTHORITATIVE_VERIFICATION_RELATIONSHIP.md).
 
 The loop is:
 
@@ -65,9 +65,9 @@ The Repository Atlas gains an `After rescan` view only after a matching later sc
 
 Detected current nodes can be highlighted, but the canonical Atlas and Universe models are not mutated. Repository Universe keeps rendering the current graph rather than fabricated applied nodes.
 
-## Limitations
+## Legacy Optimization Pack limitations
 
-- Session-local baseline only.
+- Optimization Pack baselines remain session-local; Repository Intelligence applied-plan baselines can be persisted through the Omega 18.4 project workflow.
 - No backend history.
 - No branch diff through GitHub API.
 - No production verification.

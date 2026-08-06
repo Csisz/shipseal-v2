@@ -1,11 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import postgres, { type JSONValue, type Sql } from 'postgres';
+import { validateAccountDatabaseUrl } from './authConfig.js';
 import {
   PERSISTENCE_SCHEMA_VERSION,
   SCAN_SNAPSHOT_SCHEMA_VERSION,
-  VERIFICATION_RELATIONSHIP_SCHEMA_VERSION,
   persistedProjectSchema,
   persistedScanSummarySchema,
+  persistedVerificationRelationshipSchema,
   persistedUserSchema,
   scanSnapshotSchema,
   validateSafeDerivedJson,
@@ -14,6 +15,7 @@ import {
   type PersistedScanSnapshot,
   type PersistedScanSummary,
   type PersistedUser,
+  type PersistedVerificationRelationship,
   type SaveProjectRequest,
 } from '../../src/lib/persistence/schema.js';
 
@@ -41,7 +43,7 @@ export interface AccountPersistenceStore {
   getProject(userId: string, projectId: string): Promise<PersistedProject | null>;
   updateProject(userId: string, projectId: string, input: { displayName?: string; defaultBranch?: string | null; archived?: boolean }): Promise<PersistedProject | null>;
   listScans(userId: string, projectId: string, limit: number, offset: number): Promise<PersistedScanSummary[]>;
-  getScan(userId: string, scanId: string): Promise<{ scan: PersistedScanSummary; snapshot: PersistedScanSnapshot } | null>;
+  getScan(userId: string, scanId: string): Promise<{ scan: PersistedScanSummary; snapshot: PersistedScanSnapshot; verificationRelationship: PersistedVerificationRelationship | null } | null>;
   deleteScan(userId: string, scanId: string): Promise<boolean>;
   deleteProject(userId: string, projectId: string): Promise<boolean>;
   deleteAccount(userId: string): Promise<boolean>;
@@ -147,13 +149,38 @@ function mapScan(row: Record<string, unknown>): PersistedScanSummary {
   });
 }
 
+function mapVerificationRelationship(row: Record<string, unknown>): PersistedVerificationRelationship {
+  return persistedVerificationRelationshipSchema.parse({
+    version: row.schema_version,
+    id: row.id,
+    projectId: row.project_id,
+    baselineScanId: row.baseline_scan_id,
+    laterScanId: row.rescan_id,
+    state: row.state,
+    verifiedAt: row.verified_at ? asDate(row.verified_at) : null,
+    algorithmVersion: row.algorithm_version,
+    preparedPlanId: nullable(row.prepared_plan_id),
+    preparedPlanFingerprint: nullable(row.prepared_plan_fingerprint),
+    appliedOperationId: nullable(row.applied_operation_id),
+    pullRequestUrl: nullable(row.pull_request_url),
+    branch: nullable(row.branch),
+    repositoryIdentity: nullable(row.repository_identity),
+    measurementVersion: nullable(row.measurement_version),
+    expectedArtifactIds: row.expected_artifact_ids,
+    expectedStatementIds: row.expected_statement_ids || [],
+    evidence: row.evidence || null,
+    relationshipFingerprint: nullable(row.relationship_fingerprint),
+    createdAt: asDate(row.created_at),
+  });
+}
+
 export class PostgresAccountPersistenceStore implements AccountPersistenceStore {
   constructor(private readonly sql: Sql) {}
 
   static fromEnvironment(env: NodeJS.ProcessEnv = process.env) {
     const connectionString = (env.DATABASE_URL || '').trim();
     if (!connectionString) throw new PersistenceUnavailableError('DATABASE_URL is not configured.');
-    if (!/^postgres(?:ql)?:\/\//i.test(connectionString)) throw new PersistenceUnavailableError('DATABASE_URL must be a PostgreSQL connection string.');
+    try { validateAccountDatabaseUrl(connectionString); } catch { throw new PersistenceUnavailableError('DATABASE_URL must be a valid PostgreSQL connection string.'); }
     return new PostgresAccountPersistenceStore(postgres(connectionString, { max: 2, idle_timeout: 20, connect_timeout: 10, prepare: false }));
   }
 
@@ -207,6 +234,25 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
         const saved = await transaction<Record<string, unknown>[]>`select * from shipseal_scans where id = ${savedScanId}`;
         return { project: mapProject(existing[0]), scan: mapScan(saved[0]) };
       }
+      const requestedRelationship = input.scan.verificationRelationship;
+      if (requestedRelationship && 'relationshipFingerprint' in requestedRelationship) {
+        const repeated = await transaction<Record<string, unknown>[]>`
+          select p.*, v.rescan_id as saved_scan_id
+          from shipseal_verification_relationships v
+          join shipseal_projects p on p.id = v.project_id
+          where v.owner_user_id = ${userId} and p.owner_user_id = ${userId} and p.deleted_at is null
+            and p.repository_identity = ${projectIdentity(input)}
+            and v.relationship_fingerprint = ${requestedRelationship.relationshipFingerprint}
+          limit 1
+        `;
+        if (repeated[0]?.saved_scan_id) {
+          const savedScanId = databaseIdentifier(repeated[0].saved_scan_id, 'scan');
+          const saved = await transaction<Record<string, unknown>[]>`
+            select * from shipseal_scans where id = ${savedScanId} and owner_user_id = ${userId} and project_id = ${repeated[0].id as string}
+          `;
+          if (saved[0]) return { project: mapProject(repeated[0]), scan: mapScan(saved[0]) };
+        }
+      }
 
       const projectId = existing[0] ? databaseIdentifier(existing[0].id, 'project') : createPublicId('prj');
       const now = new Date().toISOString();
@@ -230,6 +276,23 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
       const storedProjectId = databaseIdentifier(projectRow.id, 'project');
       const scanId = createPublicId('scn');
       const verificationState = input.scan.verificationRelationship?.state || 'not-started';
+      const relationship = requestedRelationship;
+      if (relationship) {
+        const baselineRows = await transaction<Record<string, unknown>[]>`
+          select id, completed_at from shipseal_scans
+          where id = ${relationship.baselineScanId} and project_id = ${storedProjectId} and owner_user_id = ${userId}
+          limit 1 for update
+        `;
+        if (!baselineRows[0]) throw new PersistenceConflictError('Verification baseline does not belong to this project and account.');
+        const baselineCompletedAt = Date.parse(asDate(baselineRows[0].completed_at));
+        const laterCompletedAt = Date.parse(input.scan.completedAt || input.scan.startedAt);
+        if (!Number.isFinite(laterCompletedAt) || laterCompletedAt <= baselineCompletedAt) {
+          throw new PersistenceConflictError('Verification later scan must complete after its baseline.');
+        }
+        if ('repositoryIdentity' in relationship && relationship.repositoryIdentity !== projectIdentity(input)) {
+          throw new PersistenceConflictError('Verification repository identity does not match this project.');
+        }
+      }
       const [scanRow] = await transaction<Record<string, unknown>[]>`
         insert into shipseal_scans (
           id, project_id, owner_user_id, schema_version, snapshot_schema_version, idempotency_key, source_type,
@@ -245,15 +308,24 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
           ${this.sql.json(serializeSafeDatabaseJson(input.scan.snapshot))}
         ) returning *
       `;
-      if (input.scan.verificationRelationship) {
+      if (relationship) {
+        const isV2 = 'preparedPlanId' in relationship;
         await transaction`insert into shipseal_verification_relationships (
           id, owner_user_id, project_id, baseline_scan_id, rescan_id, schema_version, algorithm_version,
-          state, verified_at, expected_artifact_ids, created_at
+          state, verified_at, expected_artifact_ids, expected_statement_ids, prepared_plan_id, prepared_plan_fingerprint,
+          applied_operation_id, pull_request_url, branch, repository_identity, measurement_version, evidence,
+          relationship_fingerprint, created_at
         ) values (
-          ${createPublicId('ver')}, ${userId}, ${storedProjectId}, ${input.scan.verificationRelationship.baselineScanId}, ${scanId},
-          ${VERIFICATION_RELATIONSHIP_SCHEMA_VERSION}, ${input.scan.verificationRelationship.algorithmVersion},
-          ${input.scan.verificationRelationship.state}, ${input.scan.verificationRelationship.verifiedAt},
-          ${this.sql.json(serializeSafeDatabaseJson(input.scan.verificationRelationship.expectedArtifactIds))}, ${now}
+          ${createPublicId('ver')}, ${userId}, ${storedProjectId}, ${relationship.baselineScanId}, ${scanId},
+          ${relationship.version}, ${relationship.algorithmVersion}, ${relationship.state}, ${relationship.verifiedAt},
+          ${this.sql.json(serializeSafeDatabaseJson(relationship.expectedArtifactIds))},
+          ${this.sql.json(serializeSafeDatabaseJson(isV2 ? relationship.expectedStatementIds : []))},
+          ${isV2 ? relationship.preparedPlanId : null}, ${isV2 ? relationship.preparedPlanFingerprint : null},
+          ${isV2 ? relationship.appliedOperationId : null}, ${isV2 ? relationship.pullRequestUrl : null},
+          ${isV2 ? relationship.branch : null}, ${isV2 ? relationship.repositoryIdentity : null},
+          ${isV2 ? relationship.measurementVersion : null},
+          ${isV2 ? this.sql.json(serializeSafeDatabaseJson(relationship.evidence)) : null},
+          ${isV2 ? relationship.relationshipFingerprint : null}, ${now}
         )`;
       }
       return { project: mapProject({ ...projectRow, last_scan_at: input.scan.completedAt }), scan: mapScan(scanRow) };
@@ -312,7 +384,17 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
       where s.id = ${scanId} and s.owner_user_id = ${userId} and p.owner_user_id = ${userId} and p.deleted_at is null limit 1
     `;
     if (!row) return null;
-    return { scan: mapScan(row), snapshot: scanSnapshotSchema.parse(row.snapshot) };
+    const verificationRows = await this.sql<Record<string, unknown>[]>`
+      select v.* from shipseal_verification_relationships v
+      join shipseal_projects p on p.id = v.project_id
+      where v.rescan_id = ${scanId} and v.owner_user_id = ${userId} and p.owner_user_id = ${userId} and p.deleted_at is null
+      order by v.created_at desc limit 1
+    `;
+    return {
+      scan: mapScan(row),
+      snapshot: scanSnapshotSchema.parse(row.snapshot),
+      verificationRelationship: verificationRows[0] ? mapVerificationRelationship(verificationRows[0]) : null,
+    };
   }
 
   async deleteScan(userId: string, scanId: string) {

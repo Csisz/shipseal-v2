@@ -3,6 +3,8 @@ import type { RepositoryVerificationResult } from '@/lib/workspace';
 import type { RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
 import { RepositoryIntelligenceVerificationPanel } from '../../RepositoryIntelligenceVerificationPanel';
 import { ResultWorkspaceDisclosure } from '../../result-workspace/ResultWorkspaceDisclosure';
+import { RepositoryVerificationSummary } from '../RepositoryVerificationSummary';
+import { useState } from 'react';
 
 export interface VerifyChapterProps {
   baseline?: RepositoryIntelligenceVerificationBaseline | null;
@@ -16,9 +18,11 @@ export interface VerifyChapterProps {
 }
 
 export default function VerifyChapter({ baseline, result, status, error, report, onRescan, onDiscardBaseline }: VerifyChapterProps) {
+  const [technicalEvidenceOpen, setTechnicalEvidenceOpen] = useState(false);
   return (
     <div data-verify-technical-details tabIndex={-1} className="space-y-6 focus:outline-none">
-      <ResultWorkspaceDisclosure title="View technical evidence" lazyMount>
+      <RepositoryVerificationSummary baseline={baseline} result={result} status={status} onRescan={onRescan} onViewTechnicalEvidence={() => setTechnicalEvidenceOpen(true)} />
+      <ResultWorkspaceDisclosure title="View technical evidence" lazyMount defaultOpen={technicalEvidenceOpen}>
         <RepositoryIntelligenceVerificationPanel
           baseline={baseline}
           result={result}

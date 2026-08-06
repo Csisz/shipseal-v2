@@ -3,23 +3,40 @@ import { Cloud, Loader2, LogIn, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { ReadinessReport } from '@/lib/types';
 import type { RepositoryIntelligenceProviderStatus } from '@/lib/repositoryIntelligence';
-import { buildSaveProjectRequest } from '@/lib/persistence/buildSnapshot';
-import { PersistenceClientError, saveProject, type PersistedProject } from '@/lib/persistence';
+import type { RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
+import { buildSaveProjectRequest, buildVerificationRelationshipInput } from '@/lib/persistence/buildSnapshot';
+import { PersistenceClientError, saveProject, saveProjectScan, type PersistedProject } from '@/lib/persistence';
 import { useOptionalAccount } from './accountContext';
 
-export function SaveProjectControl({ report, providerStatus }: { report: ReadinessReport; providerStatus?: RepositoryIntelligenceProviderStatus }) {
+export function SaveProjectControl({ report, providerStatus, verificationBaseline, verificationResult, projectId, baselineScanId }: {
+  report: ReadinessReport;
+  providerStatus?: RepositoryIntelligenceProviderStatus;
+  verificationBaseline?: RepositoryIntelligenceVerificationBaseline | null;
+  verificationResult?: RepositoryIntelligenceVerificationResult | null;
+  projectId?: string | null;
+  baselineScanId?: string | null;
+}) {
   const account = useOptionalAccount();
   const [state, setState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const [message, setMessage] = useState('');
   const [savedProject, setSavedProject] = useState<PersistedProject | null>(null);
-  const request = useMemo(() => buildSaveProjectRequest({ report, providerStatus }), [report, providerStatus]);
+  const verificationRelationship = useMemo(() => verificationBaseline && baselineScanId
+    ? buildVerificationRelationshipInput({ baselineScanId, report, baseline: verificationBaseline, result: verificationResult })
+    : undefined, [baselineScanId, report, verificationBaseline, verificationResult]);
+  const request = useMemo(() => buildSaveProjectRequest({ report, providerStatus, verificationBaseline: verificationBaseline || undefined, verificationRelationship }), [report, providerStatus, verificationBaseline, verificationRelationship]);
 
   const save = async () => {
     if (!account.user) { account.beginSignIn(); setMessage('Sign in with GitHub, then choose Save project again. This scan remains open.'); return; }
     setState('saving'); setMessage('');
     try {
-      const saved = await saveProject(request);
-      setSavedProject(saved.project); setState('saved'); setMessage('Project and scan history saved privately.');
+      if (projectId) {
+        await saveProjectScan(projectId, request);
+        setState('saved');
+        setMessage(verificationRelationship ? 'Later scan and verification evidence saved to the existing project.' : 'Scan saved to the existing project.');
+      } else {
+        const saved = await saveProject(request);
+        setSavedProject(saved.project); setState('saved'); setMessage('Project and scan history saved privately.');
+      }
     } catch (error) {
       setState('failed');
       setMessage(error instanceof PersistenceClientError && error.code === 'authentication_required'
@@ -41,6 +58,7 @@ export function SaveProjectControl({ report, providerStatus }: { report: Readine
       {message && <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{message}</p>}
       {account.availabilityMessage && <p role="status" className="mt-2 text-xs leading-relaxed text-warning">{account.availabilityMessage}</p>}
       {savedProject && <a className="mt-1 block break-all text-xs text-primary-glow underline-offset-4 hover:underline" href={`/projects/${savedProject.id}`}>Open saved project</a>}
+      {!savedProject && state === 'saved' && projectId && <a className="mt-1 block break-all text-xs text-primary-glow underline-offset-4 hover:underline" href={`/projects/${projectId}`}>Open saved project</a>}
     </div>
   );
 }

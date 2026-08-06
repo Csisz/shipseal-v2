@@ -78,6 +78,23 @@ export {
 } from './repositoryVerification';
 
 export {
+  REPOSITORY_VERIFICATION_ALGORITHM_VERSION,
+  REPOSITORY_VERIFICATION_MEASUREMENT_VERSION,
+  REPOSITORY_VERIFICATION_RELATIONSHIP_VERSION,
+  buildRepositoryGraphDifference,
+  buildRepositoryVerificationRelationship,
+  compareRepositoryScores,
+  deriveVerifiedOpportunitySignals,
+  evaluateRepositoryVerificationCompatibility,
+  mapRepositoryIntelligenceArtifactResults,
+  mapRepositoryIntelligenceStatementResults,
+  repositoryVerificationOverlayStates,
+  repositoryVerificationOutcomeForIntelligenceResult,
+  synthesizeRepositoryVerificationResult,
+  validateDeepIntelligenceBindings,
+} from './repositoryVerificationRelationship';
+
+export {
   buildRepositoryAgentFlightPath,
 } from './repositoryAgentFlightPath';
 
@@ -201,6 +218,28 @@ export type {
   VerifiedArtifactState,
   WorkspaceMetricComparison,
 } from './repositoryVerification';
+
+export type {
+  AppliedOperationBinding,
+  BuildRepositoryVerificationRelationshipInput,
+  DeepIntelligenceVerificationBinding,
+  ExpectedArtifactContract,
+  ExpectedArtifactVerification,
+  ExpectedArtifactVerificationResult,
+  ExpectedStatementContract,
+  ExpectedStatementVerification,
+  ExpectedStatementVerificationResult,
+  RepositoryGraphDifference,
+  RepositoryGraphSnapshot,
+  RepositoryMeasurementBoundary,
+  RepositoryScoreComparison,
+  RepositoryScoreSnapshot,
+  RepositoryVerificationCompatibility,
+  RepositoryVerificationOutcome,
+  RepositoryVerificationRelationship,
+  RepositoryVerificationScanBinding,
+  VerifiedOpportunitySignal,
+} from './repositoryVerificationRelationship';
 
 export type {
   AgentFlightPathAvoidance,

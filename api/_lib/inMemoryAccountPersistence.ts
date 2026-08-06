@@ -7,13 +7,14 @@ import {
   type PersistedScanSnapshot,
   type PersistedScanSummary,
   type PersistedUser,
+  type PersistedVerificationRelationship,
   type SaveProjectRequest,
 } from '../../src/lib/persistence/schema.js';
 import { createPublicId, type AccountPersistenceStore, type OAuthIdentityInput, type SessionRecord } from './accountPersistence.js';
 
 interface MemorySession { id: string; userId: string; tokenHash: string; expiresAt: string; createdAt: string; revoked: boolean }
 interface MemoryScan { ownerId: string; summary: PersistedScanSummary; snapshot: PersistedScanSnapshot; idempotencyKey: string }
-interface MemoryVerification { ownerId: string; projectId: string; baselineScanId: string; rescanId: string }
+interface MemoryVerification extends PersistedVerificationRelationship { ownerId: string; rescanId: string }
 
 export class InMemoryAccountPersistenceStore implements AccountPersistenceStore {
   readonly users = new Map<string, PersistedUser & { providerSubject: string; deleted: boolean }>();
@@ -50,6 +51,24 @@ export class InMemoryAccountPersistenceStore implements AccountPersistenceStore 
 
   async saveProjectAndScan(userId: string, input: SaveProjectRequest) {
     const identity = this.identity(input);
+    const relationship = input.scan.verificationRelationship;
+    if (relationship && 'relationshipFingerprint' in relationship) {
+      const repeated = this.verifications.find(item => item.ownerId === userId && item.relationshipFingerprint === relationship.relationshipFingerprint);
+      const repeatedProject = repeated ? this.projects.get(repeated.projectId) : null;
+      const repeatedScan = repeated ? this.scans.get(repeated.laterScanId) : null;
+      if (repeatedProject && repeatedScan) return { project: this.safeProject(repeatedProject), scan: repeatedScan.summary };
+    }
+    if (relationship) {
+      const baselineScan = this.scans.get(relationship.baselineScanId);
+      const baselineProject = baselineScan ? this.projects.get(baselineScan.summary.projectId) : null;
+      if (!baselineScan || baselineScan.ownerId !== userId || !baselineProject || baselineProject.ownerId !== userId || baselineProject.identity !== identity) {
+        throw new Error('Verification baseline does not belong to this project and account.');
+      }
+      const baselineTime = Date.parse(baselineScan.summary.completedAt || baselineScan.summary.startedAt);
+      const laterTime = Date.parse(input.scan.completedAt || input.scan.startedAt);
+      if (!Number.isFinite(laterTime) || laterTime <= baselineTime) throw new Error('Verification later scan must complete after its baseline.');
+      if ('repositoryIdentity' in relationship && relationship.repositoryIdentity !== identity) throw new Error('Verification repository identity does not match this project.');
+    }
     let project = [...this.projects.values()].find(item => item.ownerId === userId && item.identity === identity);
     const duplicate = project && [...this.scans.values()].find(item => item.ownerId === userId && item.summary.projectId === project?.id && item.idempotencyKey === input.idempotencyKey);
     if (project && duplicate) return { project: this.safeProject(project), scan: duplicate.summary };
@@ -82,7 +101,33 @@ export class InMemoryAccountPersistenceStore implements AccountPersistenceStore 
       baselineScanId: input.scan.verificationRelationship?.baselineScanId || null, safeFailureCategory: input.scan.safeFailureCategory,
     });
     this.scans.set(scan.id, { ownerId: userId, summary: scan, snapshot: scanSnapshotSchema.parse(input.scan.snapshot), idempotencyKey: input.idempotencyKey });
-    if (input.scan.verificationRelationship) this.verifications.push({ ownerId: userId, projectId: project.id, baselineScanId: input.scan.verificationRelationship.baselineScanId, rescanId: scan.id });
+    if (relationship) {
+      const isV2 = 'preparedPlanId' in relationship;
+      this.verifications.push({
+        ownerId: userId,
+        version: relationship.version,
+        id: createPublicId('ver'),
+        projectId: project.id,
+        baselineScanId: relationship.baselineScanId,
+        laterScanId: scan.id,
+        rescanId: scan.id,
+        state: relationship.state,
+        verifiedAt: relationship.verifiedAt,
+        algorithmVersion: relationship.algorithmVersion,
+        preparedPlanId: isV2 ? relationship.preparedPlanId : null,
+        preparedPlanFingerprint: isV2 ? relationship.preparedPlanFingerprint : null,
+        appliedOperationId: isV2 ? relationship.appliedOperationId : null,
+        pullRequestUrl: isV2 ? relationship.pullRequestUrl : null,
+        branch: isV2 ? relationship.branch : null,
+        repositoryIdentity: isV2 ? relationship.repositoryIdentity : null,
+        measurementVersion: isV2 ? relationship.measurementVersion : null,
+        expectedArtifactIds: [...relationship.expectedArtifactIds],
+        expectedStatementIds: isV2 ? [...relationship.expectedStatementIds] : [],
+        evidence: isV2 ? structuredClone(relationship.evidence) : null,
+        relationshipFingerprint: isV2 ? relationship.relationshipFingerprint : null,
+        createdAt: now,
+      });
+    }
     return { project: this.safeProject(project), scan };
   }
 
@@ -109,14 +154,19 @@ export class InMemoryAccountPersistenceStore implements AccountPersistenceStore 
 
   async getScan(userId: string, scanId: string) {
     const scan = this.scans.get(scanId);
-    return scan?.ownerId === userId ? { scan: scan.summary, snapshot: scan.snapshot } : null;
+    const verification = this.verifications.find(item => item.ownerId === userId && item.laterScanId === scanId);
+    return scan?.ownerId === userId ? {
+      scan: scan.summary,
+      snapshot: scan.snapshot,
+      verificationRelationship: verification ? this.safeVerification(verification) : null,
+    } : null;
   }
 
   async deleteScan(userId: string, scanId: string) {
     const scan = this.scans.get(scanId);
     if (!scan || scan.ownerId !== userId) return false;
     this.scans.delete(scanId);
-    for (let index = this.verifications.length - 1; index >= 0; index -= 1) if (this.verifications[index].ownerId === userId && (this.verifications[index].baselineScanId === scanId || this.verifications[index].rescanId === scanId)) this.verifications.splice(index, 1);
+    for (let index = this.verifications.length - 1; index >= 0; index -= 1) if (this.verifications[index].ownerId === userId && (this.verifications[index].baselineScanId === scanId || this.verifications[index].laterScanId === scanId)) this.verifications.splice(index, 1);
     const project = this.projects.get(scan.summary.projectId);
     if (project) {
       const remaining = await this.listScans(userId, project.id, 1, 0);
@@ -149,6 +199,10 @@ export class InMemoryAccountPersistenceStore implements AccountPersistenceStore 
   private safeProject(project: PersistedProject & { ownerId?: string; identity?: string }) {
     const { ownerId: _ownerId, identity: _identity, ...safe } = project;
     return persistedProjectSchema.parse(safe);
+  }
+  private safeVerification(verification: MemoryVerification): PersistedVerificationRelationship {
+    const { ownerId: _ownerId, rescanId: _rescanId, ...safe } = verification;
+    return structuredClone(safe);
   }
   private identity(input: SaveProjectRequest) { return input.project.repositoryOwner && input.project.repositoryName ? `github:${input.project.repositoryOwner.toLowerCase()}/${input.project.repositoryName.toLowerCase()}` : `upload:${(input.project.uploadLabel || input.project.displayName).toLowerCase()}`; }
 }

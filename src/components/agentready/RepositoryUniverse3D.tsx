@@ -11,6 +11,8 @@ export interface UniverseCameraState {
   target: RepositoryUniversePosition;
 }
 
+export type RepositoryVerificationNodeOverlayState = 'verified-change' | 'partially-verified' | 'unresolved' | 'regressed' | 'newly-detected' | 'unchanged';
+
 interface RepositoryUniverse3DProps {
   model: RepositoryUniverseModel;
   selectedNodeId?: string;
@@ -30,6 +32,7 @@ interface RepositoryUniverse3DProps {
   selectedProposalId?: string | null;
   excludedProposalIds?: string[];
   transformation?: RepositoryTransformationProposalModel;
+  verificationNodeStates?: Record<string, RepositoryVerificationNodeOverlayState>;
   onCameraStateChange: (state: UniverseCameraState) => void;
   onSelectNode: (nodeId: string) => void;
   onSelectProposal?: (proposalId: string) => void;
@@ -112,6 +115,7 @@ export default function RepositoryUniverse3D({
   selectedProposalId,
   excludedProposalIds = [],
   transformation,
+  verificationNodeStates = {},
   onCameraStateChange,
   onSelectNode,
   onSelectProposal,
@@ -137,6 +141,7 @@ export default function RepositoryUniverse3D({
   const transformationDomainRef = useRef(transformationDomain);
   const selectedProposalIdRef = useRef(selectedProposalId);
   const excludedProposalSetRef = useRef(new Set(excludedProposalIds));
+  const verificationNodeStatesRef = useRef(verificationNodeStates);
   const onCameraStateChangeRef = useRef(onCameraStateChange);
   const onSelectNodeRef = useRef(onSelectNode);
   const onSelectProposalRef = useRef(onSelectProposal);
@@ -153,6 +158,10 @@ export default function RepositoryUniverse3D({
   useEffect(() => {
     cameraStateRef.current = cameraState;
   }, [cameraState]);
+
+  useEffect(() => {
+    verificationNodeStatesRef.current = verificationNodeStates;
+  }, [verificationNodeStates]);
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -767,13 +776,14 @@ export default function RepositoryUniverse3D({
         const focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
         const quiet = Boolean((selectedId || routeActive) && !selected && !connected && !matched && !routeHighlighted && node.id !== model.rootNodeId);
         const suppressed = Boolean(focusedCluster && !focused && !selected && !matched && !routeHighlighted);
+        const verificationState = verificationNodeStatesRef.current[node.id];
         const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.99 : routeHighlighted ? 0.99 : connected ? 0.96 : quiet || suppressed ? visualTokens.nodeOpacityQuiet : node.importance === 'background' ? visualTokens.nodeOpacityBackground : visualTokens.nodeOpacityBase;
         const scale = selected ? 2.16 + focusPulse * 0.08 : hovered ? 1.62 : matched ? 1.54 : routeHighlighted ? 1.5 : connected ? 1.32 : node.importance === 'primary' ? 1.12 : 1;
 
         mesh.visible = opacity > 0.02;
         mesh.material.opacity = opacity;
-        mesh.material.color.setHex(colorForNode(node, selected, matched, routeHighlighted, hovered, connected, visualTokens));
-        mesh.material.emissive.setHex(emissiveForNode(node, selected, matched, routeHighlighted, hovered, visualTokens));
+        mesh.material.color.setHex(verificationState && !selected ? verificationOverlayColor(verificationState) : colorForNode(node, selected, matched, routeHighlighted, hovered, connected, visualTokens));
+        mesh.material.emissive.setHex(verificationState && !selected ? verificationOverlayColor(verificationState) : emissiveForNode(node, selected, matched, routeHighlighted, hovered, visualTokens));
         mesh.material.emissiveIntensity = selected
           ? visualTokens.selectedEmissiveIntensity
           : hovered || matched
@@ -782,13 +792,15 @@ export default function RepositoryUniverse3D({
               ? visualTokens.routeEmissiveIntensity
               : connected
                 ? visualTokens.connectedEmissiveIntensity
-                : node.importance === 'primary'
+                : verificationState
+                  ? visualTokens.connectedEmissiveIntensity
+                  : node.importance === 'primary'
                   ? visualTokens.primaryEmissiveIntensity
                   : visualTokens.quietEmissiveIntensity;
         mesh.material.wireframe = node.evidenceType === 'missing' || node.kind === 'recommendation';
         mesh.scale.setScalar(scale);
 
-        halo.visible = visible && (selected || hovered || matched || routeHighlighted || connected);
+        halo.visible = visible && (selected || hovered || matched || routeHighlighted || connected || Boolean(verificationState && verificationState !== 'unchanged'));
         halo.material.opacity = selected
           ? visualTokens.haloOpacitySelected + focusPulse * visualTokens.haloPulseOpacity
           : hovered
@@ -797,7 +809,9 @@ export default function RepositoryUniverse3D({
               ? visualTokens.haloOpacitySearch
               : routeHighlighted
                 ? visualTokens.haloOpacityRoute + focusPulse * visualTokens.haloRoutePulseOpacity
-                : connected
+                : verificationState && verificationState !== 'unchanged'
+                  ? 0.12
+                  : connected
                   ? visualTokens.haloOpacityConnected
                   : 0;
         halo.material.color.setHex(selected
@@ -806,10 +820,12 @@ export default function RepositoryUniverse3D({
             ? visualTokens.route
             : matched
               ? visualTokens.search
-              : connected
+              : verificationState && verificationState !== 'unchanged'
+                ? verificationOverlayColor(verificationState)
+                : connected
                 ? brightenClusterColor(repositoryUniverseNodeBaseColor(node), 0.16)
                 : visualTokens.coreGlow);
-        halo.scale.setScalar(selected ? 1.58 + focusPulse * 0.08 : routeHighlighted ? 1.3 : connected ? 1.16 : 1);
+        halo.scale.setScalar(selected ? 1.58 + focusPulse * 0.08 : routeHighlighted ? 1.3 : verificationState && verificationState !== 'unchanged' ? 1.2 : connected ? 1.16 : 1);
 
         const labelVisible = visible && shouldRenderLabel(node, {
           selected,
@@ -969,6 +985,7 @@ export default function RepositoryUniverse3D({
       className="relative h-full min-h-[440px] overflow-hidden bg-[hsl(var(--universe-stage-bg))]"
       data-testid="repository-universe-host"
       data-reveal-active={!settled && !reducedMotion ? 'true' : 'false'}
+      data-verification-overlay-count={Object.keys(verificationNodeStates).length}
     >
       <canvas
         ref={canvasRef}
@@ -1088,6 +1105,17 @@ function nodeRadius(node: RepositoryUniverseNode) {
   if (node.importance === 'primary') return 4.7;
   if (node.importance === 'supporting') return 3.15;
   return 2.15;
+}
+
+function verificationOverlayColor(state: RepositoryVerificationNodeOverlayState) {
+  return ({
+    'verified-change': 0x2dd4bf,
+    'partially-verified': 0x60a5fa,
+    unresolved: 0xf59e0b,
+    regressed: 0xef4444,
+    'newly-detected': 0xa78bfa,
+    unchanged: 0x64748b,
+  })[state];
 }
 
 function colorForNode(

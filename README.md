@@ -39,7 +39,7 @@ Vite defaults to port `8080`. If that port is busy, Vite may choose another port
 
 Use `npm run dev` for frontend-only local development. Use `vercel dev` when you also need the Vercel API routes such as `/api/repository-intelligence`, `/api/github-archive`, `/api/create-readiness-pr`, `/api/github-app/repositories`, `/api/github-app/archive`, `/api/github-app/create-readiness-pr`, and the legacy `/api/audit-request` contact endpoint.
 
-Omega 18.1 durable projects use dedicated GitHub OAuth identity and PostgreSQL. Configure the server-only account variables from `.env.example`, apply `npm run db:migrate`, then use `vercel dev`. Anonymous ZIP/public scans remain available without an account. Sign-in is requested only when saving or opening private history, and opening a saved scan does not rescan, call the provider, or mutate GitHub. See [Account and Project Persistence Architecture](docs/implementation/ACCOUNT_PERSISTENCE_ARCHITECTURE.md).
+Omega 18.1 durable projects use dedicated GitHub OAuth identity and PostgreSQL. Configure the server-only account variables from `.env.example`, apply `npm run db:migrate`, then use `vercel dev`. Anonymous ZIP/public scans remain available without an account. Sign-in is requested only when saving or opening private history, and opening a saved scan does not rescan, call the provider, or mutate GitHub. Omega 18.4 adds an owner-scoped, versioned baseline-to-later-scan verification relationship; Applied remains pending until compatible rescan evidence exists. See [Account and Project Persistence Architecture](docs/implementation/ACCOUNT_PERSISTENCE_ARCHITECTURE.md) and [Authoritative Verification Relationship](docs/implementation/AUTHORITATIVE_VERIFICATION_RELATIONSHIP.md).
 
 If `vercel dev` shows a white page with console errors such as `GET /src/main.tsx 404`, `GET /@vite/client 404`, or `GET /@react-refresh 404`, the Vercel/Vite dev configuration is broken. `vercel.json` must use the Vite framework preset and `devCommand: "vite --host 0.0.0.0 --port $PORT"` so Vercel dev can pass its proxy port to the Vite dev server instead of serving the root `index.html` as a static file.
 
@@ -203,14 +203,30 @@ Keep `GITHUB_APP_PRIVATE_KEY` server-side only. If Vercel stores the key on one 
 
 Production configuration is validated centrally before an auth redirect or installation-token request is attempted. Set the variables for the Production environment (and Preview separately if it should support auth), then redeploy so the functions receive the new values. The GitHub App OAuth callback must exactly be `https://YOUR_DOMAIN/api/github-app/oauth-callback`; the GitHub App setup callback remains `https://YOUR_DOMAIN/api/github-app/callback`. Missing or malformed settings return a safe configuration state to the popup and leave ZIP/public URL scanning available; diagnostics report field names and error codes, never credential values.
 
-Account identity and saved-project persistence use a separate GitHub OAuth App and require all four server-side variables:
+Account identity and saved-project persistence use a separate GitHub OAuth App and require these five server-side variables in the Vercel **Production** environment:
 
+- `SHIPSEAL_APP_ORIGIN` set exactly to `https://www.getshipseal.com`
 - `SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID`
 - `SHIPSEAL_ACCOUNT_GITHUB_CLIENT_SECRET`
-- `SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL` set exactly to `https://YOUR_DOMAIN/api/account/callback`
+- `SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL` set exactly to `https://www.getshipseal.com/api/account/callback`
 - `DATABASE_URL`
 
 Do not substitute the GitHub App OAuth credentials for the account OAuth App: their registered callback paths and responsibilities are intentionally separate. If account auth is absent, scans and exports stay anonymous and available; only private saved-project history is unavailable.
+
+Create the dedicated GitHub OAuth App with:
+
+- Application name: `ShipSeal Account` (or another operator-visible name)
+- Homepage URL: `https://www.getshipseal.com`
+- Authorization callback URL: `https://www.getshipseal.com/api/account/callback`
+- Requested scopes: `read:user user:email`
+
+The account provider identifier stored by ShipSeal is `github`. Account OAuth is intentionally disabled on Preview deployments unless a separately registered Preview OAuth App and an explicitly matching Preview origin/callback contract are introduced and reviewed. Production credentials must not be copied into Preview: a Vercel Preview hostname or the apex `https://getshipseal.com` cannot replace the canonical `https://www.getshipseal.com` callback.
+
+Provision PostgreSQL, set `DATABASE_URL` to a complete `postgres://` or `postgresql://` connection string including a host and database name, then run `npm run db:migrate` against that production database before enabling sign-in. The migration must create `shipseal_users`, `shipseal_sessions`, `shipseal_projects`, `shipseal_scans`, `shipseal_verification_relationships`, and `shipseal_schema_migrations`. After setting or changing Vercel variables, redeploy Production; existing functions do not receive new environment values until a deployment uses them.
+
+No session-signing or cookie-encryption environment variable is required. ShipSeal creates a cryptographically random opaque session token, stores only its SHA-256 hash in PostgreSQL, and sends the token in a `__Host-` cookie with `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, and no `Domain` attribute in production.
+
+Production smoke test: open `/projects`, choose **Sign in with GitHub**, confirm GitHub returns to `/account/complete`, open `/projects`, save a completed scan, reopen the saved project and scan, sign out, and confirm the private project requires sign-in. Finally, remove or invalidate account configuration in a controlled non-production deployment and confirm ZIP/public URL/sample scanning still works without an account.
 
 Next:
 

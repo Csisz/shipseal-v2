@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createOAuthState, safeReturnPath } from '../../_lib/accountSession.js';
-import { AuthConfigurationError, getAccountOAuthConfig, safeAuthDiagnostic } from '../../_lib/authConfig.js';
+import { AuthConfigurationError, getAccountOAuthConfig, safeAuthDiagnostic, validateAccountRequestOrigin } from '../../_lib/authConfig.js';
 
 function escapeHtml(value: string) {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -19,9 +19,10 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   if (req.method && req.method !== 'GET') { res.statusCode = 405; res.end('Use GET.'); return; }
   try {
     const settings = getAccountOAuthConfig();
+    validateAccountRequestOrigin(req, settings);
     const returnTo = safeReturnPath(new URL(req.url || '/', 'https://shipseal.local').searchParams.get('returnTo') || '/');
     const state = createOAuthState(res, req, returnTo);
-    const params = new URLSearchParams({ client_id: settings.clientId, redirect_uri: settings.callbackUrl, state, scope: 'read:user user:email' });
+    const params = new URLSearchParams({ client_id: settings.clientId, redirect_uri: settings.callbackUrl, state, scope: settings.scope });
     res.statusCode = 302;
     res.setHeader('Location', `https://github.com/login/oauth/authorize?${params}`);
     res.end();

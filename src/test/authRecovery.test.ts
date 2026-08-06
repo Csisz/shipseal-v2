@@ -28,13 +28,14 @@ describe('production auth recovery boundaries', () => {
       VERCEL_ENV: 'production',
       SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID: 'Iv1.account-client',
       SHIPSEAL_ACCOUNT_GITHUB_CLIENT_SECRET: secret,
+      SHIPSEAL_APP_ORIGIN: 'https://www.getshipseal.com',
       SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL: 'http://localhost/api/account/callback',
-      DATABASE_URL: '',
+      DATABASE_URL: 'postgresql://shipseal:test@db.example.test/shipseal',
     };
 
     expect(() => getAccountOAuthConfig(env)).toThrow();
     const diagnostics = inspectAuthConfiguration('account-oauth', env);
-    expect(diagnostics).toMatchObject({ configured: false, persistenceConfigured: false, callbackUrlUsable: false });
+    expect(diagnostics).toMatchObject({ configured: false, persistenceConfigured: true, callbackUrlUsable: false, applicationOriginUsable: true });
     expect(JSON.stringify(diagnostics)).not.toContain(secret);
   });
 
@@ -43,6 +44,7 @@ describe('production auth recovery boundaries', () => {
     delete process.env.SHIPSEAL_ACCOUNT_GITHUB_CLIENT_ID;
     delete process.env.SHIPSEAL_ACCOUNT_GITHUB_CLIENT_SECRET;
     delete process.env.SHIPSEAL_ACCOUNT_GITHUB_CALLBACK_URL;
+    delete process.env.SHIPSEAL_APP_ORIGIN;
     delete process.env.DATABASE_URL;
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const res = createResponse();
