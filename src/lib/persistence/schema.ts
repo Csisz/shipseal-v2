@@ -3,7 +3,7 @@ import type { ReadinessReport } from '../types.js';
 import {
   REPOSITORY_VERIFICATION_ALGORITHM_VERSION,
   REPOSITORY_VERIFICATION_RELATIONSHIP_VERSION,
-} from '../workspace/repositoryVerificationRelationship.js';
+} from '../workspace/repositoryVerificationVersions.js';
 
 export const PERSISTENCE_SCHEMA_VERSION = 'shipseal.persistence.v1' as const;
 export const SCAN_SNAPSHOT_SCHEMA_VERSION = 'shipseal.scan-snapshot.v1' as const;

@@ -1,16 +1,16 @@
-import type { ReadinessReport } from '../types';
-import { buildScoreJson } from '../exports';
-import { buildDeliveryPackFiles } from '../deliveryPack';
-import type { DeliveryPackFileKind } from '../deliveryPack/types';
-import type { RepositoryAtlasModel } from './workspaceStory';
-import type { RepositoryUniverseModel } from './repositoryUniverse';
+import type { ReadinessReport } from '../types.js';
+import { buildScoreJson } from '../exports.js';
+import { buildDeliveryPackFiles } from '../deliveryPack/index.js';
+import type { DeliveryPackFileKind } from '../deliveryPack/types.js';
+import type { RepositoryAtlasModel } from './workspaceStory.js';
+import type { RepositoryUniverseModel } from './repositoryUniverse.js';
 import type {
   RepositoryTransformationArtifactAction,
   RepositoryTransformationConfidence,
   RepositoryTransformationDomain,
   RepositoryTransformationProposal,
   RepositoryTransformationProposalModel,
-} from './repositoryTransformation';
+} from './repositoryTransformation.js';
 
 export type RepositoryOptimizationAction = RepositoryTransformationArtifactAction['action'] | 'unavailable';
 export type RepositoryOptimizationReadiness = 'ready' | 'review-required' | 'blocked';

@@ -1,13 +1,20 @@
-import { stableContextFingerprint } from '../repositoryIntelligence/contextSelection';
+import { stableContextFingerprint } from '../repositoryIntelligence/contextSelection.js';
 import type {
   RepositoryIntelligenceArtifactVerification,
   RepositoryIntelligenceStatementVerification,
   RepositoryIntelligenceVerificationResult,
-} from '../repositoryIntelligence/repositoryIntelligenceVerification';
+} from '../repositoryIntelligence/repositoryIntelligenceVerification.js';
+import {
+  REPOSITORY_VERIFICATION_ALGORITHM_VERSION,
+  REPOSITORY_VERIFICATION_MEASUREMENT_VERSION,
+  REPOSITORY_VERIFICATION_RELATIONSHIP_VERSION,
+} from './repositoryVerificationVersions.js';
 
-export const REPOSITORY_VERIFICATION_RELATIONSHIP_VERSION = 'shipseal.verification-relationship.v2' as const;
-export const REPOSITORY_VERIFICATION_ALGORITHM_VERSION = 'shipseal.repository-verification.omega18.4.v1' as const;
-export const REPOSITORY_VERIFICATION_MEASUREMENT_VERSION = 'shipseal.repository-measurement.v1' as const;
+export {
+  REPOSITORY_VERIFICATION_ALGORITHM_VERSION,
+  REPOSITORY_VERIFICATION_MEASUREMENT_VERSION,
+  REPOSITORY_VERIFICATION_RELATIONSHIP_VERSION,
+} from './repositoryVerificationVersions.js';
 
 export type RepositoryVerificationOutcome = 'pending' | 'verified' | 'partially-verified' | 'unresolved' | 'regressed' | 'incompatible';
 export type ExpectedArtifactVerificationResult = 'verified' | 'partially-verified' | 'missing' | 'changed-differently' | 'unreadable' | 'incompatible' | 'regressed';

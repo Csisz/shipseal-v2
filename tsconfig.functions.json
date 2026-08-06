@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "strict": false,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "moduleDetection": "force"
+  },
+  "files": [
+    "api/account-router.ts",
+    "api/audit-request.ts",
+    "api/create-readiness-pr.ts",
+    "api/github-app-router.ts",
+    "api/github-archive.ts",
+    "api/persistence-router.ts",
+    "api/repository-intelligence.ts"
+  ]
+}

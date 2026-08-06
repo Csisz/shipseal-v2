@@ -1,6 +1,5 @@
-import { stableContextFingerprint } from '../repositoryIntelligence/contextSelection';
-import type { PreparedRepositoryOptimizationPlan } from './repositoryOptimizationPreparation';
-import type { RepositoryOptimizationAction, RepositoryOptimizationReadiness } from './repositoryOptimizationPlan';
+import { stableContextFingerprint } from '../repositoryIntelligence/contextSelection.js';
+import type { OptimizationPackFile } from './repositoryOptimizationApplyContract.js';
 
 export const OPTIMIZATION_GITHUB_APPLY_VERSION = 'shipseal.optimization-github-apply.v1' as const;
 
@@ -13,7 +12,7 @@ export const OPTIMIZATION_GITHUB_APPLY_LIMITS = Object.freeze({
   maximumDiffLines: 400,
 });
 
-export type OptimizationGithubApplyAction = Exclude<RepositoryOptimizationAction, 'unavailable'>;
+export type OptimizationGithubApplyAction = Exclude<OptimizationPackFile['action'], 'unavailable'>;
 export type OptimizationGithubApplyIssueCode =
   | 'invalid-payload' | 'stale-prepared-plan' | 'repository-mismatch' | 'repository-unavailable'
   | 'repository-read-only' | 'base-branch-missing' | 'unsafe-path' | 'file-limit'
@@ -33,7 +32,7 @@ export interface OptimizationGithubPreparedFile {
   artifactId: string;
   path: string;
   action: OptimizationGithubApplyAction;
-  readiness: RepositoryOptimizationReadiness;
+  readiness: OptimizationPackFile['readiness'];
   nextContent: string;
   contentHash: string;
   sizeBytes: number;
@@ -142,9 +141,34 @@ export interface OptimizationGithubApplyProgress {
   prUrl?: string;
 }
 
-export function buildOptimizationGithubPreparedSnapshot(prepared: PreparedRepositoryOptimizationPlan): OptimizationGithubPreparedSnapshot {
+export interface OptimizationGithubPreparedPlanSource {
+  id: string;
+  sourcePlanId: string;
+  selectedProposalIds: string[];
+  applyPlan: {
+    id: string;
+    files: OptimizationPackFile[];
+    manifest: {
+      repository: { name: string; fullName?: string; sourceType: string; ref?: string };
+    };
+    prPreview: {
+      branchName: string;
+      title: string;
+      body: string;
+      files: Array<{
+        path: string;
+        generatedPath: string;
+        action: OptimizationPackFile['action'];
+        readiness: OptimizationPackFile['readiness'];
+        content: string;
+      }>;
+    };
+  };
+}
+
+export function buildOptimizationGithubPreparedSnapshot(prepared: OptimizationGithubPreparedPlanSource): OptimizationGithubPreparedSnapshot {
   const applyPlan = prepared.applyPlan;
-  const byPrPath = new Map(applyPlan.files.map(file => [file.prPath, file]));
+  const byPrPath = new Map<string, OptimizationPackFile>(applyPlan.files.map(file => [file.prPath, file]));
   const files = applyPlan.prPreview.files.map(file => {
     const source = byPrPath.get(file.path);
     const action = file.action;

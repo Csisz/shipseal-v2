@@ -1,4 +1,4 @@
-import type { DeliveryPackFileKind } from '../deliveryPack/types';
+import type { DeliveryPackFileKind } from '../deliveryPack/types.js';
 import type {
   RepositoryOptimizationAction,
   RepositoryOptimizationConflict,
@@ -6,27 +6,13 @@ import type {
   RepositoryOptimizationPlan,
   RepositoryOptimizationPlanItem,
   RepositoryOptimizationReadiness,
-} from './repositoryOptimizationPlan';
-import { loadJSZip } from '../jszipLoader';
+} from './repositoryOptimizationPlan.js';
+import { loadJSZip } from '../jszipLoader.js';
+import type { OptimizationPackFile } from './repositoryOptimizationApplyContract.js';
+
+export type { OptimizationPackFile } from './repositoryOptimizationApplyContract.js';
 
 export type OptimizationApplyReadiness = 'ready' | 'review-required' | 'blocked';
-
-export interface OptimizationPackFile {
-  id: string;
-  zipPath: string;
-  prPath: string;
-  generatedPath: string;
-  destinationPath: string;
-  kind: DeliveryPackFileKind | 'unknown';
-  action: RepositoryOptimizationAction;
-  readiness: RepositoryOptimizationReadiness;
-  content: string;
-  sourceItemId: string;
-  contributingProposalIds: string[];
-  conflicts: RepositoryOptimizationConflict[];
-  includeInZip: boolean;
-  includeInPr: boolean;
-}
 
 export interface OptimizationPackManifest {
   schemaVersion: 'shipseal.optimization-pack.v1';

@@ -2,12 +2,12 @@ import {
   buildOptimizationApplyPlan,
   type BuildOptimizationApplyPlanInput,
   type OptimizationApplyPlan,
-} from './repositoryOptimizationApply';
+} from './repositoryOptimizationApply.js';
 import type {
   RepositoryOptimizationConflictKind,
   RepositoryOptimizationPlan,
   RepositoryOptimizationPlanItem,
-} from './repositoryOptimizationPlan';
+} from './repositoryOptimizationPlan.js';
 
 export type OptimizationPlanValidationIssueKind =
   | RepositoryOptimizationConflictKind
