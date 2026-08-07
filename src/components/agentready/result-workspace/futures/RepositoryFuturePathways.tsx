@@ -24,6 +24,7 @@ import {
 } from '@/lib/workspace';
 import {
   REPOSITORY_FUTURE_CAPABILITIES,
+  DEFAULT_REPOSITORY_FUTURE_DEPENDENCY_DEFINITIONS,
   REPOSITORY_FUTURE_COMPATIBILITY_LABELS,
   REPOSITORY_FUTURE_FIT_LABELS,
   addRepositoryFutureSupportingGoal,
@@ -65,6 +66,8 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
   const [mode, setMode] = useState<RepositoryFuturePathwaysMode>('quick');
   const [draft, setDraft] = useState<RepositoryFutureDraft>();
   const [focus, setFocus] = useState<Focus>(null);
+  const [tracePreviewId, setTracePreviewId] = useState<string>();
+  const [tracePinnedId, setTracePinnedId] = useState<string>();
   const [notice, setNotice] = useState('');
   const [replaceSupportGoalId, setReplaceSupportGoalId] = useState<string>();
   const [fitFilter, setFitFilter] = useState<'all' | RepositoryFutureFit>('all');
@@ -88,6 +91,8 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
   useEffect(() => {
     setDraft(undefined);
     setFocus(null);
+    setTracePreviewId(undefined);
+    setTracePinnedId(undefined);
     setNotice('');
     setReplaceSupportGoalId(undefined);
   }, [graph.fingerprint]);
@@ -109,14 +114,20 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
         primaryGoalIds: [goalId],
         supportingGoalIds: [],
       }), 'Primary future selected. Required dependencies were included automatically.');
-      if (accepted) setFocus({ kind: 'goal', id: goalId });
+      if (accepted) {
+        setFocus({ kind: 'goal', id: goalId });
+        setTracePinnedId(goalId);
+      }
       return;
     }
     const operation = replaceRepositoryFuturePrimary(graph, draft, goalId);
     const accepted = acceptResult(operation.result, operation.removedGoalIds.length
       ? `Primary replaced. ${operation.removedGoalIds.length} incompatible supporting ${operation.removedGoalIds.length === 1 ? 'goal was' : 'goals were'} removed and remain available as alternatives.`
       : 'Primary replaced. Compatible supporting goals were preserved.');
-    if (accepted) setFocus({ kind: 'goal', id: goalId });
+    if (accepted) {
+      setFocus({ kind: 'goal', id: goalId });
+      setTracePinnedId(goalId);
+    }
   }, [acceptResult, draft, graph]);
 
   const addSupport = useCallback((goalId: string) => {
@@ -130,13 +141,21 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
       return;
     }
     const accepted = acceptResult(addRepositoryFutureSupportingGoal(graph, draft, goalId), 'Supporting goal joined the path. Shared dependencies remain represented once.');
-    if (accepted) setFocus({ kind: 'goal', id: goalId });
+    if (accepted) {
+      setFocus({ kind: 'goal', id: goalId });
+      setTracePinnedId(goalId);
+    }
   }, [acceptResult, draft, graph]);
 
   const removeSupport = useCallback((goalId: string) => {
     if (!draft) return;
-    acceptResult(removeRepositoryFutureSupportingGoal(graph, draft, goalId), 'Supporting goal removed. Dependencies were recomputed from the remaining path.');
-  }, [acceptResult, draft, graph]);
+    const accepted = acceptResult(removeRepositoryFutureSupportingGoal(graph, draft, goalId), 'Supporting goal removed. Dependencies were recomputed from the remaining path.');
+    if (accepted && tracePinnedId === goalId) {
+      setTracePinnedId(undefined);
+      setTracePreviewId(undefined);
+      setFocus(null);
+    }
+  }, [acceptResult, draft, graph, tracePinnedId]);
 
   const replaceSupport = useCallback((removedGoalId: string) => {
     if (!draft || !replaceSupportGoalId) return;
@@ -162,6 +181,7 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
   }, [draft, goalById, graph]);
 
   const stageCandidates = useMemo(() => {
+    const capabilityTitles = new Map(DEFAULT_REPOSITORY_FUTURE_DEPENDENCY_DEFINITIONS.map(definition => [definition.id, definition.title]));
     const recommendedIds = quickPath.primaryRecommendations.candidates.slice(0, 5).map(item => item.goalId);
     const displayIds = draft
       ? [draft.primaryGoal.goalId, ...draft.supportingGoals.map(goal => goal.goalId), ...draft.savedAlternatives.map(item => item.goalId).slice(0, 2)]
@@ -191,6 +211,11 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
         evidenceCount: candidate.evidence.length,
         mappedEvidenceCount: candidate.universeMappings.length,
         universeNodeIds: candidate.universeMappings.map(mapping => mapping.universeNodeId),
+        capabilityTitle: capabilityTitles.get(candidate.targetCapabilityId) || candidate.title,
+        rationale: candidate.rationale,
+        evidencePaths: candidate.evidence.map(evidence => evidence.path || evidence.id),
+        artifactLabels: candidate.expectedArtifacts.map(artifact => artifact.targetPath || artifact.family),
+        limitations: candidate.limitations,
       }];
     });
   }, [compatibilityFor, draft, goalById, quickPath.primaryRecommendations.candidates]);
@@ -198,7 +223,7 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
   const overlay = useMemo<RepositoryFutureStageOverlay>(() => ({
     active: true,
     mode,
-    phase: draft ? 'synthesis' : focus ? 'choice' : 'possibility',
+    phase: draft ? 'synthesis' : focus || tracePreviewId || tracePinnedId ? 'choice' : 'possibility',
     graphFingerprint: graph.fingerprint,
     draftFingerprint: draft?.fingerprint,
     candidates: stageCandidates,
@@ -210,18 +235,35 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
       dependentGoalIds: dependency.dependentGoalIds,
       executionOrder: dependency.executionOrder,
       humanReviewRequired: dependency.humanReviewState === 'required',
+      rationale: dependency.rationale,
+      evidencePaths: dependency.evidenceIds,
+      limitations: dependency.limitations,
     })),
     artifactCount: draft?.artifacts.length || 0,
     gateCount: draft?.gates.length || 0,
     conflictCount: draft?.conflicts.length || 0,
     limited: graph.summary.limited,
     focusedId: focus?.id,
+    activeTraceId: tracePreviewId || tracePinnedId,
+    tracePinned: Boolean(tracePinnedId),
     onModeChange: setMode,
     onCandidateFocus: goalId => setFocus({ kind: 'goal', id: goalId }),
     onCandidateSelect: choosePrimary,
     onDependencyFocus: dependencyId => setFocus({ kind: 'dependency', id: dependencyId }),
+    onTracePreview: setTracePreviewId,
+    onTracePin: id => {
+      setTracePinnedId(id);
+      setFocus(stageCandidates.some(candidate => candidate.goalId === id)
+        ? { kind: 'goal', id }
+        : { kind: 'dependency', id });
+    },
+    onTraceClear: () => {
+      setTracePreviewId(undefined);
+      setTracePinnedId(undefined);
+      setFocus(null);
+    },
     onOpenDomControls: () => rootRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' }),
-  }), [choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, stageCandidates]);
+  }), [choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, stageCandidates, tracePinnedId, tracePreviewId]);
 
   useEffect(() => onStageOverlayChange(overlay), [onStageOverlayChange, overlay]);
   useEffect(() => () => onStageOverlayChange(null), [onStageOverlayChange]);

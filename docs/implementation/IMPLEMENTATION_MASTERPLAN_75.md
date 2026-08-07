@@ -73,6 +73,14 @@ Implemented on 2026-08-07 as a presentation-only correction after Ω.18.5d visua
 
 The existing WebGL Universe remains the sole canvas and publishes only requested screen-space evidence projections to the DOM/SVG overlay. Core controls remain DOM-first and WebGL-optional; reduced motion removes impulses while preserving topology; legacy Optimize controls remain available behind contextual disclosure. Repository Futures domain and draft semantics are unchanged. Automated release gates pass, but the required Light/Dark/desktop/mobile/reduced-motion/WebGL-fallback browser review remains an explicit operator acceptance gate.
 
+#### Ω.18.5d.2 — Directional neural pathways clarity pass
+
+Implemented on 2026-08-07 as a presentation-only correction to the d.1 field. Specific mapped repository entities now feed bounded evidence bundles, bundles resolve into named intervention capabilities, selected capabilities pass through one prerequisite-ordered dependency chain, compatible supports converge at their truthful shared stage, and the primary future occupies the destination role. The Repository root is used only when no more specific Universe mapping exists.
+
+Quick and Deep continue to edit the same session-local deterministic draft. Hover and keyboard focus preview a complete path without changing selection; activation pins context; explicit clear restores the unfiltered field. Unrelated futures remain present but subordinate. Compact spatial nodes carry only decision labels while rationale, provenance, qualitative confidence, artifacts, limitations and dependency causality move into a contextual desktop inspector or the existing complete mobile/DOM surface. Legacy improvement controls and chapter navigation remain reachable through compact disclosures.
+
+Perspective lenses remain deferred because the current Future candidate contract does not yet provide one reliable cross-origin classification vocabulary. No Repository Futures domain, ranking, compatibility, dependency, persistence, artifact-generation, apply, verification or unlock semantics changed. Automated release gates are required; the seven-view production Light/Dark/desktop/mobile manual acceptance set remains an explicit operator gate and must not be inferred from unit tests.
+
 ### Ω.18.5e — Future artifacts and prompt packs
 
 Implement the canonical Future JSON/Markdown plan, artifact/evidence manifests, verification plan, reviewed repository artifacts, Codex/Claude Code/Cursor/Windsurf/human prompt packs and the immutable prepared snapshot. Reuse validated Repository Intelligence generators.
@@ -91,7 +99,7 @@ Enforce bundle/interaction budgets, WebGL/GPU fallbacks, accessibility QA, owner
 | --- | --- | --- |
 | Future domain | Versioned Future Graph and deterministic one-draft synthesis contracts exist; immutable preparation and generated outputs remain absent. | Ω.18.5e |
 | One-plan interaction | Quick Path and Deep Configuration now edit one session-local deterministic Future Draft with an explicit primary, two-support cap/replacement and automatic required closure. | Ω.18.5d complete; persistence in Ω.18.5f |
-| Future visualization | The existing Universe stage now hosts a deterministic directional Future Horizon with projected evidence anchors, compact goals, ordered dependencies and converging synthesis, plus a complete DOM interaction equivalent; no second current graph or WebGL renderer exists. Human visual acceptance remains open. | Ω.18.5d.1 ready for operator review; release hardening in Ω.18.5g |
+| Future visualization | The existing Universe stage now hosts a deterministic left-to-right Future field with specific evidence anchors, bounded bundles, named interventions, ordered unique dependencies, converging supports, compact outcomes and contextual trace/inspection, plus a complete DOM interaction equivalent; no second current graph or WebGL renderer exists. Human visual acceptance remains open. | Ω.18.5d.2 ready for operator review; release hardening in Ω.18.5g |
 | Future outputs | No canonical Future plan/manifests/prompt packs exist. | Ω.18.5e |
 | Apply convergence | Optimization has stronger preview/base binding; Repository Intelligence has stronger provenance/handwritten preservation. | Ω.18.5f |
 | Future persistence | Accounts/projects/scans persist; Future drafts, prepared plans, saved branches and unlock lineage do not. | Ω.18.5f |
