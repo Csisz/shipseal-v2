@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildReport } from '@/lib/readiness';
+import { buildRepositoryUniverseModel } from '@/lib/workspace';
 import RepositoryFuturePathways from '@/components/agentready/result-workspace/futures/RepositoryFuturePathways';
 import type { RepositoryFutureStageOverlay } from '@/components/agentready/result-workspace/futures/futurePathwaysPresentation';
 
@@ -27,7 +28,8 @@ async function renderPathways() {
   const onStageOverlayChange = vi.fn((overlay: RepositoryFutureStageOverlay | null) => {
     latestOverlay = overlay;
   });
-  render(<RepositoryFuturePathways report={futureReport()} onStageOverlayChange={onStageOverlayChange} />);
+  const report = futureReport();
+  render(<RepositoryFuturePathways report={report} universe={buildRepositoryUniverseModel(report)} onStageOverlayChange={onStageOverlayChange} />);
   await waitFor(() => expect(onStageOverlayChange).toHaveBeenCalled());
   return { onStageOverlayChange, overlay: () => latestOverlay };
 }
@@ -50,6 +52,8 @@ describe('Omega 18.5d Repository Future Pathways', () => {
     expect(screen.getByText(/Required dependency path/)).toBeInTheDocument();
     await waitFor(() => expect(overlay()?.phase).toBe('synthesis'));
     expect(overlay()?.draftFingerprint).toBeTruthy();
+    expect(overlay()?.universeProjection?.sourceDraftFingerprint).toBe(overlay()?.draftFingerprint);
+    expect(overlay()?.universeProjection?.proposedNodes.every(node => node.currentness === 'future')).toBe(true);
     expect(overlay()?.candidates.filter(candidate => candidate.role === 'primary')).toHaveLength(1);
   });
 
@@ -69,11 +73,14 @@ describe('Omega 18.5d Repository Future Pathways', () => {
   });
 
   it('adds supports through domain operations and requires an explicit replacement at the two-support cap', async () => {
-    await renderPathways();
+    const { overlay } = await renderPathways();
     chooseFirstPrimary();
+    await waitFor(() => expect(overlay()?.universeProjection).toBeTruthy());
+    const primaryProjection = overlay()?.universeProjection?.fingerprint;
 
     const firstSupport = await screen.findAllByRole('button', { name: 'Add supporting goal' });
     fireEvent.click(firstSupport[0]);
+    await waitFor(() => expect(overlay()?.universeProjection?.fingerprint).not.toBe(primaryProjection));
     const secondSupport = await screen.findAllByRole('button', { name: 'Add supporting goal' });
     if (secondSupport.length > 0) fireEvent.click(secondSupport[0]);
 
@@ -115,5 +122,15 @@ describe('Omega 18.5d Repository Future Pathways', () => {
     expect(await screen.findByText('Future Draft crystallized')).toBeInTheDocument();
     expect(screen.getByRole('complementary', { name: 'Future Pathways inspector' })).toBeInTheDocument();
     expect(document.querySelector('canvas')).not.toBeInTheDocument();
+  });
+
+  it('renders a dedicated clean Pathways stage without Universe controls or a canvas', async () => {
+    await renderPathways();
+    const hero = screen.getByTestId('future-pathways-hero-stage');
+    expect(within(hero).getByTestId('future-neural-field')).toBeInTheDocument();
+    expect(within(hero).queryByLabelText(/Search repository atlas or universe/i)).not.toBeInTheDocument();
+    expect(within(hero).queryByRole('button', { name: /Universe 3D/i })).not.toBeInTheDocument();
+    expect(within(hero).queryByRole('button', { name: /Fullscreen/i })).not.toBeInTheDocument();
+    expect(hero.querySelector('canvas')).not.toBeInTheDocument();
   });
 });

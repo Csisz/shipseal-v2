@@ -105,3 +105,13 @@ export {
   requestRepositoryFutureDependencyExclusion,
   synthesizeRepositoryFutureDraft,
 } from './synthesis.js';
+export {
+  buildRepositoryFutureUniverseProjection,
+  repositoryFutureProjectionToTransformationModel,
+  REPOSITORY_FUTURE_UNIVERSE_PROJECTION_VERSION,
+} from './universeProjection.js';
+export type {
+  RepositoryFutureUniverseProjection,
+  RepositoryFutureUniverseProposedEdge,
+  RepositoryFutureUniverseProposedNode,
+} from './universeProjection.js';

@@ -44,7 +44,6 @@ import {
   buildRepositoryTransformationProposalModel,
   buildRepositoryVerificationBaseline,
   buildRepositoryVerificationResult,
-  buildRepositoryUniverseModel,
   buildWorkspaceStory,
   chapterForDnaDimension,
   chapterForMentalModelNode,
@@ -91,6 +90,7 @@ import type { RepositoryVerificationNodeOverlayState, UniverseCameraState, Unive
 import type { RepositoryIntelligenceReviewUiSession } from '@/components/agentready/RepositoryIntelligenceReviewPanel';
 import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
 import type { RepositoryFutureStageOverlay } from '../futures/futurePathwaysPresentation';
+import { repositoryFutureProjectionToTransformationModel } from '@/lib/workspace/repositoryFutures';
 import { buildFutureFieldLayout, futureImpulseEvent, futureRoutePath, type FutureEvidenceProjection } from '../futures/futurePathwaysLayout';
 import { PostScanOverview } from '@/components/agentready/result-dashboard/PostScanOverview';
 import { ResultChapterNav } from '@/components/agentready/result-dashboard/ResultChapterNav';
@@ -157,6 +157,7 @@ class RepositoryUniverseErrorBoundary extends Component<RepositoryUniverseBounda
 
 export function AiWorkspaceHero({
   report,
+  universeModel,
   limitationReason,
   story,
   activeStoryChapter,
@@ -181,6 +182,7 @@ export function AiWorkspaceHero({
   futureStageOverlay,
 }: {
   report: ReadinessReport;
+  universeModel: RepositoryUniverseModel;
   limitationReason?: string;
   story: WorkspaceStory;
   activeStoryChapter: WorkspaceStoryChapter | null;
@@ -231,6 +233,7 @@ export function AiWorkspaceHero({
           <>
             <RepositoryAtlasVisualization
               report={report}
+              universeModel={universeModel}
               story={story}
               activeChapter={activeStoryChapter}
               onSelectChapter={selectStoryChapter}
@@ -271,7 +274,7 @@ interface AtlasFilters {
 
 type ContextualInspectorTab = 'overview' | 'evidence' | 'relationships' | 'agent-impact' | 'story' | 'dna' | 'mental-model';
 
-function FutureStageComposer({ overlay }: { overlay: RepositoryFutureStageOverlay }) {
+export function FutureStageComposer({ overlay }: { overlay: RepositoryFutureStageOverlay }) {
   const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
   const supports = overlay.candidates.filter(candidate => candidate.role === 'supporting');
   return (
@@ -288,7 +291,7 @@ function FutureStageComposer({ overlay }: { overlay: RepositoryFutureStageOverla
   );
 }
 
-function FutureContextInspector({ overlay }: { overlay: RepositoryFutureStageOverlay }) {
+export function FutureContextInspector({ overlay }: { overlay: RepositoryFutureStageOverlay }) {
   const activeId = overlay.activeTraceId || overlay.focusedId;
   const candidate = overlay.candidates.find(item => item.goalId === activeId);
   const dependency = overlay.dependencies.find(item => item.id === activeId);
@@ -316,7 +319,7 @@ function FutureContextInspector({ overlay }: { overlay: RepositoryFutureStageOve
   );
 }
 
-function FutureNeuralField({ overlay, mobile, reducedMotion, evidenceProjections }: { overlay: RepositoryFutureStageOverlay; mobile: boolean; reducedMotion: boolean; evidenceProjections: FutureEvidenceProjection }) {
+export function FutureNeuralField({ overlay, mobile, reducedMotion, evidenceProjections }: { overlay: RepositoryFutureStageOverlay; mobile: boolean; reducedMotion: boolean; evidenceProjections: FutureEvidenceProjection }) {
   if (mobile) {
     const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
     const dependencies = overlay.dependencies.slice().sort((left, right) => left.executionOrder - right.executionOrder).slice(0, 3);
@@ -354,6 +357,7 @@ function FutureNeuralField({ overlay, mobile, reducedMotion, evidenceProjections
 
 function RepositoryAtlasVisualization({
   report,
+  universeModel,
   story,
   activeChapter,
   onSelectChapter,
@@ -377,6 +381,7 @@ function RepositoryAtlasVisualization({
   futureStageOverlay,
 }: {
   report: ReadinessReport;
+  universeModel: RepositoryUniverseModel;
   story: WorkspaceStory;
   activeChapter: WorkspaceStoryChapter | null;
   onSelectChapter: (chapterId: WorkspaceStoryChapterId) => void;
@@ -403,7 +408,7 @@ function RepositoryAtlasVisualization({
   const isMobile = useIsMobile();
   const universeTheme = resolvedTheme === 'light' ? 'light' : 'dark';
   const atlas = useMemo(() => buildRepositoryAtlasModel(report), [report]);
-  const universe = useMemo(() => buildRepositoryUniverseModel(report), [report]);
+  const universe = universeModel;
   const transformation = useMemo(() => buildRepositoryTransformationProposalModel(report, universe, atlas), [report, universe, atlas]);
   const connection = useMemo(() => githubConnection || buildGitHubConnectionFromReport(report), [githubConnection, report]);
   const initialUniverseCamera = useMemo(() => initialUniverseCameraState(universe), [universe]);
@@ -430,6 +435,8 @@ function RepositoryAtlasVisualization({
   const [view, setView] = useState({ x: 0, y: 0, scale: 0.82 });
   const [viewMode, setViewMode] = useState<'universe3d' | 'atlas2d'>('universe3d');
   const [transformationMode, setTransformationMode] = useState<RepositoryTransformationMode | 'after-rescan'>('current');
+  const [futureImpactMode, setFutureImpactMode] = useState<'current' | 'selected-path'>('current');
+  const [legacyImprovementPreviewActive, setLegacyImprovementPreviewActive] = useState(false);
   const [transformationDomain, setTransformationDomain] = useState<RepositoryTransformationDomainFilter>('all');
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(null);
   const [excludedProposalIds, setExcludedProposalIds] = useState<Set<string>>(() => new Set());
@@ -460,9 +467,6 @@ function RepositoryAtlasVisualization({
   const [agentFlightPath, setAgentFlightPath] = useState<RepositoryAgentFlightPath | null>(null);
   const [agentFlightPathCopied, setAgentFlightPathCopied] = useState(false);
   const [flightPathOpen, setFlightPathOpen] = useState(false);
-  const [futureEvidenceProjections, setFutureEvidenceProjections] = useState<FutureEvidenceProjection>({});
-  const [legacyImproveControlsOpen, setLegacyImproveControlsOpen] = useState(false);
-  const [futureChapterNavOpen, setFutureChapterNavOpen] = useState(false);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; viewX: number; viewY: number; moved: boolean } | null>(null);
   const exitFullscreen = useCallback(() => {
     if (document.fullscreenElement && document.exitFullscreen) {
@@ -475,13 +479,25 @@ function RepositoryAtlasVisualization({
   const activeCluster = focusedClusterId ? atlas.clusters.find(cluster => cluster.id === focusedClusterId) : null;
   const activeUniverseCluster = focusedClusterId ? universe.clusters.find(cluster => cluster.id === focusedClusterId) : null;
   const activeChapterNodeId = activeChapter?.knowledgeNodeId;
-  const selectedProposal = selectedProposalId ? transformation.proposals.find(proposal => proposal.id === selectedProposalId) || null : null;
-  const futureEvidenceNodeIds = useMemo(() => [...new Set(futureStageOverlay?.candidates.flatMap(candidate => candidate.universeNodeIds) || [])].sort(), [futureStageOverlay]);
-  const handleFutureProjectionChange = useCallback((positions: Record<string, UniverseProjectedNodePosition>) => {
-    setFutureEvidenceProjections(positions);
-  }, []);
+  const selectedPathTransformation = useMemo(
+    () => repositoryFutureProjectionToTransformationModel(universe, futureStageOverlay?.universeProjection),
+    [futureStageOverlay?.universeProjection, universe],
+  );
+  const selectedPathProjectionActive = Boolean(futureStageOverlay && !legacyImprovementPreviewActive);
+  const renderedTransformation = selectedPathProjectionActive ? selectedPathTransformation : transformation;
+  const renderedTransformationMode: RepositoryTransformationMode = selectedPathProjectionActive
+    ? futureImpactMode === 'selected-path' ? 'with-shipseal' : 'current'
+    : transformationMode === 'after-rescan' ? 'current' : transformationMode;
+  const selectedProposal = selectedProposalId ? renderedTransformation.proposals.find(proposal => proposal.id === selectedProposalId) || null : null;
+  useEffect(() => {
+    if (futureStageOverlay && !futureStageOverlay.universeProjection && futureImpactMode === 'selected-path') setFutureImpactMode('current');
+  }, [futureImpactMode, futureStageOverlay]);
+  useEffect(() => {
+    if (selectedProposalId && !renderedTransformation.proposals.some(proposal => proposal.id === selectedProposalId)) setSelectedProposalId(null);
+  }, [renderedTransformation.proposals, selectedProposalId]);
   const domainCounts = useMemo(() => repositoryTransformationDomainCounts(transformation.proposals), [transformation.proposals]);
   const visibleTransformationProposals = useMemo(() => transformation.proposals.filter(proposal => transformationDomain === 'all' || proposal.domain === transformationDomain), [transformation.proposals, transformationDomain]);
+  const renderedTransformationProposals = selectedPathProjectionActive ? selectedPathTransformation.proposals : visibleTransformationProposals;
   const visibleIncludedTransformationProposals = useMemo(
     () => visibleTransformationProposals.filter(proposal => !excludedProposalIds.has(proposal.id)),
     [excludedProposalIds, visibleTransformationProposals],
@@ -605,15 +621,15 @@ function RepositoryAtlasVisualization({
   const selectedUniverseNodeVisible = selectedUniverseNode ? visibleUniverseNodeIds.has(selectedUniverseNode.id) : false;
   const proposalAffectedAtlasNodeIds = useMemo(() => {
     const ids = new Set<string>();
-    if (transformationMode !== 'with-shipseal') return ids;
-    for (const proposal of visibleTransformationProposals) {
+    if (renderedTransformationMode !== 'with-shipseal') return ids;
+    for (const proposal of renderedTransformationProposals) {
       for (const universeNodeId of proposal.graphChanges.affectedExistingNodeIds) {
         const atlasNode = atlasNodeForUniverseNodeId(universeNodeId, universe, atlas);
         if (atlasNode) ids.add(atlasNode.id);
       }
     }
     return ids;
-  }, [atlas, transformationMode, universe, visibleTransformationProposals]);
+  }, [atlas, renderedTransformationMode, renderedTransformationProposals, universe]);
   const searchResults = query.trim()
     ? (viewMode === 'universe3d'
       ? universe.nodes.filter(node => universeSearchMatches.has(node.id) && visibleUniverseNodeIds.has(node.id)).slice(0, 8)
@@ -1630,7 +1646,7 @@ function RepositoryAtlasVisualization({
           );
         })}
 
-        {transformationMode === 'with-shipseal' && visibleTransformationProposals.flatMap(proposal => (
+        {renderedTransformationMode === 'with-shipseal' && renderedTransformationProposals.flatMap(proposal => (
           proposal.graphChanges.proposedEdges.map(edge => {
             const proposed = proposal.graphChanges.proposedNodes.find(node => node.id === edge.source);
             const target = atlasNodeForUniverseNodeId(edge.target, universe, atlas);
@@ -1644,7 +1660,7 @@ function RepositoryAtlasVisualization({
                   y2={target.y + 320}
                   stroke="hsl(var(--primary))"
                   strokeWidth={selectedProposalId === proposal.id ? 2 : 1.2}
-                  strokeOpacity={excludedProposalIds.has(proposal.id) ? 0.08 : selectedProposalId === proposal.id ? 0.62 : selectedProposalId ? 0.1 : 0.22}
+                  strokeOpacity={!selectedPathProjectionActive && excludedProposalIds.has(proposal.id) ? 0.08 : selectedProposalId === proposal.id ? 0.62 : selectedProposalId ? 0.1 : 0.22}
                   strokeDasharray="7 8"
                   className="transition-all duration-500"
                 />
@@ -1653,10 +1669,10 @@ function RepositoryAtlasVisualization({
           })
         ))}
 
-        {transformationMode === 'with-shipseal' && visibleTransformationProposals.flatMap((proposal, proposalIndex) => (
+        {renderedTransformationMode === 'with-shipseal' && renderedTransformationProposals.flatMap((proposal, proposalIndex) => (
           proposal.graphChanges.proposedNodes.map(node => {
             const selected = selectedProposalId === proposal.id;
-            const excluded = excludedProposalIds.has(proposal.id);
+            const excluded = !selectedPathProjectionActive && excludedProposalIds.has(proposal.id);
             const showLabel = selected || transformationDomain !== 'all' || proposalIndex % 2 === 0;
             return (
               <button
@@ -1728,19 +1744,17 @@ function RepositoryAtlasVisualization({
             visibleNodeIds={visibleUniverseNodeIdList}
             visibleEdgeIds={visibleUniverseEdgeIdList}
             cameraState={universeCamera}
-            rotationPaused={universeRotationPaused || prefersReducedMotion || Boolean(futureStageOverlay)}
+            rotationPaused={universeRotationPaused || prefersReducedMotion}
             reducedMotion={prefersReducedMotion}
             animateIn={!universeSceneSettled}
             fullscreen={fullscreen}
             theme={universeTheme}
-            transformation={transformation}
+            transformation={renderedTransformation}
             verificationNodeStates={transformationMode === 'after-rescan' ? verificationUniverseNodeStates : {}}
-            projectionNodeIds={futureEvidenceNodeIds}
-            onProjectionChange={handleFutureProjectionChange}
-            transformationMode={transformationMode === 'after-rescan' ? 'current' : transformationMode}
-            transformationDomain={transformationDomain}
+            transformationMode={renderedTransformationMode}
+            transformationDomain={selectedPathProjectionActive ? 'all' : transformationDomain}
             selectedProposalId={selectedProposalId}
-            excludedProposalIds={excludedProposalIdList}
+            excludedProposalIds={selectedPathProjectionActive ? [] : excludedProposalIdList}
             onCameraStateChange={setUniverseCamera}
             onSelectNode={handleUniverseSelectNode}
             onSelectProposal={handleUniverseSelectProposal}
@@ -1753,14 +1767,15 @@ function RepositoryAtlasVisualization({
   );
 
   const inspector = (
-    selectedProposal && transformationMode === 'with-shipseal'
+    selectedProposal && renderedTransformationMode === 'with-shipseal'
       ? (
         <TransformationInspector
           proposal={selectedProposal}
           included={!excludedProposalIds.has(selectedProposal.id)}
+          allowInclusionToggle={!selectedPathProjectionActive}
           collapsed={fullscreen && inspectorCollapsed}
           onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
-          onToggleIncluded={() => toggleProposalIncluded(selectedProposal.id)}
+          onToggleIncluded={() => selectedPathProjectionActive ? undefined : toggleProposalIncluded(selectedProposal.id)}
           onClear={() => setSelectedProposalId(null)}
         />
       )
@@ -1902,8 +1917,6 @@ function RepositoryAtlasVisualization({
         >
           <div className="absolute inset-0 z-[var(--layer-canvas)] [&>*]:h-full">{viewMode === 'universe3d' ? universeCanvas : atlasCanvas}</div>
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[var(--layer-graph-overlay)] bg-[radial-gradient(circle_at_50%_44%,transparent_36%,hsl(var(--universe-stage-bg)/0.12)_68%,hsl(var(--universe-stage-bg)/0.42)_100%)]" />
-          {futureStageOverlay && <FutureNeuralField overlay={futureStageOverlay} mobile={isMobile} reducedMotion={prefersReducedMotion} evidenceProjections={futureEvidenceProjections} />}
-          {futureStageOverlay && !isMobile && <FutureContextInspector overlay={futureStageOverlay} />}
           <div
             className="pointer-events-none absolute inset-x-2 top-2 z-[var(--layer-context)] grid min-w-0 gap-2 sm:grid-cols-[minmax(18rem,23rem)_minmax(0,1fr)] sm:items-start"
             onPointerDownCapture={() => setUniverseSceneSettled(true)}
@@ -1915,10 +1928,16 @@ function RepositoryAtlasVisualization({
             {showTransformationPanel && (
               <div className="min-w-0 sm:col-start-1 sm:row-start-1 sm:w-full sm:max-w-[23rem]">
                 {futureStageOverlay ? (
-                  <div className="space-y-2">
-                    <FutureStageComposer overlay={futureStageOverlay} />
-                    <div className="flex gap-1.5"><button type="button" aria-expanded={legacyImproveControlsOpen} onClick={() => setLegacyImproveControlsOpen(current => !current)} className="pointer-events-auto min-h-9 rounded-full border border-border/45 bg-[hsl(var(--universe-surface)/0.68)] px-3 text-[10px] font-medium text-muted-foreground backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{legacyImproveControlsOpen ? 'Hide other improvements' : 'Other improvements'}</button><button type="button" aria-expanded={futureChapterNavOpen} onClick={() => setFutureChapterNavOpen(current => !current)} className="pointer-events-auto hidden min-h-9 rounded-full border border-border/45 bg-[hsl(var(--universe-surface)/0.68)] px-3 text-[10px] font-medium text-muted-foreground backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:block">{futureChapterNavOpen ? 'Hide chapters' : 'Chapters'}</button></div>
-                    {legacyImproveControlsOpen && transformationControls}
+                  <div data-testid="future-impact-mode-control" className="pointer-events-auto rounded-2xl border border-primary/20 bg-[hsl(var(--universe-surface)/0.88)] p-3 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl">
+                    <div className="flex items-center justify-between gap-3">
+                      <div><div className="text-[9px] font-mono uppercase tracking-[0.16em] text-primary">Selected path impact</div><div className="mt-1 text-xs text-muted-foreground">One authoritative Universe · proposed overlay</div></div>
+                      {futureImpactMode === 'selected-path' && <span className="rounded-full border border-primary/35 px-2 py-1 text-[9px] font-medium text-primary">Proposed</span>}
+                    </div>
+                    <div role="group" aria-label="Repository future impact mode" className="mt-3 grid grid-cols-2 rounded-xl border border-border/50 bg-background/30 p-1">
+                      <button type="button" aria-pressed={!legacyImprovementPreviewActive && futureImpactMode === 'current'} onClick={() => { setLegacyImprovementPreviewActive(false); setFutureImpactMode('current'); }} className={`min-h-11 rounded-lg px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${!legacyImprovementPreviewActive && futureImpactMode === 'current' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>Current repository</button>
+                      <button type="button" aria-pressed={!legacyImprovementPreviewActive && futureImpactMode === 'selected-path'} disabled={!futureStageOverlay.universeProjection} aria-describedby={!futureStageOverlay.universeProjection ? 'future-impact-empty-reason' : undefined} onClick={() => { setLegacyImprovementPreviewActive(false); setFutureImpactMode('selected-path'); }} className={`min-h-11 rounded-lg px-2 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-45 ${!legacyImprovementPreviewActive && futureImpactMode === 'selected-path' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>With this path</button>
+                    </div>
+                    <p id="future-impact-empty-reason" className="mt-2 text-[10px] leading-relaxed text-muted-foreground">{futureStageOverlay.universeProjection ? `${futureStageOverlay.universeProjection.proposedNodes.length} proposed entities · ${futureStageOverlay.universeProjection.affectedCurrentNodeIds.length} affected current entities` : 'Choose a primary Future Path to preview its proposed repository impact.'}</p>
                   </div>
                 ) : transformationControls}
               </div>
@@ -1927,7 +1946,7 @@ function RepositoryAtlasVisualization({
               {atlasToolbar}
             </div>
             {!isMobile && (
-              <div data-testid="result-chapter-rail-overlay" className={`min-w-0 sm:col-start-1 sm:row-start-2 sm:w-full sm:max-w-[23rem] sm:justify-self-start lg:col-start-1 lg:max-w-[23rem] ${futureStageOverlay && !futureChapterNavOpen ? 'hidden' : ''}`}>
+              <div data-testid="result-chapter-rail-overlay" className="min-w-0 sm:col-start-1 sm:row-start-2 sm:w-full sm:max-w-[23rem] sm:justify-self-start lg:col-start-1 lg:max-w-[23rem]">
                 {chapterNavOverlay}
               </div>
             )}
@@ -1940,7 +1959,7 @@ function RepositoryAtlasVisualization({
               {chapterNavOverlay}
             </div>
           )}
-          {inspectorVisible && !futureStageOverlay
+          {inspectorVisible
             ? (
               <aside
                 ref={inspectorSheetRef}
@@ -2038,6 +2057,20 @@ function RepositoryAtlasVisualization({
         </div>
       )}
 
+      {!fullscreen && futureStageOverlay && (
+        <section aria-labelledby="other-improvements-heading" className="mt-8 rounded-[2rem] border border-border/55 bg-background/20 p-5 md:p-7">
+          <div className="text-xs font-mono uppercase tracking-[0.16em] text-muted-foreground">3 · Continue improving</div>
+          <div className="mt-2">
+            <div className="max-w-3xl"><h2 id="other-improvements-heading" className="font-display text-2xl font-semibold">Other improvements</h2><p className="mt-2 text-sm text-muted-foreground">The existing Optimization Plan and Repository Intelligence workflows remain available below the selected-path experience.</p></div>
+          </div>
+          <details className="mt-5 rounded-2xl border border-border/45 bg-background/20 p-3" onToggle={event => setLegacyImprovementPreviewActive(event.currentTarget.open)}>
+            <summary className="cursor-pointer text-sm font-medium text-foreground">Legacy proposal comparison controls</summary>
+            <p className="mt-2 text-xs text-muted-foreground">Opening this review temporarily previews the existing generic ShipSeal proposal set in the same Universe. Close it, or choose Current repository / With this path above, to return to the selected Future Path comparison.</p>
+            <div className="mt-3">{transformationControls}</div>
+          </details>
+        </section>
+      )}
+
       <p className="sr-only" aria-live="polite">
         {viewMode === 'universe3d'
           ? selectedUniverseNode
@@ -2064,7 +2097,7 @@ function RepositoryAtlasVisualization({
             </div>
             {atlasToolbar}
           </div>
-          {showTransformationPanel && <div className="mb-4">{transformationControls}</div>}
+          {showTransformationPanel && !futureStageOverlay && <div className="mb-4">{transformationControls}</div>}
           <div className="mb-4">{atlasFilters}</div>
           {clusterLegend && <div className="mb-4">{clusterLegend}</div>}
           {searchResultList && <div className="mb-4">{searchResultList}</div>}
@@ -3335,6 +3368,7 @@ function TransformationDomainButton({ label, count, active, onClick }: { label: 
 function TransformationInspector({
   proposal,
   included,
+  allowInclusionToggle = true,
   collapsed = false,
   onToggleCollapsed,
   onToggleIncluded,
@@ -3342,6 +3376,7 @@ function TransformationInspector({
 }: {
   proposal: RepositoryTransformationProposal;
   included: boolean;
+  allowInclusionToggle?: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   onToggleIncluded: () => void;
@@ -3409,9 +3444,9 @@ function TransformationInspector({
       </dl>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={onToggleIncluded} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
+        {allowInclusionToggle && <Button type="button" variant="outline" size="sm" onClick={onToggleIncluded} className="border-primary/35 bg-primary/10 text-primary-glow hover:text-primary-glow">
           {included ? 'Remove from plan' : 'Include in plan'}
-        </Button>
+        </Button>}
         <Button type="button" variant="ghost" size="sm" onClick={onClear}>
           Return to repository entity
         </Button>

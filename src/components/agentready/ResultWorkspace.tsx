@@ -7,6 +7,7 @@ import { resolveSelectedPackages } from '@/lib/packages';
 import { buildGitHubConnectionFromReport, type GitHubConnectionState } from '@/lib/githubConnection/types';
 import {
   buildRepositoryVerificationResult,
+  buildRepositoryUniverseModel,
   buildWorkspaceStory,
   type RepositoryVerificationBaseline,
   type WorkspaceStoryChapterId,
@@ -113,6 +114,7 @@ export function ResultWorkspace({
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
+  const repositoryUniverse = useMemo(() => buildRepositoryUniverseModel(report), [report]);
   const effectiveStoryChapterId = activeStoryChapterId ?? localStoryChapterId;
   const activeStoryChapter = selectActiveWorkspaceStoryChapter(workspaceStory, effectiveStoryChapterId);
   const limitedScanReason = selectLimitedScanReason(report);
@@ -228,7 +230,37 @@ export function ResultWorkspace({
         onChange={handleResultChapterChange}
       />}
 
-      <div ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} className="relative left-1/2 min-h-[calc(100dvh-5rem)] w-screen -translate-x-1/2 scroll-mt-20 overflow-hidden bg-background focus:outline-none">
+      {visitedResultChapters.has('improve') && (
+        <ResultChapterShell chapter="improve" active={activeResultChapter === 'improve'}>
+          <ResultChapterLoadBoundary chapterLabel="Future Pathways">
+            <Suspense fallback={<ResultChapterLoading chapterLabel="Future Pathways" />}>
+              <ImproveChapter
+                variant="pathways"
+                frictions={repositoryFrictions}
+                targetRef={repositoryIntelligenceReviewRef}
+                focusTarget={false}
+                onTargetFocused={clearRepositoryIntelligenceFocus}
+                githubConnection={githubConnection || buildGitHubConnectionFromReport(report)}
+                report={report}
+                universe={repositoryUniverse}
+                onFutureStageOverlayChange={setFutureStageOverlay}
+              />
+            </Suspense>
+          </ResultChapterLoadBoundary>
+        </ResultChapterShell>
+      )}
+
+      <header hidden={activeResultChapter !== 'improve'} className="mb-5 max-w-4xl" data-testid="repository-future-impact-heading">
+        <div className="text-xs font-mono uppercase tracking-[0.16em] text-primary-glow">2 · Repository impact</div>
+        <h2 id="repository-future-impact-title" className="mt-1 font-display text-2xl font-semibold md:text-3xl">See this future in your repository</h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground md:text-base">
+          {futureStageOverlay?.universeProjection
+            ? 'Compare the current Repository Universe with the proposed impact of your selected path.'
+            : 'Choose a Future Path above to explore its proposed repository impact.'}
+        </p>
+      </header>
+
+      <div key="repository-universe" ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} aria-labelledby={activeResultChapter === 'improve' ? 'repository-future-impact-title' : undefined} className="relative left-1/2 min-h-[calc(100dvh-5rem)] w-screen -translate-x-1/2 scroll-mt-20 overflow-hidden bg-background focus:outline-none">
         {workspaceHeroRequested ? <AiWorkspaceHero
           report={report}
           limitationReason={limitedScanReason}
@@ -268,14 +300,16 @@ export function ResultWorkspace({
           onSaveVerificationBaseline={onSaveVerificationBaseline}
           onDiscardVerificationBaseline={onDiscardVerificationBaseline}
           futureStageOverlay={activeResultChapter === 'improve' ? futureStageOverlay : null}
+          universeModel={repositoryUniverse}
         /> : null}
       </div>
 
       {visitedResultChapters.has('improve') && (
-        <ResultChapterShell chapter="improve" active={activeResultChapter === 'improve'}>
-          <ResultChapterLoadBoundary chapterLabel="Improve">
-            <Suspense fallback={<ResultChapterLoading chapterLabel="Improve" />}>
+        <div hidden={activeResultChapter !== 'improve'} className="mb-6">
+          <ResultChapterLoadBoundary chapterLabel="Other improvements">
+            <Suspense fallback={<ResultChapterLoading chapterLabel="Other improvements" />}>
               <ImproveChapter
+                variant="other"
                 frictions={repositoryFrictions}
                 targetRef={repositoryIntelligenceReviewRef}
                 focusTarget={pendingDashboardFocus === 'repository-intelligence'}
@@ -288,12 +322,13 @@ export function ResultWorkspace({
                 prepareEnhancement={prepareRepositoryIntelligenceEnhancement}
                 githubConnection={githubConnection || buildGitHubConnectionFromReport(report)}
                 report={report}
+                universe={repositoryUniverse}
                 onVerificationBaseline={onSaveRepositoryIntelligenceVerificationBaseline}
                 onFutureStageOverlayChange={setFutureStageOverlay}
               />
             </Suspense>
           </ResultChapterLoadBoundary>
-        </ResultChapterShell>
+        </div>
       )}
 
       {visitedResultChapters.has('verify') && (

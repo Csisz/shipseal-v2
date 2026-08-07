@@ -1,3 +1,5 @@
+import type { RepositoryFutureUniverseProjection } from '@/lib/workspace/repositoryFutures';
+
 export type RepositoryFuturePathwaysMode = 'quick' | 'deep';
 
 export interface RepositoryFutureStageCandidate {
@@ -39,6 +41,7 @@ export interface RepositoryFutureStageOverlay {
   phase: 'possibility' | 'choice' | 'synthesis';
   graphFingerprint: string;
   draftFingerprint?: string;
+  universeProjection?: RepositoryFutureUniverseProjection;
   candidates: RepositoryFutureStageCandidate[];
   dependencies: RepositoryFutureStageDependency[];
   artifactCount: number;

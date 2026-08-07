@@ -81,6 +81,14 @@ Quick and Deep continue to edit the same session-local deterministic draft. Hove
 
 Perspective lenses remain deferred because the current Future candidate contract does not yet provide one reliable cross-origin classification vocabulary. No Repository Futures domain, ranking, compatibility, dependency, persistence, artifact-generation, apply, verification or unlock semantics changed. Automated release gates are required; the seven-view production Light/Dark/desktop/mobile manual acceptance set remains an explicit operator gate and must not be inferred from unit tests.
 
+#### Ω.18.5d.3 — Pathways / Universe experience separation
+
+Implemented on 2026-08-07 as a structural interaction correction. Improve now reads vertically as Future Pathways → Repository Universe impact → Other improvements. Future Pathways owns a clean DOM/SVG intelligence canvas and remains grounded by the accepted Future Graph evidence mappings without rendering, initializing or positioning itself from WebGL. The Repository Universe remains the single authoritative current model and appears below as the full spatial consequence surface with separate search, view, layer and fullscreen controls.
+
+The pure serializable `shipseal.repository-future-universe-projection.v1` contract derives a proposed overlay from the shared authoritative Universe identity, Future Graph fingerprint and active Future Draft fingerprint. `Current repository` shows current truth only. `With this path` reuses the existing hollow-node and dashed-edge proposal grammar for only selected-draft capabilities, unsatisfied dependencies, supported prospective artifacts and affected current entities. Draft changes recompute the projection automatically without forcing the viewer out of Current mode; shared dependencies are deduplicated with multi-goal lineage.
+
+The existing Optimization Plan and Repository Intelligence review remain available once below the two main experiences. The projection is proposed, not applied or verified. No Future artifact preparation, prompt pack, persistence, migration, GitHub Future mutation, rescan relationship, verification repair or unlock persistence was added. Automated gates pass before handoff; production desktop/mobile, theme, reduced-motion and WebGL-fallback visual acceptance remains an explicit operator gate.
+
 ### Ω.18.5e — Future artifacts and prompt packs
 
 Implement the canonical Future JSON/Markdown plan, artifact/evidence manifests, verification plan, reviewed repository artifacts, Codex/Claude Code/Cursor/Windsurf/human prompt packs and the immutable prepared snapshot. Reuse validated Repository Intelligence generators.
@@ -99,7 +107,7 @@ Enforce bundle/interaction budgets, WebGL/GPU fallbacks, accessibility QA, owner
 | --- | --- | --- |
 | Future domain | Versioned Future Graph and deterministic one-draft synthesis contracts exist; immutable preparation and generated outputs remain absent. | Ω.18.5e |
 | One-plan interaction | Quick Path and Deep Configuration now edit one session-local deterministic Future Draft with an explicit primary, two-support cap/replacement and automatic required closure. | Ω.18.5d complete; persistence in Ω.18.5f |
-| Future visualization | The existing Universe stage now hosts a deterministic left-to-right Future field with specific evidence anchors, bounded bundles, named interventions, ordered unique dependencies, converging supports, compact outcomes and contextual trace/inspection, plus a complete DOM interaction equivalent; no second current graph or WebGL renderer exists. Human visual acceptance remains open. | Ω.18.5d.2 ready for operator review; release hardening in Ω.18.5g |
+| Future visualization | Future Pathways is now an independent evidence-grounded DOM/SVG decision field above the single authoritative Repository Universe. The lower Universe can show current truth or a deterministic selected-draft proposed overlay; no second current graph or WebGL renderer exists. Human visual acceptance remains open. | Ω.18.5d.3 ready for operator review; release hardening in Ω.18.5g |
 | Future outputs | No canonical Future plan/manifests/prompt packs exist. | Ω.18.5e |
 | Apply convergence | Optimization has stronger preview/base binding; Repository Intelligence has stronger provenance/handwritten preservation. | Ω.18.5f |
 | Future persistence | Accounts/projects/scans persist; Future drafts, prepared plans, saved branches and unlock lineage do not. | Ω.18.5f |

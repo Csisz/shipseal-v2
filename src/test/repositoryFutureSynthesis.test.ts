@@ -8,6 +8,7 @@ import {
   addRepositoryFutureSupportingGoal,
   buildRepositoryFutureQuickPathModel,
   buildRepositoryFutureGraph,
+  buildRepositoryFutureUniverseProjection,
   inspectRepositoryFutureCandidateCompatibility,
   inspectRepositoryFutureDependencyImpact,
   rankRepositoryFuturePrimaryCandidates,
@@ -489,5 +490,58 @@ describe('Omega 18.5c Repository Future synthesis', () => {
     expect(result).toMatchObject({ ok: false, code: 'unsupported-dependency' });
     expect(rankRepositoryFuturePrimaryCandidates(graph)).toMatchObject({ state: 'none', candidates: [] });
     if (result.ok === false) expect(result.limitations.join(' ')).toContain('dependency');
+  });
+});
+
+describe('Omega 18.5d.3 selected-path Universe projection', () => {
+  it('is deterministic, proposed-only, draft-bound, and does not mutate the authoritative Universe', () => {
+    const primary = candidate('projection-primary');
+    const unrelated = candidate('unrelated-generic');
+    const universe = universeFixture();
+    const graph = buildRepositoryFutureGraph({
+      repository,
+      universe,
+      candidateResults: [{ candidates: [primary, unrelated], rejected: [] }],
+      capabilityDefinitions: definitions,
+      satisfiedCapabilityIds: [CAPABILITIES.evidence],
+    });
+    const draft = expectDraft(synthesizeRepositoryFutureDraft(graph, selection(graph, [goalId(graph, primary.id)])));
+    const before = structuredClone(universe);
+    const first = buildRepositoryFutureUniverseProjection({ universe, graph, draft });
+    const second = buildRepositoryFutureUniverseProjection({ universe, graph, draft });
+    const alternateDraft = expectDraft(synthesizeRepositoryFutureDraft(graph, selection(graph, [goalId(graph, unrelated.id)])));
+    const alternate = buildRepositoryFutureUniverseProjection({ universe, graph, draft: alternateDraft });
+
+    expect(first).toEqual(second);
+    expect(first.sourceDraftFingerprint).toBe(draft.fingerprint);
+    expect(first.sourceGraphFingerprint).toBe(graph.fingerprint);
+    expect(first.proposedNodes.length).toBeGreaterThan(0);
+    expect(first.proposedNodes.every(node => node.currentness === 'future' && node.lifecycle === 'proposed' && node.state === 'proposed')).toBe(true);
+    expect(first.proposedEdges.every(edge => edge.currentness === 'future' && edge.lifecycle === 'proposed')).toBe(true);
+    expect(first.proposedNodes.some(node => node.label.includes('unrelated-generic'))).toBe(false);
+    expect(alternate.fingerprint).not.toBe(first.fingerprint);
+    expect(alternate.sourceDraftFingerprint).toBe(alternateDraft.fingerprint);
+    expect(universe).toEqual(before);
+  });
+
+  it('deduplicates a shared dependency while retaining both selected goal lineages', () => {
+    const primary = candidate('projection-primary', { targetCapabilityId: CAPABILITIES.memory, dependencies: [dependency(CAPABILITIES.shared)] });
+    const support = candidate('projection-support', { targetCapabilityId: CAPABILITIES.routing, dependencies: [dependency(CAPABILITIES.shared)] });
+    const universe = universeFixture();
+    const graph = buildRepositoryFutureGraph({
+      repository,
+      universe,
+      candidateResults: [{ candidates: [primary, support], rejected: [] }],
+      capabilityDefinitions: definitions,
+      satisfiedCapabilityIds: [CAPABILITIES.evidence],
+    });
+    const primaryGoalId = goalId(graph, primary.id);
+    const supportGoalId = goalId(graph, support.id);
+    const draft = expectDraft(synthesizeRepositoryFutureDraft(graph, selection(graph, [primaryGoalId], [supportGoalId])));
+    const projection = buildRepositoryFutureUniverseProjection({ universe, graph, draft });
+    const shared = projection.proposedNodes.filter(node => node.kind === 'dependency' && node.capabilityId === CAPABILITIES.shared);
+
+    expect(shared).toHaveLength(1);
+    expect(shared[0].sourceGoalIds).toEqual([primaryGoalId, supportGoalId].sort());
   });
 });

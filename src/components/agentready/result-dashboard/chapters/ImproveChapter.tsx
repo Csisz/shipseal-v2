@@ -8,8 +8,10 @@ import type { RepositoryFriction } from '../types';
 import { ResultWorkspaceDisclosure } from '../../result-workspace/ResultWorkspaceDisclosure';
 import RepositoryFuturePathways from '../../result-workspace/futures/RepositoryFuturePathways';
 import type { RepositoryFutureStageOverlay } from '../../result-workspace/futures/futurePathwaysPresentation';
+import type { RepositoryUniverseModel } from '@/lib/workspace';
 
 export interface ImproveChapterProps {
+  variant: 'pathways' | 'other';
   frictions: RepositoryFriction[];
   targetRef: RefObject<HTMLDivElement>;
   focusTarget: boolean;
@@ -22,11 +24,13 @@ export interface ImproveChapterProps {
   prepareEnhancement?: () => Promise<void>;
   githubConnection?: GitHubConnectionState;
   report: ReadinessReport;
+  universe: RepositoryUniverseModel;
   onVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void;
   onFutureStageOverlayChange: (overlay: RepositoryFutureStageOverlay | null) => void;
 }
 
 export default function ImproveChapter({
+  variant,
   frictions,
   targetRef,
   focusTarget,
@@ -39,20 +43,25 @@ export default function ImproveChapter({
   prepareEnhancement,
   githubConnection,
   report,
+  universe,
   onVerificationBaseline,
   onFutureStageOverlayChange,
 }: ImproveChapterProps) {
   useEffect(() => {
+    if (variant !== 'other') return;
     if (!focusTarget || !targetRef.current) return;
     targetRef.current.focus({ preventScroll: true });
     targetRef.current.scrollIntoView?.({ block: 'start', behavior: 'auto' });
     onTargetFocused();
-  }, [focusTarget, onTargetFocused, targetRef]);
+  }, [focusTarget, onTargetFocused, targetRef, variant]);
+
+  if (variant === 'pathways') {
+    return <RepositoryFuturePathways report={report} universe={universe} onStageOverlayChange={onFutureStageOverlayChange} />;
+  }
 
   return (
-    <div className="space-y-6">
-      <RepositoryFuturePathways report={report} onStageOverlayChange={onFutureStageOverlayChange} />
-      <ResultWorkspaceDisclosure title="Implementation and evidence details" defaultOpen={focusTarget} lazyMount>
+    <section aria-label="Other improvement evidence" className="space-y-5 rounded-[2rem] border border-border/55 bg-card/40 p-5 shadow-[var(--shadow-md-semantic)] md:p-7">
+      <ResultWorkspaceDisclosure title="Optimization and Repository Intelligence" defaultOpen={focusTarget} lazyMount>
         <div className="space-y-6">
           <RepositoryFrictionProgression frictions={frictions} />
           <div ref={targetRef} id="repository-intelligence-review" tabIndex={-1} className="scroll-mt-24 focus:outline-none">
@@ -70,6 +79,6 @@ export default function ImproveChapter({
           </div>
         </div>
       </ResultWorkspaceDisclosure>
-    </div>
+    </section>
   );
 }

@@ -19,7 +19,6 @@ import {
   buildRepositoryAtlasModel,
   buildRepositoryOptimizationPlan,
   buildRepositoryTransformationProposalModel,
-  buildRepositoryUniverseModel,
   buildWorkspaceStory,
 } from '@/lib/workspace';
 import {
@@ -32,6 +31,7 @@ import {
   adaptRepositoryHealthCandidates,
   adaptWorkspaceStoryCandidates,
   buildRepositoryFutureGraph,
+  buildRepositoryFutureUniverseProjection,
   buildRepositoryFutureQuickPathModel,
   inspectRepositoryFutureCandidateCompatibility,
   inspectRepositoryFutureDependencyImpact,
@@ -46,22 +46,25 @@ import {
   type RepositoryFutureOrigin,
   type RepositoryFutureSynthesisResult,
 } from '@/lib/workspace/repositoryFutures';
+import type { RepositoryUniverseModel } from '@/lib/workspace';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type {
   RepositoryFuturePathwaysMode,
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
+import { RepositoryFuturePathwaysStage } from './RepositoryFuturePathwaysStage';
 
 interface RepositoryFuturePathwaysProps {
   report: ReadinessReport;
+  universe: RepositoryUniverseModel;
   onStageOverlayChange: (overlay: RepositoryFutureStageOverlay | null) => void;
 }
 
 type RoleFilter = 'all' | 'selected' | 'saved' | 'available' | 'blocked';
 type Focus = { kind: 'goal'; id: string } | { kind: 'dependency'; id: string } | null;
 
-export default function RepositoryFuturePathways({ report, onStageOverlayChange }: RepositoryFuturePathwaysProps) {
+export default function RepositoryFuturePathways({ report, universe, onStageOverlayChange }: RepositoryFuturePathwaysProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const [mode, setMode] = useState<RepositoryFuturePathwaysMode>('quick');
   const [draft, setDraft] = useState<RepositoryFutureDraft>();
@@ -73,7 +76,7 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
   const [fitFilter, setFitFilter] = useState<'all' | RepositoryFutureFit>('all');
   const [originFilter, setOriginFilter] = useState<'all' | RepositoryFutureOrigin>('all');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
-  const graph = useMemo(() => buildFutureGraph(report), [report]);
+  const graph = useMemo(() => buildFutureGraph(report, universe), [report, universe]);
   const quickPath = useMemo(() => buildRepositoryFutureQuickPathModel(graph, draft), [draft, graph]);
   const goalById = useMemo(() => new Map(graph.nodes
     .filter(node => node.kind === 'future-goal' && node.candidateId)
@@ -219,6 +222,9 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
       }];
     });
   }, [compatibilityFor, draft, goalById, quickPath.primaryRecommendations.candidates]);
+  const universeProjection = useMemo(() => draft
+    ? buildRepositoryFutureUniverseProjection({ universe, graph, draft })
+    : undefined, [draft, graph, universe]);
 
   const overlay = useMemo<RepositoryFutureStageOverlay>(() => ({
     active: true,
@@ -226,6 +232,7 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
     phase: draft ? 'synthesis' : focus || tracePreviewId || tracePinnedId ? 'choice' : 'possibility',
     graphFingerprint: graph.fingerprint,
     draftFingerprint: draft?.fingerprint,
+    universeProjection,
     candidates: stageCandidates,
     dependencies: (draft?.dependencies || []).map(dependency => ({
       id: dependency.id,
@@ -263,7 +270,7 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
       setFocus(null);
     },
     onOpenDomControls: () => rootRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' }),
-  }), [choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, stageCandidates, tracePinnedId, tracePreviewId]);
+  }), [choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, stageCandidates, tracePinnedId, tracePreviewId, universeProjection]);
 
   useEffect(() => onStageOverlayChange(overlay), [onStageOverlayChange, overlay]);
   useEffect(() => () => onStageOverlayChange(null), [onStageOverlayChange]);
@@ -300,6 +307,8 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
           </div>
         )}
       </div>
+
+      <RepositoryFuturePathwaysStage overlay={overlay} />
 
       <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 p-4 md:p-6">
@@ -371,8 +380,7 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
   );
 }
 
-function buildFutureGraph(report: ReadinessReport) {
-  const universe = buildRepositoryUniverseModel(report);
+function buildFutureGraph(report: ReadinessReport, universe: RepositoryUniverseModel) {
   const atlas = buildRepositoryAtlasModel(report);
   const transformation = buildRepositoryTransformationProposalModel(report, universe, atlas);
   const plan = buildRepositoryOptimizationPlan({ report, universe, atlas, transformation });
