@@ -362,7 +362,7 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 - GitHub OAuth accounts and PostgreSQL-backed private projects/scans are implemented when server account services are configured; anonymous scan/export remains available without them.
 - No payments.
 - Private repository access requires a separately configured GitHub App and server-side credentials. Account identity does not grant repository installation access. Installation webhooks, scheduled rescans, public sharing, payment entitlements and organization roles are not implemented.
-- Repository Futures is specification-only pending human acceptance; no Future graph, UI, persistence, prompt-pack, apply or unlock flow is implemented yet.
+- Repository Futures includes a session-local deterministic Future Graph, bounded Product Opportunity enrichment, canvas-first Quick Path, Deep Configuration and selected-path Universe projection. Future artifact preparation, prompt packs, persistence, GitHub Future apply, rescan verification and verified unlocks remain deferred.
 - Optional external intelligence is disabled by default, requires explicit server-only configuration and never replaces deterministic evidence or fallback.
 - No browser API keys.
 - Scan cancellation is best-effort while JSZip work is in progress.

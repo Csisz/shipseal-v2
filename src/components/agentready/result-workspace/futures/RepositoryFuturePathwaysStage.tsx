@@ -1,94 +1,268 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Check, Info, LockKeyhole, Plus, Replace, Sparkles, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { buildFutureFieldLayout, futureImpulseEvent, futureRoutePath } from './futurePathwaysLayout';
-import type { RepositoryFutureStageOverlay } from './futurePathwaysPresentation';
+import type { RepositoryFutureStageCandidate, RepositoryFutureStageDependency, RepositoryFutureStageOverlay } from './futurePathwaysPresentation';
 
 export function RepositoryFuturePathwaysStage({ overlay }: { overlay: RepositoryFutureStageOverlay }) {
   const mobile = useIsMobile();
   const reducedMotion = useReducedMotion();
+  const [activeId, setActiveId] = useState<string>();
+  const [supportChooserOpen, setSupportChooserOpen] = useState(false);
   const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
   const supports = overlay.candidates.filter(candidate => candidate.role === 'supporting');
+  const compatibleCandidates = useMemo(() => overlay.candidates
+    .filter(candidate => ['candidate', 'saved'].includes(candidate.role)
+      && (overlay.supportCount >= 2
+        ? Boolean(candidate.replaceableSupportGoalIds?.length)
+        : ['compatible', 'compatible-with-review'].includes(candidate.compatibility)))
+    .slice(0, 5), [overlay.candidates, overlay.supportCount]);
+  const initialCandidates = overlay.candidates.filter(candidate => candidate.role === 'candidate').slice(0, 5);
+  const activeCandidate = overlay.candidates.find(candidate => candidate.goalId === activeId);
+  const activeDependency = overlay.dependencies.find(dependency => dependency.id === activeId);
+
+  useEffect(() => {
+    if (activeId && !overlay.candidates.some(candidate => candidate.goalId === activeId)
+      && !overlay.dependencies.some(dependency => dependency.id === activeId)) setActiveId(undefined);
+  }, [activeId, overlay.candidates, overlay.dependencies]);
+
+  const inspectCandidate = (goalId: string) => {
+    setActiveId(current => current === goalId ? undefined : goalId);
+    overlay.onCandidateFocus(goalId);
+  };
+  const inspectDependency = (dependencyId: string) => {
+    setActiveId(current => current === dependencyId ? undefined : dependencyId);
+    overlay.onDependencyFocus(dependencyId);
+  };
 
   return (
-    <section data-testid="future-pathways-hero-stage" aria-label="Directional Future Pathways" className="relative min-h-[31rem] overflow-hidden border-b border-primary/15 bg-[radial-gradient(circle_at_18%_45%,hsl(var(--accent)/0.09),transparent_30%),radial-gradient(circle_at_82%_44%,hsl(var(--primary)/0.12),transparent_34%),linear-gradient(110deg,hsl(var(--universe-stage-bg)),hsl(var(--universe-surface)/0.72))] md:min-h-[36rem]">
-      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(hsl(var(--border)/0.08)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--border)/0.06)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(circle_at_center,black,transparent_80%)]" />
-      <div className="pointer-events-none absolute left-4 right-4 top-4 z-20 flex items-start justify-between gap-4 md:left-6 md:right-6">
-        <div className="max-w-[23rem] text-foreground">
-          <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-primary">Current evidence → future horizon</div>
-          <div data-testid="future-selected-path-summary" className="mt-1 text-sm font-semibold">{primary ? `Primary ${primary.title} · Supporting ${supports.length ? supports.map(item => item.title).join(' + ') : 'none'} · Requires ${overlay.dependencies.length ? overlay.dependencies.map(item => item.title).join(' → ') : 'none'}` : 'Choose one primary future'}</div>
-          <div className="mt-1 text-[10px] text-muted-foreground">
-            {primary ? `${supports.length} supporting · ${overlay.dependencies.length} required · ${overlay.artifactCount} prospective artifacts` : `${overlay.candidates.length} repository-evidence-backed recommendations`}
+    <section data-testid="future-pathways-hero-stage" aria-label="Future Path visual composer" className="relative overflow-hidden border-b border-primary/15 bg-[radial-gradient(circle_at_18%_20%,hsl(var(--accent)/0.09),transparent_30%),radial-gradient(circle_at_82%_34%,hsl(var(--primary)/0.12),transparent_38%),linear-gradient(110deg,hsl(var(--universe-stage-bg)),hsl(var(--universe-surface)/0.72))]">
+      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(hsl(var(--border)/0.08)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--border)/0.06)_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(circle_at_center,black,transparent_82%)]" />
+      <div className="relative z-10 flex flex-col gap-2 border-b border-primary/10 px-4 py-4 md:flex-row md:items-start md:justify-between md:px-6">
+        <div>
+          <div className="text-[10px] font-mono uppercase tracking-[0.18em] text-primary">Product opportunity composer</div>
+          <div data-testid="future-selected-path-summary" className="mt-1 text-sm font-semibold">
+            {primary ? `${primary.title} · ${supports.length} of 2 supports · ${overlay.dependencies.length} automatic requirements` : 'Choose one primary Product Future'}
           </div>
+          <p className="mt-1 text-xs text-muted-foreground">Click nodes to compose. Connections remain evidence- and domain-derived; no arbitrary rewiring.</p>
         </div>
-        {overlay.tracePinned && overlay.onTraceClear && <button type="button" onClick={overlay.onTraceClear} className="pointer-events-auto min-h-9 rounded-full border border-border/50 bg-[hsl(var(--universe-surface)/0.82)] px-3 text-[10px] text-muted-foreground backdrop-blur focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Clear trace</button>}
+        <span className="rounded-full border border-border/50 bg-background/40 px-3 py-1.5 text-[10px] text-muted-foreground">
+          {overlay.productIntelligenceState === 'enhanced' ? 'Product opportunities enhanced'
+            : overlay.productIntelligenceState === 'analysing' ? 'Analysing product opportunities'
+              : 'Repository evidence fallback'}
+        </span>
       </div>
-      <FutureField overlay={overlay} mobile={mobile} reducedMotion={reducedMotion} />
-      {!mobile && <FutureContextInspector overlay={overlay} />}
+
+      <div
+        data-testid="future-neural-field"
+        data-future-phase={overlay.phase}
+        data-future-direction={mobile ? 'top-to-bottom' : 'left-to-right'}
+        data-mobile-dom-sequence={mobile || undefined}
+        data-reduced-motion-contract={reducedMotion ? 'static' : 'one-shot'}
+        className="relative z-10 min-h-[32rem] px-3 py-6 md:min-h-[38rem] md:px-6 md:py-8"
+      >
+        {!primary ? (
+          <div className="mx-auto max-w-6xl">
+            <div className="mb-5 text-center">
+              <h3 className="font-display text-xl font-semibold">Strong product directions</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Nothing is selected automatically. Choose the direction that should define the product’s next chapter.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" role="list" aria-label="Recommended Product Futures">
+              {initialCandidates.map((candidate, index) => (
+                <OpportunityNode
+                  key={candidate.goalId}
+                  candidate={candidate}
+                  label={`${index + 1}. ${priorityLabel(candidate)}`}
+                  active={activeId === candidate.goalId}
+                  onInspect={() => inspectCandidate(candidate.goalId)}
+                  actions={<>
+                    <NodeAction label="Make primary" onClick={() => overlay.onCandidateSelect(candidate.goalId)} primary />
+                    <NodeAction label="Details" onClick={() => inspectCandidate(candidate.goalId)} />
+                  </>}
+                />
+              ))}
+            </div>
+            {!initialCandidates.length && <FallbackEmpty state={overlay.productIntelligenceState} />}
+          </div>
+        ) : (
+          <div className="mx-auto flex max-w-5xl flex-col items-center">
+            <OpportunityNode
+              candidate={primary}
+              label="Primary Product Future"
+              active={activeId === primary.goalId}
+              prominent
+              onInspect={() => inspectCandidate(primary.goalId)}
+              actions={<NodeAction label="Details" onClick={() => inspectCandidate(primary.goalId)} />}
+            />
+
+            <ComposerConnector label="supports and requirements" />
+
+            <div className="grid w-full gap-3 md:grid-cols-2" aria-label="Supporting Product Futures">
+              {supports.map((candidate, index) => (
+                <OpportunityNode
+                  key={candidate.goalId}
+                  candidate={candidate}
+                  label={`Support ${index + 1}`}
+                  active={activeId === candidate.goalId}
+                  onInspect={() => inspectCandidate(candidate.goalId)}
+                  actions={<>
+                    <NodeAction label="Remove" icon={<X className="h-3.5 w-3.5" aria-hidden="true" />} onClick={() => overlay.onCandidateRemoveSupport(candidate.goalId)} />
+                    <NodeAction label="Details" onClick={() => inspectCandidate(candidate.goalId)} />
+                  </>}
+                />
+              ))}
+              {supports.length < 2 && (
+                <button type="button" onClick={() => setSupportChooserOpen(value => !value)} className="grid min-h-28 place-items-center rounded-2xl border border-dashed border-primary/45 bg-primary/5 p-4 text-sm font-medium text-primary transition-colors hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">
+                  <span><Plus className="mx-auto mb-2 h-5 w-5" aria-hidden="true" />Add supporting opportunity</span>
+                </button>
+              )}
+            </div>
+
+            {supports.length === 2 && (
+              <button type="button" onClick={() => setSupportChooserOpen(value => !value)} className="mt-3 min-h-11 rounded-full border border-border/55 bg-background/35 px-4 text-xs font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <Replace className="mr-2 inline h-3.5 w-3.5" aria-hidden="true" />Replace a supporting goal
+              </button>
+            )}
+
+            {supportChooserOpen && (
+              <SupportChooser
+                candidates={compatibleCandidates}
+                supports={supports}
+                onAdd={goalId => { overlay.onCandidateAddSupport(goalId); setSupportChooserOpen(false); }}
+                onReplace={(addedGoalId, removedGoalId) => { overlay.onCandidateReplaceSupport(addedGoalId, removedGoalId); setSupportChooserOpen(false); }}
+                onDetails={inspectCandidate}
+              />
+            )}
+
+            <ComposerConnector label="automatically requires" />
+
+            <div className="w-full">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div><div className="text-[10px] font-mono uppercase tracking-[0.16em] text-accent">System-generated capability path</div><p className="mt-1 text-xs text-muted-foreground">Required nodes cannot be removed independently.</p></div>
+                <span className="text-xs text-muted-foreground">{overlay.dependencies.length} required</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {overlay.dependencies.slice().sort((left, right) => left.executionOrder - right.executionOrder).map(dependency => (
+                  <DependencyNode key={dependency.id} dependency={dependency} active={activeId === dependency.id} onInspect={() => inspectDependency(dependency.id)} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(activeCandidate || activeDependency) && (
+          <ComposerDetails candidate={activeCandidate} dependency={activeDependency} onClose={() => setActiveId(undefined)} />
+        )}
+      </div>
     </section>
   );
 }
 
-function FutureField({ overlay, mobile, reducedMotion }: { overlay: RepositoryFutureStageOverlay; mobile: boolean; reducedMotion: boolean }) {
-  if (mobile) {
-    const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
-    const dependencies = overlay.dependencies.slice().sort((left, right) => left.executionOrder - right.executionOrder).slice(0, 3);
-    return (
-      <div data-testid="future-neural-field" data-future-phase={overlay.phase} data-mobile-dom-sequence="true" className="absolute inset-0 flex items-end px-3 pb-5 pt-24">
-        <div className="w-full rounded-[1.35rem] border border-primary/20 bg-[hsl(var(--universe-surface)/0.94)] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl">
-          <div className="text-[9px] font-mono uppercase tracking-[0.17em] text-primary">Current evidence → intervention → future</div>
-          <div className="mt-3 flex flex-col gap-2 text-xs">
-            <GroundedEvidenceSummary overlay={overlay} />
-            {dependencies.map(dependency => <button key={dependency.id} type="button" onClick={() => overlay.onDependencyFocus(dependency.id)} className="min-h-11 rounded-xl border border-border/50 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className="mr-2 font-mono text-[9px] text-accent">REQUIRES</span>{dependency.title}</button>)}
-            <strong className="rounded-xl border border-primary/45 bg-primary/10 px-3 py-3">{primary?.title || 'Choose a primary future'}</strong>
-          </div>
-          <button type="button" onClick={overlay.onOpenDomControls} className="mt-3 min-h-11 w-full rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Open path details</button>
-        </div>
-      </div>
-    );
-  }
-
-  const layout = buildFutureFieldLayout(overlay, {});
-  const impulse = futureImpulseEvent(overlay, reducedMotion);
+function OpportunityNode({ candidate, label, active, prominent = false, onInspect, actions }: {
+  candidate: RepositoryFutureStageCandidate;
+  label: string;
+  active: boolean;
+  prominent?: boolean;
+  onInspect: () => void;
+  actions: ReactNode;
+}) {
   return (
-    <div data-testid="future-neural-field" data-future-phase={overlay.phase} data-future-direction="left-to-right" data-reduced-motion-contract={reducedMotion ? 'static' : 'one-shot'} className="absolute inset-0 overflow-hidden motion-safe:animate-fade-in">
-      {layout.zones.map(zone => <div key={zone.id} data-future-zone={zone.id} aria-hidden="true" className="absolute bottom-8 top-[15%] w-[16%] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,hsl(var(--primary)/0.035),transparent_70%)]" style={{ left: `${zone.x}%` }}><span className="absolute left-1/2 top-0 w-max -translate-x-1/2 text-[8px] font-mono uppercase tracking-[0.16em] text-muted-foreground/65">{zone.label}</span></div>)}
-      <div aria-hidden="true" className="absolute inset-y-[8%] w-28 -translate-x-1/2 bg-[radial-gradient(ellipse_at_center,hsl(var(--primary)/0.12),transparent_70%)] opacity-70 blur-xl" style={{ left: `${layout.horizonX}%` }} />
-      <svg aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full overflow-visible">
-        <defs><linearGradient id="future-standalone-path-gradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="hsl(var(--accent))" stopOpacity=".3" /><stop offset="1" stopColor="hsl(var(--primary))" stopOpacity=".95" /></linearGradient><filter id="future-standalone-path-glow"><feGaussianBlur stdDeviation="0.42" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter></defs>
-        {layout.routes.map(path => <path key={path.id} data-future-route={path.kind} data-route-broken={path.broken || undefined} d={futureRoutePath(path)} fill="none" stroke={path.kind === 'conflict' ? 'hsl(var(--warning))' : ['execution', 'support', 'capability'].includes(path.kind) ? 'url(#future-standalone-path-gradient)' : 'hsl(var(--muted-foreground))'} strokeWidth={path.kind === 'execution' ? 0.62 : path.kind === 'support' || path.kind === 'capability' ? 0.42 : 0.22} strokeDasharray={path.broken ? '2.3 2.8' : !path.deterministic || path.kind === 'saved' ? '1.1 1.15' : undefined} opacity={path.opacity} vectorEffect="non-scaling-stroke" filter={path.kind === 'execution' || path.kind === 'support' ? 'url(#future-standalone-path-glow)' : undefined} className="transition-opacity duration-200 motion-reduce:transition-none" />)}
-      </svg>
-      {layout.nodes.filter(node => node.kind === 'evidence').map(node => <span key={node.id} data-future-node="evidence" data-source-universe-node={node.sourceUniverseNodeId} aria-hidden="true" className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent/60 bg-accent/20 shadow-[0_0_16px_hsl(var(--accent)/0.28)]" style={{ left: `${node.x}%`, top: `${node.y}%`, opacity: node.opacity }} />)}
-      {layout.nodes.filter(node => node.kind === 'bundle').map(node => <span key={node.id} data-future-node="bundle" aria-hidden="true" className="absolute h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border border-accent/55 bg-[hsl(var(--universe-surface)/0.8)] shadow-[0_0_22px_hsl(var(--accent)/0.24)]" style={{ left: `${node.x}%`, top: `${node.y}%`, opacity: node.opacity }}><span className="absolute inset-[3px] rounded-full bg-accent/50" /></span>)}
-      {layout.nodes.filter(node => node.kind === 'intervention').map(node => <button key={node.id} type="button" data-future-node="intervention" onMouseEnter={() => overlay.onTracePreview?.(node.pathGoalIds[0])} onMouseLeave={() => overlay.onTracePreview?.()} onFocus={() => overlay.onTracePreview?.(node.pathGoalIds[0])} onBlur={() => overlay.onTracePreview?.()} onClick={() => overlay.onTracePin?.(node.pathGoalIds[0])} className="absolute min-h-11 -translate-x-1/2 -translate-y-1/2 rounded-full px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ left: `${node.x}%`, top: `${node.y}%`, opacity: node.opacity }} aria-label={`${node.label}. Intervention capability. Activate to pin its path.`}><span className="block h-5 w-5 rounded-md border border-primary/60 bg-primary/15 shadow-[0_0_20px_hsl(var(--primary)/0.28)]" /><span className="absolute left-1/2 top-[calc(50%+1rem)] w-max max-w-[7rem] -translate-x-1/2 text-[8px] font-medium leading-tight text-muted-foreground">{node.label}</span></button>)}
-      {layout.nodes.filter(node => node.kind === 'dependency').map(node => <button key={node.id} type="button" data-future-node="dependency" data-dependency-state={node.state} onClick={() => { overlay.onDependencyFocus(node.id); overlay.onTracePin?.(node.id); }} className={`absolute grid h-9 w-9 -translate-x-1/2 -translate-y-1/2 rotate-45 place-items-center border bg-[hsl(var(--universe-surface-raised)/0.9)] shadow-[0_0_24px_hsl(var(--accent)/0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${node.state === 'satisfied' ? 'rounded-full border-accent/45' : node.reviewRequired ? 'rounded-[0.35rem] border-double border-warning/70' : 'rounded-[0.35rem] border-accent/65'}`} style={{ left: `${node.x}%`, top: `${node.y}%`, opacity: node.opacity }} aria-label={`${node.label}. Required dependency. ${node.state}.`}><span className="-rotate-45 text-[9px] font-bold text-accent">{node.state === 'satisfied' ? '✓' : node.reviewRequired ? '!' : (node.order || 0) + 1}</span></button>)}
-      {layout.nodes.filter(node => node.kind === 'goal').map(node => { const candidate = overlay.candidates.find(item => item.goalId === node.id)!; const selectable = candidate.role === 'candidate'; const primary = candidate.role === 'primary'; return <button key={node.id} type="button" data-future-node="goal" data-future-role={candidate.role} onFocus={() => overlay.onTracePreview?.(candidate.goalId)} onBlur={() => overlay.onTracePreview?.()} onMouseEnter={() => overlay.onTracePreview?.(candidate.goalId)} onMouseLeave={() => overlay.onTracePreview?.()} onClick={() => selectable ? overlay.onCandidateSelect(candidate.goalId) : overlay.onTracePin?.(candidate.goalId)} className="group absolute min-h-11 min-w-11 -translate-x-1/2 -translate-y-1/2 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ left: `${node.x}%`, top: `${node.y}%`, opacity: node.opacity, transform: `translate(-50%, -50%) scale(${node.scale})` }} aria-label={`${candidate.title}. ${candidate.fit}. ${candidate.role}. ${selectable ? 'Activate to choose as primary.' : 'Activate to pin its path.'}`}><span aria-hidden="true" className={`absolute left-1/2 top-1/2 block -translate-x-1/2 -translate-y-1/2 rounded-full border ${primary ? 'h-10 w-10 border-primary/90 bg-primary/20 shadow-[0_0_38px_hsl(var(--primary)/0.42)]' : candidate.role === 'supporting' ? 'h-7 w-7 border-accent/80 bg-accent/20' : candidate.role === 'saved' ? 'h-4 w-4 border-dashed border-muted-foreground/55' : 'h-6 w-6 border-primary/45 bg-primary/10'}`} /><span className={`absolute left-1/2 top-[calc(50%+1.55rem)] w-max max-w-[9rem] -translate-x-1/2 text-center leading-tight text-foreground ${primary ? 'text-xs font-semibold' : 'text-[10px] font-medium'}`}><span className="block text-[8px] font-mono uppercase tracking-[0.13em] text-muted-foreground">{candidate.role === 'candidate' ? candidate.fit : candidate.role}</span>{candidate.title}</span></button>; })}
-      {impulse && <span key={overlay.draftFingerprint || overlay.activeTraceId || overlay.focusedId} data-semantic-impulse={impulse} aria-hidden="true" className="future-semantic-impulse absolute h-2 w-2 rounded-full bg-primary shadow-[0_0_18px_hsl(var(--primary)/0.8)]" style={{ left: `${layout.horizonX}%`, top: '50%' }} />}
-      <div className="absolute bottom-4 left-[42%] -translate-x-1/2 rounded-full bg-[hsl(var(--universe-stage-bg)/0.76)] px-3 py-1.5 text-[9px] text-muted-foreground backdrop-blur-sm">Solid = evidence-backed · dashed = inferred or saved · diamond = required · broken = conflict</div>
-    </div>
+    <article role="listitem" data-future-node="goal" data-future-role={candidate.role} data-product-opportunity-origin={candidate.opportunityOrigin} className={`relative rounded-2xl border bg-[hsl(var(--universe-surface-raised)/0.9)] p-4 shadow-[var(--shadow-md-semantic)] backdrop-blur ${prominent ? 'w-full max-w-xl border-primary/70 shadow-[0_0_34px_hsl(var(--primary)/0.16)]' : active ? 'border-primary/65' : 'border-border/55'}`}>
+      <button type="button" onClick={onInspect} aria-expanded={active} className="min-h-11 w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <span className="flex flex-wrap items-center gap-2 text-[10px] font-mono uppercase tracking-[0.13em] text-primary">
+          <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />{label}
+          <span className="rounded-full border border-border/55 px-2 py-0.5 text-muted-foreground">{originLabel(candidate)}</span>
+        </span>
+        <span className={`${prominent ? 'mt-3 text-xl' : 'mt-2 text-base'} block font-display font-semibold text-foreground`}>{candidate.title}</span>
+        <span className="mt-1 line-clamp-2 block text-sm leading-relaxed text-muted-foreground">{candidate.userValue || candidate.rationale || 'Proposed repository-grounded direction.'}</span>
+      </button>
+      <div className="mt-3 flex flex-wrap gap-2 border-t border-border/45 pt-3">{actions}</div>
+    </article>
   );
 }
 
-function GroundedEvidenceSummary({ overlay }: { overlay: RepositoryFutureStageOverlay }) {
-  const mapped = overlay.candidates.reduce((total, candidate) => total + candidate.mappedEvidenceCount, 0);
-  const evidence = overlay.candidates.reduce((total, candidate) => total + candidate.evidenceCount, 0);
-  return <div className="rounded-xl border border-accent/35 bg-accent/5 px-3 py-3"><span className="mr-2 font-mono text-[9px] text-accent">CURRENT</span>{mapped} mapped repository anchors · {evidence} evidence references</div>;
+function DependencyNode({ dependency, active, onInspect }: { dependency: RepositoryFutureStageDependency; active: boolean; onInspect: () => void }) {
+  const satisfied = dependency.state === 'satisfied';
+  return (
+    <button type="button" data-future-node="dependency" data-dependency-state={dependency.state} aria-expanded={active} onClick={onInspect} className={`min-h-20 rounded-xl border p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? 'border-accent/70 bg-accent/10' : 'border-accent/35 bg-background/35'}`}>
+      <span className="flex items-center gap-2 text-[9px] font-mono uppercase tracking-[0.13em] text-accent">
+        {satisfied ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />}
+        {satisfied ? 'Existing capability' : 'Required capability'}
+      </span>
+      <span className="mt-2 block text-sm font-medium text-foreground">{dependency.title}</span>
+    </button>
+  );
 }
 
-function FutureContextInspector({ overlay }: { overlay: RepositoryFutureStageOverlay }) {
-  const activeId = overlay.activeTraceId || overlay.focusedId;
-  const candidate = overlay.candidates.find(item => item.goalId === activeId);
-  const dependency = overlay.dependencies.find(item => item.id === activeId);
-  if (!candidate && !dependency) return null;
-  const evidence = candidate?.evidencePaths || dependency?.evidencePaths || [];
+function NodeAction({ label, onClick, primary = false, icon }: { label: string; onClick: () => void; primary?: boolean; icon?: ReactNode }) {
+  return <button type="button" onClick={event => { event.stopPropagation(); onClick(); }} className={`min-h-9 rounded-full border px-3 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${primary ? 'border-primary bg-primary text-primary-foreground' : 'border-border/55 bg-background/45 text-foreground'}`}>{icon}{label}</button>;
+}
+
+function SupportChooser({ candidates, supports, onAdd, onReplace, onDetails }: {
+  candidates: RepositoryFutureStageCandidate[];
+  supports: RepositoryFutureStageCandidate[];
+  onAdd: (goalId: string) => void;
+  onReplace: (addedGoalId: string, removedGoalId: string) => void;
+  onDetails: (goalId: string) => void;
+}) {
   return (
-    <aside data-testid="future-context-inspector" aria-label="Selected Future Pathways inspector" className="absolute bottom-4 right-3 top-[5.5rem] z-20 hidden w-[min(21rem,28vw)] overflow-y-auto rounded-[1.4rem] border border-primary/20 bg-[hsl(var(--universe-surface-raised)/0.94)] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl lg:block">
-      <div className="text-[9px] font-mono uppercase tracking-[0.17em] text-primary">{candidate?.role || 'required dependency'}</div>
-      <h3 className="mt-1 text-sm font-semibold">{candidate?.title || dependency?.title}</h3>
-      <p className="mt-3 text-xs leading-relaxed text-foreground">{candidate?.rationale || dependency?.rationale}</p>
-      {evidence.length > 0 && <div className="mt-4"><div className="text-[9px] font-mono uppercase tracking-[0.14em] text-muted-foreground">Repository evidence</div><ul className="mt-2 space-y-1 text-[10px] text-muted-foreground">{evidence.slice(0, 6).map((item, index) => <li key={`${item}:${index}`} className="break-all">{item}</li>)}</ul></div>}
-      {overlay.onTraceClear && <button type="button" onClick={overlay.onTraceClear} className="mt-4 min-h-9 rounded-full border border-border/50 px-3 text-[10px] text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Clear</button>}
+    <section aria-label={supports.length >= 2 ? 'Replace a supporting Product Future' : 'Add a supporting Product Future'} className="mt-4 w-full rounded-2xl border border-primary/25 bg-[hsl(var(--universe-surface-raised)/0.96)] p-4 shadow-[var(--shadow-floating-panel)]">
+      <h4 className="font-semibold">{supports.length >= 2 ? 'Choose a direction, then the support it replaces' : 'Compatible supporting opportunities'}</h4>
+      <div className="mt-3 grid gap-2 md:grid-cols-2">
+        {candidates.map(candidate => (
+          <div key={candidate.goalId} className="rounded-xl border border-border/50 bg-background/35 p-3">
+            <div className="text-xs font-mono uppercase tracking-wide text-primary">{originLabel(candidate)}</div>
+            <div className="mt-1 font-medium">{candidate.title}</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {supports.length < 2
+                ? <NodeAction label="Add support" primary onClick={() => onAdd(candidate.goalId)} />
+                : supports.map((support, index) => candidate.replaceableSupportGoalIds?.includes(support.goalId)
+                  ? <NodeAction key={support.goalId} label={`Replace support ${index + 1}`} onClick={() => onReplace(candidate.goalId, support.goalId)} />
+                  : null)}
+              <NodeAction label="Details" onClick={() => onDetails(candidate.goalId)} />
+            </div>
+          </div>
+        ))}
+        {!candidates.length && <p className="text-sm text-muted-foreground">No additional compatible Product Future is available for this draft.</p>}
+      </div>
+    </section>
+  );
+}
+
+function ComposerDetails({ candidate, dependency, onClose }: { candidate?: RepositoryFutureStageCandidate; dependency?: RepositoryFutureStageDependency; onClose: () => void }) {
+  return (
+    <aside data-testid="future-context-inspector" aria-label="Future details" className="mx-auto mt-5 max-w-3xl rounded-2xl border border-primary/25 bg-[hsl(var(--universe-surface-raised)/0.96)] p-4 shadow-[var(--shadow-floating-panel)]">
+      <div className="flex items-start justify-between gap-3">
+        <div><div className="text-[9px] font-mono uppercase tracking-[0.16em] text-primary">{candidate ? 'Why it fits this product' : 'Required because'}</div><h3 className="mt-1 font-semibold">{candidate?.title || dependency?.title}</h3></div>
+        <button type="button" onClick={onClose} aria-label="Close details" className="grid h-9 w-9 place-items-center rounded-full border border-border/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="h-4 w-4" aria-hidden="true" /></button>
+      </div>
+      <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{candidate?.whyItFits || candidate?.rationale || dependency?.rationale}</p>
+      {dependency && <p className="mt-2 text-xs font-medium text-foreground">Required capabilities cannot be removed independently.</p>}
+      {candidate?.targetUsers?.length ? <p className="mt-2 text-xs text-muted-foreground">For: {candidate.targetUsers.join(', ')}</p> : null}
+      <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground"><Info className="h-3.5 w-3.5" aria-hidden="true" />Details remain proposed and require later implementation and verification.</p>
     </aside>
   );
+}
+
+function ComposerConnector({ label }: { label: string }) {
+  return <div aria-hidden="true" className="flex h-20 flex-col items-center justify-center"><span className="h-8 w-px bg-gradient-to-b from-primary/70 to-accent/60" /><span className="rounded-full border border-border/45 bg-background/45 px-2 py-1 text-[8px] font-mono uppercase tracking-[0.13em] text-muted-foreground">{label}</span><span className="h-8 w-px bg-gradient-to-b from-accent/60 to-primary/25" /></div>;
+}
+
+function FallbackEmpty({ state }: { state: RepositoryFutureStageOverlay['productIntelligenceState'] }) {
+  return <div className="mx-auto max-w-xl rounded-2xl border border-dashed border-border/60 bg-background/30 p-5 text-center text-sm text-muted-foreground">{state === 'analysing' ? 'ShipSeal is analysing bounded product evidence. Repository fallback remains available in Deep Configuration.' : 'No eligible recommendation can be composed from the current evidence.'}</div>;
+}
+
+function originLabel(candidate: RepositoryFutureStageCandidate) {
+  if (candidate.opportunityOrigin === 'evidence-backed') return 'Evidence-backed';
+  if (candidate.opportunityOrigin === 'strategic') return 'Strategic';
+  if (candidate.opportunityOrigin === 'exploratory') return 'Exploratory';
+  return 'Repository improvement';
+}
+
+function priorityLabel(candidate: RepositoryFutureStageCandidate) {
+  if (candidate.opportunityOrigin === 'evidence-backed') return 'Strong next move';
+  if (candidate.opportunityOrigin === 'strategic') return 'High-potential extension';
+  if (candidate.opportunityOrigin === 'exploratory') return 'Exploratory direction';
+  return 'Repository improvement fallback';
 }
 
 function useReducedMotion() {

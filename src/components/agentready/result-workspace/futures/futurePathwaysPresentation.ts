@@ -20,6 +20,12 @@ export interface RepositoryFutureStageCandidate {
   evidencePaths?: string[];
   artifactLabels?: string[];
   limitations?: string[];
+  candidateClass?: 'product-opportunity' | 'repository-improvement';
+  opportunityOrigin?: 'evidence-backed' | 'strategic' | 'exploratory';
+  userValue?: string;
+  whyItFits?: string;
+  targetUsers?: string[];
+  replaceableSupportGoalIds?: string[];
 }
 
 export interface RepositoryFutureStageDependency {
@@ -51,9 +57,14 @@ export interface RepositoryFutureStageOverlay {
   focusedId?: string;
   activeTraceId?: string;
   tracePinned?: boolean;
+  supportCount: number;
+  productIntelligenceState: 'analysing' | 'enhanced' | 'deterministic-fallback' | 'unavailable';
   onModeChange: (mode: RepositoryFuturePathwaysMode) => void;
   onCandidateFocus: (goalId: string) => void;
   onCandidateSelect: (goalId: string) => void;
+  onCandidateAddSupport: (goalId: string) => void;
+  onCandidateRemoveSupport: (goalId: string) => void;
+  onCandidateReplaceSupport: (addedGoalId: string, removedGoalId: string) => void;
   onDependencyFocus: (dependencyId: string) => void;
   onTracePreview?: (id?: string) => void;
   onTracePin?: (id: string) => void;

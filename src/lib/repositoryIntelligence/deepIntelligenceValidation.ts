@@ -1,6 +1,7 @@
 import { normalizeEvidencePath, type RepositoryResponsibility } from './evidence.js';
 import { stableContextFingerprint } from './contextSelection.js';
 import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
+import { validateRepositoryProductIntelligence } from './productIntelligenceSchema.js';
 import {
   REPOSITORY_DEEP_INTELLIGENCE_RESULT_VERSION,
   REPOSITORY_DEEP_INTELLIGENCE_VALIDATOR_VERSION,
@@ -54,6 +55,10 @@ export function validateRepositoryDeepIntelligenceResponse({
   if (response.returnedCapabilities.some(capability => !request.requestedCapabilities.includes(capability))) {
     return invalid('unsupported-capability', 'Provider returned a capability that was not requested.');
   }
+  if ((response.productUnderstanding || response.productOpportunities?.length)
+    && !request.requestedCapabilities.includes('product-opportunity-analysis')) {
+    return invalid('unsupported-capability', 'Provider returned Product Intelligence that was not requested.');
+  }
   if (unsafeText(response.providerId) || unsafeText(response.modelId || '') || unsafeText(response.providerVersion || '')) {
     return invalid('unsafe-provider-metadata', 'Provider metadata failed safety validation.');
   }
@@ -68,6 +73,16 @@ export function validateRepositoryDeepIntelligenceResponse({
   const deterministicRelationships = new Map(request.relationshipSummary.map(relationship => [
     relationshipKey(relationship.type, relationship.sourcePath, relationship.targetPath), relationship,
   ]));
+  const productIntelligence = request.requestedCapabilities.includes('product-opportunity-analysis')
+    ? validateRepositoryProductIntelligence({
+      sourceAnalysisFingerprint: request.fingerprint,
+      rawUnderstanding: response.productUnderstanding,
+      rawOpportunities: response.productOpportunities,
+      evidenceReferences: request.evidenceReferences,
+      knownPaths,
+      knownLimitations: request.knownLimitations,
+    })
+    : undefined;
   const seenProviderIds = new Set<string>();
   const accepted: RepositoryDeepIntelligenceValidatedFinding[] = [];
   const rejected: RepositoryDeepIntelligenceRejectedFinding[] = [];
@@ -153,6 +168,7 @@ export function validateRepositoryDeepIntelligenceResponse({
     ...request.knownLimitations,
     ...(metadata.truncated ? ['Provider output or validation intake was truncated by a declared bound.'] : []),
     ...(rejected.length ? ['Rejected provider findings remain unavailable to artifact generation.'] : []),
+    ...(productIntelligence?.limitations || []),
   ]);
   const fingerprint = stableContextFingerprint({
     version: REPOSITORY_DEEP_INTELLIGENCE_RESULT_VERSION,
@@ -160,6 +176,7 @@ export function validateRepositoryDeepIntelligenceResponse({
     rejectedFindings: rejected,
     summary,
     metadata,
+    productIntelligence,
     limitations,
   });
   return {
@@ -171,6 +188,7 @@ export function validateRepositoryDeepIntelligenceResponse({
       rejectedFindings: rejected,
       summary,
       metadata,
+      productIntelligence,
       limitations,
       fingerprint,
     },

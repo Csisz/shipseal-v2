@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { ReadinessReport } from '@/lib/types';
+import type { RepositoryIntelligenceProviderStatus, RepositoryProductIntelligenceResult } from '@/lib/repositoryIntelligence';
 import {
   buildRepositoryActionableImprovements,
   buildRepositoryAtlasModel,
@@ -28,15 +29,19 @@ import {
   REPOSITORY_FUTURE_FIT_LABELS,
   addRepositoryFutureSupportingGoal,
   adaptActionableImprovementCandidates,
+  adaptProductOpportunityCandidates,
   adaptRepositoryHealthCandidates,
   adaptWorkspaceStoryCandidates,
   buildRepositoryFutureGraph,
   buildRepositoryFutureUniverseProjection,
   buildRepositoryFutureQuickPathModel,
+  buildProductOpportunityCapabilityDefinitions,
+  compareRepositoryFutureCandidates,
   inspectRepositoryFutureCandidateCompatibility,
   inspectRepositoryFutureDependencyImpact,
   removeRepositoryFutureSupportingGoal,
   replaceRepositoryFuturePrimary,
+  productOpportunitySatisfiedCapabilityIds,
   synthesizeRepositoryFutureDraft,
   type RepositoryFutureCompatibilityState,
   type RepositoryFutureDraft,
@@ -58,14 +63,18 @@ import { RepositoryFuturePathwaysStage } from './RepositoryFuturePathwaysStage';
 interface RepositoryFuturePathwaysProps {
   report: ReadinessReport;
   universe: RepositoryUniverseModel;
+  productIntelligence?: RepositoryProductIntelligenceResult | null;
+  providerStatus?: RepositoryIntelligenceProviderStatus;
+  prepareEnhancement?: () => Promise<void>;
   onStageOverlayChange: (overlay: RepositoryFutureStageOverlay | null) => void;
 }
 
 type RoleFilter = 'all' | 'selected' | 'saved' | 'available' | 'blocked';
 type Focus = { kind: 'goal'; id: string } | { kind: 'dependency'; id: string } | null;
 
-export default function RepositoryFuturePathways({ report, universe, onStageOverlayChange }: RepositoryFuturePathwaysProps) {
+export default function RepositoryFuturePathways({ report, universe, productIntelligence, providerStatus, prepareEnhancement, onStageOverlayChange }: RepositoryFuturePathwaysProps) {
   const rootRef = useRef<HTMLElement | null>(null);
+  const productRequestRef = useRef(false);
   const [mode, setMode] = useState<RepositoryFuturePathwaysMode>('quick');
   const [draft, setDraft] = useState<RepositoryFutureDraft>();
   const [focus, setFocus] = useState<Focus>(null);
@@ -76,7 +85,7 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
   const [fitFilter, setFitFilter] = useState<'all' | RepositoryFutureFit>('all');
   const [originFilter, setOriginFilter] = useState<'all' | RepositoryFutureOrigin>('all');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
-  const graph = useMemo(() => buildFutureGraph(report, universe), [report, universe]);
+  const graph = useMemo(() => buildFutureGraph(report, universe, productIntelligence), [productIntelligence, report, universe]);
   const quickPath = useMemo(() => buildRepositoryFutureQuickPathModel(graph, draft), [draft, graph]);
   const goalById = useMemo(() => new Map(graph.nodes
     .filter(node => node.kind === 'future-goal' && node.candidateId)
@@ -90,6 +99,24 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
   const focusedDependency = focus?.kind === 'dependency' && draft
     ? inspectRepositoryFutureDependencyImpact(draft, focus.id)
     : undefined;
+  const productIntelligenceState = productIntelligence?.opportunities.length
+    ? 'enhanced' as const
+    : providerStatus?.state === 'preparing'
+      ? 'analysing' as const
+      : providerStatus?.state === 'fallback' || providerStatus?.state === 'cancelled'
+        ? 'deterministic-fallback' as const
+        : 'unavailable' as const;
+
+  useEffect(() => {
+    productRequestRef.current = false;
+  }, [report.repoName, report.scannedAt]);
+
+  useEffect(() => {
+    if (productIntelligence?.opportunities.length || !prepareEnhancement || productRequestRef.current) return;
+    if (providerStatus && providerStatus.state !== 'deterministic') return;
+    productRequestRef.current = true;
+    void prepareEnhancement();
+  }, [prepareEnhancement, productIntelligence, providerStatus]);
 
   useEffect(() => {
     setDraft(undefined);
@@ -174,6 +201,21 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
     }
   }, [acceptResult, draft, graph, replaceSupportGoalId]);
 
+  const replaceSupportDirect = useCallback((addedGoalId: string, removedGoalId: string) => {
+    if (!draft) return;
+    const withoutSupport = removeRepositoryFutureSupportingGoal(graph, draft, removedGoalId);
+    if (!withoutSupport.ok) {
+      acceptResult(withoutSupport, '');
+      return;
+    }
+    const replacement = addRepositoryFutureSupportingGoal(graph, withoutSupport.draft, addedGoalId);
+    if (acceptResult(replacement, 'Supporting goal replaced. Required capabilities were recomputed.')) {
+      setFocus({ kind: 'goal', id: addedGoalId });
+      setTracePinnedId(addedGoalId);
+      setReplaceSupportGoalId(undefined);
+    }
+  }, [acceptResult, draft, graph]);
+
   const compatibilityFor = useCallback((goalId: string): RepositoryFutureCompatibilityState => {
     if (!draft) return goalById.get(goalId)?.eligibility === 'eligible' ? 'compatible' : 'blocked';
     return inspectRepositoryFutureCandidateCompatibility(graph, {
@@ -185,13 +227,39 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
 
   const stageCandidates = useMemo(() => {
     const capabilityTitles = new Map(DEFAULT_REPOSITORY_FUTURE_DEPENDENCY_DEFINITIONS.map(definition => [definition.id, definition.title]));
-    const recommendedIds = quickPath.primaryRecommendations.candidates.slice(0, 5).map(item => item.goalId);
+    const recommendedProductIds = quickPath.primaryRecommendations.candidates
+      .filter(item => goalById.get(item.goalId)?.candidateClass === 'product-opportunity')
+      .slice(0, 5)
+      .map(item => item.goalId);
+    const recommendedIds = recommendedProductIds.length
+      ? recommendedProductIds
+      : quickPath.primaryRecommendations.candidates.slice(0, 5).map(item => item.goalId);
+    const primaryIsProduct = draft ? goalById.get(draft.primaryGoal.goalId)?.candidateClass === 'product-opportunity' : false;
+    const compatibleIds = draft ? [...goalById.entries()]
+      .filter(([goalId, candidate]) => !selectedGoalIds.has(goalId)
+        && ['compatible', 'compatible-with-review'].includes(compatibilityFor(goalId))
+        && (!primaryIsProduct || candidate.candidateClass === 'product-opportunity'))
+      .sort(([, left], [, right]) => compareRepositoryFutureCandidates(left, right))
+      .slice(0, 5)
+      .map(([goalId]) => goalId) : [];
     const displayIds = draft
-      ? [draft.primaryGoal.goalId, ...draft.supportingGoals.map(goal => goal.goalId), ...draft.savedAlternatives.map(item => item.goalId).slice(0, 2)]
+      ? [draft.primaryGoal.goalId, ...draft.supportingGoals.map(goal => goal.goalId), ...compatibleIds, ...draft.savedAlternatives.map(item => item.goalId).slice(0, 2)]
       : recommendedIds;
     return [...new Set(displayIds)].flatMap(goalId => {
       const candidate = goalById.get(goalId);
       if (!candidate) return [];
+      const replaceableSupportGoalIds = draft && !selectedGoalIds.has(goalId) && draft.supportingGoals.length >= 2
+        ? draft.supportingGoals.flatMap(support => {
+          const withoutSupport = removeRepositoryFutureSupportingGoal(graph, draft, support.goalId);
+          if (!withoutSupport.ok) return [];
+          const replacementCompatibility = inspectRepositoryFutureCandidateCompatibility(graph, {
+            sourceGraphFingerprint: graph.fingerprint,
+            primaryGoalIds: [withoutSupport.draft.primaryGoal.goalId],
+            supportingGoalIds: withoutSupport.draft.supportingGoals.map(goal => goal.goalId),
+          }, goalId).state;
+          return ['compatible', 'compatible-with-review'].includes(replacementCompatibility) ? [support.goalId] : [];
+        })
+        : [];
       const role = draft?.primaryGoal.goalId === goalId
         ? 'primary' as const
         : draft?.supportingGoals.some(goal => goal.goalId === goalId)
@@ -206,7 +274,7 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
         title: candidate.title,
         fit: REPOSITORY_FUTURE_FIT_LABELS[candidate.fit],
         role,
-        origin: originLabel(candidate.origin),
+        origin: candidateOriginLabel(candidate),
         capabilityId: candidate.targetCapabilityId,
         confidence: candidate.confidence,
         compatibility: compatibilityFor(goalId),
@@ -219,9 +287,15 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
         evidencePaths: candidate.evidence.map(evidence => evidence.path || evidence.id),
         artifactLabels: candidate.expectedArtifacts.map(artifact => artifact.targetPath || artifact.family),
         limitations: candidate.limitations,
+        candidateClass: candidate.candidateClass,
+        opportunityOrigin: candidate.productOpportunityOrigin,
+        userValue: candidate.userValue,
+        whyItFits: candidate.whyItFits,
+        targetUsers: candidate.targetUsers,
+        replaceableSupportGoalIds,
       }];
     });
-  }, [compatibilityFor, draft, goalById, quickPath.primaryRecommendations.candidates]);
+  }, [compatibilityFor, draft, goalById, graph, quickPath.primaryRecommendations.candidates, selectedGoalIds]);
   const universeProjection = useMemo(() => draft
     ? buildRepositoryFutureUniverseProjection({ universe, graph, draft })
     : undefined, [draft, graph, universe]);
@@ -253,9 +327,14 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
     focusedId: focus?.id,
     activeTraceId: tracePreviewId || tracePinnedId,
     tracePinned: Boolean(tracePinnedId),
+    supportCount: draft?.supportingGoals.length || 0,
+    productIntelligenceState,
     onModeChange: setMode,
     onCandidateFocus: goalId => setFocus({ kind: 'goal', id: goalId }),
     onCandidateSelect: choosePrimary,
+    onCandidateAddSupport: addSupport,
+    onCandidateRemoveSupport: removeSupport,
+    onCandidateReplaceSupport: replaceSupportDirect,
     onDependencyFocus: dependencyId => setFocus({ kind: 'dependency', id: dependencyId }),
     onTracePreview: setTracePreviewId,
     onTracePin: id => {
@@ -270,12 +349,11 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
       setFocus(null);
     },
     onOpenDomControls: () => rootRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' }),
-  }), [choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, stageCandidates, tracePinnedId, tracePreviewId, universeProjection]);
+  }), [addSupport, choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, productIntelligenceState, removeSupport, replaceSupportDirect, stageCandidates, tracePinnedId, tracePreviewId, universeProjection]);
 
   useEffect(() => onStageOverlayChange(overlay), [onStageOverlayChange, overlay]);
   useEffect(() => () => onStageOverlayChange(null), [onStageOverlayChange]);
 
-  const primaryRecommendations = quickPath.primaryRecommendations.candidates.slice(0, 5);
   const deepCandidates = useMemo(() => [...goalById.entries()].filter(([goalId, candidate]) => {
     if (fitFilter !== 'all' && candidate.fit !== fitFilter) return false;
     if (originFilter !== 'all' && candidate.origin !== originFilter) return false;
@@ -295,8 +373,8 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
             <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-[0.16em] text-primary">
               <Orbit className="h-4 w-4" aria-hidden="true" /> Future Pathways
             </div>
-            <h2 id="future-pathways-heading" className="mt-2 font-display text-2xl font-semibold text-foreground md:text-3xl">Choose where this repository should go next.</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Explore evidence-backed possibilities, then converge one primary path with up to two compatible supporting goals.</p>
+            <h2 id="future-pathways-heading" className="mt-2 font-display text-2xl font-semibold text-foreground md:text-3xl">Where should this product go next?</h2>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">ShipSeal understood the product from bounded repository evidence and mapped its strongest user-facing next directions.</p>
           </div>
           <ModeToggle mode={mode} onChange={setMode} />
         </div>
@@ -308,11 +386,13 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
         )}
       </div>
 
+      <ProductUnderstandingDisclosure productIntelligence={productIntelligence} state={productIntelligenceState} />
+
       <RepositoryFuturePathwaysStage overlay={overlay} />
 
-      <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="grid gap-0">
         <div className="min-w-0 p-4 md:p-6">
-          <PathComposer draft={draft} />
+          {mode === 'deep' && <PathComposer draft={draft} />}
           {notice && <div role="status" aria-live="polite" className="mt-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground">{notice}</div>}
 
           {!draft && quickPath.primaryRecommendations.state === 'none' && (
@@ -325,14 +405,7 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
           {mode === 'quick' ? (
             <QuickPath
               draft={draft}
-              recommendations={primaryRecommendations}
-              goalById={goalById}
-              quickPath={quickPath}
               replaceSupportGoalId={replaceSupportGoalId}
-              onFocus={goalId => setFocus({ kind: 'goal', id: goalId })}
-              onChoosePrimary={choosePrimary}
-              onAddSupport={addSupport}
-              onRemoveSupport={removeSupport}
               onReplaceSupport={replaceSupport}
               onCancelReplace={() => setReplaceSupportGoalId(undefined)}
             />
@@ -366,7 +439,7 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
             />
           )}
         </div>
-        <FutureInspector
+        {mode === 'deep' && (focusedCandidate || focusedDependency) && <FutureInspector
           graph={graph}
           draft={draft}
           focusedCandidate={focusedCandidate}
@@ -374,13 +447,13 @@ export default function RepositoryFuturePathways({ report, universe, onStageOver
           focusedDependency={focusedDependency}
           onChoosePrimary={choosePrimary}
           onAddSupport={addSupport}
-        />
+        />}
       </div>
     </section>
   );
 }
 
-function buildFutureGraph(report: ReadinessReport, universe: RepositoryUniverseModel) {
+function buildFutureGraph(report: ReadinessReport, universe: RepositoryUniverseModel, productIntelligence?: RepositoryProductIntelligenceResult | null) {
   const atlas = buildRepositoryAtlasModel(report);
   const transformation = buildRepositoryTransformationProposalModel(report, universe, atlas);
   const plan = buildRepositoryOptimizationPlan({ report, universe, atlas, transformation });
@@ -400,12 +473,58 @@ function buildFutureGraph(report: ReadinessReport, universe: RepositoryUniverseM
     repository,
     universe,
     candidateResults: [
+      ...(productIntelligence?.opportunities.length ? [adaptProductOpportunityCandidates({ productIntelligence, context })] : []),
       adaptActionableImprovementCandidates(improvements, context),
       adaptRepositoryHealthCandidates(report.repositoryHealth, context),
       adaptWorkspaceStoryCandidates(buildWorkspaceStory(report), context),
     ],
-    satisfiedCapabilityIds: [REPOSITORY_FUTURE_CAPABILITIES.repositoryEvidence],
+    capabilityDefinitions: [
+      ...DEFAULT_REPOSITORY_FUTURE_DEPENDENCY_DEFINITIONS,
+      ...(productIntelligence ? buildProductOpportunityCapabilityDefinitions(productIntelligence) : []),
+    ],
+    satisfiedCapabilityIds: [
+      REPOSITORY_FUTURE_CAPABILITIES.repositoryEvidence,
+      ...(productIntelligence ? productOpportunitySatisfiedCapabilityIds(productIntelligence) : []),
+    ],
   });
+}
+
+function ProductUnderstandingDisclosure({ productIntelligence, state }: {
+  productIntelligence?: RepositoryProductIntelligenceResult | null;
+  state: RepositoryFutureStageOverlay['productIntelligenceState'];
+}) {
+  const understanding = productIntelligence?.understanding;
+  return (
+    <details className="border-b border-primary/15 bg-background/30 px-5 py-3 md:px-7">
+      <summary className="cursor-pointer list-none text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <span className="flex flex-wrap items-center justify-between gap-2">
+          <span>What ShipSeal understood</span>
+          <span className="text-xs font-normal text-muted-foreground">
+            {state === 'analysing' ? 'Analysing product opportunities'
+              : state === 'enhanced' ? 'Product opportunities enhanced'
+                : state === 'deterministic-fallback' ? 'Based on repository evidence only'
+                  : 'Strategic Product Intelligence unavailable'}
+          </span>
+        </span>
+      </summary>
+      {understanding ? (
+        <div className="mt-3 grid gap-3 text-sm md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+          <div className="rounded-xl border border-border/50 bg-background/35 p-3">
+            <div className="text-xs font-mono uppercase tracking-wide text-primary">Product</div>
+            <p className="mt-1 text-foreground">{understanding.productSummary.statement}</p>
+            <p className="mt-2 text-xs text-muted-foreground">Primary problem: {understanding.primaryProblem.statement}</p>
+          </div>
+          <div className="rounded-xl border border-border/50 bg-background/35 p-3">
+            <div className="text-xs font-mono uppercase tracking-wide text-primary">Current loop</div>
+            <p className="mt-1 text-muted-foreground">{understanding.currentProductLoop.map(item => item.statement).join(' → ') || 'Current loop remains incomplete.'}</p>
+          </div>
+          <p className="text-xs text-muted-foreground md:col-span-2">Observed statements cite repository evidence. Inferred statements are hypotheses for review. {understanding.evidenceIds.length} evidence references · {understanding.confidence} bounded confidence.</p>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-muted-foreground">Repository improvement opportunities remain available, but ShipSeal is not presenting them as equivalent to strategic user-facing Product Opportunities.</p>
+      )}
+    </details>
+  );
 }
 
 function ModeToggle({ mode, onChange }: { mode: RepositoryFuturePathwaysMode; onChange: (mode: RepositoryFuturePathwaysMode) => void }) {
@@ -440,77 +559,27 @@ function ComposerStep({ label, value, active }: { label: string; value: string; 
   return <span className={`rounded-lg border px-2.5 py-1.5 ${active ? 'border-primary/35 bg-primary/10 text-foreground' : 'border-border/50 text-muted-foreground'}`}><span className="font-mono uppercase tracking-wide">{label}</span><span className="ml-1.5 font-medium">{value}</span></span>;
 }
 
-function QuickPath({ draft, recommendations, goalById, quickPath, replaceSupportGoalId, onFocus, onChoosePrimary, onAddSupport, onRemoveSupport, onReplaceSupport, onCancelReplace }: {
+function QuickPath({ draft, replaceSupportGoalId, onReplaceSupport, onCancelReplace }: {
   draft?: RepositoryFutureDraft;
-  recommendations: ReturnType<typeof buildRepositoryFutureQuickPathModel>['primaryRecommendations']['candidates'];
-  goalById: Map<string, RepositoryFutureNormalizedCandidate>;
-  quickPath: ReturnType<typeof buildRepositoryFutureQuickPathModel>;
   replaceSupportGoalId?: string;
-  onFocus: (goalId: string) => void;
-  onChoosePrimary: (goalId: string) => void;
-  onAddSupport: (goalId: string) => void;
-  onRemoveSupport: (goalId: string) => void;
   onReplaceSupport: (goalId: string) => void;
   onCancelReplace: () => void;
 }) {
   return (
-    <div className="mt-5 space-y-6">
-      {!draft ? (
-        <section aria-labelledby="primary-recommendations-heading">
-          <h3 id="primary-recommendations-heading" className="font-display text-lg font-semibold">Strongest supported futures</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Ranked deterministically from current repository evidence. Nothing is selected automatically.</p>
-          <div className="mt-3 grid gap-3 md:grid-cols-2">
-            {recommendations.map(recommendation => {
-              const candidate = goalById.get(recommendation.goalId);
-              if (!candidate) return null;
-              return <CandidateCard key={recommendation.goalId} candidate={candidate} fit={recommendation.fit} badge={`#${recommendation.rank} recommendation`} reason={recommendation.reasons[0]} onInspect={() => onFocus(recommendation.goalId)} actionLabel="Choose as primary" onAction={() => onChoosePrimary(recommendation.goalId)} />;
-            })}
-          </div>
-        </section>
-      ) : (
-        <>
-          <section aria-labelledby="selected-path-heading">
-            <div className="flex items-center justify-between gap-3">
-              <div><h3 id="selected-path-heading" className="font-display text-lg font-semibold">Selected future</h3><p className="text-sm text-muted-foreground">The primary remains dominant; supports converge into it.</p></div>
-              <Badge variant="outline">Synthesized draft</Badge>
-            </div>
-            <div className="mt-3 rounded-2xl border border-primary/40 bg-primary/10 p-4">
-              <div className="flex items-start justify-between gap-3"><div><div className="text-xs font-mono uppercase tracking-wide text-primary">Primary path</div><h4 className="mt-1 font-semibold">{draft.primaryGoal.title}</h4><p className="mt-1 text-sm text-muted-foreground">{draft.primaryGoal.rationale}</p></div><ShieldCheck className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" /></div>
-            </div>
-          </section>
-          <section aria-labelledby="supporting-goals-heading">
-            <h3 id="supporting-goals-heading" className="font-display text-lg font-semibold">Compatible supporting goals</h3>
-            <p className="mt-1 text-sm text-muted-foreground">Add up to two. Required capabilities are recomputed automatically.</p>
-            {draft.supportingGoals.length > 0 && <div className="mt-3 flex flex-wrap gap-2">{draft.supportingGoals.map(goal => <span key={goal.goalId} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-accent/35 bg-accent/10 px-3 text-sm"><GitBranch className="h-4 w-4" aria-hidden="true" />{goal.title}<button type="button" className="rounded px-1 text-muted-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onRemoveSupport(goal.goalId)} aria-label={`Remove supporting goal ${goal.title}`}>Remove</button></span>)}</div>}
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
-              {quickPath.supportingRecommendations.map(item => {
-                const candidate = goalById.get(item.goalId);
-                if (!candidate) return null;
-                return <CandidateCard key={item.goalId} candidate={candidate} fit={item.fit} badge={REPOSITORY_FUTURE_COMPATIBILITY_LABELS[item.compatibility]} reason={item.reasons[0]} onInspect={() => onFocus(item.goalId)} actionLabel={draft.supportingGoals.length >= 2 ? 'Replace a support' : 'Add supporting goal'} onAction={() => onAddSupport(item.goalId)} />;
-              })}
-            </div>
-          </section>
-          {replaceSupportGoalId && (
+    <div className="mt-5 space-y-4">
+      <div role="status" className="rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-muted-foreground">
+        {draft
+          ? 'The Future Draft is composed directly on the canvas above. Open details below only when you need dependency, trade-off, or provenance depth.'
+          : 'Select one product direction directly on the composer above.'}
+      </div>
+      {draft && replaceSupportGoalId && (
             <section role="dialog" aria-labelledby="replace-support-heading" className="rounded-2xl border border-warning/35 bg-warning/10 p-4">
               <h3 id="replace-support-heading" className="font-semibold">Replace one supporting goal</h3>
               <p className="mt-1 text-sm text-muted-foreground">Your Future Plan can include up to two supporting goals. Choose which selected support to replace; nothing is removed silently.</p>
               <div className="mt-3 flex flex-wrap gap-2">{draft.supportingGoals.map(goal => <Button key={goal.goalId} type="button" variant="outline" className="min-h-11" onClick={() => onReplaceSupport(goal.goalId)}>Replace {goal.title}</Button>)}<Button type="button" variant="ghost" className="min-h-11" onClick={onCancelReplace}>Cancel</Button></div>
             </section>
-          )}
-        </>
       )}
     </div>
-  );
-}
-
-function CandidateCard({ candidate, fit, badge, reason, actionLabel, onInspect, onAction, actionDisabled }: { candidate: RepositoryFutureNormalizedCandidate; fit: RepositoryFutureFit; badge: string; reason?: string; actionLabel: string; onInspect: () => void; onAction: () => void; actionDisabled?: boolean }) {
-  return (
-    <article className="rounded-2xl border border-border/55 bg-background/35 p-4 focus-within:border-primary/40">
-      <div className="flex flex-wrap items-center gap-2 text-xs"><Badge variant="outline">{badge}</Badge><span className="rounded-full bg-muted px-2 py-1 font-medium">{REPOSITORY_FUTURE_FIT_LABELS[fit]}</span><span className="text-muted-foreground">{originLabel(candidate.origin)}</span></div>
-      <h4 className="mt-3 font-semibold text-foreground">{candidate.title}</h4>
-      <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-muted-foreground">{reason || candidate.rationale}</p>
-      <div className="mt-3 flex flex-wrap gap-2"><Button type="button" variant="ghost" className="min-h-11" onClick={onInspect}>Inspect</Button><Button type="button" className="min-h-11" disabled={actionDisabled} onClick={onAction}>{actionLabel}</Button></div>
-    </article>
   );
 }
 
@@ -552,7 +621,7 @@ function DeepConfiguration({ candidates, draft, selectedGoalIds, savedGoalIds, f
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <button type="button" onClick={() => onFocus(goalId)} className="min-h-11 min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <span className="flex flex-wrap items-center gap-2"><span className="font-semibold">{candidate.title}</span>{primary && <Badge>Primary</Badge>}{support && <Badge variant="secondary">Supporting</Badge>}{savedGoalIds.has(goalId) && !selected && <Badge variant="outline"><Bookmark className="mr-1 h-3 w-3" aria-hidden="true" />Saved</Badge>}</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">{REPOSITORY_FUTURE_FIT_LABELS[candidate.fit]} · {originLabel(candidate.origin)} · {REPOSITORY_FUTURE_COMPATIBILITY_LABELS[compatibility]}{candidate.humanReviewState === 'required' ? ' · Review required' : ''}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{REPOSITORY_FUTURE_FIT_LABELS[candidate.fit]} · {candidateOriginLabel(candidate)} · {REPOSITORY_FUTURE_COMPATIBILITY_LABELS[compatibility]}{candidate.humanReviewState === 'required' ? ' · Review required' : ''}</span>
                 </button>
                 <div className="flex flex-wrap gap-2">
                   {!primary && <Button type="button" size="sm" variant="outline" className="min-h-11" disabled={blocked} onClick={() => onChoosePrimary(goalId)}>Make primary</Button>}
@@ -575,7 +644,7 @@ function Filter({ label, value, options, onChange }: { label: string; value: str
 function DraftDetails({ draft, onDependencyFocus, onSavedFocus, onSavedPrimary, onSavedSupport }: { draft: RepositoryFutureDraft; onDependencyFocus: (id: string) => void; onSavedFocus: (id: string) => void; onSavedPrimary: (id: string) => void; onSavedSupport: (id: string) => void }) {
   return (
     <div className="mt-6 space-y-3">
-      <details open className="rounded-2xl border border-border/55 bg-background/25 p-4">
+      <details className="rounded-2xl border border-border/55 bg-background/25 p-4">
         <summary className="cursor-pointer font-semibold">Required dependency path · {draft.dependencies.length}</summary>
         <p className="mt-2 text-xs text-muted-foreground">Prerequisite-first and automatic. Dependencies cannot be toggled off independently.</p>
         <ol className="mt-3 space-y-2">{draft.dependencies.map((dependency, index) => <li key={dependency.id}><button type="button" onClick={() => onDependencyFocus(dependency.id)} className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-border/50 bg-background/35 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-primary/35 font-mono text-xs">{index + 1}</span><span className="min-w-0 flex-1"><span className="block font-medium">{dependency.title}</span><span className="block text-xs text-muted-foreground">{dependency.state} · required by {dependency.dependentGoalIds.length} {dependency.dependentGoalIds.length === 1 ? 'goal' : 'goals'}</span></span><LockKeyhole className="h-4 w-4 text-muted-foreground" aria-label="Automatically required" /></button></li>)}</ol>
@@ -596,7 +665,7 @@ function FutureInspector({ graph, draft, focusedCandidate, focusedGoalId, focuse
         {focusedDependency ? (
           <div className="mt-4"><Badge variant="outline">Required dependency · {focusedDependency.state}</Badge><h3 className="mt-3 font-display text-lg font-semibold">{draft?.dependencies.find(item => item.id === focusedDependency.dependencyId)?.title}</h3><p className="mt-2 text-sm text-muted-foreground">{draft?.dependencies.find(item => item.id === focusedDependency.dependencyId)?.rationale}</p><dl className="mt-4 space-y-3 text-sm"><InspectorRow label="Required by" value={`${focusedDependency.directDependentGoalIds.length} direct, ${draft?.dependencies.find(item => item.id === focusedDependency.dependencyId)?.dependentGoalIds.length || 0} total`} /><InspectorRow label="Primary requires it" value={focusedDependency.requiredByPrimary ? 'Yes' : 'No'} /><InspectorRow label="Review" value={focusedDependency.humanReviewState === 'required' ? 'Human review required' : 'No special review gate'} /><InspectorRow label="Removal" value={focusedDependency.removableByRemovingSupportingGoals ? 'Only by removing its supporting goal' : 'Cannot be removed independently'} /></dl><details className="mt-4 rounded-xl border border-border/50 p-3"><summary className="cursor-pointer text-sm font-medium">Causal chains and evidence</summary><ul className="mt-2 space-y-1 text-xs text-muted-foreground">{focusedDependency.causeChains.map(chain => <li key={chain.join(':')}>{chain.join(' → ')}</li>)}</ul><p className="mt-2 text-xs text-muted-foreground">{focusedDependency.evidenceIds.length} evidence references</p></details></div>
         ) : focusedCandidate && focusedGoalId ? (
-          <div className="mt-4"><Badge variant="outline">Future goal · {REPOSITORY_FUTURE_FIT_LABELS[focusedCandidate.fit]}</Badge><h3 className="mt-3 font-display text-lg font-semibold">{focusedCandidate.title}</h3><p className="mt-2 text-sm text-muted-foreground">{focusedCandidate.rationale}</p><dl className="mt-4 space-y-3 text-sm"><InspectorRow label="Role" value={draft?.primaryGoal.goalId === focusedGoalId ? 'Primary path' : draft?.supportingGoals.some(goal => goal.goalId === focusedGoalId) ? 'Supporting goal' : draft?.savedAlternatives.some(item => item.goalId === focusedGoalId) ? 'Saved for later' : 'Candidate future'} /><InspectorRow label="Origin" value={originLabel(focusedCandidate.origin)} /><InspectorRow label="Evidence" value={`${focusedCandidate.evidence.length} references · ${focusedCandidate.universeMappings.length} Universe mappings`} /><InspectorRow label="Review" value={focusedCandidate.humanReviewState === 'required' ? 'Required' : 'Not required'} /></dl><div className="mt-4 flex flex-wrap gap-2">{draft?.primaryGoal.goalId !== focusedGoalId && <Button type="button" size="sm" className="min-h-11" onClick={() => onChoosePrimary(focusedGoalId)}>Make primary</Button>}{draft && draft.primaryGoal.goalId !== focusedGoalId && !draft.supportingGoals.some(goal => goal.goalId === focusedGoalId) && <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => onAddSupport(focusedGoalId)}>Use as support</Button>}</div><details className="mt-4 rounded-xl border border-border/50 p-3"><summary className="cursor-pointer text-sm font-medium">Evidence, artifacts and limitations</summary><div className="mt-3 space-y-3 text-xs text-muted-foreground"><div><div className="font-medium text-foreground">Evidence paths</div>{focusedCandidate.evidence.map(item => <div key={item.id} className="mt-1 break-all">{item.path || item.id} · {item.state} · {item.confidence}</div>)}</div><div><div className="font-medium text-foreground">Prospective outputs</div>{focusedCandidate.expectedArtifacts.map(item => <div key={item.id} className="mt-1">{item.targetPath || item.family} · {item.supported ? 'supported metadata' : 'unsupported'}</div>)}</div>{focusedCandidate.limitations.length > 0 && <div><div className="font-medium text-foreground">Limitations</div>{focusedCandidate.limitations.map(item => <div key={item} className="mt-1">{item}</div>)}</div>}<div className="break-all font-mono text-[10px]">{focusedCandidate.id}</div></div></details></div>
+          <div className="mt-4"><Badge variant="outline">Future goal · {REPOSITORY_FUTURE_FIT_LABELS[focusedCandidate.fit]}</Badge><h3 className="mt-3 font-display text-lg font-semibold">{focusedCandidate.title}</h3><p className="mt-2 text-sm text-muted-foreground">{focusedCandidate.whyItFits || focusedCandidate.rationale}</p><dl className="mt-4 space-y-3 text-sm"><InspectorRow label="Role" value={draft?.primaryGoal.goalId === focusedGoalId ? 'Primary path' : draft?.supportingGoals.some(goal => goal.goalId === focusedGoalId) ? 'Supporting goal' : draft?.savedAlternatives.some(item => item.goalId === focusedGoalId) ? 'Saved for later' : 'Candidate future'} /><InspectorRow label="Origin" value={candidateOriginLabel(focusedCandidate)} /><InspectorRow label="Evidence" value={`${focusedCandidate.evidence.length} references · ${focusedCandidate.universeMappings.length} Universe mappings`} /><InspectorRow label="Review" value={focusedCandidate.humanReviewState === 'required' ? 'Required' : 'Not required'} /></dl><div className="mt-4 flex flex-wrap gap-2">{draft?.primaryGoal.goalId !== focusedGoalId && <Button type="button" size="sm" className="min-h-11" onClick={() => onChoosePrimary(focusedGoalId)}>Make primary</Button>}{draft && draft.primaryGoal.goalId !== focusedGoalId && !draft.supportingGoals.some(goal => goal.goalId === focusedGoalId) && <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => onAddSupport(focusedGoalId)}>Use as support</Button>}</div><details className="mt-4 rounded-xl border border-border/50 p-3"><summary className="cursor-pointer text-sm font-medium">Evidence, artifacts and limitations</summary><div className="mt-3 space-y-3 text-xs text-muted-foreground"><div><div className="font-medium text-foreground">Evidence paths</div>{focusedCandidate.evidence.map(item => <div key={item.id} className="mt-1 break-all">{item.path || item.id} · {item.state} · {item.confidence}</div>)}</div><div><div className="font-medium text-foreground">Prospective outputs</div>{focusedCandidate.expectedArtifacts.map(item => <div key={item.id} className="mt-1">{item.targetPath || item.family} · {item.supported ? 'supported metadata' : 'unsupported'}</div>)}</div>{focusedCandidate.limitations.length > 0 && <div><div className="font-medium text-foreground">Limitations</div>{focusedCandidate.limitations.map(item => <div key={item} className="mt-1">{item}</div>)}</div>}<div className="break-all font-mono text-[10px]">{focusedCandidate.id}</div></div></details></div>
         ) : (
           <div className="mt-4"><CircleDot className="h-6 w-6 text-primary" aria-hidden="true" /><h3 className="mt-3 font-display text-lg font-semibold">Inspect a possible future</h3><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Focus a goal or dependency to see why it fits, its role, evidence, causal requirements and review boundary.</p><div className="mt-4 rounded-xl border border-border/45 p-3 text-xs text-muted-foreground"><div className="flex items-center gap-2"><Check className="h-3.5 w-3.5" aria-hidden="true" />Solid = deterministic support</div><div className="mt-2 flex items-center gap-2"><GitBranch className="h-3.5 w-3.5" aria-hidden="true" />Dashed = bounded inference or saved branch</div><div className="mt-2 flex items-center gap-2"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />Diamond/gate = required condition</div><div className="mt-2 flex items-center gap-2"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />Broken route = conflict or blocker</div></div><p className="mt-4 text-xs text-muted-foreground">{graph.summary.eligibleCandidates} eligible · {graph.summary.exploratoryCandidates} exploratory · {graph.summary.blockingConflicts} blocking conflicts</p></div>
         )}
@@ -613,6 +682,13 @@ function originLabel(origin: RepositoryFutureOrigin) {
   if (origin === 'deep-intelligence') return 'Validated bounded inference';
   if (origin === 'verified-signal') return 'Verified opportunity signal';
   return 'Deterministic evidence';
+}
+
+function candidateOriginLabel(candidate: RepositoryFutureNormalizedCandidate) {
+  if (candidate.productOpportunityOrigin === 'evidence-backed') return 'Evidence-backed Product Opportunity';
+  if (candidate.productOpportunityOrigin === 'strategic') return 'Strategic Product Opportunity';
+  if (candidate.productOpportunityOrigin === 'exploratory') return 'Exploratory Product Opportunity';
+  return originLabel(candidate.origin);
 }
 
 function humanize(value: string) {

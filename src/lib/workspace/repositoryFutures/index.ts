@@ -6,6 +6,7 @@ export {
 export type {
   BuildRepositoryFutureGraphInput,
   RepositoryFutureCandidateAdapterResult,
+  RepositoryFutureCandidateClass,
   RepositoryFutureCandidateDependencyHint,
   RepositoryFutureCandidateRejection,
   RepositoryFutureConfidence,
@@ -30,6 +31,7 @@ export type {
   RepositoryFutureNodeKind,
   RepositoryFutureNormalizedCandidate,
   RepositoryFutureOrigin,
+  RepositoryFutureProductOpportunityOrigin,
   RepositoryFutureRepositoryBinding,
   RepositoryFutureUniverseMapping,
 } from './schema.js';
@@ -44,10 +46,13 @@ export {
 export type { RepositoryFutureAdapterContext } from './adapters.js';
 export {
   adaptActionableImprovementCandidates,
+  adaptProductOpportunityCandidates,
   adaptRepositoryHealthCandidates,
   adaptValidatedDeepIntelligenceCandidates,
   adaptVerifiedOpportunitySignalCandidates,
   adaptWorkspaceStoryCandidates,
+  buildProductOpportunityCapabilityDefinitions,
+  productOpportunitySatisfiedCapabilityIds,
 } from './adapters.js';
 export {
   buildRepositoryFutureDependencies,

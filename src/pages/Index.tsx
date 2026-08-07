@@ -533,6 +533,7 @@ const Index = () => {
               repositoryIntelligenceReviewError={sampleReport ? null : scan.repositoryIntelligenceReviewError}
               prepareRepositoryIntelligenceReview={sampleReport ? prepareSampleRepositoryIntelligenceReview : undefined}
               repositoryIntelligenceProviderStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus}
+              repositoryProductIntelligence={sampleReport ? null : scan.repositoryProductIntelligence}
               prepareRepositoryIntelligenceEnhancement={sampleReport ? undefined : scan.prepareRepositoryIntelligenceEnhancement}
               history={history}
               onReset={reset}

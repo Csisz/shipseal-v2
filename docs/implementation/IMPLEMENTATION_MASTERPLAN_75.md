@@ -89,6 +89,16 @@ The pure serializable `shipseal.repository-future-universe-projection.v1` contra
 
 The existing Optimization Plan and Repository Intelligence review remain available once below the two main experiences. The projection is proposed, not applied or verified. No Future artifact preparation, prompt pack, persistence, migration, GitHub Future mutation, rescan relationship, verification repair or unlock persistence was added. Automated gates pass before handoff; production desktop/mobile, theme, reduced-motion and WebGL-fallback visual acceptance remains an explicit operator gate.
 
+#### Ω.18.5d.4 — Product Opportunity Intelligence and canvas-first composition
+
+Implemented on 2026-08-07 as the accepted product-direction correction. Repository Futures now asks what the user-facing product should become next before promoting repository hygiene as a headline Future. The bounded `shipseal.repository-product-understanding.v1` and `shipseal.repository-product-opportunity.v1` contracts validate observed/inferred product meaning, evidence-backed/strategic/exploratory opportunity origin, current-capability claims, proposed capability requirements, qualitative breadth/weight, verification concepts, confidence caps, human review and limitations. Strategic opportunities may introduce new proposed capabilities without fabricated current repository paths.
+
+The existing server-side OpenAI-compatible Deep Intelligence provider is reused with the `product-opportunity-analysis` capability, existing request/redaction budgets, one retry, timeout, cancellation, response bounds and request-fingerprint cache. Repository excerpts are explicitly untrusted data. The deterministic validator rejects unknown evidence, invented current paths/capabilities, prompt-leaking or executable output and unsupported states. Product Opportunities adapt into the existing Future Graph; product-facing candidates rank ahead of repository improvements, while technical recommendations remain as capability dependencies, Deep Configuration candidates and Other Improvements.
+
+Quick Path is now a DOM-first visual product architecture composer. Three to five validated Product Futures are presented without auto-selection; nodes expose direct primary/details actions; `+ Add supporting opportunity` opens only bounded compatible choices; the two-support cap becomes explicit replacement; and automatic required capability nodes cannot be removed independently. Default text is title, role, short value and quiet origin. Product Understanding, evidence, rationale, conflicts and technical depth remain secondary disclosures or Deep Configuration. Mobile uses the same semantic stacked composer and every operation remains keyboard/touch accessible. The lower selected-path Universe projection is unchanged and continues consuming the same shared draft.
+
+Lightweight Product Understanding correction and user-authored custom Future entry were evaluated but deferred because safely revalidating user-origin strategy would materially expand this slice. No Ω.18.5e prepared artifacts/prompt packs or Ω.18.5f persistence/apply/rescan/verification/unlock behavior is included.
+
 ### Ω.18.5e — Future artifacts and prompt packs
 
 Implement the canonical Future JSON/Markdown plan, artifact/evidence manifests, verification plan, reviewed repository artifacts, Codex/Claude Code/Cursor/Windsurf/human prompt packs and the immutable prepared snapshot. Reuse validated Repository Intelligence generators.
@@ -105,9 +115,9 @@ Enforce bundle/interaction budgets, WebGL/GPU fallbacks, accessibility QA, owner
 
 | Gap | Current truth | Owner |
 | --- | --- | --- |
-| Future domain | Versioned Future Graph and deterministic one-draft synthesis contracts exist; immutable preparation and generated outputs remain absent. | Ω.18.5e |
+| Future domain | Versioned Product Understanding and Product Opportunity contracts feed the existing Future Graph and deterministic one-draft synthesis; immutable preparation and generated outputs remain absent. | Ω.18.5e |
 | One-plan interaction | Quick Path and Deep Configuration now edit one session-local deterministic Future Draft with an explicit primary, two-support cap/replacement and automatic required closure. | Ω.18.5d complete; persistence in Ω.18.5f |
-| Future visualization | Future Pathways is now an independent evidence-grounded DOM/SVG decision field above the single authoritative Repository Universe. The lower Universe can show current truth or a deterministic selected-draft proposed overlay; no second current graph or WebGL renderer exists. Human visual acceptance remains open. | Ω.18.5d.3 ready for operator review; release hardening in Ω.18.5g |
+| Future visualization | Future Pathways is an independent canvas-first DOM composer for Product Opportunities above the single authoritative Repository Universe. Direct primary/support/replacement actions edit one draft; the lower Universe can show current truth or its deterministic proposed consequence. Human product and visual acceptance remain open. | Ω.18.5d.4 ready for operator review; release hardening in Ω.18.5g |
 | Future outputs | No canonical Future plan/manifests/prompt packs exist. | Ω.18.5e |
 | Apply convergence | Optimization has stronger preview/base binding; Repository Intelligence has stronger provenance/handwritten preservation. | Ω.18.5f |
 | Future persistence | Accounts/projects/scans persist; Future drafts, prepared plans, saved branches and unlock lineage do not. | Ω.18.5f |

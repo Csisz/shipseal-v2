@@ -33,12 +33,15 @@ const ELIGIBILITY_ORDER: Record<RepositoryFutureEligibility, number> = {
 };
 
 const ALIGNMENT_ORDER: Record<RepositoryFutureNormalizedCandidate['alignment'], number> = {
-  'direct-friction': 0,
-  transformation: 1,
-  'verified-opportunity': 2,
-  'workspace-evidence': 3,
-  'provider-suggestion': 4,
+  'product-opportunity': 0,
+  'direct-friction': 1,
+  transformation: 2,
+  'verified-opportunity': 3,
+  'workspace-evidence': 4,
+  'provider-suggestion': 5,
 };
+
+const PRODUCT_ORIGIN_ORDER = { 'evidence-backed': 0, strategic: 1, exploratory: 2 } as const;
 
 export function buildRepositoryFutureGraph(input: BuildRepositoryFutureGraphInput): RepositoryFutureGraph {
   const sourceUniverseFingerprint = repositoryFutureFingerprint(input.universe);
@@ -90,6 +93,8 @@ export function buildRepositoryFutureGraph(input: BuildRepositoryFutureGraphInpu
 
 export function compareRepositoryFutureCandidates(left: RepositoryFutureNormalizedCandidate, right: RepositoryFutureNormalizedCandidate) {
   return ELIGIBILITY_ORDER[left.eligibility] - ELIGIBILITY_ORDER[right.eligibility]
+    || Number(right.candidateClass === 'product-opportunity') - Number(left.candidateClass === 'product-opportunity')
+    || productOriginRank(left) - productOriginRank(right)
     || ALIGNMENT_ORDER[left.alignment] - ALIGNMENT_ORDER[right.alignment]
     || evidenceQualityRank(right) - evidenceQualityRank(left)
     || dependencySatisfiabilityRank(right) - dependencySatisfiabilityRank(left)
@@ -97,6 +102,10 @@ export function compareRepositoryFutureCandidates(left: RepositoryFutureNormaliz
     || Number(Boolean(right.verificationMethod)) - Number(Boolean(left.verificationMethod))
     || Number(left.humanReviewState === 'required') - Number(right.humanReviewState === 'required')
     || left.id.localeCompare(right.id);
+}
+
+function productOriginRank(candidate: RepositoryFutureNormalizedCandidate) {
+  return candidate.productOpportunityOrigin ? PRODUCT_ORIGIN_ORDER[candidate.productOpportunityOrigin] : 3;
 }
 
 export function buildRepositoryFutureDependencies(

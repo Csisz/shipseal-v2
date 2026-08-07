@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from 'react';
 import type { ReadinessReport } from '@/lib/types';
 import type { GitHubConnectionState } from '@/lib/githubConnection/types';
-import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
+import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline, RepositoryProductIntelligenceResult } from '@/lib/repositoryIntelligence';
 import { RepositoryIntelligenceReviewPanel, type RepositoryIntelligenceReviewUiSession } from '../../RepositoryIntelligenceReviewPanel';
 import { RepositoryFrictionProgression } from '../chapterContent';
 import type { RepositoryFriction } from '../types';
@@ -25,6 +25,7 @@ export interface ImproveChapterProps {
   githubConnection?: GitHubConnectionState;
   report: ReadinessReport;
   universe: RepositoryUniverseModel;
+  productIntelligence?: RepositoryProductIntelligenceResult | null;
   onVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void;
   onFutureStageOverlayChange: (overlay: RepositoryFutureStageOverlay | null) => void;
 }
@@ -44,6 +45,7 @@ export default function ImproveChapter({
   githubConnection,
   report,
   universe,
+  productIntelligence,
   onVerificationBaseline,
   onFutureStageOverlayChange,
 }: ImproveChapterProps) {
@@ -56,7 +58,7 @@ export default function ImproveChapter({
   }, [focusTarget, onTargetFocused, targetRef, variant]);
 
   if (variant === 'pathways') {
-    return <RepositoryFuturePathways report={report} universe={universe} onStageOverlayChange={onFutureStageOverlayChange} />;
+    return <RepositoryFuturePathways report={report} universe={universe} productIntelligence={productIntelligence} providerStatus={providerStatus} prepareEnhancement={prepareEnhancement} onStageOverlayChange={onFutureStageOverlayChange} />;
   }
 
   return (

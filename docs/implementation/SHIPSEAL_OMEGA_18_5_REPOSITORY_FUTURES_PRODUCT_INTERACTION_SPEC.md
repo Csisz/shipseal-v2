@@ -92,6 +92,35 @@ This document resolves the following areas that were directional but not yet ful
 - sprint boundaries Ω.18.5a through Ω.18.5g;
 - a canonical sprint ledger without rewriting previously shipped historical identifiers.
 
+### 1.3 Accepted Ω.18.5d.4 product-direction correction
+
+Ω.18.5d.4 adds a second, explicitly different intelligence class without rewriting the accepted Future Graph, draft, lifecycle, Universe, apply or verification contracts:
+
+- **Product Opportunities** answer what the user-facing product should become next. They are primary in Future Pathways when validated Product Intelligence is available.
+- **Repository improvement opportunities** answer what technical repository capability should improve. They remain available as required implementation capabilities, Deep Configuration detail and Other Improvements.
+
+The corrected reasoning sequence is:
+
+```text
+bounded repository evidence
+→ validated Product Understanding
+→ evidence-backed, strategic or exploratory Product Opportunities
+→ deterministic feasibility and capability dependencies
+→ the existing Repository Future Graph
+→ one shared Future Draft
+→ canvas-first visual composition
+→ lower Repository Universe consequence
+→ later implementation preparation and verification
+```
+
+`shipseal.repository-product-understanding.v1` preserves observed-versus-inferred product summary, users, problem, current loop, existing capabilities, constraints, missing areas, evidence, limitations, confidence and review state. `shipseal.repository-product-opportunity.v1` preserves user value, product fit, target user, origin, controlled inference, existing-capability leverage, proposed required capabilities, conflicts, qualitative breadth/weight, verification concept, review needs and limitations. Strategic capabilities may be proposed without current paths, but may never masquerade as current repository truth.
+
+The existing optional server-side OpenAI-compatible Deep Intelligence boundary acts as Product Strategist when `product-opportunity-analysis` is requested. It receives only the existing bounded/redacted context, treats repository excerpts as untrusted data, performs at most one cached enhancement for the request fingerprint, and returns strict structured output. Deterministic validation owns evidence identity, current-path claims, confidence caps, candidate eligibility, capability satisfaction, dependencies, conflicts, ranking, selection and lifecycle. Disabled, unavailable, rejected or timed-out providers leave the deterministic Repository Futures fallback usable while stating that repository improvement recommendations are not equivalent to strategic Product Intelligence.
+
+Quick Path is canvas-first: the user selects a primary Product Future directly, opens a bounded `+ Add supporting opportunity` chooser, uses at most two support slots, explicitly replaces a support when full, and inspects non-removable system-generated required capabilities. No arbitrary wire creation or semantic drag operation is allowed. Deep Configuration edits the same draft and retains the full candidate, evidence, origin, dependency and conflict density. Product Understanding and node details are secondary disclosures; raw evidence IDs, long artifact lists and full rationale are not default canvas content.
+
+The Ω.18.5d.3 vertical architecture remains authoritative: Future Pathways → Repository Universe impact → Other Improvements. Product Opportunity selection continues through the same draft and selected-path projection. Ω.18.5d.4 does not prepare Future artifacts, create prompt packs, persist Futures, mutate GitHub, rescan, verify or unlock later Futures.
+
 ---
 
 ## 2. Evaluation of the handoff and current product vision

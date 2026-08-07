@@ -39,6 +39,14 @@ export {
 
 export { buildRepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest';
 export { validateRepositoryDeepIntelligenceResponse, isResponsibilityCompatible } from './deepIntelligenceValidation';
+export {
+  MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES,
+  REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION,
+  REPOSITORY_PRODUCT_OPPORTUNITY_ORIGINS,
+  REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
+  REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
+  validateRepositoryProductIntelligence,
+} from './productIntelligenceSchema';
 export { runRepositoryDeepIntelligence } from './deepIntelligenceExecution';
 export { clearRepositoryIntelligenceEnhancementSessionCache, requestRepositoryIntelligenceEnhancement } from './deepIntelligenceClient';
 export {
@@ -158,6 +166,22 @@ export type {
   RepositoryDeepIntelligenceValidationState,
   RepositoryDeepIntelligenceValidationSummary,
 } from './deepIntelligenceSchema';
+
+export type {
+  RepositoryProductConfidence,
+  RepositoryProductEvidenceReference,
+  RepositoryProductExistingCapability,
+  RepositoryProductImplementationArea,
+  RepositoryProductInferenceLevel,
+  RepositoryProductInsight,
+  RepositoryProductIntelligenceResult,
+  RepositoryProductOpportunity,
+  RepositoryProductOpportunityInferenceLevel,
+  RepositoryProductOpportunityOrigin,
+  RepositoryProductOpportunityRejection,
+  RepositoryProductRequiredCapability,
+  RepositoryProductUnderstanding,
+} from './productIntelligenceSchema';
 
 export type {
   BuildRepositoryDeepIntelligenceRequestInput,

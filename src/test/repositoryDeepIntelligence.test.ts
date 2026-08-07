@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
+  REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
+  REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
   buildRepositoryDeepIntelligenceRequest,
   buildRepositoryIntelligenceEvidence,
   prepareRepositoryIntelligenceContext,
@@ -441,5 +443,55 @@ describe('evidence quotes and future-direction preparation', () => {
     const unknown = response(request, [finding(request)]) as ReturnType<typeof response> & { findings: Array<Record<string, unknown>> };
     unknown.findings[0].arbitraryNestedOutput = { executable: true };
     expect(validateRepositoryDeepIntelligenceResponse({ request, rawResponse: unknown }).success).toBe(false);
+  });
+});
+
+describe('Product Strategist enrichment through the existing provider contract', () => {
+  it('accepts bounded Product Understanding and a strategic proposed capability without claiming it is current', () => {
+    const { contextBundle, evidenceResult } = preparedFixture();
+    const request = buildRepositoryDeepIntelligenceRequest({
+      contextBundle,
+      evidenceResult,
+      requestedCapabilities: ['product-opportunity-analysis', 'structured-output'],
+    });
+    const appEvidence = evidenceForPath(request, 'src/App.tsx');
+    const insight = (statement: string, inferenceLevel: 'observed' | 'inferred' = 'observed') => ({ statement, inferenceLevel, evidenceIds: [appEvidence] });
+    const rawResponse = {
+      ...response(request, []),
+      productUnderstanding: {
+        schemaVersion: REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
+        productSummary: insight('A Vite application with a user-facing React surface.'),
+        primaryUsers: [insight('Application users.', 'inferred')],
+        primaryProblem: insight('Users interact with a bounded application workflow.'),
+        currentProductLoop: [insight('Open the application.'), insight('Use the primary interface.')],
+        existingCapabilities: [{ id: 'cap:interface', title: 'Application interface', description: 'The repository contains a React application surface.', evidenceIds: [appEvidence] }],
+        constraints: [], businessModelClues: [], missingCapabilityAreas: [insight('Continuing user history is not evidenced.', 'inferred')],
+        providerConfidence: 0.85, limitations: [],
+      },
+      productOpportunities: [{
+        schemaVersion: REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
+        id: 'op:history', title: 'Continuing User History',
+        opportunityStatement: 'Add a proposed history workflow for returning users.',
+        userValue: 'Users can resume prior work instead of restarting.',
+        whyItFits: 'The product already has a user-facing application loop that could become continuous.',
+        targetUsers: ['Returning application users'], evidenceIds: [appEvidence],
+        origin: 'strategic', inferenceLevel: 'strategic-inference',
+        strategicRationale: 'A bounded history capability can deepen the existing workflow.',
+        existingCapabilityIds: ['cap:interface'],
+        requiredNewCapabilities: [{ title: 'Persisted user history', rationale: 'A continuing workflow requires durable history.' }],
+        optionalSupportingOpportunityIds: [], knownConflicts: [],
+        expectedImplementationAreas: [{ label: 'Current application surface', existingPath: 'src/App.tsx', evidenceIds: [appEvidence] }],
+        changeWeight: 'moderate', impactBreadth: 'workflow',
+        verificationConcept: 'Verify that a returning user can resume a prior workflow.',
+        humanReviewRequirements: [], limitations: ['Proposed capability; persistence is not current repository truth.'], providerConfidence: 0.95,
+      }],
+    };
+    const outcome = validateRepositoryDeepIntelligenceResponse({ request, rawResponse, expectedProviderId: 'shipseal-fixture-provider' });
+    expect(outcome.success).toBe(true);
+    if (!outcome.success) return;
+    expect(outcome.result.productIntelligence?.understanding?.productSummary.statement).toContain('Vite application');
+    expect(outcome.result.productIntelligence?.opportunities[0]).toMatchObject({
+      title: 'Continuing User History', origin: 'strategic', acceptedConfidence: 'medium', currentness: 'future', lifecycle: 'proposed',
+    });
   });
 });

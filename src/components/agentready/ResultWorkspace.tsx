@@ -13,7 +13,7 @@ import {
   type WorkspaceStoryChapterId,
 } from '@/lib/workspace';
 import type { RepositoryIntelligenceReviewUiSession } from './RepositoryIntelligenceReviewPanel';
-import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
+import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult, RepositoryProductIntelligenceResult } from '@/lib/repositoryIntelligence';
 import { PostScanOverview } from './result-dashboard/PostScanOverview';
 import { ResultChapterNav } from './result-dashboard/ResultChapterNav';
 import { ResultChapterShell } from './result-dashboard/ResultChapterShell';
@@ -52,6 +52,7 @@ interface Props {
   repositoryIntelligenceReviewError?: string | null;
   prepareRepositoryIntelligenceReview?: () => Promise<RepositoryIntelligenceReviewUiSession>;
   repositoryIntelligenceProviderStatus?: RepositoryIntelligenceProviderStatus;
+  repositoryProductIntelligence?: RepositoryProductIntelligenceResult | null;
   prepareRepositoryIntelligenceEnhancement?: () => Promise<void>;
   agentOperatingMode?: AgentOperatingModeId;
   githubConnection?: GitHubConnectionState;
@@ -84,6 +85,7 @@ export function ResultWorkspace({
   repositoryIntelligenceReviewError,
   prepareRepositoryIntelligenceReview,
   repositoryIntelligenceProviderStatus,
+  repositoryProductIntelligence,
   prepareRepositoryIntelligenceEnhancement,
   agentOperatingMode,
   githubConnection,
@@ -243,6 +245,9 @@ export function ResultWorkspace({
                 githubConnection={githubConnection || buildGitHubConnectionFromReport(report)}
                 report={report}
                 universe={repositoryUniverse}
+                productIntelligence={repositoryProductIntelligence}
+                providerStatus={repositoryIntelligenceProviderStatus}
+                prepareEnhancement={prepareRepositoryIntelligenceEnhancement}
                 onFutureStageOverlayChange={setFutureStageOverlay}
               />
             </Suspense>

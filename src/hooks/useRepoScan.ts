@@ -8,6 +8,7 @@ import type {
   RepositoryIntelligenceProviderStatus,
   RepositoryIntelligenceVerificationBaseline,
   RepositoryIntelligenceVerificationResult,
+  RepositoryProductIntelligenceResult,
 } from '@/lib/repositoryIntelligence';
 
 export type RepoScanStatus = 'idle' | 'scanning' | 'completed' | 'failed' | 'cancelled';
@@ -27,6 +28,8 @@ export interface RepoScanState {
   repositoryIntelligenceReviewPreparing: boolean;
   repositoryIntelligenceReviewError: string | null;
   repositoryIntelligenceProviderStatus: RepositoryIntelligenceProviderStatus;
+  /** Validated, bounded Product Understanding and proposed opportunities; never raw provider output. */
+  repositoryProductIntelligence: RepositoryProductIntelligenceResult | null;
   /** Safe internal UI boundary: fingerprints, finite states and repository-relative paths only. */
   repositoryIntelligenceVerification: RepositoryIntelligenceVerificationResult | null;
   repositoryIntelligenceVerificationStatus: 'idle' | 'scanning' | 'completed' | 'failed';
@@ -57,6 +60,7 @@ const initialState: RepoScanState = {
   repositoryIntelligenceReviewPreparing: false,
   repositoryIntelligenceReviewError: null,
   repositoryIntelligenceProviderStatus: { state: 'deterministic', deepState: 'disabled', message: 'Deterministic repository intelligence is ready for review.', retryable: false },
+  repositoryProductIntelligence: null,
   repositoryIntelligenceVerification: null,
   repositoryIntelligenceVerificationStatus: 'idle',
   repositoryIntelligenceVerificationError: null,
@@ -452,6 +456,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
             'architecture-analysis', 'responsibility-refinement', 'task-routing', 'risk-identification',
             'documentation-conflict-detection', 'agent-instruction-recommendations',
             'artifact-statement-generation', 'structured-output',
+            'product-opportunity-analysis',
           ],
         });
         const response = await requestRepositoryIntelligenceEnhancement(request, { signal: controller.signal });
@@ -467,6 +472,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           setState(current => ({
             ...current,
             repositoryIntelligenceReview: { artifactSet: enhanced.artifactSet, review: enhanced.review },
+            repositoryProductIntelligence: response.result.productIntelligence || null,
             repositoryIntelligenceProviderStatus: {
               state: 'enhanced', deepState: response.deepState, message: 'Validated deep analysis is available alongside deterministic findings.', retryable: false,
               providerId: response.providerId, modelId: response.modelId, diagnostics: response.diagnostics,

@@ -6,6 +6,9 @@ const callbacks = {
   onModeChange: () => undefined,
   onCandidateFocus: () => undefined,
   onCandidateSelect: () => undefined,
+  onCandidateAddSupport: () => undefined,
+  onCandidateRemoveSupport: () => undefined,
+  onCandidateReplaceSupport: () => undefined,
   onDependencyFocus: () => undefined,
   onTracePreview: () => undefined,
   onTracePin: () => undefined,
@@ -47,6 +50,8 @@ function overlay(values: Partial<RepositoryFutureStageOverlay> = {}): Repository
     gateCount: 0,
     conflictCount: 1,
     limited: false,
+    supportCount: 0,
+    productIntelligenceState: 'deterministic-fallback',
     ...callbacks,
     ...values,
   };

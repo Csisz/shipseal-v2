@@ -5,6 +5,8 @@ export const REPOSITORY_FUTURE_GRAPH_POLICY_VERSION = 'shipseal.repository-futur
 
 export type RepositoryFutureConfidence = 'high' | 'medium' | 'low';
 export type RepositoryFutureOrigin = 'deterministic' | 'deep-intelligence' | 'verified-signal';
+export type RepositoryFutureCandidateClass = 'product-opportunity' | 'repository-improvement';
+export type RepositoryFutureProductOpportunityOrigin = 'evidence-backed' | 'strategic' | 'exploratory';
 export type RepositoryFutureNodeKind = 'repository-entity' | 'future-goal' | 'capability' | 'artifact' | 'gate' | 'outcome';
 export type RepositoryFutureCurrentness = 'current' | 'future';
 export type RepositoryFutureLifecycle = 'current' | 'proposed' | 'prepared' | 'applied-unverified' | 'verified' | 'historical';
@@ -124,7 +126,16 @@ export interface RepositoryFutureNormalizedCandidate {
   incompatibleCandidateIds: string[];
   universeMappings: RepositoryFutureUniverseMapping[];
   verificationMethod?: string;
-  alignment: 'direct-friction' | 'transformation' | 'workspace-evidence' | 'verified-opportunity' | 'provider-suggestion';
+  alignment: 'product-opportunity' | 'direct-friction' | 'transformation' | 'workspace-evidence' | 'verified-opportunity' | 'provider-suggestion';
+  candidateClass?: RepositoryFutureCandidateClass;
+  productOpportunityOrigin?: RepositoryFutureProductOpportunityOrigin;
+  userValue?: string;
+  whyItFits?: string;
+  targetUsers?: string[];
+  strategicRationale?: string;
+  changeWeight?: 'small' | 'moderate' | 'broad';
+  impactBreadth?: 'focused' | 'workflow' | 'cross-product';
+  productUnderstandingFingerprint?: string;
   eligibility: RepositoryFutureEligibility;
   fit: RepositoryFutureFit;
   contentFingerprint: string;

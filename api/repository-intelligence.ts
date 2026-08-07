@@ -86,16 +86,17 @@ export async function prepareProductionRepositoryIntelligence(
     durationMs,
     retryCount: providerRetryCount,
   });
-  if (execution.status === 'completed' && execution.result?.findings.length) {
+  if (execution.status === 'completed' && (execution.result?.findings.length || execution.result?.productIntelligence?.opportunities.length)) {
     const warnings = execution.result.summary.rejectedFindings + execution.result.summary.acceptedWithLimitations
       + execution.result.summary.requiringHumanReview + execution.result.metadata.providerWarnings.length
-      + execution.result.summary.validationMessages.length + config.configurationWarnings.length;
+      + execution.result.summary.validationMessages.length + config.configurationWarnings.length
+      + (execution.result.productIntelligence?.rejectedOpportunities.length || 0);
     const enhancedDiagnostics = {
       ...diagnostics,
       actualInputTokens: execution.result.metadata.usage?.inputUnits,
       actualOutputTokens: execution.result.metadata.usage?.outputUnits,
       outputBytes: Buffer.byteLength(JSON.stringify(execution.result), 'utf8'),
-      acceptedFindingCount: execution.result.findings.length,
+      acceptedFindingCount: execution.result.findings.length + (execution.result.productIntelligence?.opportunities.length || 0),
       rejectedFindingCount: execution.result.rejectedFindings.length,
       validationWarningCount: warnings,
     };

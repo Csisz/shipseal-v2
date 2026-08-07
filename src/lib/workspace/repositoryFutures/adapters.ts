@@ -1,6 +1,7 @@
 import type { RepositoryHealthModel } from '../../repositoryHealth/types.js';
 import type { RepositoryEvidence } from '../../repositoryIntelligence/evidence.js';
 import type { RepositoryDeepIntelligenceValidatedFinding } from '../../repositoryIntelligence/deepIntelligenceSchema.js';
+import type { RepositoryProductIntelligenceResult } from '../../repositoryIntelligence/productIntelligenceSchema.js';
 import type { VerifiedOpportunitySignal } from '../repositoryVerificationRelationship.js';
 import type { RepositoryActionableImprovement } from '../repositoryActionableImprovement.js';
 import type { RepositoryUniverseModel } from '../repositoryUniverse.js';
@@ -37,6 +38,7 @@ import type {
   RepositoryFutureOrigin,
   RepositoryFutureRepositoryBinding,
   RepositoryFutureUniverseMapping,
+  RepositoryFutureDependencyDefinition,
 } from './schema.js';
 
 export interface RepositoryFutureAdapterContext {
@@ -64,6 +66,111 @@ interface CandidateDraft {
   verificationMethod?: string;
   alignment: RepositoryFutureNormalizedCandidate['alignment'];
   eligibility?: RepositoryFutureEligibility;
+  candidateClass?: RepositoryFutureNormalizedCandidate['candidateClass'];
+  productOpportunityOrigin?: RepositoryFutureNormalizedCandidate['productOpportunityOrigin'];
+  userValue?: string;
+  whyItFits?: string;
+  targetUsers?: string[];
+  strategicRationale?: string;
+  changeWeight?: RepositoryFutureNormalizedCandidate['changeWeight'];
+  impactBreadth?: RepositoryFutureNormalizedCandidate['impactBreadth'];
+  productUnderstandingFingerprint?: string;
+}
+
+export function adaptProductOpportunityCandidates(input: {
+  productIntelligence: RepositoryProductIntelligenceResult;
+  context: RepositoryFutureAdapterContext;
+}): RepositoryFutureCandidateAdapterResult {
+  const evidenceById = new Map(input.productIntelligence.evidenceReferences.map(item => [item.id, item]));
+  const candidates = input.productIntelligence.opportunities.map(opportunity => {
+    const evidence = opportunity.evidenceIds.flatMap(id => {
+      const source = evidenceById.get(id);
+      if (!source) return [];
+      return [evidenceReference({
+        id: source.id,
+        path: source.path,
+        confidence: opportunity.acceptedConfidence,
+        state: 'provider-suggestion',
+        origin: 'deep-intelligence',
+        contractVersion: opportunity.version,
+        limitation: opportunity.origin === 'evidence-backed'
+          ? 'The opportunity is grounded in current evidence but remains a proposed product extension.'
+          : 'The repository evidence supports product fit, not current implementation of the proposed capability.',
+        humanReviewRequired: opportunity.humanReviewRequirements.length > 0,
+        context: input.context,
+      })];
+    });
+    const dependencies: RepositoryFutureCandidateDependencyHint[] = [
+      repositoryEvidenceDependency(evidence, 'deep-intelligence'),
+      ...opportunity.requiredNewCapabilities.map(capability => ({
+        capabilityId: capability.id,
+        requirement: 'required' as const,
+        origin: 'deep-intelligence' as const,
+        rationale: capability.rationale,
+        evidenceIds: [...opportunity.evidenceIds],
+        confidence: opportunity.acceptedConfidence,
+        state: capability.satisfiedByExistingCapabilityId ? 'satisfied' as const : 'missing' as const,
+        humanReviewState: opportunity.humanReviewRequirements.length ? 'required' as const : 'not-required' as const,
+        limitations: capability.satisfiedByExistingCapabilityId
+          ? ['Satisfied only by the validated existing Product Understanding capability binding.']
+          : ['Proposed capability; it is not current repository truth.'],
+      })),
+    ];
+    const mappedPaths = new Set(opportunity.expectedImplementationAreas.flatMap(area => area.existingPath ? [area.existingPath] : []));
+    const mappings = input.context.universe.nodes.flatMap(node => node.path && mappedPaths.has(normalizeRepositoryFuturePath(node.path))
+      ? [{ universeNodeId: node.id, repositoryRelativePath: normalizeRepositoryFuturePath(node.path) }]
+      : []);
+    return normalizeCandidate({
+      sourceId: opportunity.id,
+      sourceContractVersion: opportunity.version,
+      title: opportunity.title,
+      rationale: opportunity.whyItFits,
+      origin: 'deep-intelligence',
+      targetCapabilityId: `product-outcome:${opportunity.id}`,
+      evidence,
+      dependencies,
+      expectedArtifacts: [],
+      confidence: opportunity.acceptedConfidence,
+      humanReviewState: opportunity.humanReviewRequirements.length || input.productIntelligence.understanding?.humanReviewState === 'required' ? 'required' : 'not-required',
+      limitations: [
+        ...opportunity.limitations,
+        `${opportunity.origin === 'evidence-backed' ? 'Evidence-backed' : opportunity.origin === 'strategic' ? 'Strategic' : 'Exploratory'} Product Opportunity; proposed, not current, applied, or verified.`,
+      ],
+      unavailableInformation: opportunity.expectedImplementationAreas.some(area => !area.existingPath)
+        ? ['One or more implementation areas are conceptual because deterministic repository paths are unavailable.']
+        : [],
+      compatibilityHints: opportunity.optionalSupportingOpportunityIds,
+      universeMappings: mappings,
+      verificationMethod: opportunity.verificationConcept,
+      alignment: 'product-opportunity',
+      eligibility: opportunity.origin === 'exploratory' ? 'exploratory' : undefined,
+      candidateClass: 'product-opportunity',
+      productOpportunityOrigin: opportunity.origin,
+      userValue: opportunity.userValue,
+      whyItFits: opportunity.whyItFits,
+      targetUsers: opportunity.targetUsers,
+      strategicRationale: opportunity.strategicRationale,
+      changeWeight: opportunity.changeWeight,
+      impactBreadth: opportunity.impactBreadth,
+      productUnderstandingFingerprint: input.productIntelligence.understanding?.fingerprint,
+    }, input.context);
+  });
+  return adapterResult(candidates);
+}
+
+export function buildProductOpportunityCapabilityDefinitions(productIntelligence: RepositoryProductIntelligenceResult): RepositoryFutureDependencyDefinition[] {
+  return [...new Map(productIntelligence.opportunities.flatMap(opportunity => opportunity.requiredNewCapabilities.map(capability => [capability.id, {
+    id: capability.id,
+    title: capability.title,
+    rationale: capability.rationale,
+    requires: [REPOSITORY_FUTURE_CAPABILITIES.repositoryEvidence] as string[],
+  }] as const))).values()].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+export function productOpportunitySatisfiedCapabilityIds(productIntelligence: RepositoryProductIntelligenceResult) {
+  return sortedUnique(productIntelligence.opportunities.flatMap(opportunity => opportunity.requiredNewCapabilities
+    .filter(capability => Boolean(capability.satisfiedByExistingCapabilityId))
+    .map(capability => capability.id)));
 }
 
 export function adaptActionableImprovementCandidates(
@@ -415,6 +522,15 @@ function normalizeCandidate(draft: CandidateDraft, context: RepositoryFutureAdap
     verificationMethod: draft.verificationMethod?.trim() || undefined,
     alignment: draft.alignment,
     eligibility,
+    candidateClass: draft.candidateClass || 'repository-improvement',
+    productOpportunityOrigin: draft.productOpportunityOrigin,
+    userValue: draft.userValue?.trim() || undefined,
+    whyItFits: draft.whyItFits?.trim() || undefined,
+    targetUsers: sortedUnique(draft.targetUsers || []),
+    strategicRationale: draft.strategicRationale?.trim() || undefined,
+    changeWeight: draft.changeWeight,
+    impactBreadth: draft.impactBreadth,
+    productUnderstandingFingerprint: draft.productUnderstandingFingerprint,
   };
   const id = repositoryFutureId('future-candidate', {
     sourceId: contentSeed.sourceId,
@@ -432,9 +548,11 @@ function normalizeCandidate(draft: CandidateDraft, context: RepositoryFutureAdap
   };
 }
 
-function fitFor(candidate: Pick<RepositoryFutureNormalizedCandidate, 'eligibility' | 'origin' | 'confidence' | 'humanReviewState' | 'evidence' | 'expectedArtifacts'>): RepositoryFutureFit {
+function fitFor(candidate: Pick<RepositoryFutureNormalizedCandidate, 'eligibility' | 'origin' | 'confidence' | 'humanReviewState' | 'evidence' | 'expectedArtifacts' | 'candidateClass' | 'productOpportunityOrigin'>): RepositoryFutureFit {
   if (candidate.eligibility === 'blocked' || candidate.eligibility === 'unsupported') return 'blocked';
-  if (candidate.eligibility === 'exploratory' || candidate.origin === 'deep-intelligence' || candidate.confidence === 'low') return 'exploratory';
+  if (candidate.eligibility === 'exploratory' || candidate.productOpportunityOrigin === 'exploratory' || candidate.confidence === 'low') return 'exploratory';
+  if (candidate.candidateClass === 'product-opportunity' && candidate.productOpportunityOrigin === 'strategic') return 'supported-with-review';
+  if (candidate.origin === 'deep-intelligence' && candidate.candidateClass !== 'product-opportunity') return 'exploratory';
   if (candidate.humanReviewState === 'required' || candidate.confidence === 'medium') return 'supported-with-review';
   if (candidate.evidence.some(item => item.state === 'observed-current' || item.state === 'verified-signal')
     && (!candidate.expectedArtifacts.length || candidate.expectedArtifacts.some(item => item.supported))) return 'strong-evidence-fit';

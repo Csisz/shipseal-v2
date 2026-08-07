@@ -108,7 +108,9 @@ function recommendation(
 function primaryReasons(graph: RepositoryFutureGraph, candidate: RepositoryFutureNormalizedCandidate) {
   const dependencyStates = candidate.dependencies.map(dependency => graph.dependencies.find(item => item.capabilityId === dependency.capabilityId)?.state).filter(Boolean);
   return sortedUnique([
-    candidate.alignment === 'direct-friction' ? 'Directly addresses observed repository friction.' : `Candidate alignment is ${candidate.alignment}.`,
+    candidate.candidateClass === 'product-opportunity'
+      ? candidate.whyItFits || 'Validated Product Intelligence links this proposed direction to the current product.'
+      : candidate.alignment === 'direct-friction' ? 'Directly addresses observed repository friction.' : `Candidate alignment is ${candidate.alignment}.`,
     `${candidate.evidence.length} bounded evidence ${candidate.evidence.length === 1 ? 'reference' : 'references'} support this candidate.`,
     candidate.expectedArtifacts.every(artifact => artifact.supported) ? 'All expected artifact families have supported generator contracts.' : 'Some expected artifacts remain unsupported.',
     candidate.verificationMethod ? 'A later verification method is defined.' : 'A later verification method is not yet defined.',

@@ -5,11 +5,17 @@ import type {
   RepositoryRelationshipType,
   RepositoryResponsibility,
 } from './evidence.js';
+import {
+  MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES,
+  repositoryProductOpportunityProviderSchema,
+  repositoryProductUnderstandingProviderSchema,
+  type RepositoryProductIntelligenceResult,
+} from './productIntelligenceSchema.js';
 
 export const REPOSITORY_DEEP_INTELLIGENCE_REQUEST_VERSION = 'shipseal.deep-intelligence-request.v1' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION = 'shipseal.deep-intelligence-response.v2' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_RESULT_VERSION = 'shipseal.deep-intelligence-result.v1' as const;
-export const REPOSITORY_DEEP_INTELLIGENCE_PROMPT_CONTRACT_VERSION = 'shipseal.deep-intelligence-contract.v2' as const;
+export const REPOSITORY_DEEP_INTELLIGENCE_PROMPT_CONTRACT_VERSION = 'shipseal.deep-intelligence-contract.v3' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_VALIDATOR_VERSION = 'shipseal.deep-intelligence-validator.v2' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_RESULT_POLICY_VERSION = 'shipseal.deep-intelligence-result-policy.v2' as const;
 
@@ -21,6 +27,7 @@ export const REPOSITORY_DEEP_INTELLIGENCE_CAPABILITIES = [
   'documentation-conflict-detection',
   'agent-instruction-recommendations',
   'artifact-statement-generation',
+  'product-opportunity-analysis',
   'structured-output',
 ] as const;
 export type RepositoryDeepIntelligenceCapability = typeof REPOSITORY_DEEP_INTELLIGENCE_CAPABILITIES[number];
@@ -215,6 +222,8 @@ export const repositoryDeepIntelligenceProviderResponseSchema = z.object({
   providerVersion: z.string().optional(),
   returnedCapabilities: z.array(capabilitySchema),
   findings: z.array(rawFindingSchema),
+  productUnderstanding: repositoryProductUnderstandingProviderSchema.optional(),
+  productOpportunities: z.array(repositoryProductOpportunityProviderSchema).max(MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES * 4).optional(),
   warnings: z.array(z.string()).optional(),
   usage: usageSchema.optional(),
   truncated: z.boolean().optional(),
@@ -314,6 +323,7 @@ export interface RepositoryDeepIntelligenceValidatedResult {
   rejectedFindings: RepositoryDeepIntelligenceRejectedFinding[];
   summary: RepositoryDeepIntelligenceValidationSummary;
   metadata: RepositoryDeepIntelligenceRunMetadata;
+  productIntelligence?: RepositoryProductIntelligenceResult;
   limitations: string[];
   fingerprint: string;
 }
