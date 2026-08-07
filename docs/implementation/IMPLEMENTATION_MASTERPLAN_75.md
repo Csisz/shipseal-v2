@@ -2,7 +2,7 @@
 
 Status: canonical implementation sequence
 
-Last updated: 2026-08-06
+Last updated: 2026-08-07
 
 Product direction is canonical in [Positioning](../vision/POSITIONING.md). The [Repository Intelligence PR Specification](REPOSITORY_INTELLIGENCE_PR_SPEC.md) governs its shipped domain. The [Repository Futures Product and Interaction Specification](SHIPSEAL_OMEGA_18_5_REPOSITORY_FUTURES_PRODUCT_INTERACTION_SPEC.md) governs Ω.18.5 after human acceptance.
 
@@ -35,7 +35,7 @@ The permanent invariant is:
 
 > One primary path + zero to two compatible supporting goals + automatically included required dependencies = one coherent Executable Future Plan.
 
-No production Repository Futures implementation is authorized until the Ω.18.5a specification receives human acceptance.
+Ω.18.5a was accepted at `29ebf3f`; implementation proceeds through the frozen a–g sequence without redefining the accepted product contract.
 
 ### Ω.18.5a — Accepted specification and terminology
 
@@ -45,9 +45,11 @@ Exit: human accepts the canonical specification and this a–g sequence. No Type
 
 ### Ω.18.5b — Deterministic Future Graph
 
-Implement versioned pure schemas, adapters, normalization, stable identities, candidate eligibility, dependency mapping, complete-cycle blocking, conflicts, deterministic fingerprints and tests.
+Implemented on 2026-08-07 as the pure `shipseal.repository-future-graph.v1` domain: versioned schemas, strict adapters, normalization, stable identities, qualitative eligibility and fit, explicit capability dependencies, complete-cycle detection, conservative conflicts, deterministic ordering/fingerprints and focused tests.
 
-No UI, persistence, export or mutation.
+Supported inputs are actionable improvements and deterministic transformation evidence, Repository Health, Workspace Story, already-validated Deep Intelligence `future-direction` findings, and caller-scoped eligible verified opportunity signals. Deep Intelligence remains optional and non-authoritative; opportunity-signal production wiring remains deferred to Ω.18.5f.
+
+No Quick Path selection, UI, persistence, migration, Future artifact or prompt-pack generation, GitHub mutation, verification repair or unlock persistence is implemented in this slice.
 
 ### Ω.18.5c — Quick Path synthesis
 
@@ -73,7 +75,7 @@ Enforce bundle/interaction budgets, WebGL/GPU fallbacks, accessibility QA, owner
 
 | Gap | Current truth | Owner |
 | --- | --- | --- |
-| Future domain | No versioned Future graph/draft/synthesis contracts exist in production. | Ω.18.5b |
+| Future domain | The pure versioned Future Graph foundation is implemented; executable draft selection and synthesis remain absent. | Ω.18.5c |
 | One-plan interaction | No Quick Path, shared draft or Future compatibility engine exists. | Ω.18.5c |
 | Future visualization | Universe has current/proposed/verification overlays, not a Future Pathways overlay. | Ω.18.5d |
 | Future outputs | No canonical Future plan/manifests/prompt packs exist. | Ω.18.5e |
