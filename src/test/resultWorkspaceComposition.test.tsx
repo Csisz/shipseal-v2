@@ -457,6 +457,8 @@ describe('Result Workspace composition', () => {
     await waitFor(() => expect(prepareRepositoryIntelligenceReview).toHaveBeenCalledTimes(1), { timeout: 10000 });
     await waitFor(() => expect(document.activeElement).toHaveAttribute('id', 'repository-intelligence-review'), { timeout: 10000 });
     expect(screen.getByRole('heading', { name: /Preparing repository-specific artifact review/i })).toBeInTheDocument();
+    expect(screen.queryByTestId('improve-universe-control-dock')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Other improvements' }));
     expect(screen.getByTestId('improve-universe-control-dock')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Review optimization plan/i })).toBeInTheDocument();
     expect(screen.getByText(/Implementation and evidence details/i)).toBeInTheDocument();

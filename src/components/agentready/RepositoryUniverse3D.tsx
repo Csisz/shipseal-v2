@@ -13,6 +13,12 @@ export interface UniverseCameraState {
 
 export type RepositoryVerificationNodeOverlayState = 'verified-change' | 'partially-verified' | 'unresolved' | 'regressed' | 'newly-detected' | 'unchanged';
 
+export interface UniverseProjectedNodePosition {
+  x: number;
+  y: number;
+  visible: boolean;
+}
+
 interface RepositoryUniverse3DProps {
   model: RepositoryUniverseModel;
   selectedNodeId?: string;
@@ -33,6 +39,8 @@ interface RepositoryUniverse3DProps {
   excludedProposalIds?: string[];
   transformation?: RepositoryTransformationProposalModel;
   verificationNodeStates?: Record<string, RepositoryVerificationNodeOverlayState>;
+  projectionNodeIds?: string[];
+  onProjectionChange?: (positions: Record<string, UniverseProjectedNodePosition>) => void;
   onCameraStateChange: (state: UniverseCameraState) => void;
   onSelectNode: (nodeId: string) => void;
   onSelectProposal?: (proposalId: string) => void;
@@ -116,6 +124,8 @@ export default function RepositoryUniverse3D({
   excludedProposalIds = [],
   transformation,
   verificationNodeStates = {},
+  projectionNodeIds = [],
+  onProjectionChange,
   onCameraStateChange,
   onSelectNode,
   onSelectProposal,
@@ -142,6 +152,8 @@ export default function RepositoryUniverse3D({
   const selectedProposalIdRef = useRef(selectedProposalId);
   const excludedProposalSetRef = useRef(new Set(excludedProposalIds));
   const verificationNodeStatesRef = useRef(verificationNodeStates);
+  const projectionNodeIdSetRef = useRef(new Set(projectionNodeIds));
+  const onProjectionChangeRef = useRef(onProjectionChange);
   const onCameraStateChangeRef = useRef(onCameraStateChange);
   const onSelectNodeRef = useRef(onSelectNode);
   const onSelectProposalRef = useRef(onSelectProposal);
@@ -162,6 +174,14 @@ export default function RepositoryUniverse3D({
   useEffect(() => {
     verificationNodeStatesRef.current = verificationNodeStates;
   }, [verificationNodeStates]);
+
+  useEffect(() => {
+    projectionNodeIdSetRef.current = new Set(projectionNodeIds);
+  }, [projectionNodeIds]);
+
+  useEffect(() => {
+    onProjectionChangeRef.current = onProjectionChange;
+  }, [onProjectionChange]);
 
   useEffect(() => {
     selectedNodeIdRef.current = selectedNodeId;
@@ -296,6 +316,8 @@ export default function RepositoryUniverse3D({
     let viewportWidth = 320;
     let viewportHeight = 320;
     let lastPublishedCamera = cameraStateRef.current;
+    let lastProjectionPublishedAt = 0;
+    let lastProjections: Record<string, UniverseProjectedNodePosition> = {};
     const startedAt = performance.now();
     const revealEnabled = !reducedMotionRef.current && animateInRef.current;
     const revealTargetCamera = clampCameraState(cameraStateRef.current);
@@ -573,6 +595,33 @@ export default function RepositoryUniverse3D({
         inspectorOpen: inspectorFramingAmount > 0.001,
       }, inspectorFramingAmount);
       camera.lookAt(lookTarget.x, lookTarget.y, lookTarget.z);
+    };
+
+    const publishRequestedProjections = (now: number) => {
+      if (!onProjectionChangeRef.current || now - lastProjectionPublishedAt < 120) return;
+      const requestedIds = projectionNodeIdSetRef.current;
+      if (!requestedIds.size) return;
+      const next: Record<string, UniverseProjectedNodePosition> = {};
+      requestedIds.forEach(nodeId => {
+        const item = nodeItems.get(nodeId);
+        if (!item) return;
+        const projected = item.mesh.position.clone().project(camera);
+        next[nodeId] = {
+          x: (projected.x + 1) * 50,
+          y: (1 - projected.y) * 50,
+          visible: projected.z >= -1 && projected.z <= 1 && projected.x >= -1.12 && projected.x <= 1.12 && projected.y >= -1.12 && projected.y <= 1.12,
+        };
+      });
+      const ids = Object.keys(next);
+      const changed = ids.length !== Object.keys(lastProjections).length || ids.some(nodeId => {
+        const previous = lastProjections[nodeId];
+        const current = next[nodeId];
+        return !previous || previous.visible !== current.visible || Math.abs(previous.x - current.x) > 0.35 || Math.abs(previous.y - current.y) > 0.35;
+      });
+      lastProjectionPublishedAt = now;
+      if (!changed) return;
+      lastProjections = next;
+      onProjectionChangeRef.current(next);
     };
 
     const setPointer = (event: Pick<PointerEvent | MouseEvent, 'clientX' | 'clientY'>) => {
@@ -941,6 +990,7 @@ export default function RepositoryUniverse3D({
       if (!reducedMotionRef.current) starField.rotation.y += 0.000012;
       applyCamera(now);
       updateVisualState(now);
+      publishRequestedProjections(now);
       renderer.render(scene, camera);
       frameId = requestAnimationFrame(animate);
     };

@@ -67,6 +67,12 @@ The existing Repository Universe remains the only current-truth renderer. Future
 
 No Future persistence, migration, immutable preparation, generated Future artifact, prompt pack, GitHub Future mutation, verification repair or unlock persistence is included in this slice.
 
+#### Ω.18.5d.1 — Cinematic Future Pathways polish
+
+Implemented on 2026-08-07 as a presentation-only correction after Ω.18.5d visual acceptance failed. The static hub-and-card overlay is replaced by a deterministic directional Future Horizon: compact spatial goal nodes, curved evidence routes projected from mapped Repository Universe entities, prerequisite-ordered dependency checkpoints, converging supporting branches, receded saved futures and structurally broken conflict routes. Primary selection now reorganizes the entire field into one dominant synthesized path.
+
+The existing WebGL Universe remains the sole canvas and publishes only requested screen-space evidence projections to the DOM/SVG overlay. Core controls remain DOM-first and WebGL-optional; reduced motion removes impulses while preserving topology; legacy Optimize controls remain available behind contextual disclosure. Repository Futures domain and draft semantics are unchanged. Automated release gates pass, but the required Light/Dark/desktop/mobile/reduced-motion/WebGL-fallback browser review remains an explicit operator acceptance gate.
+
 ### Ω.18.5e — Future artifacts and prompt packs
 
 Implement the canonical Future JSON/Markdown plan, artifact/evidence manifests, verification plan, reviewed repository artifacts, Codex/Claude Code/Cursor/Windsurf/human prompt packs and the immutable prepared snapshot. Reuse validated Repository Intelligence generators.
@@ -85,7 +91,7 @@ Enforce bundle/interaction budgets, WebGL/GPU fallbacks, accessibility QA, owner
 | --- | --- | --- |
 | Future domain | Versioned Future Graph and deterministic one-draft synthesis contracts exist; immutable preparation and generated outputs remain absent. | Ω.18.5e |
 | One-plan interaction | Quick Path and Deep Configuration now edit one session-local deterministic Future Draft with an explicit primary, two-support cap/replacement and automatic required closure. | Ω.18.5d complete; persistence in Ω.18.5f |
-| Future visualization | The existing Universe stage now hosts a semantic non-current Future Pathways overlay plus a complete DOM interaction equivalent; no second current graph or WebGL renderer exists. | Ω.18.5d complete; release hardening in Ω.18.5g |
+| Future visualization | The existing Universe stage now hosts a deterministic directional Future Horizon with projected evidence anchors, compact goals, ordered dependencies and converging synthesis, plus a complete DOM interaction equivalent; no second current graph or WebGL renderer exists. Human visual acceptance remains open. | Ω.18.5d.1 ready for operator review; release hardening in Ω.18.5g |
 | Future outputs | No canonical Future plan/manifests/prompt packs exist. | Ω.18.5e |
 | Apply convergence | Optimization has stronger preview/base binding; Repository Intelligence has stronger provenance/handwritten preservation. | Ω.18.5f |
 | Future persistence | Accounts/projects/scans persist; Future drafts, prepared plans, saved branches and unlock lineage do not. | Ω.18.5f |

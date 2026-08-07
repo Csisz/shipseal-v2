@@ -184,8 +184,13 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
         fit: REPOSITORY_FUTURE_FIT_LABELS[candidate.fit],
         role,
         origin: originLabel(candidate.origin),
+        capabilityId: candidate.targetCapabilityId,
+        confidence: candidate.confidence,
+        compatibility: compatibilityFor(goalId),
+        humanReviewRequired: candidate.humanReviewState === 'required',
         evidenceCount: candidate.evidence.length,
         mappedEvidenceCount: candidate.universeMappings.length,
+        universeNodeIds: candidate.universeMappings.map(mapping => mapping.universeNodeId),
       }];
     });
   }, [compatibilityFor, draft, goalById, quickPath.primaryRecommendations.candidates]);
@@ -202,6 +207,9 @@ export default function RepositoryFuturePathways({ report, onStageOverlayChange 
       title: dependency.title,
       state: dependency.state,
       dependentCount: dependency.dependentGoalIds.length,
+      dependentGoalIds: dependency.dependentGoalIds,
+      executionOrder: dependency.executionOrder,
+      humanReviewRequired: dependency.humanReviewState === 'required',
     })),
     artifactCount: draft?.artifacts.length || 0,
     gateCount: draft?.gates.length || 0,

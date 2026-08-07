@@ -436,7 +436,7 @@
   0% { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
   18% { opacity: 1; }
   82% { opacity: 0.85; }
-  100% { opacity: 0; transform: translate(210px, -132px) scale(1); }
+  100% { opacity: 0; transform: translate(28vw, -50%) scale(1); }
 }
 
 .future-semantic-impulse {
