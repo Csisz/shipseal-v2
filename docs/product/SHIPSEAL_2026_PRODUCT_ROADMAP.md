@@ -1,8 +1,8 @@
 # ShipSeal 2026 Product Roadmap
 
-Last updated: 2026-07-14
+Last updated: 2026-08-06
 
-This roadmap is subordinate to the canonical product direction in `docs/vision/POSITIONING.md` and the Repository Intelligence PR implementation contract in `docs/implementation/REPOSITORY_INTELLIGENCE_PR_SPEC.md`.
+This roadmap is subordinate to [Positioning](../vision/POSITIONING.md), the [Repository Intelligence PR implementation contract](../implementation/REPOSITORY_INTELLIGENCE_PR_SPEC.md), the [Implementation Master Plan and Milestone Ledger](../implementation/IMPLEMENTATION_MASTERPLAN_75.md), and—after human acceptance—the [Repository Futures Product and Interaction Specification](../implementation/SHIPSEAL_OMEGA_18_5_REPOSITORY_FUTURES_PRODUCT_INTERACTION_SPEC.md).
 
 ## Master vision
 
@@ -23,7 +23,7 @@ The primary paid outcome is the **Repository Intelligence PR**.
 
 - **Primary identity:** AI repository intelligence and AI workspace improvement.
 - **Primary paid outcome:** Repository Intelligence PR.
-- **Signature experience:** Repository Universe, preserved as optional visual proof and evidence exploration.
+- **Signature experience:** Repository Universe, the primary post-scan spatial experience for current repository truth, progressively loaded with a complete DOM/accessibility equivalent.
 - **Secondary commercial output:** Client Handoff Pack after repository understanding.
 - **Supporting outputs:** Delivery Packs, PDF/HTML, security and testing outputs, MCP guidance, AI Act notes, readiness, manifests, and `score.json`.
 
@@ -41,12 +41,16 @@ The repository already contains:
 - optimization proposal and plan models with conflict/readiness states;
 - an Optimization Pack ZIP and explicit review-first GitHub PR preparation path;
 - session-local rescan baselines and conservative later-scan comparison.
+- optional production Deep Intelligence behind the provider-neutral validated boundary;
+- GitHub OAuth accounts, opaque server sessions, owner-scoped PostgreSQL projects and immutable saved scans;
+- deterministic actionable improvements, prepared review and hardened GitHub preview/apply;
+- a versioned authoritative verification domain and bounded opportunity-signal derivation.
 
-This means safe PR preparation, Repository Universe, and basic rescan verification are foundations, not wholly future phases. The next gap is deep, evidence-linked repository specificity.
+This means safe PR preparation, Repository Universe, deep evidence enrichment, persistence and authoritative verification contracts are foundations, not future promises. Repository Futures is the active next program; its production domain, UI, persistence and unlock loop are not implemented.
 
 ## 2026 delivery sequence
 
-### Phase A - Repository Intelligence quality (Omega 16)
+### Phase A - Repository Intelligence quality (Omega 16, complete)
 
 Goal: make the Repository Intelligence PR trustworthy and repository-specific for JS/TS application repositories.
 
@@ -70,7 +74,7 @@ Exit criteria:
 - existing handwritten instructions are reviewable and never silently replaced;
 - current readiness, export, and GitHub contracts remain compatible.
 
-### Phase B - Simplified post-scan experience (Omega 17)
+### Phase B - Simplified post-scan experience (Omega 17, complete)
 
 Goal: make repository understanding and the Repository Intelligence PR the obvious path after a scan.
 
@@ -78,7 +82,7 @@ Work:
 
 - decompose `ResultDashboard`;
 - simplify the scan-to-findings-to-artifacts-to-PR path;
-- keep Repository Universe optional and lazy-loaded;
+- keep Repository Universe primary, progressive and lazy at its WebGL boundary;
 - keep Client Handoff and other exports accessible after understanding;
 - preserve advanced evidence and compatibility views through progressive disclosure.
 
@@ -88,26 +92,41 @@ Exit criteria:
 - Universe remains available and recognizable;
 - no existing export path is lost.
 
-### Phase C - Minimal commercial foundation (Omega 18)
+### Phase C - Minimal commercial and verification foundation (historical Omega 18 work, partially complete)
 
-Goal: support paid access and shareable results only after intelligence quality is validated.
+Goal: establish durable private identity/history and authoritative verification before later commercial expansion.
 
 Work:
 
-- minimal accounts and persistence;
-- Repository Intelligence entitlement and payment;
-- public share page and badge backend;
-- data retention, tenancy, privacy, and audit boundaries;
-- metadata/history needed for durable rescan workflows.
+- GitHub OAuth accounts and opaque database-backed sessions — complete;
+- owner-scoped projects, immutable scan snapshots and deletion behavior — complete;
+- actionable improvement review and apply hardening — complete under the later overlapping Ω.18.1/Ω.18.2 sequence;
+- authoritative verification domain and persistence schema — complete, with the production wiring gaps assigned to Ω.18.5f;
+- payment/entitlement, public sharing/badges, teams and scheduled rescans — deferred.
 
 Exit criteria:
 
 - repository data remains isolated and governed;
-- payment state cannot expose private results;
-- public pages and badges are integrity-checked;
+- future payment/public features cannot expose private results;
 - no secrets or raw source are exposed through persistence.
 
-### Phase D - Broader repository intelligence
+### Phase D - Repository Futures (Ω.18.5, active specification program)
+
+Goal: transform current Repository Universe evidence into one coherent Executable Future Plan.
+
+Sequence:
+
+- Ω.18.5a accepted specification and terminology;
+- Ω.18.5b deterministic Future Graph;
+- Ω.18.5c Quick Path synthesis;
+- Ω.18.5d Future Pathways neural field and Deep Configuration;
+- Ω.18.5e Future artifacts and model/tool prompt packs;
+- Ω.18.5f persistence, apply, rescan and verified unlocks;
+- Ω.18.5g performance, accessibility, security and release.
+
+Repository Futures remains inside Understand, Improve, Verify and Deliver. It creates no fifth chapter, second current graph, autonomous implementation engine or multiple simultaneous executable plans.
+
+### Phase E - Broader repository intelligence
 
 Goal: expand only after JS/TS quality is measurable.
 
@@ -125,7 +144,7 @@ No stack should receive deep-quality claims before it has representative fixture
 
 ## Repository Universe roadmap role
 
-Repository Universe remains part of ShipSeal. Near-term work should connect existing nodes to evidence and Repository Intelligence artifacts only when the underlying evidence model is ready. Major new Universe functionality is intentionally not scheduled in Omega 16.
+Repository Universe is ShipSeal’s primary post-scan signature experience and the sole graph authority for current repository truth. Future Pathways may add versioned non-current overlays mapped to stable Universe identities; it must reuse the existing model/scene authority and retain DOM, reduced-motion and WebGL-unavailable equivalents.
 
 Future compatible overlays may show current friction, responsibilities, selected memory, current versus **With ShipSeal**, and links from a node to an evidence-backed artifact. The visualization must not fabricate applied repository state.
 
@@ -149,14 +168,17 @@ Across every phase:
 
 ## Deferred commercial and platform work
 
-The following are deliberately deferred until Omega 18 or later:
+The following remain deliberately deferred unless a later accepted program brings them into scope:
 
-- authentication and account management;
 - Stripe or other payment implementation;
-- persistent repository/source storage;
 - public share pages and badge backend;
+- organization/team collaboration;
+- scheduled or webhook rescans;
+- cross-repository Futures;
+- multiple simultaneous executable Future Plans;
+- autonomous provider/model selection;
+- automatic merge, direct default-branch writes or partial-branch cleanup;
+- numeric ROI, effort, time, token-saving or success predictions;
 - broad non-JS/TS deep intelligence;
-- automatic merge or direct `main` writes;
 - active workflow installation by default;
-- major Repository Universe expansion;
 - generalized legal or compliance claims.

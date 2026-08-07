@@ -1,19 +1,20 @@
 # ShipSeal Ω.18.5 Handoff
 
-Status: specification handoff for the next Codex session
+Status: Ω.18.5a implementation handoff; Repository Futures implementation remains unauthorized pending human acceptance
 
 Repository inspected: 2026-08-06
 
-This document describes the repository at the end of Ω.18.4 and its production NodeNext hotfix. It also defines the intended Ω.18.5 direction. Current behavior and future intent are deliberately separated below.
+This document describes the repository at the end of Ω.18.4 and its production NodeNext hotfix. The [Repository Futures Product and Interaction Specification](SHIPSEAL_OMEGA_18_5_REPOSITORY_FUTURES_PRODUCT_INTERACTION_SPEC.md) is the canonical Ω.18.5 contract after human acceptance; this handoff summarizes repository state and implementation prerequisites without duplicating that specification.
 
 ## 1. Repository state
 
 - Branch: `main`.
 - Upstream: `origin/main`; inspected branch was `0` ahead and `0` behind.
-- Latest commit: `a87c851ed729cd3eec4488e67241bc7d48502678` (`fix(functions): restore NodeNext serverless compilation`).
-- Expected next-session baseline: tracked files match `origin/main`. This handoff is intentionally uncommitted until the operator reviews it.
-- Inspection caveat: a pre-existing untracked root file, `logo.png`, was present before this handoff. It is not part of Ω.18.4, the NodeNext hotfix, or this document; do not delete, add, or overwrite it without explicit direction.
-- Before implementation, run `git status --short --branch`, confirm the expected documentation-only delta, and investigate any other change rather than resetting it.
+- Baseline commit inspected for Ω.18.5a: `5e703a3949fce5969fbb50ece812061ee4cf4f00` (`docs(futures): add omega 18.5 implementation handoff`).
+- Tag `omega-18.4-complete` resolves to the same commit.
+- At Ω.18.5a start, tracked files matched `origin/main`; the only change was the operator’s untracked draft `docs/SHIPSEAL_OMEGA_18_5_REPOSITORY_FUTURES_PRODUCT_INTERACTION_SPEC.md`, which this documentation sprint preserved and promoted to the canonical implementation-doc path.
+- No `logo.png` exception was present at this baseline.
+- Before implementation, run `git status --short --branch`, inspect the then-current `HEAD` and investigate every unknown change rather than resetting it. Do not assume the documentation changes described here have been committed.
 
 ## 2. Current product flow
 
@@ -24,7 +25,7 @@ This document describes the repository at the end of Ω.18.4 and its production 
 5. Truthful progress, limited-scan warnings, cancellation, failure recovery, and Intelligence Reveal bridge intake to results.
 6. One post-scan workspace exposes four chapters: **Understand**, **Improve**, **Verify**, and **Deliver**. Repository Universe is the signature Understand surface, with a task-oriented agent flight path and progressive disclosures.
 7. Improve turns evidence-backed frictions into proposals and generator-backed artifacts. The user reviews a prepared plan, then chooses ZIP/manual export or a connected GitHub PR route.
-8. GitHub preview performs repository preflight and bounded diff preparation. Mutation occurs only after explicit confirmation; successful provider evidence may advance the lifecycle to Applied.
+8. GitHub preview performs repository preflight and bounded diff preparation. Mutation occurs only after explicit confirmation; successful provider evidence may advance the lifecycle to Applied to review branch and PR opened.
 9. Verify compares a saved authoritative baseline with a user-initiated compatible later scan. It reports artifact, statement, graph, friction, and compatible score evidence without claiming causation or production correctness.
 10. Deliver retains the Client Handoff, PDF/HTML report, Delivery Pack, manifests, `score.json`, and related exports.
 11. Anonymous scan and export remain available. GitHub OAuth account sign-in is requested for private projects and saved scans; reopening a saved scan renders the validated snapshot without rescanning, provider execution, or GitHub mutation.
@@ -72,11 +73,11 @@ Do not remove the nested function typecheck, weaken it to bundler resolution, om
 
 ### Repository Universe
 
-`src/lib/workspace/repositoryUniverse.ts` builds the canonical nodes, edges, clusters, file records, counts, and stable identities from the analyzed inventory and Workspace Story knowledge. `RepositoryUniverse3D` is a lazy visualization of that model. Current/proposed and verification states are overlays or derived views of the same authoritative Universe; they must not create a second competing graph instance.
+`src/lib/workspace/repositoryUniverse.ts` builds the canonical nodes, edges, clusters, file records, counts, and stable identities from the analyzed inventory and Workspace Story knowledge. `RepositoryUniverse3D` is a lazy visualization of that model. Repository Universe is the primary post-scan signature experience for current truth; the complete experience retains DOM/accessibility alternatives. Current/proposed and verification states are overlays or derived views of the same authoritative Universe; they must not create a second competing graph instance.
 
 ### Modular Result Workspace
 
-`ResultWorkspace` is an orchestration shell around independently lazy Understand, Improve, Verify, and Deliver surfaces. Chapters mount on first visit and retain state. Universe/WebGL, Deep Intelligence review, Delivery previews, PDF, and archive paths remain progressively loaded. The landing, scan, reveal, account, project, saved-scan, privacy, security, and not-found routes share truthful state and responsive surface conventions.
+`ResultWorkspace` is an orchestration shell around independently lazy Understand, Improve, Verify, and Deliver surfaces. Chapters mount on first visit and retain state. Universe/WebGL, Deep Intelligence review, Delivery previews, PDF, and archive paths remain progressively loaded. Current implementation may prefetch the Universe chunk immediately after a report exists, so it must not be described as viewport-only. New Future code must remain independently lazy. The landing, scan, reveal, account, project, saved-scan, privacy, security, and not-found routes share truthful state and responsive surface conventions.
 
 ### Actionable improvements and prepared-plan review
 
@@ -102,13 +103,13 @@ Sessions are opaque random bearer tokens; only SHA-256 hashes are stored. Produc
 
 ### Authoritative baseline/rescan verification
 
-`shipseal.verification-relationship.v2` binds an immutable baseline scan to a later scan, a prepared-plan fingerprint, an optional applied operation/PR, expected artifacts/statements, repository/branch identity, measurement versions, Deep Intelligence provenance, and a deterministic fingerprint. Direct comparison requires compatible owner, project, repository, branch, scanner, measurement, time ordering, plan identity, and sufficient evidence. Incompatible boundaries suppress score deltas.
+`shipseal.verification-relationship.v2` defines a comprehensive relationship between an immutable baseline and a later scan, including prepared-plan, optional applied operation/PR, artifact/statement, repository/branch, measurement, Deep Intelligence and fingerprint evidence. Important current limitation: production persistence/UI still adapts the older Repository Intelligence verification result rather than flowing losslessly through the comprehensive relationship builder, and `measurementCompatible` is not included in the final eligibility expression. These are Ω.18.5f prerequisites, not already-complete production behavior.
 
 ## 6. Contracts that must not regress
 
 - **Determinism and evidence:** identical bounded input yields stable identities, ordering, fingerprints, proposals, artifacts, and verification synthesis. Facts remain traceable; heuristics and limitations stay labeled.
 - **One Universe:** one authoritative Repository Universe instance/model supplies current truth. Future, proposed, applied, and verification visuals are derived overlays, not fabricated current nodes or separate graph authorities.
-- **Lifecycle truth:** `Proposed != Prepared != Applied != Verified`. ZIP export is preparation/export, PR creation is not merge, and Applied remains pending until compatible rescan evidence exists.
+- **Lifecycle truth:** `Proposed != Prepared != Exported != Applied to review branch != PR opened != Verified`. ZIP export is non-mutating, PR creation is not merge, and branch/PR states remain Pending verification until compatible rescan evidence exists.
 - **Shared prepared snapshot:** ZIP/manual and PR routes use the same selected prepared artifact set and fingerprints. Presentation may differ; content and identity may not drift.
 - **Explicit mutation:** GitHub writes require repository preflight, bounded preview, explicit confirmation, authenticated permission, server-side tokens, and provider-confirmed results. No direct-main push or automatic merge.
 - **Authenticated ownership:** protected project, scan, and verification reads/writes/deletes derive the owner from the server session and return safe not-found behavior across owners.
@@ -202,7 +203,7 @@ Accepted `future-direction` findings can already carry a goal, repository-specif
 
 ### Verified opportunity signals
 
-Ω.18.4 can derive bounded signals of kinds `friction-resolved`, `capability-added`, `risk-detected`, and `future-unlocked` from compatible outcomes. The schema also reserves `dependency-satisfied`. Signals retain project and source-verification identity, rationale, evidence IDs, related artifacts, and confidence. They are eligible input to future ranking only after deterministic validation; unresolved/incompatible verification emits no opportunity signals, and a signal is not itself a plan or promise.
+Pure Ω.18.4 code can derive bounded signals of kinds `friction-resolved`, `capability-added`, `risk-detected`, and `future-unlocked`; the schema also reserves `dependency-satisfied`. Signals retain project and source-verification identity, rationale, evidence IDs, related artifacts, and confidence. They are not yet first-class persisted or production-consumed Future inputs. Current derivation can also allow `future-unlocked` from a regressed overall relationship. Ω.18.5f must prohibit Future unlock for unresolved, incompatible or regressed overall states and wire validated signals through the authoritative persisted relationship before presenting them to users.
 
 ## 14. Bundle and performance constraints
 
@@ -215,6 +216,8 @@ The existing production bundle report currently shows 36 JavaScript assets total
 `ResultDashboard` is 416.18 KiB raw / 109.65 KiB gzip. The bundle audit reports zero server-only provider markers and zero server-only account/persistence markers in browser assets.
 
 Ω.18.5 must not eagerly add the future engine, prompt-pack generation, extra 3D assets, PDF/ZIP work, or Deep Intelligence code to initial/landing chunks. Reuse the lazy Universe renderer and modular chapters; derive models once, memoize indexed interactions, mount heavy detail only on demand, and preserve responsive input during graph filtering or selection. Do not raise warning thresholds or conceal chunk growth as a substitute for decomposition.
+
+Frozen Future budgets are: at most 24 visible Quick Path candidates, 80 validated Deep Configuration candidates, selection feedback under 100 ms, normal bounded synthesis under 200 ms, no interaction-blocking task above 50 ms, at most 10 KiB gzip initial-main growth and at most 15 KiB gzip unopened Result Workspace growth.
 
 ## 15. Remaining warnings and risks
 
@@ -237,22 +240,23 @@ The existing production bundle report currently shows 36 JavaScript assets total
 3. **Ω.18.5c — Quick Path synthesis.** Implement deterministic ranking, one-primary/two-supporting limits, dependency closure, compatibility checks, saved alternatives, and one fingerprinted executable draft with focused tests.
 4. **Ω.18.5d — Neural field and Deep Configuration.** Add the future overlay to the one Universe model, DOM/list equivalent, inspectors, filters, mobile sheet behavior, keyboard/touch support, themes, reduced motion, and conflict/dependency editing against the same draft.
 5. **Ω.18.5e — Future artifacts and prompt packs.** Generate and validate the implementation plan, repository files, and explicitly supported model-specific prompt packs. Extend prepared review while preserving handwritten content, artifact limits, and shared ZIP/PR snapshot identity.
-6. **Ω.18.5f — Apply, rescan, and unlock loop.** Reuse explicit GitHub confirmation/export, owner-scoped baselines, later-scan verification, and opportunity signals. Advance futures only from compatible evidence; keep partial, unresolved, regressed, and incompatible recovery honest.
+6. **Ω.18.5f — Persistence, apply, rescan, and unlock loop.** Add reviewed owner-scoped Future persistence, converge the existing apply protocols, require exact preview/base binding, wire the comprehensive authoritative relationship into production, require measurement compatibility, persist opportunity lineage, and allow unlocks only from compatible verified evidence.
 7. **Ω.18.5g — Performance, accessibility, security, and release.** Enforce bundle/interaction budgets, mobile GPU fallbacks, overlay/focus tests, server NodeNext gate, secret audit, migration review if any, full release validation, dogfood scan, export inspection, and manual production smoke tests.
 
 Each slice should be independently reviewable and must preserve all earlier contracts. A later slice must not be pulled forward merely because its UI is easy to prototype.
 
 ## 17. First-session rules
 
-1. **Specification before implementation.** Read this handoff, `README.md`, applicable `AGENTS.md` files, the canonical architecture/verification/apply documents, and the actual source/tests. Produce the Ω.18.5a specification and contract proposal first.
-2. **No code until specification acceptance.** Do not edit production TypeScript, UI, migrations, routes, exports, or tests until the operator explicitly accepts the specification. Visual prototypes must also be requested or accepted; do not let a prototype silently become architecture.
+1. **Specification before implementation.** Read this handoff, `README.md`, applicable `AGENTS.md` files, the accepted canonical Ω.18.5 specification, the architecture/verification/apply documents, and the actual source/tests.
+2. **No code until specification acceptance.** Do not edit production TypeScript, UI, migrations, routes, exports, or tests until the operator explicitly accepts the canonical specification. Visual prototypes must also be requested or accepted; do not let a prototype silently become architecture.
 3. **The repository is the technical source of truth.** Prompts and handoffs explain intent, but current types, tests, migrations, route graphs, build gates, and committed history decide what exists. When prose conflicts with code, report the conflict and update the specification before implementation.
-4. Preserve the working tree. Do not reset or discard unknown changes, and do not assume ownership of `logo.png`.
+4. Preserve the working tree. Do not reset, discard or assume ownership of unknown changes.
 5. Do not commit, push, deploy, mutate GitHub repositories, rotate credentials, or run production migrations without explicit authorization.
 
 ## Canonical references
 
 - [README](../../README.md)
+- [Repository Futures Product and Interaction Specification](SHIPSEAL_OMEGA_18_5_REPOSITORY_FUTURES_PRODUCT_INTERACTION_SPEC.md)
 - [Implementation Master Plan](IMPLEMENTATION_MASTERPLAN_75.md)
 - [Repository Intelligence PR Specification](REPOSITORY_INTELLIGENCE_PR_SPEC.md)
 - [Optimization Apply Flow](OPTIMIZATION_APPLY_FLOW.md)

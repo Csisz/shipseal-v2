@@ -2,6 +2,8 @@
 
 Last updated: 2026-07-16
 
+Status note (2026-08-06): this file records the Omega 17 redesign and earlier 75% product principles. Current work keeps exactly four chapters—Understand, Improve, Verify and Deliver—and treats Repository Universe as the primary post-scan signature experience for current truth. Repository Futures decisions are canonical in [the Ω.18.5 specification](SHIPSEAL_OMEGA_18_5_REPOSITORY_FUTURES_PRODUCT_INTERACTION_SPEC.md); the “Future Navigation” ideas below are historical direction, not implemented routes or current sprint authority.
+
 ## Omega 17.2 implementation status
 
 The detailed post-scan experience now follows one four-chapter repository journey:

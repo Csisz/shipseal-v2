@@ -2,9 +2,11 @@
 
 ShipSeal Omega 18.4 records a versioned, owner-scoped relationship between an immutable baseline scan and a later scan. The relationship binds a prepared plan, an optional applied operation or pull request, expected artifacts and statements, repository identity, branch, scanner and measurement versions, derived evidence, and a deterministic relationship fingerprint.
 
+Implementation qualification (2026-08-06): the comprehensive pure relationship builder and schema are implemented and test-covered, but production persistence/UI currently adapts the older Repository Intelligence verification result rather than flowing losslessly through that builder. In addition, `measurementCompatible` contributes an incompatibility reason but is not yet included in final `compatibility.eligible`, and pure opportunity derivation can currently emit `future-unlocked` for a regressed overall result. The accepted Ω.18.5 contract assigns these production corrections to Ω.18.5f. Until they ship, this document describes the authoritative target contract; it must not be read as evidence that production Future unlocks exist.
+
 ## Truthful lifecycle
 
-Applied does not mean verified. A prepared or applied change remains `pending` until a later compatible scan supplies evidence. Deterministic synthesis can then produce `verified`, `partially-verified`, `unresolved`, `regressed`, or `incompatible`. Incompatible boundaries suppress direct score deltas instead of presenting unlike measurements as comparable.
+Applied to review branch and PR opened do not mean verified. A prepared, exported or branch-applied change remains `pending` until a later compatible scan supplies evidence. Deterministic synthesis can then produce `verified`, `partially-verified`, `unresolved`, `regressed`, or `incompatible`. Incompatible boundaries suppress direct score deltas instead of presenting unlike measurements as comparable.
 
 Compatibility requires the same owner, project, and repository; a baseline, applied, or explicitly compatible branch; equal scanner and measurement boundaries; a later completion timestamp; matching prepared-plan identity; and non-limited evidence. ZIP export is preparation, not proof of application.
 
@@ -15,7 +17,7 @@ Compatibility requires the same owner, project, and repository; a baseline, appl
 - Repository graph differences use stable node and relationship identities. They report added, removed, changed, and responsibility-changed nodes, artifact paths, and resolved or new frictions without mutating the canonical graph.
 - Score deltas are labeled as observed after rescan and exist only when scanner, measurement, scoring, and scan-boundary versions match.
 - Accepted Deep Intelligence findings must retain their request, source-scan, prompt, schema, context, confidence, and evidence bindings. Rejected or mismatched findings remain limitations.
-- Opportunity signals are provider-neutral, evidence-backed outputs for a later sprint; they are not Future Pathways and are not emitted from unresolved verification.
+- Opportunity signals are provider-neutral, evidence-backed outputs for a later sprint; they are not Future Pathways. The Ω.18.5 MVP must prevent `future-unlocked` for unresolved, incompatible or regressed overall verification.
 
 ## Persistence and ownership
 

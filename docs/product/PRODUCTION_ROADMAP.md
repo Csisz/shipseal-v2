@@ -1,8 +1,6 @@
 ﻿# DEPRECATED
 
-Superseded by:
-
-docs/SHIPSEAL_2026_PRODUCT_ROADMAP.md
+Historical compatibility plan only. Superseded by [ShipSeal 2026 Product Roadmap](SHIPSEAL_2026_PRODUCT_ROADMAP.md), the [Implementation Master Plan](../implementation/IMPLEMENTATION_MASTERPLAN_75.md), and the accepted [Repository Futures Product and Interaction Specification](../implementation/SHIPSEAL_OMEGA_18_5_REPOSITORY_FUTURES_PRODUCT_INTERACTION_SPEC.md). The capability list below is not current implementation status.
 
 # AgentReady Production Roadmap
 

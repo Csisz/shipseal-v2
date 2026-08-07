@@ -2,6 +2,8 @@
 
 Sprint Omega 11 introduces Repository Universe as the spatial exploration layer for the AI Workspace.
 
+Status note (2026-08-06): this file documents the implemented MVP boundaries and remains a technical compatibility reference. Repository Universe is now the primary post-scan signature experience for current repository truth. Future Pathways may add only a versioned non-current overlay on the same model/scene authority; the canonical future contract is [the Ω.18.5 specification](../implementation/SHIPSEAL_OMEGA_18_5_REPOSITORY_FUTURES_PRODUCT_INTERACTION_SPEC.md).
+
 ## Purpose
 
 Repository Universe turns the analyzed repository inventory into a navigable knowledge space. It does not rescan the repository and does not create a second analysis engine. The model is built from the existing scan report, Workspace Story and Repository Knowledge Model.

@@ -39,7 +39,7 @@ Vite defaults to port `8080`. If that port is busy, Vite may choose another port
 
 Use `npm run dev` for frontend-only local development. Use `vercel dev` when you also need the Vercel API routes such as `/api/repository-intelligence`, `/api/github-archive`, `/api/create-readiness-pr`, `/api/github-app/repositories`, `/api/github-app/archive`, `/api/github-app/create-readiness-pr`, and the legacy `/api/audit-request` contact endpoint.
 
-Omega 18.1 durable projects use dedicated GitHub OAuth identity and PostgreSQL. Configure the server-only account variables from `.env.example`, apply `npm run db:migrate`, then use `vercel dev`. Anonymous ZIP/public scans remain available without an account. Sign-in is requested only when saving or opening private history, and opening a saved scan does not rescan, call the provider, or mutate GitHub. Omega 18.4 adds an owner-scoped, versioned baseline-to-later-scan verification relationship; Applied remains pending until compatible rescan evidence exists. See [Account and Project Persistence Architecture](docs/implementation/ACCOUNT_PERSISTENCE_ARCHITECTURE.md) and [Authoritative Verification Relationship](docs/implementation/AUTHORITATIVE_VERIFICATION_RELATIONSHIP.md).
+Omega 18.1 durable projects use dedicated GitHub OAuth identity and PostgreSQL. Configure the server-only account variables from `.env.example`, apply `npm run db:migrate`, then use `vercel dev`. Anonymous ZIP/public scans remain available without an account. Sign-in is requested only when saving or opening private history, and opening a saved scan does not rescan, call the provider, or mutate GitHub. Omega 18.4 adds an owner-scoped, versioned baseline-to-later-scan verification relationship; Applied to review branch and PR opened remain Pending verification until compatible rescan evidence exists. See [Account and Project Persistence Architecture](docs/implementation/ACCOUNT_PERSISTENCE_ARCHITECTURE.md) and [Authoritative Verification Relationship](docs/implementation/AUTHORITATIVE_VERIFICATION_RELATIONSHIP.md).
 
 If `vercel dev` shows a white page with console errors such as `GET /src/main.tsx 404`, `GET /@vite/client 404`, or `GET /@react-refresh 404`, the Vercel/Vite dev configuration is broken. `vercel.json` must use the Vite framework preset and `devCommand: "vite --host 0.0.0.0 --port $PORT"` so Vercel dev can pass its proxy port to the Vite dev server instead of serving the root `index.html` as a static file.
 
@@ -55,7 +55,7 @@ If `vercel dev` shows a white page with console errors such as `GET /src/main.ts
 8. Open the ZIP and review `06-client-handoff/CLIENT_HANDOFF_REPORT.md`, `06-client-handoff/CLIENT_HANDOFF_REPORT.html`, `04-testing/EVAL_TEST_CASES.md`, `04-testing/RED_TEAM_PROMPTS.md`, `05-ai-act-readiness/TRANSPARENCY_NOTICE_DRAFT.md`, and `score.json`.
 9. Run `npm run test` and `npm run build` before sharing the demo.
 
-For the full manual checklist, see [ShipSeal Demo Validation](docs/SHIPSEAL_DEMO_VALIDATION.md).
+For the full manual checklist, see [ShipSeal Demo Validation](docs/demo/SHIPSEAL_DEMO_VALIDATION.md).
 
 ## Public GitHub Import
 
@@ -63,7 +63,7 @@ ShipSeal supports best-effort public GitHub repository import in the browser. Su
 
 Local mode: ZIP upload is recommended. Direct GitHub ZIP import can be blocked by browser CORS or network restrictions because the app is trying to fetch GitHub's archive from the browser. If import is blocked, download the repository as ZIP from GitHub and upload it manually.
 
-Hosted Vercel mode uses the same-origin proxy endpoint first: `/api/github-archive?owner=Csisz&repo=shipseal&ref=main`. If that proxy fails, the frontend can try direct codeload as a fallback, then shows the ZIP upload fallback if browser restrictions block the download. See [GitHub Import Proxy Plan](docs/GITHUB_IMPORT_PROXY_PLAN.md) for the serverless shape and security notes.
+Hosted Vercel mode uses the same-origin proxy endpoint first: `/api/github-archive?owner=Csisz&repo=shipseal&ref=main`. If that proxy fails, the frontend can try direct codeload as a fallback, then shows the ZIP upload fallback if browser restrictions block the download. See [GitHub Import Proxy Plan](docs/implementation/GITHUB_IMPORT_PROXY_PLAN.md) for the serverless shape and security notes.
 
 Public GitHub repositories can be scanned through public URL import. A configured GitHub App can also return selected repository metadata and use server-side installation tokens for archive download and Readiness PR creation. Without GitHub App server env, the connected repo UI stays honest and reports that listing is not configured.
 
@@ -87,7 +87,7 @@ npm run dev
 
 For Vercel, use `npm run build` and publish the `dist` directory; the minimal serverless endpoints under `api/` are included for public GitHub archive imports, temporary-token Create Readiness PR, GitHub App repository listing/archive/PR MVP endpoints, and optional contact requests in hosted demos. No environment variables are required for the core scan/export demo.
 
-For Netlify/static-only hosting, the app still works with ZIP upload and sample project flow, but the Vercel API endpoint is not available unless an equivalent same-origin function is implemented. See [Hosted Demo Readiness](docs/HOSTED_DEMO_READINESS.md) for the full deployment and validation checklist.
+For Netlify/static-only hosting, the app still works with ZIP upload and sample project flow, but the Vercel API endpoint is not available unless an equivalent same-origin function is implemented. See [Hosted Demo Readiness](docs/demo/HOSTED_DEMO_READINESS.md) for the full deployment and validation checklist.
 
 ## Deploy To Vercel
 
@@ -109,7 +109,7 @@ Expected dev modes:
 
 If `vercel dev` loads a blank page and the browser console shows missing Vite files like `/src/main.tsx`, `/@vite/client`, or `/@react-refresh`, verify that `vercel.json` still contains `framework: "vite"` and `devCommand: "vite --host 0.0.0.0 --port $PORT"`.
 
-Private GitHub repositories require a configured GitHub App installation and server env. ZIP upload remains the stable fallback for demos and client validation. After deployment, run the [Hosted Smoke Test](docs/HOSTED_SMOKE_TEST.md).
+Private GitHub repositories require a configured GitHub App installation and server env. ZIP upload remains the stable fallback for demos and client validation. After deployment, run the [Hosted Smoke Test](docs/demo/HOSTED_SMOKE_TEST.md).
 
 ### Contact / Request Access Form
 
@@ -127,7 +127,7 @@ Use the sample to review the quality of the generated Delivery Pack without call
 
 To review the client report, click `Download PDF report` in the Delivery Pack preview. `Open HTML report` remains available as the standalone print-ready fallback, and `06-client-handoff/CLIENT_HANDOFF_REPORT.html` is still included in the downloaded ZIP. Printing the full dashboard is not the client-report export path. Before sending it to a client, complete the intake fields and confirm the score, risks, AI Act pre-screen, testing summary, next steps roadmap, and disclaimer are appropriate for the project.
 
-The sample is intentionally not perfect. The generated pack should surface missing red-team documentation, transparency notice review, personal data/privacy review, MCP as a future governance item, and legal review recommendations. See [Sample Delivery Pack Review](docs/SAMPLE_DELIVERY_PACK_REVIEW.md) for the full review checklist.
+The sample is intentionally not perfect. The generated pack should surface missing red-team documentation, transparency notice review, personal data/privacy review, MCP as a future governance item, and legal review recommendations. See [Sample Delivery Pack Review](docs/demo/SAMPLE_DELIVERY_PACK_REVIEW.md) for the full review checklist.
 
 ## Suggested Readiness Fix Pack
 
@@ -140,7 +140,7 @@ Delivery Pack and Readiness Fix Pack are intentionally separate:
 - Delivery Pack: client handoff package with reports, AI Act readiness, testing pack and agent instructions.
 - Readiness Fix Pack: repository files you can add back to your project to improve future scans and make the repo more agent-ready.
 
-See [Readiness Fix Pack](docs/READINESS_FIX_PACK.md) for manual branch and pull request steps.
+See [Readiness Fix Pack](docs/implementation/READINESS_FIX_PACK.md) for manual branch and pull request steps.
 
 ## Create Readiness PR MVP
 
@@ -154,9 +154,9 @@ When a scan came from GitHub import, ShipSeal can auto-fill repository owner and
 
 ShipSeal creates a separate branch such as `shipseal/readiness-pack` or a timestamped fallback branch, uploads the Readiness Fix Pack files, and opens a Pull Request for human review. ShipSeal never pushes directly to `main`.
 
-Recommended flow: `Connect GitHub -> select repository -> scan -> generate -> create PR`. The current GitHub App MVP uses scoped installation tokens server-side for repository listing, archive download, and PR creation. It does not store sessions or add webhook/audit-log hardening yet.
+Recommended flow: `Connect GitHub -> select repository -> scan -> generate -> create PR`. The current GitHub App MVP uses scoped installation tokens server-side for repository listing, archive download, and PR creation. GitHub App installation authorization remains separate from the implemented GitHub OAuth account session. Account sessions and private scan history are stored server-side; installation webhooks and lifecycle audit-log hardening are not implemented.
 
-Workflow files such as `.github/workflows/ci.yml` are sensitive and should be reviewed carefully before merging. See [Create Readiness PR Plan](docs/CREATE_READINESS_PR_PLAN.md).
+Workflow files such as `.github/workflows/ci.yml` are sensitive and should be reviewed carefully before merging. See [Create Readiness PR Plan](docs/implementation/CREATE_READINESS_PR_PLAN.md).
 
 ## Connect GitHub Roadmap
 
@@ -180,7 +180,8 @@ Current MVP:
 - `/api/github-app/create-readiness-pr` creates the ShipSeal branch, writes Readiness Fix Pack files, and opens a PR with a server-side installation token,
 - shared GitHub connection state tracks source mode, owner/repo, repository listing capability, and PR creation capability,
 - no stored tokens,
-- no session database, webhook handling, automatic merge, or direct `main` push.
+- database-backed account sessions and private owner-scoped scan history when account services are configured,
+- no installation webhook handling, automatic merge, or direct `main` push.
 
 Frontend demo env:
 
@@ -342,8 +343,10 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 - [Product Position Audit](docs/implementation/PRODUCT_POSITION_AUDIT.md)
 - [Workspace Transformation Plan](docs/implementation/WORKSPACE_TRANSFORMATION_PLAN.md)
 - [Dashboard Redesign Plan](docs/implementation/DASHBOARD_REDESIGN_PLAN.md)
+- [Repository Futures Product and Interaction Specification](docs/implementation/SHIPSEAL_OMEGA_18_5_REPOSITORY_FUTURES_PRODUCT_INTERACTION_SPEC.md)
+- [Implementation Master Plan and Milestone Ledger](docs/implementation/IMPLEMENTATION_MASTERPLAN_75.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Production Roadmap](docs/product/PRODUCTION_ROADMAP.md)
+- [2026 Product Roadmap](docs/product/SHIPSEAL_2026_PRODUCT_ROADMAP.md)
 - [Deployment](docs/DEPLOYMENT.md)
 - [Release Checklist](docs/release/RELEASE_CHECKLIST.md)
 - [Demo Script](docs/demo/DEMO_SCRIPT.md)
@@ -356,9 +359,10 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 ## Current Limitations
 
 - No backend worker.
-- No database or authentication.
+- GitHub OAuth accounts and PostgreSQL-backed private projects/scans are implemented when server account services are configured; anonymous scan/export remains available without them.
 - No payments.
-- Private repository access requires a configured GitHub App and server-side credentials; there is no persistent account/session model, webhook hardening, or stored repository history yet.
+- Private repository access requires a separately configured GitHub App and server-side credentials. Account identity does not grant repository installation access. Installation webhooks, scheduled rescans, public sharing, payment entitlements and organization roles are not implemented.
+- Repository Futures is specification-only pending human acceptance; no Future graph, UI, persistence, prompt-pack, apply or unlock flow is implemented yet.
 - Optional external intelligence is disabled by default, requires explicit server-only configuration and never replaces deterministic evidence or fallback.
 - No browser API keys.
 - Scan cancellation is best-effort while JSZip work is in progress.
