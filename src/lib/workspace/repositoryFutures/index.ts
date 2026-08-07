@@ -55,3 +55,53 @@ export {
   compareRepositoryFutureCandidates,
   detectRepositoryFutureDependencyCycles,
 } from './graph.js';
+export {
+  REPOSITORY_FUTURE_COMPATIBILITY_LABELS,
+  REPOSITORY_FUTURE_DRAFT_VERSION,
+  REPOSITORY_FUTURE_QUICK_PATH_LIMIT,
+  REPOSITORY_FUTURE_SYNTHESIS_VERSION,
+} from './draft.js';
+export type {
+  RepositoryFutureCandidateRecommendation,
+  RepositoryFutureCompatibilityResult,
+  RepositoryFutureCompatibilityState,
+  RepositoryFutureDependencyExclusionResult,
+  RepositoryFutureDependencyImpact,
+  RepositoryFutureDraft,
+  RepositoryFutureDraftDependency,
+  RepositoryFutureDraftGoal,
+  RepositoryFutureDraftOperationResult,
+  RepositoryFutureDraftSelection,
+  RepositoryFutureExcludedCandidate,
+  RepositoryFutureExclusionReason,
+  RepositoryFutureHumanReviewRequirement,
+  RepositoryFuturePreparationReadiness,
+  RepositoryFuturePrimaryRecommendations,
+  RepositoryFutureQuickPathModel,
+  RepositoryFutureSavedAlternative,
+  RepositoryFutureSynthesisFailureCode,
+  RepositoryFutureSynthesisIssue,
+  RepositoryFutureSynthesisResult,
+  RepositoryFutureTradeOff,
+  RepositoryFutureTradeOffCategory,
+  RepositoryFutureTradeOffValue,
+} from './draft.js';
+export {
+  buildRepositoryFutureCompatibilityMatrix,
+  createRepositoryFutureGraphIndex,
+  inspectRepositoryFutureCandidateCompatibility,
+  pairwiseBlockingConflicts,
+} from './compatibility.js';
+export {
+  rankRepositoryFuturePrimaryCandidates,
+  rankRepositoryFutureSupportingCandidates,
+} from './ranking.js';
+export {
+  addRepositoryFutureSupportingGoal,
+  buildRepositoryFutureQuickPathModel,
+  inspectRepositoryFutureDependencyImpact,
+  removeRepositoryFutureSupportingGoal,
+  replaceRepositoryFuturePrimary,
+  requestRepositoryFutureDependencyExclusion,
+  synthesizeRepositoryFutureDraft,
+} from './synthesis.js';

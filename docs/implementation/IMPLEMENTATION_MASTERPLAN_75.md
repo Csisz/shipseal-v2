@@ -53,7 +53,11 @@ No Quick Path selection, UI, persistence, migration, Future artifact or prompt-p
 
 ### Ω.18.5c — Quick Path synthesis
 
-Implement explicit one-primary selection, the two-supporting cap, automatic dependency closure, deterministic ranking, qualitative trade-offs, Save for later and one executable draft over the Ω.18.5b engine.
+Implemented on 2026-08-07 as the pure `shipseal.repository-future-draft.v1` domain using `shipseal.repository-future-synthesis.omega18.5.v1`: explicit one-primary selection, the two-supporting cap, pairwise and closure-aware compatibility, deterministic primary/support recommendations, automatic transitive dependency closure and prerequisite-first ordering, cycle blocking, shared-dependency deduplication, qualitative evidence-backed trade-offs, human-review propagation, saved alternatives, explicit exclusions and one semantic draft fingerprint.
+
+Recommendations remain separate from selection. Required dependencies are derived and cannot be removed independently. Add/remove/replace operations recompute new immutable drafts without mutating the source Future Graph or prior draft.
+
+No visual Quick Path UI, neural Future Pathways, Deep Configuration UI, persistence, migration, prepared Future artifacts, prompt packs, GitHub Future mutation, verification repair or unlock persistence is implemented in this slice.
 
 ### Ω.18.5d — Neural field and Deep Configuration
 
@@ -75,8 +79,8 @@ Enforce bundle/interaction budgets, WebGL/GPU fallbacks, accessibility QA, owner
 
 | Gap | Current truth | Owner |
 | --- | --- | --- |
-| Future domain | The pure versioned Future Graph foundation is implemented; executable draft selection and synthesis remain absent. | Ω.18.5c |
-| One-plan interaction | No Quick Path, shared draft or Future compatibility engine exists. | Ω.18.5c |
+| Future domain | Versioned Future Graph and deterministic one-draft synthesis contracts exist; immutable preparation and generated outputs remain absent. | Ω.18.5e |
+| One-plan interaction | One-primary/two-supporting compatibility and closure are enforced in the pure domain; no Quick Path or shared Quick/Deep UI exists. | Ω.18.5d |
 | Future visualization | Universe has current/proposed/verification overlays, not a Future Pathways overlay. | Ω.18.5d |
 | Future outputs | No canonical Future plan/manifests/prompt packs exist. | Ω.18.5e |
 | Apply convergence | Optimization has stronger preview/base binding; Repository Intelligence has stronger provenance/handwritten preservation. | Ω.18.5f |
