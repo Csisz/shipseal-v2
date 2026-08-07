@@ -6,6 +6,8 @@ import { RepositoryIntelligenceReviewPanel, type RepositoryIntelligenceReviewUiS
 import { RepositoryFrictionProgression } from '../chapterContent';
 import type { RepositoryFriction } from '../types';
 import { ResultWorkspaceDisclosure } from '../../result-workspace/ResultWorkspaceDisclosure';
+import RepositoryFuturePathways from '../../result-workspace/futures/RepositoryFuturePathways';
+import type { RepositoryFutureStageOverlay } from '../../result-workspace/futures/futurePathwaysPresentation';
 
 export interface ImproveChapterProps {
   frictions: RepositoryFriction[];
@@ -21,6 +23,7 @@ export interface ImproveChapterProps {
   githubConnection?: GitHubConnectionState;
   report: ReadinessReport;
   onVerificationBaseline?: (baseline: RepositoryIntelligenceVerificationBaseline) => void;
+  onFutureStageOverlayChange: (overlay: RepositoryFutureStageOverlay | null) => void;
 }
 
 export default function ImproveChapter({
@@ -37,6 +40,7 @@ export default function ImproveChapter({
   githubConnection,
   report,
   onVerificationBaseline,
+  onFutureStageOverlayChange,
 }: ImproveChapterProps) {
   useEffect(() => {
     if (!focusTarget || !targetRef.current) return;
@@ -46,23 +50,26 @@ export default function ImproveChapter({
   }, [focusTarget, onTargetFocused, targetRef]);
 
   return (
-    <ResultWorkspaceDisclosure title="Implementation and evidence details" defaultOpen={focusTarget} lazyMount>
-      <div className="space-y-6">
-        <RepositoryFrictionProgression frictions={frictions} />
-        <div ref={targetRef} id="repository-intelligence-review" tabIndex={-1} className="scroll-mt-24 focus:outline-none">
-          <RepositoryIntelligenceReviewPanel
-            session={session}
-            preparing={preparing}
-            error={error}
-            enabled
-            prepareSession={prepareSession}
-            providerStatus={providerStatus}
-            prepareEnhancement={prepareEnhancement}
-            githubConnection={githubConnection}
-            onVerificationBaseline={onVerificationBaseline}
-          />
+    <div className="space-y-6">
+      <RepositoryFuturePathways report={report} onStageOverlayChange={onFutureStageOverlayChange} />
+      <ResultWorkspaceDisclosure title="Implementation and evidence details" defaultOpen={focusTarget} lazyMount>
+        <div className="space-y-6">
+          <RepositoryFrictionProgression frictions={frictions} />
+          <div ref={targetRef} id="repository-intelligence-review" tabIndex={-1} className="scroll-mt-24 focus:outline-none">
+            <RepositoryIntelligenceReviewPanel
+              session={session}
+              preparing={preparing}
+              error={error}
+              enabled
+              prepareSession={prepareSession}
+              providerStatus={providerStatus}
+              prepareEnhancement={prepareEnhancement}
+              githubConnection={githubConnection}
+              onVerificationBaseline={onVerificationBaseline}
+            />
+          </div>
         </div>
-      </div>
-    </ResultWorkspaceDisclosure>
+      </ResultWorkspaceDisclosure>
+    </div>
   );
 }

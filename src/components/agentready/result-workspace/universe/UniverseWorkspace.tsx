@@ -90,6 +90,7 @@ import { repositoryUniverseClusterLegend, repositoryUniverseFocusCameraState } f
 import type { RepositoryVerificationNodeOverlayState, UniverseCameraState } from '@/components/agentready/RepositoryUniverse3D';
 import type { RepositoryIntelligenceReviewUiSession } from '@/components/agentready/RepositoryIntelligenceReviewPanel';
 import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
+import type { RepositoryFutureStageOverlay } from '../futures/futurePathwaysPresentation';
 import { PostScanOverview } from '@/components/agentready/result-dashboard/PostScanOverview';
 import { ResultChapterNav } from '@/components/agentready/result-dashboard/ResultChapterNav';
 import { ResultChapterShell } from '@/components/agentready/result-dashboard/ResultChapterShell';
@@ -176,6 +177,7 @@ export function AiWorkspaceHero({
   onRescan,
   onSaveVerificationBaseline,
   onDiscardVerificationBaseline,
+  futureStageOverlay,
 }: {
   report: ReadinessReport;
   limitationReason?: string;
@@ -199,6 +201,7 @@ export function AiWorkspaceHero({
   onRescan?: () => void;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
+  futureStageOverlay?: RepositoryFutureStageOverlay | null;
 }) {
   const health = report.repositoryHealth;
   const unavailable = health.overall.score === null;
@@ -247,6 +250,7 @@ export function AiWorkspaceHero({
               onRescan={onRescan}
               onSaveVerificationBaseline={onSaveVerificationBaseline}
               onDiscardVerificationBaseline={onDiscardVerificationBaseline}
+              futureStageOverlay={futureStageOverlay}
             />
           </>
         )}
@@ -265,6 +269,62 @@ interface AtlasFilters {
 }
 
 type ContextualInspectorTab = 'overview' | 'evidence' | 'relationships' | 'agent-impact' | 'story' | 'dna' | 'mental-model';
+
+const FUTURE_STAGE_POSITIONS = [
+  { left: '69%', top: '24%' },
+  { left: '78%', top: '46%' },
+  { left: '64%', top: '68%' },
+  { left: '42%', top: '75%' },
+  { left: '34%', top: '28%' },
+];
+
+function FutureStageComposer({ overlay }: { overlay: RepositoryFutureStageOverlay }) {
+  const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
+  const supports = overlay.candidates.filter(candidate => candidate.role === 'supporting');
+  return (
+    <div data-testid="future-stage-composer" className="pointer-events-auto rounded-2xl border border-primary/25 bg-[hsl(var(--universe-surface)/0.9)] p-3 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0"><div className="text-[10px] font-mono uppercase tracking-[0.16em] text-primary">Future Pathways · {overlay.phase}</div><div className="mt-1 truncate text-sm font-semibold text-foreground">{primary?.title || 'Choose one primary future'}</div></div>
+        <div role="group" aria-label="Future Pathways stage mode" className="flex rounded-lg border border-border/50 bg-background/40 p-0.5">
+          {(['quick', 'deep'] as const).map(mode => <button key={mode} type="button" aria-pressed={overlay.mode === mode} onClick={() => overlay.onModeChange(mode)} className={`min-h-9 rounded-md px-2 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${overlay.mode === mode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}>{mode === 'quick' ? 'Quick' : 'Deep'}</button>)}
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-muted-foreground"><span className="rounded-full border border-border/50 px-2 py-1">{supports.length}/2 supports</span><span className="rounded-full border border-border/50 px-2 py-1">{overlay.dependencies.length} automatic dependencies</span>{overlay.draftFingerprint && <span className="rounded-full border border-primary/30 bg-primary/5 px-2 py-1 text-primary">Synthesized, not prepared</span>}</div>
+    </div>
+  );
+}
+
+function FutureNeuralField({ overlay, mobile }: { overlay: RepositoryFutureStageOverlay; mobile: boolean }) {
+  if (mobile) {
+    return (
+      <div data-testid="future-neural-field" data-future-phase={overlay.phase} className="pointer-events-none absolute inset-0 z-[var(--layer-graph-overlay)] grid place-items-center bg-[hsl(var(--universe-stage-bg)/0.34)] px-5">
+        <div className="pointer-events-auto mt-28 max-w-sm rounded-[1.6rem] border border-primary/25 bg-[hsl(var(--universe-surface)/0.94)] p-5 text-center shadow-[var(--shadow-floating-panel)] backdrop-blur-xl">
+          <div className="text-xs font-mono uppercase tracking-[0.16em] text-primary">Future Pathways</div><div className="mt-2 font-display text-xl font-semibold">Meaning first on mobile</div><p className="mt-2 text-sm text-muted-foreground">Use the complete candidate, dependency, conflict and saved-path controls below. The current Universe remains the visual context.</p><button type="button" onClick={overlay.onOpenDomControls} className="mt-4 min-h-11 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Open Future Pathways controls</button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div data-testid="future-neural-field" data-future-phase={overlay.phase} data-reduced-motion-contract="immediate" className="pointer-events-none absolute inset-0 z-[var(--layer-graph-overlay)] overflow-hidden bg-[radial-gradient(ellipse_at_50%_50%,transparent_10%,hsl(var(--universe-stage-bg)/0.2)_72%)] motion-safe:animate-fade-in">
+      <svg aria-hidden="true" viewBox="0 0 1000 700" preserveAspectRatio="none" className="absolute inset-0 h-full w-full opacity-75">
+        <defs><linearGradient id="future-path-gradient" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stopColor="hsl(var(--accent))" stopOpacity=".32" /><stop offset="1" stopColor="hsl(var(--primary))" stopOpacity=".8" /></linearGradient></defs>
+        {overlay.candidates.slice(0, 5).map((candidate, index) => {
+          const position = FUTURE_STAGE_POSITIONS[index];
+          const x = Number.parseFloat(position.left) * 10;
+          const y = Number.parseFloat(position.top) * 7;
+          const selected = candidate.role === 'primary' || candidate.role === 'supporting';
+          return <path key={candidate.goalId} d={`M 500 350 Q ${(500 + x) / 2} ${y < 350 ? y + 80 : y - 80} ${x} ${y}`} fill="none" stroke={selected ? 'url(#future-path-gradient)' : 'hsl(var(--muted-foreground))'} strokeWidth={candidate.role === 'primary' ? 4 : candidate.role === 'supporting' ? 2.5 : 1.25} strokeDasharray={candidate.origin === 'Deterministic evidence' && candidate.role !== 'saved' ? undefined : '8 8'} opacity={candidate.role === 'saved' ? .28 : candidate.role === 'blocked' ? .2 : selected ? .9 : .38} />;
+        })}
+        {overlay.dependencies.slice(0, 5).map((dependency, index) => <path key={dependency.id} d={`M ${420 + index * 30} ${390 + index * 12} L ${470 + index * 14} ${355 + index * 4}`} fill="none" stroke="hsl(var(--accent))" strokeWidth="3" opacity={dependency.state === 'satisfied' ? .55 : .8} />)}
+      </svg>
+      <div className="absolute left-1/2 top-1/2 grid h-28 w-28 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-accent/35 bg-[hsl(var(--universe-surface)/0.78)] text-center shadow-[0_0_52px_hsl(var(--accent)/0.16)] backdrop-blur-sm"><span><span className="block text-[10px] font-mono uppercase tracking-wide text-muted-foreground">Current truth</span><span className="mt-1 block text-xs font-semibold">Repository</span></span></div>
+      {(overlay.focusedId || overlay.draftFingerprint) && <span key={overlay.draftFingerprint || overlay.focusedId} data-semantic-impulse={overlay.draftFingerprint ? 'synthesis-recomputed' : 'evidence-focused'} aria-hidden="true" className="future-semantic-impulse absolute left-1/2 top-1/2 h-2 w-2 rounded-full bg-primary shadow-[0_0_18px_hsl(var(--primary)/0.8)]" />}
+      {overlay.dependencies.slice(0, 5).map((dependency, index) => <button key={dependency.id} type="button" onClick={() => overlay.onDependencyFocus(dependency.id)} className="pointer-events-auto absolute left-1/2 top-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 rotate-45 place-items-center border border-accent/55 bg-[hsl(var(--universe-surface-raised)/0.94)] shadow-[0_0_24px_hsl(var(--accent)/0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" style={{ marginLeft: `${-92 + index * 35}px`, marginTop: `${42 + index * 14}px` }} aria-label={`${dependency.title}. Required dependency. ${dependency.state}. Required by ${dependency.dependentCount} goals.`}><span className="-rotate-45 text-[9px] font-bold">{index + 1}</span></button>)}
+      {overlay.candidates.slice(0, 5).map((candidate, index) => { const position = FUTURE_STAGE_POSITIONS[index]; const primary = candidate.role === 'primary'; const support = candidate.role === 'supporting'; const selectable = candidate.role === 'candidate'; return <button key={candidate.goalId} type="button" onFocus={() => overlay.onCandidateFocus(candidate.goalId)} onMouseEnter={() => overlay.onCandidateFocus(candidate.goalId)} onClick={() => selectable ? overlay.onCandidateSelect(candidate.goalId) : overlay.onCandidateFocus(candidate.goalId)} className={`pointer-events-auto absolute min-h-11 -translate-x-1/2 -translate-y-1/2 rounded-2xl border px-3 py-2 text-left shadow-[var(--shadow-md-semantic)] backdrop-blur-lg transition-[opacity,transform,border-color] duration-500 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${primary ? 'z-20 max-w-[15rem] border-primary/70 bg-[hsl(var(--universe-surface-raised)/0.96)] text-foreground' : support ? 'z-10 max-w-[13rem] border-accent/55 bg-[hsl(var(--universe-surface)/0.92)]' : candidate.role === 'saved' ? 'max-w-[12rem] border-dashed border-border/45 bg-[hsl(var(--universe-surface)/0.7)] opacity-55' : candidate.role === 'blocked' ? 'max-w-[12rem] border-dashed border-warning/35 bg-[hsl(var(--universe-surface)/0.72)] opacity-45' : 'max-w-[13rem] border-primary/25 bg-[hsl(var(--universe-surface)/0.82)] hover:border-primary/55'}`} style={position} aria-label={`${candidate.title}. ${candidate.fit}. ${candidate.role}. ${candidate.origin}. ${candidate.evidenceCount} evidence references. ${selectable ? 'Activate to choose as primary.' : 'Activate to inspect.'}`}><span className="block text-[9px] font-mono uppercase tracking-wide text-muted-foreground">{candidate.role === 'candidate' ? 'Possible future' : candidate.role}</span><span className="mt-0.5 block line-clamp-2 text-xs font-semibold">{candidate.title}</span><span className="mt-1 block text-[9px] text-muted-foreground">{candidate.mappedEvidenceCount} evidence anchors</span></button>; })}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-border/45 bg-[hsl(var(--universe-surface)/0.8)] px-3 py-1.5 text-[10px] text-muted-foreground backdrop-blur">Solid support · dashed inference/saved · diamond dependency · no continuous effects</div>
+    </div>
+  );
+}
 
 function RepositoryAtlasVisualization({
   report,
@@ -288,6 +348,7 @@ function RepositoryAtlasVisualization({
   onRescan,
   onSaveVerificationBaseline,
   onDiscardVerificationBaseline,
+  futureStageOverlay,
 }: {
   report: ReadinessReport;
   story: WorkspaceStory;
@@ -310,6 +371,7 @@ function RepositoryAtlasVisualization({
   onRescan?: () => void;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
+  futureStageOverlay?: RepositoryFutureStageOverlay | null;
 }) {
   const { resolvedTheme } = useTheme();
   const isMobile = useIsMobile();
@@ -1633,7 +1695,7 @@ function RepositoryAtlasVisualization({
             visibleNodeIds={visibleUniverseNodeIdList}
             visibleEdgeIds={visibleUniverseEdgeIdList}
             cameraState={universeCamera}
-            rotationPaused={universeRotationPaused || prefersReducedMotion}
+            rotationPaused={universeRotationPaused || prefersReducedMotion || Boolean(futureStageOverlay)}
             reducedMotion={prefersReducedMotion}
             animateIn={!universeSceneSettled}
             fullscreen={fullscreen}
@@ -1805,6 +1867,7 @@ function RepositoryAtlasVisualization({
         >
           <div className="absolute inset-0 z-[var(--layer-canvas)] [&>*]:h-full">{viewMode === 'universe3d' ? universeCanvas : atlasCanvas}</div>
           <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[var(--layer-graph-overlay)] bg-[radial-gradient(circle_at_50%_44%,transparent_36%,hsl(var(--universe-stage-bg)/0.12)_68%,hsl(var(--universe-stage-bg)/0.42)_100%)]" />
+          {futureStageOverlay && <FutureNeuralField overlay={futureStageOverlay} mobile={isMobile} />}
           <div
             className="pointer-events-none absolute inset-x-2 top-2 z-[var(--layer-context)] grid min-w-0 gap-2 sm:grid-cols-[minmax(18rem,23rem)_minmax(0,1fr)] sm:items-start"
             onPointerDownCapture={() => setUniverseSceneSettled(true)}
@@ -1815,7 +1878,7 @@ function RepositoryAtlasVisualization({
             </div>
             {showTransformationPanel && (
               <div className="min-w-0 sm:col-start-1 sm:row-start-1 sm:w-full sm:max-w-[23rem]">
-                {transformationControls}
+                {futureStageOverlay ? <div className="space-y-2"><FutureStageComposer overlay={futureStageOverlay} />{transformationControls}</div> : transformationControls}
               </div>
             )}
             <div data-testid="repository-toolbar-overlay" className="pointer-events-auto relative z-[var(--layer-toolbar)] min-w-0 max-w-full justify-self-end rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.82)] p-1.5 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl motion-safe:animate-fade-in sm:col-start-2 sm:row-start-1">
@@ -1835,7 +1898,7 @@ function RepositoryAtlasVisualization({
               {chapterNavOverlay}
             </div>
           )}
-          {inspectorVisible
+          {inspectorVisible && !futureStageOverlay
             ? (
               <aside
                 ref={inspectorSheetRef}

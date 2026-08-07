@@ -61,7 +61,11 @@ No visual Quick Path UI, neural Future Pathways, Deep Configuration UI, persiste
 
 ### Ω.18.5d — Neural field and Deep Configuration
 
-Implement the versioned Future overlay in the existing Universe scene, semantic motion, shared Quick/Deep draft, inspectors, filters, full DOM equivalent, keyboard/touch/mobile behavior and reduced motion. Do not create a second current graph or renderer authority.
+Implemented on 2026-08-07 inside the existing Improve chapter: the accepted deterministic Future Graph now drives a session-local shared Quick Path/Deep Configuration draft, bounded candidate recommendations, explicit primary and support replacement, automatic dependency causality, saved alternatives, conflicts, prospective artifact/gate summaries and progressive inspectors.
+
+The existing Repository Universe remains the only current-truth renderer. Future Pathways publishes a lightweight semantic DOM/SVG overlay into that same stage, pauses idle rotation, preserves current context and uses one-shot evidence/synthesis motion with a reduced-motion-off contract. A complete keyboard/touch DOM interaction surface remains available without WebGL, with mobile switching to a meaning-first DOM flow and semantic Light/Dark/System surfaces.
+
+No Future persistence, migration, immutable preparation, generated Future artifact, prompt pack, GitHub Future mutation, verification repair or unlock persistence is included in this slice.
 
 ### Ω.18.5e — Future artifacts and prompt packs
 
@@ -80,8 +84,8 @@ Enforce bundle/interaction budgets, WebGL/GPU fallbacks, accessibility QA, owner
 | Gap | Current truth | Owner |
 | --- | --- | --- |
 | Future domain | Versioned Future Graph and deterministic one-draft synthesis contracts exist; immutable preparation and generated outputs remain absent. | Ω.18.5e |
-| One-plan interaction | One-primary/two-supporting compatibility and closure are enforced in the pure domain; no Quick Path or shared Quick/Deep UI exists. | Ω.18.5d |
-| Future visualization | Universe has current/proposed/verification overlays, not a Future Pathways overlay. | Ω.18.5d |
+| One-plan interaction | Quick Path and Deep Configuration now edit one session-local deterministic Future Draft with an explicit primary, two-support cap/replacement and automatic required closure. | Ω.18.5d complete; persistence in Ω.18.5f |
+| Future visualization | The existing Universe stage now hosts a semantic non-current Future Pathways overlay plus a complete DOM interaction equivalent; no second current graph or WebGL renderer exists. | Ω.18.5d complete; release hardening in Ω.18.5g |
 | Future outputs | No canonical Future plan/manifests/prompt packs exist. | Ω.18.5e |
 | Apply convergence | Optimization has stronger preview/base binding; Repository Intelligence has stronger provenance/handwritten preservation. | Ω.18.5f |
 | Future persistence | Accounts/projects/scans persist; Future drafts, prepared plans, saved branches and unlock lineage do not. | Ω.18.5f |

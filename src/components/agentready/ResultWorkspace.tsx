@@ -26,6 +26,7 @@ import {
   selectLimitedScanReason,
 } from './result-workspace/model/resultWorkspaceSelectors';
 import { AiWorkspaceHero } from './result-workspace/universe/UniverseWorkspace';
+import type { RepositoryFutureStageOverlay } from './result-workspace/futures/futurePathwaysPresentation';
 const ImproveChapter = lazy(() => import('./result-dashboard/chapters/ImproveChapter'));
 const VerifyChapter = lazy(() => import('./result-dashboard/chapters/VerifyChapter'));
 const DeliverChapter = lazy(() => import('./result-dashboard/chapters/DeliverChapter'));
@@ -108,6 +109,7 @@ export function ResultWorkspace({
   const [planReviewed, setPlanReviewed] = useState(false);
   const [packagePrepared, setPackagePrepared] = useState(false);
   const [prCreated, setPrCreated] = useState(false);
+  const [futureStageOverlay, setFutureStageOverlay] = useState<RepositoryFutureStageOverlay | null>(null);
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
@@ -127,6 +129,7 @@ export function ResultWorkspace({
     setPlanReviewed(false);
     setPackagePrepared(false);
     setPrCreated(false);
+    setFutureStageOverlay(null);
   }, [initialIntake, intakeSkipped, report.repoName, report.scannedAt]);
 
   useEffect(() => {
@@ -264,6 +267,7 @@ export function ResultWorkspace({
           onRescan={onRescanRepositoryIntelligence}
           onSaveVerificationBaseline={onSaveVerificationBaseline}
           onDiscardVerificationBaseline={onDiscardVerificationBaseline}
+          futureStageOverlay={activeResultChapter === 'improve' ? futureStageOverlay : null}
         /> : null}
       </div>
 
@@ -285,6 +289,7 @@ export function ResultWorkspace({
                 githubConnection={githubConnection || buildGitHubConnectionFromReport(report)}
                 report={report}
                 onVerificationBaseline={onSaveRepositoryIntelligenceVerificationBaseline}
+                onFutureStageOverlayChange={setFutureStageOverlay}
               />
             </Suspense>
           </ResultChapterLoadBoundary>
