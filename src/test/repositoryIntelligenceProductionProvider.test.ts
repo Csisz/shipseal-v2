@@ -6,6 +6,7 @@ import {
   REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
 } from '@/lib/repositoryIntelligence';
+import { stableContextFingerprint } from '@/lib/repositoryIntelligence/contextSelection';
 import { prepareProductionRepositoryIntelligence } from '../../api/repository-intelligence';
 import {
   OpenAiCompatibleRepositoryDeepIntelligenceProvider,
@@ -16,7 +17,10 @@ import {
 import type { RepoScanInput } from '@/lib/types';
 import { RepositoryIntelligenceEnhancementSingleFlight } from '@/lib/repositoryIntelligence/deepIntelligenceClient';
 
-function fixtureRequest(requestedCapabilities: Parameters<typeof buildRepositoryDeepIntelligenceRequest>[0]['requestedCapabilities'] = ['architecture-analysis', 'structured-output']) {
+function fixtureRequest(
+  requestedCapabilities: Parameters<typeof buildRepositoryDeepIntelligenceRequest>[0]['requestedCapabilities'] = ['architecture-analysis', 'structured-output'],
+  readmeContent = '# Provider fixture',
+) {
   const scanInput: RepoScanInput = {
     repoName: 'provider-fixture',
     source: { sourceType: 'github-url', githubOwner: 'example', githubRepo: 'provider-fixture', githubBranch: 'main' },
@@ -29,7 +33,7 @@ function fixtureRequest(requestedCapabilities: Parameters<typeof buildRepository
     ],
     textContents: {
       'package.json': JSON.stringify({ scripts: { test: 'vitest' }, dependencies: { react: '^18', vite: '^5' } }),
-      'README.md': '# Provider fixture',
+      'README.md': readmeContent,
       'src/main.tsx': "import React from 'react'; export function bootstrap() { return React.createElement('main'); }",
       '.env': 'API_KEY=never-transmit-value',
     },
@@ -67,12 +71,74 @@ function validProviderPayload(request = fixtureRequest().request) {
   };
 }
 
+function validProductProviderPayload(request = fixtureRequest(['product-opportunity-analysis', 'structured-output']).request) {
+  const evidence = request.evidenceReferences.find(item => item.path === 'README.md') || request.evidenceReferences[0];
+  const insight = (statement: string, inferenceLevel: 'observed' | 'inferred' = 'observed') => ({
+    statement,
+    inferenceLevel,
+    evidenceIds: [evidence.id],
+  });
+  return {
+    schemaVersion: REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
+    providerId: 'openai-compatible',
+    modelId: 'controlled-model',
+    returnedCapabilities: [...request.requestedCapabilities],
+    findings: [],
+    productUnderstanding: {
+      schemaVersion: 'shipseal.repository-product-understanding.v1',
+      productSummary: insight('A repository intelligence product for software teams.'),
+      primaryUsers: [insight('Software teams preparing repositories for AI-assisted development.', 'inferred')],
+      primaryProblem: insight('Teams need evidence-grounded repository guidance.'),
+      currentProductLoop: [insight('Scan a repository and review generated intelligence.')],
+      existingCapabilities: [{ id: 'cap:scan', title: 'Repository scanning', description: 'Scans bounded repository evidence.', evidenceIds: [evidence.id] }],
+      constraints: [],
+      businessModelClues: [],
+      missingCapabilityAreas: [insight('Users cannot yet compose longer-term product directions.', 'inferred')],
+      providerConfidence: 0.82,
+      limitations: ['Bounded static repository evidence only.'],
+    },
+    productOpportunities: [{
+      schemaVersion: 'shipseal.repository-product-opportunity.v1',
+      id: 'op:guided-futures',
+      title: 'Guided Product Futures',
+      opportunityStatement: 'Help teams compose a coherent next product direction from repository evidence.',
+      userValue: 'Turns repository analysis into an actionable product strategy decision.',
+      whyItFits: 'The product already scans repositories and explains improvement opportunities.',
+      targetUsers: ['Software product teams'],
+      evidenceIds: [evidence.id],
+      origin: 'strategic',
+      inferenceLevel: 'strategic-inference',
+      strategicRationale: 'Product direction composition extends the existing analysis loop.',
+      existingCapabilityIds: ['cap:scan'],
+      requiredNewCapabilities: [{ title: 'Product direction composition', rationale: 'Users need a bounded way to select and combine opportunities.' }],
+      optionalSupportingOpportunityIds: [],
+      knownConflicts: [],
+      expectedImplementationAreas: [{ label: 'Future composition experience', evidenceIds: [evidence.id] }],
+      changeWeight: 'moderate',
+      impactBreadth: 'workflow',
+      verificationConcept: 'A user can select one primary direction and synthesize a valid draft.',
+      humanReviewRequirements: [],
+      limitations: ['Requires product-owner review.'],
+      providerConfidence: 0.78,
+    }],
+    warnings: [],
+  };
+}
+
 function envelope(payload: unknown, fenced = false) {
   const content = JSON.stringify(payload);
   return new Response(JSON.stringify({ choices: [{ message: { content: fenced ? `\`\`\`json\n${content}\n\`\`\`` : content } }] }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+function withProductionContextContent(request: ReturnType<typeof fixtureRequest>['request'], content: string) {
+  const changed = structuredClone(request);
+  changed.contextItems[0].content = content;
+  changed.contextItems[0].includedCharacters = content.length;
+  const { fingerprint: _previousFingerprint, ...requestWithoutFingerprint } = changed;
+  return { ...requestWithoutFingerprint, fingerprint: stableContextFingerprint(requestWithoutFingerprint) };
 }
 
 const enabledEnv = {
@@ -83,6 +149,48 @@ const enabledEnv = {
 };
 
 describe('production Repository Intelligence provider', () => {
+  it('transmits server-prepared context when repository excerpts contain local absolute paths', async () => {
+    const fixture = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const request = withProductionContextContent(
+      fixture.request,
+      'Windows diagnostic: C:\\Users\\operator\\shipseal\\src\\main.tsx\nUnix diagnostic: /home/operator/shipseal/src/main.tsx',
+    );
+    const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = String(init?.body || '');
+      expect(body).toContain('[REDACTED:ABSOLUTE_PATH]');
+      expect(body).not.toMatch(/C:\\\\Users|\/home\/operator/);
+      return envelope(validProviderPayload(request));
+    });
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: vi.fn() });
+
+    expect(result.body.state).toBe('enhanced');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.body.state === 'enhanced' && result.body.diagnostics.redactedValueCount).toBeGreaterThanOrEqual(2);
+    expect(request.contextItems[0].content).toContain('C:\\Users\\operator');
+    expect(request.contextItems[0].content).toContain('/home/operator');
+  });
+
+  it('does not call fetch when the strict provider preflight rejects the prepared request', async () => {
+    const { request } = fixtureRequest();
+    const invalidRequest = { ...request, fingerprint: 'invalid-provider-fingerprint' };
+    const fetcher = vi.fn();
+    const logs: ProductionProviderLogEvent[] = [];
+    const provider = new OpenAiCompatibleRepositoryDeepIntelligenceProvider({
+      config: resolveProductionProviderConfig(enabledEnv),
+      fetcher: fetcher as unknown as typeof fetch,
+      logger: event => logs.push(event),
+    });
+    await expect(provider.analyze(invalidRequest)).rejects.toMatchObject({ code: 'request_preflight_rejected' });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(logs).toEqual(expect.arrayContaining([expect.objectContaining({
+      outcome: 'failure',
+      validationCategory: 'request-preflight-rejected',
+    })]));
+  });
+
   it('uses the existing server-only provider as a prompt-injection-resistant Product Strategist', async () => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
@@ -152,13 +260,17 @@ describe('production Repository Intelligence provider', () => {
       logger: vi.fn(),
     });
     expect(fenced.body.state).toBe('enhanced');
-    const malformedFetcher = vi.fn(async () => envelope('not-json'));
+    const malformedFetcher = vi.fn(async () => new Response('not-json', { status: 200, headers: { 'Content-Type': 'application/json' } }));
     const malformed = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv,
       fetcher: malformedFetcher as unknown as typeof fetch,
       logger: vi.fn(),
     });
-    expect(malformed.body).toMatchObject({ state: 'fallback', category: 'schema_validation_failed' });
+    expect(malformed.body).toMatchObject({
+      state: 'fallback',
+      category: 'schema_validation_failed',
+      diagnostics: { validationCategory: 'provider-envelope-invalid' },
+    });
     expect(malformedFetcher).toHaveBeenCalledTimes(1);
   });
 
@@ -171,7 +283,11 @@ describe('production Repository Intelligence provider', () => {
       fetcher: vi.fn(async () => envelope(missingProvider)) as unknown as typeof fetch,
       logger: vi.fn(),
     });
-    expect(missing.body).toMatchObject({ state: 'fallback', category: 'schema_validation_failed' });
+    expect(missing.body).toMatchObject({
+      state: 'fallback',
+      category: 'schema_validation_failed',
+      diagnostics: { validationCategory: 'response-schema-rejected' },
+    });
 
     const unsupported = validProviderPayload(request);
     unsupported.findings[0].artifactTargets = ['not-a-supported-artifact'];
@@ -181,6 +297,32 @@ describe('production Repository Intelligence provider', () => {
       logger: vi.fn(),
     });
     expect(invalidTarget.body).toMatchObject({ state: 'fallback', category: 'schema_validation_failed' });
+  });
+
+  it('distinguishes Product Opportunity schema rejection and accepts valid Product Intelligence', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const invalidProduct = validProductProviderPayload(request);
+    invalidProduct.productOpportunities[0].inferenceLevel = 'unsupported-inference' as 'strategic-inference';
+    const rejected = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
+      env: enabledEnv,
+      fetcher: vi.fn(async () => envelope(invalidProduct)) as unknown as typeof fetch,
+      logger: vi.fn(),
+    });
+    expect(rejected.body).toMatchObject({
+      state: 'fallback',
+      category: 'schema_validation_failed',
+      diagnostics: { validationCategory: 'product-opportunity-schema-rejected' },
+    });
+
+    const fetcher = vi.fn(async () => envelope(validProductProviderPayload(request)));
+    const enhanced = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
+      env: enabledEnv,
+      fetcher: fetcher as typeof fetch,
+      logger: vi.fn(),
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(enhanced.body).toMatchObject({ state: 'enhanced', deepState: 'completed' });
+    expect(enhanced.body.state === 'enhanced' && enhanced.body.result.productIntelligence?.opportunities).toHaveLength(1);
   });
 
   it('returns deterministic fallback when disabled or credentials are missing', async () => {
@@ -206,6 +348,7 @@ describe('production Repository Intelligence provider', () => {
       env: enabledEnv, fetcher: auth as typeof fetch, logger: vi.fn(),
     });
     expect(rejected.body).toMatchObject({ state: 'fallback', category: 'authentication_failed' });
+    expect(rejected.body).toMatchObject({ diagnostics: { validationCategory: 'provider-http-rejected' } });
     expect(auth).toHaveBeenCalledTimes(1);
 
     const rateLimited = vi.fn(async () => new Response('', { status: 429, headers: { 'Retry-After': '0' } }));

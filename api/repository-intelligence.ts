@@ -17,7 +17,10 @@ import {
   type ProductionDeepIntelligenceRedactionSummary,
 } from './_lib/repositoryDeepIntelligenceContext.js';
 import { stableContextFingerprint } from '../src/lib/repositoryIntelligence/contextSelection.js';
-import type { RepositoryIntelligenceSafeDiagnostics } from '../src/lib/repositoryIntelligence/productionProviderContract.js';
+import type {
+  RepositoryIntelligenceSafeDiagnostics,
+  RepositoryIntelligenceValidationCategory,
+} from '../src/lib/repositoryIntelligence/productionProviderContract.js';
 
 const MAX_BODY_BYTES = 900 * 1024;
 type VercelLikeRequest = IncomingMessage & { body?: unknown };
@@ -58,12 +61,14 @@ export async function prepareProductionRepositoryIntelligence(
     return fallback(200, category, false, diagnosticsFor(preparedContext.budget, preparedContext.redaction));
   }
   let providerRetryCount = 0;
+  let providerValidationCategory: RepositoryIntelligenceValidationCategory | undefined;
   const logger = options.logger || safeOperationalLogger;
   const provider = new OpenAiCompatibleRepositoryDeepIntelligenceProvider({
     config,
     fetcher: options.fetcher,
     logger: event => {
       providerRetryCount = Math.max(providerRetryCount, event.retryCount);
+      if (event.validationCategory) providerValidationCategory = event.validationCategory;
       logger(event);
     },
   });
@@ -85,6 +90,7 @@ export async function prepareProductionRepositoryIntelligence(
     redactionVersion: preparedContext.request.transmission?.redactionVersion,
     durationMs,
     retryCount: providerRetryCount,
+    validationCategory: providerValidationCategory || validationCategoryForExecution(execution),
   });
   if (execution.status === 'completed' && (execution.result?.findings.length || execution.result?.productIntelligence?.opportunities.length)) {
     const warnings = execution.result.summary.rejectedFindings + execution.result.summary.acceptedWithLimitations
@@ -137,6 +143,9 @@ export async function prepareProductionRepositoryIntelligence(
   }
   if (execution.status === 'completed') return fallback(200, 'evidence_validation_failed', false, {
     ...diagnostics,
+    validationCategory: execution.result?.productIntelligence?.rejectedOpportunities.length
+      ? 'product-opportunity-schema-rejected'
+      : diagnostics.validationCategory,
     acceptedFindingCount: execution.result?.findings.length || 0,
     rejectedFindingCount: execution.result?.rejectedFindings.length || 0,
     validationWarningCount: execution.result?.summary.validationMessages.length || 0,
@@ -151,11 +160,24 @@ function mapExecutionError(code?: string): RepositoryIntelligenceProviderFailure
   if (code === 'rate_limited' || code === 'provider_unavailable' || code === 'authentication_failed'
     || code === 'response_too_large' || code === 'request_cancelled') return code;
   if (code === 'response-too-large') return 'response_too_large';
-  if (['malformed-response', 'unsupported-schema', 'provider-mismatch', 'unsafe-provider-metadata', 'invalid_response'].includes(code || '')) {
+  if (['malformed-response', 'unsupported-schema', 'provider-mismatch', 'unsafe-provider-metadata', 'invalid_response',
+    'request_preflight_rejected', 'provider_http_rejected', 'provider_envelope_invalid', 'product-opportunity-schema-rejected'].includes(code || '')) {
     return 'schema_validation_failed';
   }
   if (code === 'unsupported-capability') return 'schema_validation_failed';
   return 'unknown_provider_error';
+}
+
+function validationCategoryForExecution(execution: Awaited<ReturnType<typeof runRepositoryDeepIntelligence>>): RepositoryIntelligenceValidationCategory | undefined {
+  if (execution.error?.code === 'request_preflight_rejected') return 'request-preflight-rejected';
+  if (execution.error?.code === 'provider_http_rejected') return 'provider-http-rejected';
+  if (execution.error?.code === 'provider_envelope_invalid') return 'provider-envelope-invalid';
+  if (execution.error?.code === 'product-opportunity-schema-rejected') return 'product-opportunity-schema-rejected';
+  if (execution.status === 'invalid-response') return 'response-schema-rejected';
+  if (execution.status === 'completed' && execution.result?.productIntelligence?.rejectedOpportunities.length) {
+    return 'product-opportunity-schema-rejected';
+  }
+  return undefined;
 }
 
 function fallback(status: number, category: RepositoryIntelligenceProviderFailureCategory, retryable: boolean, diagnostics?: RepositoryIntelligenceSafeDiagnostics): { status: number; body: RepositoryIntelligenceProviderApiResponse } {

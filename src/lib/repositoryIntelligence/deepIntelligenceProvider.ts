@@ -20,9 +20,17 @@ export type RepositoryDeepIntelligenceProviderErrorCode =
   | 'rate_limited'
   | 'provider_unavailable'
   | 'authentication_failed'
+  | 'request_preflight_rejected'
+  | 'provider_http_rejected'
+  | 'provider_envelope_invalid'
   | 'invalid_response'
   | 'response_too_large'
   | 'unknown_provider_error';
+
+export type RepositoryDeepIntelligenceProviderFailureStage =
+  | 'request-preflight'
+  | 'provider-http'
+  | 'provider-envelope';
 
 /** Safe cross-boundary provider failure. It must never contain response bodies or credentials. */
 export class RepositoryDeepIntelligenceProviderError extends Error {
@@ -30,6 +38,7 @@ export class RepositoryDeepIntelligenceProviderError extends Error {
     public readonly code: RepositoryDeepIntelligenceProviderErrorCode,
     message: string,
     public readonly retryable = false,
+    public readonly failureStage?: RepositoryDeepIntelligenceProviderFailureStage,
   ) {
     super(message);
     this.name = 'RepositoryDeepIntelligenceProviderError';

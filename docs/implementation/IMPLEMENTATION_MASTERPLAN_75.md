@@ -99,6 +99,12 @@ Quick Path is now a DOM-first visual product architecture composer. Three to fiv
 
 Lightweight Product Understanding correction and user-authored custom Future entry were evaluated but deferred because safely revalidating user-origin strategy would materially expand this slice. No Ω.18.5e prepared artifacts/prompt packs or Ω.18.5f persistence/apply/rescan/verification/unlock behavior is included.
 
+#### Ω.18.5d.4a — Production Product Strategist provider validation repair
+
+Server preparation now deterministically redacts Windows and Unix local absolute paths from transmitted excerpts and bounded free-text diagnostics while preserving repository-relative metadata paths. The prepared request is re-fingerprinted and must still pass the provider's strict second preflight; that boundary was not disabled. Safe `validationCategory` diagnostics distinguish request preflight, provider HTTP, provider envelope, response schema, and Product Opportunity schema rejection without returning provider bodies or repository content.
+
+The OpenAI-compatible adapter intentionally retains `json_object` for this repair. Migrating the full provider response to strict `json_schema` remains a follow-up because the nested provider-neutral finding, Product Understanding, and Product Opportunity union must first be represented and compatibility-tested against the configured OpenAI-compatible target. Post-provider deterministic validation remains authoritative.
+
 ### Ω.18.5e — Future artifacts and prompt packs
 
 Implement the canonical Future JSON/Markdown plan, artifact/evidence manifests, verification plan, reviewed repository artifacts, Codex/Claude Code/Cursor/Windsurf/human prompt packs and the immutable prepared snapshot. Reuse validated Repository Intelligence generators.

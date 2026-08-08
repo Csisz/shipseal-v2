@@ -19,6 +19,7 @@ import {
   PRODUCTION_DEEP_INTELLIGENCE_REDACTION_VERSION,
   estimateDeepIntelligenceInputTokens,
 } from './repositoryDeepIntelligenceContext.js';
+import type { RepositoryIntelligenceValidationCategory } from '../../src/lib/repositoryIntelligence/productionProviderContract.js';
 
 export const PRODUCTION_PROVIDER_POLICY_VERSION = 'shipseal.production-provider-policy.v1' as const;
 
@@ -59,7 +60,7 @@ export type ProductionProviderLogEvent = {
   requestBytes: number;
   retryCount: number;
   statusCategory?: string;
-  validationCategory?: string;
+  validationCategory?: RepositoryIntelligenceValidationCategory;
   repositoryIdentityHash?: string;
   promptVersion?: string;
   schemaVersion?: string;
@@ -189,10 +190,17 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
 
   async analyze(request: RepositoryDeepIntelligenceRequest, runOptions?: RepositoryDeepIntelligenceRunOptions): Promise<unknown> {
     const { config } = this.options;
-    const validation = validateProductionProviderRequest(request, config.policy);
-    if ('message' in validation) throw new RepositoryDeepIntelligenceProviderError('invalid_response', validation.message);
     const requestId = `ri-${request.fingerprint.slice(0, 16)}`;
     const startedAt = (this.options.now || Date.now)();
+    const validation = validateProductionProviderRequest(request, config.policy);
+    if ('message' in validation) {
+      const requestBytes = safeSerializedBytes(request);
+      this.log(requestId, 'failure', startedAt, requestBytes, 0, 'request_preflight_rejected', {
+        validationCategory: 'request-preflight-rejected',
+        inputTokenEstimate: estimateDeepIntelligenceInputTokens(requestBytes),
+      });
+      throw new RepositoryDeepIntelligenceProviderError('request_preflight_rejected', validation.message, false, 'request-preflight');
+    }
     const fetcher = this.options.fetcher || fetch;
     let retryCount = 0;
     for (;;) {
@@ -219,7 +227,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
         }
         const contentType = response.headers.get('Content-Type') || '';
         if (!contentType.toLowerCase().includes('application/json')) {
-          throw new RepositoryDeepIntelligenceProviderError('invalid_response', 'Provider response content type was not JSON.');
+          throw new RepositoryDeepIntelligenceProviderError('provider_envelope_invalid', 'Provider response content type was not JSON.', false, 'provider-envelope');
         }
         const rawText = await readBoundedResponseText(response, config.policy.maximumResponseBytes, runOptions?.signal);
         const payload = parseProviderEnvelope(rawText);
@@ -235,7 +243,10 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
         return payload;
       } catch (error) {
         if (error instanceof RepositoryDeepIntelligenceProviderError) {
-          this.log(requestId, 'failure', startedAt, validation.requestBytes, retryCount, error.code);
+          this.log(requestId, 'failure', startedAt, validation.requestBytes, retryCount, error.code, {
+            validationCategory: providerValidationCategory(error.code, error.failureStage),
+            inputTokenEstimate: estimateDeepIntelligenceInputTokens(validation.requestBytes),
+          });
           throw error;
         }
         if (runOptions?.signal?.aborted) throw new RepositoryDeepIntelligenceProviderError('request_cancelled', 'Deep-intelligence request was cancelled.');
@@ -298,15 +309,15 @@ function buildProviderBody(request: RepositoryDeepIntelligenceRequest, config: P
 
 function parseProviderEnvelope(rawText: string): unknown {
   let envelope: unknown;
-  try { envelope = JSON.parse(rawText); } catch { throw new RepositoryDeepIntelligenceProviderError('invalid_response', 'Provider returned malformed JSON.'); }
+  try { envelope = JSON.parse(rawText); } catch { throw new RepositoryDeepIntelligenceProviderError('provider_envelope_invalid', 'Provider returned malformed JSON.', false, 'provider-envelope'); }
   const content = extractMessageContent(envelope);
-  if (typeof content !== 'string') throw new RepositoryDeepIntelligenceProviderError('invalid_response', 'Provider response did not contain structured message content.');
+  if (typeof content !== 'string') throw new RepositoryDeepIntelligenceProviderError('provider_envelope_invalid', 'Provider response did not contain structured message content.', false, 'provider-envelope');
   const normalized = stripSingleJsonFence(content);
   try {
     const payload = JSON.parse(normalized) as Record<string, unknown>;
     const usage = extractUsage(envelope);
     return usage ? { ...payload, usage } : payload;
-  } catch { throw new RepositoryDeepIntelligenceProviderError('invalid_response', 'Provider structured content was not valid JSON.'); }
+  } catch { throw new RepositoryDeepIntelligenceProviderError('provider_envelope_invalid', 'Provider structured content was not valid JSON.', false, 'provider-envelope'); }
 }
 
 function extractUsage(value: unknown) {
@@ -359,10 +370,24 @@ async function readBoundedResponseText(response: Response, maximumBytes: number,
 }
 
 function httpFailure(status: number) {
-  if (status === 401 || status === 403) return new RepositoryDeepIntelligenceProviderError('authentication_failed', 'Deep-intelligence provider authentication failed.');
-  if (status === 429) return new RepositoryDeepIntelligenceProviderError('rate_limited', 'Deep-intelligence provider rate limit was reached.', true);
-  if (status >= 500) return new RepositoryDeepIntelligenceProviderError('provider_unavailable', 'Deep-intelligence provider is temporarily unavailable.', true);
-  return new RepositoryDeepIntelligenceProviderError('invalid_response', 'Deep-intelligence provider rejected the bounded request.');
+  if (status === 401 || status === 403) return new RepositoryDeepIntelligenceProviderError('authentication_failed', 'Deep-intelligence provider authentication failed.', false, 'provider-http');
+  if (status === 429) return new RepositoryDeepIntelligenceProviderError('rate_limited', 'Deep-intelligence provider rate limit was reached.', true, 'provider-http');
+  if (status >= 500) return new RepositoryDeepIntelligenceProviderError('provider_unavailable', 'Deep-intelligence provider is temporarily unavailable.', true, 'provider-http');
+  return new RepositoryDeepIntelligenceProviderError('provider_http_rejected', 'Deep-intelligence provider rejected the bounded request.', false, 'provider-http');
+}
+
+function providerValidationCategory(code: string, failureStage?: string): ProductionProviderLogEvent['validationCategory'] {
+  if (failureStage === 'provider-http') return 'provider-http-rejected';
+  if (failureStage === 'provider-envelope') return 'provider-envelope-invalid';
+  if (failureStage === 'request-preflight') return 'request-preflight-rejected';
+  if (code === 'request_preflight_rejected') return 'request-preflight-rejected';
+  if (code === 'provider_envelope_invalid') return 'provider-envelope-invalid';
+  if (['provider_http_rejected', 'authentication_failed', 'rate_limited'].includes(code)) return 'provider-http-rejected';
+  return undefined;
+}
+
+function safeSerializedBytes(value: unknown) {
+  try { return Buffer.byteLength(JSON.stringify(value), 'utf8'); } catch { return 0; }
 }
 
 async function boundedRetryDelay(retryAfter: string | null, maximumMs: number, signal?: AbortSignal, random: () => number = Math.random) {

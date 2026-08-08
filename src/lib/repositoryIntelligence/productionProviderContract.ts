@@ -3,6 +3,13 @@ import type { RepositoryDeepIntelligenceValidatedResult } from './deepIntelligen
 
 export const REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION = 'shipseal.repository-intelligence-provider-api.v1' as const;
 
+export type RepositoryIntelligenceValidationCategory =
+  | 'request-preflight-rejected'
+  | 'provider-http-rejected'
+  | 'provider-envelope-invalid'
+  | 'response-schema-rejected'
+  | 'product-opportunity-schema-rejected';
+
 export type RepositoryDeepIntelligenceState =
   | 'disabled' | 'unavailable' | 'pending' | 'completed' | 'completed-with-warnings'
   | 'rejected' | 'failed' | 'timed-out' | 'budget-exceeded';
@@ -28,6 +35,7 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   acceptedFindingCount?: number;
   rejectedFindingCount?: number;
   validationWarningCount?: number;
+  validationCategory?: RepositoryIntelligenceValidationCategory;
   costEstimate: 'unavailable';
   cacheUsed?: boolean;
 }

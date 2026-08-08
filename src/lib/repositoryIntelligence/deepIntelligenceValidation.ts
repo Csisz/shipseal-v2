@@ -48,7 +48,15 @@ export function validateRepositoryDeepIntelligenceResponse({
   if (rawSize === undefined) return invalid('malformed-response', 'Provider response could not be safely serialized.');
   if (rawSize > policy.maximumRawResponseCharacters) return invalid('response-too-large', 'Provider response exceeded the bounded raw-response limit.');
   const parsed = repositoryDeepIntelligenceProviderResponseSchema.safeParse(rawResponse);
-  if (!parsed.success) return invalid('malformed-response', 'Provider response did not match the required structured schema.');
+  if (!parsed.success) {
+    const productSchemaRejected = parsed.error.issues.some(issue => ['productUnderstanding', 'productOpportunities'].includes(String(issue.path[0] || '')));
+    return invalid(
+      productSchemaRejected ? 'product-opportunity-schema-rejected' : 'malformed-response',
+      productSchemaRejected
+        ? 'Provider Product Intelligence did not match the required structured schema.'
+        : 'Provider response did not match the required structured schema.',
+    );
+  }
   const response = parsed.data;
   if (!policy.acceptedResponseSchemaVersions.includes(response.schemaVersion)) return invalid('unsupported-schema', 'Provider response schema version is unsupported.');
   if (expectedProviderId && response.providerId !== expectedProviderId) return invalid('provider-mismatch', 'Provider response identity did not match the supplied provider.');

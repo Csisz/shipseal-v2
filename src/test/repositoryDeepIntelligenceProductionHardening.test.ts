@@ -139,6 +139,19 @@ describe('production Deep Intelligence context and redaction', () => {
     expect(redactSensitiveContent('-----BEGIN PRIVATE KEY-----\nunclosed')).toMatchObject({ excluded: true });
   });
 
+  it('redacts Windows and Unix local absolute paths without changing repository-relative paths', () => {
+    const redacted = redactSensitiveContent([
+      'Windows: C:\\Users\\operator\\shipseal\\src\\main.ts',
+      'Unix: /home/operator/shipseal/src/main.ts',
+      'Relative: src/main.ts',
+    ].join('\n'));
+    expect(redacted.content).not.toMatch(/C:\\Users|\/home\/operator/);
+    expect(redacted.content.match(/\[REDACTED:ABSOLUTE_PATH\]/g)).toHaveLength(2);
+    expect(redacted.content).toContain('Relative: src/main.ts');
+    expect(redacted.redactedValueCount).toBe(2);
+    expect(redacted.kinds).toContain('absolute-local-path');
+  });
+
   it('reduces context before provider execution and returns a typed budget-exceeded result when metadata alone cannot fit', () => {
     const request = fixtureRequest();
     const config = resolveProductionProviderConfig(enabledEnv);
@@ -186,6 +199,7 @@ describe('production Deep Intelligence transmission, response and caching', () =
     const selected = request.contextItems.find(item => item.path === 'src/main.ts')!;
     selected.content = "password=hunter2\nconst token = 'ghp_abcdefghijklmnopqrstuvwxyz1234';\nexport function bootstrap() {}";
     selected.includedCharacters = selected.content.length;
+    request.knownLimitations = [...request.knownLimitations, 'Local diagnostic referenced /home/operator/shipseal/src/main.ts.'];
     const fingerprinted = refingerprint(request);
     const config = resolveProductionProviderConfig(enabledEnv);
     const prepared = prepareProductionDeepIntelligenceContext({ request: fingerprinted, policy: config.policy, maximumOutputTokens: config.policy.maximumOutputTokens });
@@ -193,6 +207,10 @@ describe('production Deep Intelligence transmission, response and caching', () =
     if (prepared.state !== 'ready') return;
     const outboundValidation = validateProductionProviderRequest(prepared.request, config.policy);
     if ('message' in outboundValidation) throw new Error(outboundValidation.message);
+    expect(JSON.stringify(prepared.request)).toContain('[REDACTED:ABSOLUTE_PATH]');
+    expect(JSON.stringify(prepared.request)).not.toContain('/home/operator');
+    const { fingerprint, ...preparedWithoutFingerprint } = prepared.request;
+    expect(fingerprint).toBe(stableContextFingerprint(preparedWithoutFingerprint));
     const logs: unknown[] = [];
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const body = String(init?.body || '');
@@ -217,7 +235,7 @@ describe('production Deep Intelligence transmission, response and caching', () =
       fetcher: fetcher as typeof fetch,
       logger: vi.fn(),
     });
-    await expect(provider.analyze(request)).rejects.toMatchObject({ code: 'invalid_response' });
+    await expect(provider.analyze(request)).rejects.toMatchObject({ code: 'provider_envelope_invalid' });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 

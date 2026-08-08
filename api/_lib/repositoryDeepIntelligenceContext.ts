@@ -70,6 +70,8 @@ const GOOGLE_API_RE = /\bAIza[A-Za-z0-9_-]{30,}\b/g;
 const SLACK_TOKEN_RE = /\bxox[baprs]-[A-Za-z0-9-]{16,}\b/g;
 const STRIPE_SECRET_RE = /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g;
 const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
+const WINDOWS_LOCAL_ABSOLUTE_PATH_RE = /\b[A-Za-z]:[\\/](?:Users|Documents|home)[\\/][^\s"'`<>{}(),;]*/gi;
+const UNIX_LOCAL_ABSOLUTE_PATH_RE = /(?:file:\/\/\/[^\s"'`<>{}(),;]*|\/(?:Users|home)\/[^/\s"'`<>{}(),;]+(?:\/[^\s"'`<>{}(),;]*)?)/g;
 
 export function prepareProductionDeepIntelligenceContext(input: {
   request: RepositoryDeepIntelligenceRequest;
@@ -82,6 +84,13 @@ export function prepareProductionDeepIntelligenceContext(input: {
   let duplicateContentsRemoved = 0;
   let truncatedFiles = 0;
   const seenContent = new Set<string>();
+  const redactFreeText = (value: string, redactAllAssignments = false) => {
+    const result = redactSensitiveContent(value, redactAllAssignments);
+    result.kinds.forEach(kind => kinds.add(kind));
+    redactedValueCount += result.redactedValueCount;
+    if (result.excluded) excludedContentCount += 1;
+    return result.excluded ? '[REDACTED:SENSITIVE_CONTENT]' : result.content;
+  };
   const ordered = [...input.request.contextItems].sort((left, right) => (left.selectionOrder ?? Number.MAX_SAFE_INTEGER) - (right.selectionOrder ?? Number.MAX_SAFE_INTEGER)
     || left.path.localeCompare(right.path));
   const selected = ordered.slice(0, input.policy.maximumSelectedFiles);
@@ -128,13 +137,30 @@ export function prepareProductionDeepIntelligenceContext(input: {
         omittedCharacters: item.truncation.omittedCharacters + Math.max(0, original.length - content.length),
         includedLineRanges: content ? [...item.truncation.includedLineRanges] : [],
       },
-      limitations: sortedUnique(limitations),
+      structuralOutline: item.structuralOutline ? {
+        ...item.structuralOutline,
+        limitations: item.structuralOutline.limitations.map(value => redactFreeText(value)),
+      } : undefined,
+      limitations: sortedUnique(limitations.map(value => redactFreeText(value))),
       ...(redaction.excluded ? { contentAvailability: 'excluded-sensitive' as const } : {}),
     });
   }
 
+  const evidenceReferences = input.request.evidenceReferences.map(item => ({
+    ...item,
+    extractedFact: redactFreeText(item.extractedFact),
+  }));
+  const responsibilitySummary = input.request.responsibilitySummary.map(item => ({
+    ...item,
+    limitations: item.limitations.map(value => redactFreeText(value)),
+  }));
+  const folderResponsibilitySummary = input.request.folderResponsibilitySummary.map(item => ({
+    ...item,
+    limitations: item.limitations.map(value => redactFreeText(value)),
+  }));
+
   const knownLimitations = sortedUnique([
-    ...input.request.knownLimitations,
+    ...input.request.knownLimitations.map(value => redactFreeText(value)),
     ...(ordered.length > selected.length ? [`${ordered.length - selected.length} selected context files were omitted by the server transmission file limit.`] : []),
     ...(redactedValueCount ? ['Sensitive-looking values were replaced with stable redaction markers before provider transmission.'] : []),
     ...(excludedContentCount ? ['Suspicious sensitive content was excluded rather than transmitted.'] : []),
@@ -146,7 +172,15 @@ export function prepareProductionDeepIntelligenceContext(input: {
     redactionVersion: PRODUCTION_DEEP_INTELLIGENCE_REDACTION_VERSION,
     preparedServerSide: true as const,
   };
-  let prepared = fingerprintRequest({ ...input.request, contextItems, knownLimitations, transmission });
+  let prepared = fingerprintRequest({
+    ...input.request,
+    contextItems,
+    evidenceReferences,
+    responsibilitySummary,
+    folderResponsibilitySummary,
+    knownLimitations,
+    transmission,
+  });
   let requestBytes = utf8Bytes(JSON.stringify(prepared));
   let estimatedInputTokens = estimateTokens(requestBytes);
 
@@ -218,6 +252,8 @@ export function redactSensitiveContent(value: string, redactAllAssignments = fal
   content = content.replace(STRIPE_SECRET_RE, () => replace('service-token', '[REDACTED:SERVICE_TOKEN]'));
   content = content.replace(JWT_RE, () => replace('bearer-token', '[REDACTED:BEARER_TOKEN]'));
   content = content.replace(ASSIGNMENT_RE, (_match, prefix: string) => `${prefix}${replace('credential-assignment', '[REDACTED:CREDENTIAL_VALUE]')}`);
+  content = content.replace(WINDOWS_LOCAL_ABSOLUTE_PATH_RE, () => replace('absolute-local-path', '[REDACTED:ABSOLUTE_PATH]'));
+  content = content.replace(UNIX_LOCAL_ABSOLUTE_PATH_RE, () => replace('absolute-local-path', '[REDACTED:ABSOLUTE_PATH]'));
   if (redactAllAssignments) {
     content = content.split(/\r?\n/).map(line => line.replace(/^(\s*(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=).*$/, (_match, prefix: string) => `${prefix}${replace('environment-value', '[REDACTED:ENVIRONMENT_VALUE]')}`)).join('\n');
   }
