@@ -18,8 +18,12 @@ import {
   PRODUCTION_DEEP_INTELLIGENCE_CONTEXT_VERSION,
   PRODUCTION_DEEP_INTELLIGENCE_REDACTION_VERSION,
   estimateDeepIntelligenceInputTokens,
+  type ProductionDeepIntelligenceContextResult,
 } from './repositoryDeepIntelligenceContext.js';
-import type { RepositoryIntelligenceValidationCategory } from '../../src/lib/repositoryIntelligence/productionProviderContract.js';
+import type {
+  RepositoryIntelligenceValidationCategory,
+  RepositoryIntelligenceValidationReason,
+} from '../../src/lib/repositoryIntelligence/productionProviderContract.js';
 
 export const PRODUCTION_PROVIDER_POLICY_VERSION = 'shipseal.production-provider-policy.v1' as const;
 
@@ -61,6 +65,7 @@ export type ProductionProviderLogEvent = {
   retryCount: number;
   statusCategory?: string;
   validationCategory?: RepositoryIntelligenceValidationCategory;
+  validationReason?: RepositoryIntelligenceValidationReason;
   repositoryIdentityHash?: string;
   promptVersion?: string;
   schemaVersion?: string;
@@ -94,7 +99,7 @@ const DEFAULT_POLICY: ProductionProviderPolicy = Object.freeze({
 });
 
 const SECRET_VALUE_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|\b(?:sk|ghp|github_pat)_[A-Za-z0-9_-]{12,}|\b(?:API[_-]?KEY|ACCESS[_-]?TOKEN|SECRET|PASSWORD)\s*[:=]\s*\S+/i;
-const ABSOLUTE_PATH_RE = /(?:[A-Za-z]:[\\/](?:Users|Documents|home)[\\/]|file:\/\/\/|\/Users\/[^/]+\/|\/home\/[^/]+\/)/i;
+const ABSOLUTE_PATH_RE = /(?:[A-Za-z]:[\\/]+(?:Users|Documents|home)[\\/]+|file:\/\/\/|\/Users\/[^/]+\/|\/home\/[^/]+\/)/i;
 
 export function resolveProductionProviderConfig(env: NodeJS.ProcessEnv = process.env): ProductionProviderConfig {
   const configurationWarnings: string[] = [];
@@ -130,16 +135,12 @@ export function validateProductionProviderRequest(
   input: unknown,
   policy: ProductionProviderPolicy,
   options: { allowSensitiveContent?: boolean; allowConfiguredBudgetOverflow?: boolean } = {},
-): { valid: true; request: RepositoryDeepIntelligenceRequest; requestBytes: number } | { valid: false; message: string } {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return { valid: false, message: 'Bounded intelligence request is invalid.' };
+): { valid: true; request: RepositoryDeepIntelligenceRequest; requestBytes: number } | { valid: false; message: string; reason: RepositoryIntelligenceValidationReason } {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return rejection('request-not-object', 'Bounded intelligence request is invalid.');
   let serialized: string;
-  try { serialized = JSON.stringify(input); } catch { return { valid: false, message: 'Bounded intelligence request could not be serialized.' }; }
+  try { serialized = JSON.stringify(input); } catch { return rejection('serialization-failed', 'Bounded intelligence request could not be serialized.'); }
   const requestBytes = Buffer.byteLength(serialized, 'utf8');
-  if (requestBytes > (options.allowConfiguredBudgetOverflow ? 900_000 : policy.maximumRequestBytes)) return { valid: false, message: 'Bounded intelligence request exceeds the server request budget.' };
-  const safetySerialized = serialized
-    .replace(/(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|secret|password|passwd|private[_-]?key|client[_-]?secret|connection[_-]?string)\s*[:=]\s*(?:\\?["'`]?)\[REDACTED:[A-Z0-9_]+\](?:\\?["'`]?)/gi, '[REDACTED_ASSIGNMENT]')
-    .replace(/\[REDACTED:[A-Z0-9_]+\]/g, '[REDACTED_VALUE]');
-  if (!options.allowSensitiveContent && (SECRET_VALUE_RE.test(safetySerialized) || ABSOLUTE_PATH_RE.test(safetySerialized))) return { valid: false, message: 'Bounded intelligence request failed content safety validation.' };
+  if (requestBytes > (options.allowConfiguredBudgetOverflow ? 900_000 : policy.maximumRequestBytes)) return rejection('request-bytes-exceeded', 'Bounded intelligence request exceeds the server request budget.');
   const request = input as Partial<RepositoryDeepIntelligenceRequest>;
   if (request.schemaVersion !== REPOSITORY_DEEP_INTELLIGENCE_REQUEST_VERSION
     || request.responseSchemaVersion !== REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION
@@ -149,28 +150,157 @@ export function validateProductionProviderRequest(
     || !Array.isArray(request.contextItems)
     || !Array.isArray(request.evidenceReferences)
     || !Array.isArray(request.requestedCapabilities)
-    || !request.resultLimits) return { valid: false, message: 'Bounded intelligence request schema is unsupported.' };
-  try { resolveRepositoryDeepIntelligenceResultPolicy(request.resultLimits); } catch { return { valid: false, message: 'Bounded intelligence result policy is invalid.' }; }
+    || !Array.isArray(request.responsibilitySummary)
+    || !Array.isArray(request.folderResponsibilitySummary)
+    || !Array.isArray(request.relationshipSummary)
+    || !Array.isArray(request.frameworkEvidence)
+    || !Array.isArray(request.knownLimitations)
+    || !Array.isArray(request.safetyInstructions)
+    || !request.repository
+    || !request.resultLimits) return rejection('unsupported-request-schema', 'Bounded intelligence request schema is unsupported.');
+  if (!hasSupportedNestedRequestShape(request as RepositoryDeepIntelligenceRequest)) {
+    return rejection('unsupported-request-schema', 'Bounded intelligence request schema is unsupported.');
+  }
+  const safetyText = providerBoundFreeText(request as RepositoryDeepIntelligenceRequest)
+    .join('\n')
+    .replace(/(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|secret|password|passwd|private[_-]?key|client[_-]?secret|connection[_-]?string)\s*[:=]\s*(?:["'`]?)\[REDACTED:[A-Z0-9_]+\](?:["'`]?)/gi, '[REDACTED_ASSIGNMENT]')
+    .replace(/\[REDACTED:[A-Z0-9_]+\]/g, '[REDACTED_VALUE]');
+  if (!options.allowSensitiveContent && SECRET_VALUE_RE.test(safetyText)) return rejection('content-safety-secret', 'Bounded intelligence request failed content safety validation.');
+  if (!options.allowSensitiveContent && ABSOLUTE_PATH_RE.test(safetyText)) return rejection('content-safety-absolute-path', 'Bounded intelligence request failed content safety validation.');
+  try { resolveRepositoryDeepIntelligenceResultPolicy(request.resultLimits); } catch { return rejection('invalid-result-policy', 'Bounded intelligence result policy is invalid.'); }
   const capabilities = new Set<string>(REPOSITORY_DEEP_INTELLIGENCE_CAPABILITIES);
   if (!request.requestedCapabilities.length || request.requestedCapabilities.some(item => !capabilities.has(item))) {
-    return { valid: false, message: 'Bounded intelligence capabilities are invalid.' };
+    return rejection('unsupported-capability', 'Bounded intelligence capabilities are invalid.');
   }
   if (request.contextItems.length > 120 || request.evidenceReferences.length > 4_000) {
-    return { valid: false, message: 'Bounded intelligence request exceeds structural limits.' };
+    return rejection('structural-limit-exceeded', 'Bounded intelligence request exceeds structural limits.');
   }
   const contextCharacters = request.contextItems.reduce((total, item) => total + (typeof item?.content === 'string' ? item.content.length : 0), 0);
-  if (!options.allowConfiguredBudgetOverflow && contextCharacters > policy.maximumContextCharacters) return { valid: false, message: 'Bounded repository context exceeds the transmission budget.' };
+  if (!options.allowConfiguredBudgetOverflow && contextCharacters > policy.maximumContextCharacters) return rejection('context-budget-exceeded', 'Bounded repository context exceeds the transmission budget.');
   const evidenceIds = new Set(request.evidenceReferences.map(item => item?.id).filter((id): id is string => typeof id === 'string'));
-  if (evidenceIds.size !== request.evidenceReferences.length
-    || request.contextItems.some(item => !safeRelativePath(item?.path)
-      || item.supportingEvidenceIds.some(id => !evidenceIds.has(id)))) {
-    return { valid: false, message: 'Bounded intelligence request contains invalid paths or evidence references.' };
+  if (evidenceIds.size !== request.evidenceReferences.length) return rejection('duplicate-evidence-id', 'Bounded intelligence request contains duplicate evidence references.');
+  if (!providerBoundPaths(request as RepositoryDeepIntelligenceRequest).every(path => path === '.' || safeRelativePath(path))) {
+    return rejection('invalid-context-path', 'Bounded intelligence request contains an invalid repository path.');
+  }
+  if (providerBoundEvidenceIds(request as RepositoryDeepIntelligenceRequest).some(id => !evidenceIds.has(id))) {
+    return rejection('missing-supporting-evidence', 'Bounded intelligence request contains an unresolved supporting evidence reference.');
   }
   const { fingerprint, ...requestWithoutFingerprint } = request as RepositoryDeepIntelligenceRequest;
   if (stableContextFingerprint(requestWithoutFingerprint) !== fingerprint) {
-    return { valid: false, message: 'Bounded intelligence request fingerprint is invalid.' };
+    return rejection('fingerprint-mismatch', 'Bounded intelligence request fingerprint is invalid.');
   }
   return { valid: true, request: request as RepositoryDeepIntelligenceRequest, requestBytes };
+}
+
+export function validatePreparedProductionProviderRequest(
+  prepared: Extract<ProductionDeepIntelligenceContextResult, { state: 'ready' }>,
+  policy: ProductionProviderPolicy,
+) {
+  return validateProductionProviderRequest(prepared.request, policy);
+}
+
+function rejection(reason: RepositoryIntelligenceValidationReason, message: string) {
+  return { valid: false as const, reason, message };
+}
+
+function hasSupportedNestedRequestShape(request: RepositoryDeepIntelligenceRequest) {
+  return safeRepositoryIdentity(request.repository)
+    && (request.locale === undefined || safeBoundedScalar(request.locale, 32))
+    && safeGeneratedId(request.contextBundleFingerprint)
+    && request.contextItems.every(item => !!item
+      && typeof item.path === 'string'
+      && safeGeneratedId(item.selectionId)
+      && Array.isArray(item.supportingEvidenceIds)
+      && item.supportingEvidenceIds.every(safeGeneratedId)
+      && Array.isArray(item.selectionReasons)
+      && item.selectionReasons.every(value => safeBoundedScalar(value, 120))
+      && Array.isArray(item.relatedSelectedFiles)
+      && Array.isArray(item.limitations)
+      && (!item.structuralOutline
+        || (Array.isArray(item.structuralOutline.declaredSymbols)
+          && Array.isArray(item.structuralOutline.namedExports)
+          && item.structuralOutline.declaredSymbols.every(symbol => !!symbol && safeBoundedScalar(symbol.name, 500))
+          && item.structuralOutline.namedExports.every(value => safeBoundedScalar(value, 500))
+          && Array.isArray(item.structuralOutline.localImports)
+          && Array.isArray(item.structuralOutline.localRelationships)
+          && Array.isArray(item.structuralOutline.limitations))))
+    && request.evidenceReferences.every(item => !!item
+      && typeof item.id === 'string'
+      && safeGeneratedId(item.id)
+      && typeof item.path === 'string'
+      && typeof item.extractedFact === 'string')
+    && request.responsibilitySummary.every(item => !!item && typeof item.path === 'string' && Array.isArray(item.limitations))
+    && request.folderResponsibilitySummary.every(item => !!item && typeof item.path === 'string' && Array.isArray(item.limitations))
+    && request.relationshipSummary.every(item => !!item
+      && typeof item.sourcePath === 'string'
+      && typeof item.targetPath === 'string'
+      && Array.isArray(item.supportingEvidenceIds))
+    && request.frameworkEvidence.every(item => !!item
+      && safeBoundedScalar(item.framework, 160)
+      && Array.isArray(item.paths)
+      && Array.isArray(item.evidenceIds)
+      && item.evidenceIds.every(safeGeneratedId))
+    && request.knownLimitations.every(item => typeof item === 'string')
+    && request.safetyInstructions.every(item => safeBoundedScalar(item, 500));
+}
+
+function safeRepositoryIdentity(repository: RepositoryDeepIntelligenceRequest['repository']) {
+  return !!repository
+    && safeBoundedScalar(repository.name, 300, true)
+    && (repository.sourceType === undefined || safeBoundedScalar(repository.sourceType, 80))
+    && (repository.fullName === undefined || safeBoundedScalar(repository.fullName, 500, true))
+    && (repository.ref === undefined || safeBoundedScalar(repository.ref, 500, true));
+}
+
+function safeBoundedScalar(value: unknown, maximumLength: number, rejectSensitiveShape = false) {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= maximumLength
+    && !/[\0\r\n]/.test(value)
+    && (!rejectSensitiveShape || (!SECRET_VALUE_RE.test(value) && !ABSOLUTE_PATH_RE.test(value)
+      && !value.includes('../') && !value.includes('..\\') && !value.toLowerCase().includes('file:///')));
+}
+
+function safeGeneratedId(value: unknown) {
+  return typeof value === 'string' && value.length >= 8 && value.length <= 500 && /^[A-Za-z0-9._:-]+$/.test(value);
+}
+
+function providerBoundFreeText(request: RepositoryDeepIntelligenceRequest) {
+  return [
+    ...request.contextItems.flatMap(item => [
+      item.content,
+      ...item.limitations,
+      ...(item.structuralOutline?.limitations || []),
+    ]),
+    ...request.evidenceReferences.map(item => item.extractedFact),
+    ...request.responsibilitySummary.flatMap(item => item.limitations),
+    ...request.folderResponsibilitySummary.flatMap(item => item.limitations),
+    ...request.knownLimitations,
+  ].filter((value): value is string => typeof value === 'string');
+}
+
+function providerBoundPaths(request: RepositoryDeepIntelligenceRequest) {
+  return [
+    ...request.contextItems.flatMap(item => [
+      item.path,
+      ...item.relatedSelectedFiles,
+      ...(item.structuralOutline?.localImports || []),
+      ...(item.structuralOutline?.localRelationships.map(relationship => relationship.targetPath) || []),
+    ]),
+    ...request.evidenceReferences.map(item => item.path),
+    ...request.responsibilitySummary.map(item => item.path),
+    ...request.folderResponsibilitySummary.map(item => item.path),
+    ...request.relationshipSummary.flatMap(relationship => [relationship.sourcePath, relationship.targetPath]),
+    ...request.frameworkEvidence.flatMap(item => item.paths),
+  ];
+}
+
+function providerBoundEvidenceIds(request: RepositoryDeepIntelligenceRequest) {
+  return [
+    ...request.contextItems.flatMap(item => item.supportingEvidenceIds),
+    ...request.relationshipSummary.flatMap(relationship => relationship.supportingEvidenceIds),
+    ...request.frameworkEvidence.flatMap(item => item.evidenceIds),
+  ];
 }
 
 export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements RepositoryDeepIntelligenceProvider {
@@ -197,6 +327,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
       const requestBytes = safeSerializedBytes(request);
       this.log(requestId, 'failure', startedAt, requestBytes, 0, 'request_preflight_rejected', {
         validationCategory: 'request-preflight-rejected',
+        validationReason: validation.reason,
         inputTokenEstimate: estimateDeepIntelligenceInputTokens(requestBytes),
       });
       throw new RepositoryDeepIntelligenceProviderError('request_preflight_rejected', validation.message, false, 'request-preflight');

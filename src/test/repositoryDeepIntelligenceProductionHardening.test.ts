@@ -21,7 +21,7 @@ import {
 import {
   OpenAiCompatibleRepositoryDeepIntelligenceProvider,
   resolveProductionProviderConfig,
-  validateProductionProviderRequest,
+  validatePreparedProductionProviderRequest,
 } from '../../api/_lib/repositoryDeepIntelligenceProvider';
 import { prepareProductionRepositoryIntelligence } from '../../api/repository-intelligence';
 
@@ -96,6 +96,31 @@ afterEach(() => {
 });
 
 describe('production Deep Intelligence context and redaction', () => {
+  it('keeps every representative ready preparation valid at the strict outbound invariant', () => {
+    const config = resolveProductionProviderConfig(enabledEnv);
+    const cases = [
+      { name: 'normal repository', content: 'export function bootstrap() { return true; }' },
+      { name: 'environment template', content: 'PUBLIC_ORIGIN=https://example.test', environmentTemplate: true },
+      { name: 'Windows-path content', content: 'Diagnostic source C:\\Users\\operator\\workspace\\src\\main.ts' },
+      { name: 'Unix-path content', content: 'Diagnostic source /home/operator/workspace/src/main.ts' },
+    ];
+    for (const sample of cases) {
+      const request = structuredClone(fixtureRequest());
+      const selected = request.contextItems.find(item => item.path === 'src/main.ts')!;
+      selected.content = sample.content;
+      selected.includedCharacters = sample.content.length;
+      if (sample.environmentTemplate) selected.sourceCategory = 'environment-template';
+      const prepared = prepareProductionDeepIntelligenceContext({
+        request: refingerprint(request),
+        policy: config.policy,
+        maximumOutputTokens: config.policy.maximumOutputTokens,
+      });
+      expect(prepared.state, sample.name).toBe('ready');
+      if (prepared.state !== 'ready') continue;
+      expect(validatePreparedProductionProviderRequest(prepared, config.policy), sample.name).toMatchObject({ valid: true });
+    }
+  });
+
   it('selects deterministically, bounds files and excerpts, and removes duplicate content', () => {
     const request = structuredClone(fixtureRequest());
     request.contextItems.forEach(item => { item.content = 'same bounded content'; });
@@ -205,7 +230,7 @@ describe('production Deep Intelligence transmission, response and caching', () =
     const prepared = prepareProductionDeepIntelligenceContext({ request: fingerprinted, policy: config.policy, maximumOutputTokens: config.policy.maximumOutputTokens });
     expect(prepared.state).toBe('ready');
     if (prepared.state !== 'ready') return;
-    const outboundValidation = validateProductionProviderRequest(prepared.request, config.policy);
+    const outboundValidation = validatePreparedProductionProviderRequest(prepared, config.policy);
     if ('message' in outboundValidation) throw new Error(outboundValidation.message);
     expect(JSON.stringify(prepared.request)).toContain('[REDACTED:ABSOLUTE_PATH]');
     expect(JSON.stringify(prepared.request)).not.toContain('/home/operator');

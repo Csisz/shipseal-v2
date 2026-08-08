@@ -8,6 +8,7 @@ import {
 import {
   OpenAiCompatibleRepositoryDeepIntelligenceProvider,
   resolveProductionProviderConfig,
+  validatePreparedProductionProviderRequest,
   validateProductionProviderRequest,
   type ProductionProviderLogger,
 } from './_lib/repositoryDeepIntelligenceProvider.js';
@@ -20,6 +21,7 @@ import { stableContextFingerprint } from '../src/lib/repositoryIntelligence/cont
 import type {
   RepositoryIntelligenceSafeDiagnostics,
   RepositoryIntelligenceValidationCategory,
+  RepositoryIntelligenceValidationReason,
 } from '../src/lib/repositoryIntelligence/productionProviderContract.js';
 
 const MAX_BODY_BYTES = 900 * 1024;
@@ -42,6 +44,7 @@ export async function prepareProductionRepositoryIntelligence(
   }
   if (!config.enabled) return fallback(200, 'provider_disabled', false);
   if (!config.apiKey || !config.model) return fallback(200, 'credentials_missing', false);
+  const logger = options.logger || safeOperationalLogger;
   if (!input || typeof input !== 'object' || Array.isArray(input)
     || (input as { version?: unknown }).version !== REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION) {
     return fallback(400, 'invalid_request', false);
@@ -60,15 +63,46 @@ export async function prepareProductionRepositoryIntelligence(
     const category = preparedContext.state === 'budget-exceeded' ? 'budget_exceeded' : 'redaction_failed';
     return fallback(200, category, false, diagnosticsFor(preparedContext.budget, preparedContext.redaction));
   }
+  const outboundValidation = validatePreparedProductionProviderRequest(preparedContext, config.policy);
+  if ('reason' in outboundValidation) {
+    const requestId = `ri-${preparedContext.request.fingerprint.slice(0, 16)}`;
+    logger({
+      event: 'repository_intelligence_provider',
+      requestId,
+      providerId: config.provider,
+      modelId: config.model,
+      outcome: 'failure',
+      durationMs: 0,
+      requestBytes: preparedContext.budget.requestBytes,
+      retryCount: 0,
+      statusCategory: 'request_preflight_rejected',
+      validationCategory: 'request-preflight-rejected',
+      validationReason: outboundValidation.reason,
+      inputTokenEstimate: preparedContext.budget.estimatedInputTokens,
+    });
+    return fallback(200, 'schema_validation_failed', false, diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
+      requestId,
+      providerType: config.provider,
+      promptVersion: preparedContext.request.promptContractVersion,
+      schemaVersion: preparedContext.request.responseSchemaVersion,
+      contextVersion: preparedContext.request.transmission?.contextVersion,
+      redactionVersion: preparedContext.request.transmission?.redactionVersion,
+      durationMs: 0,
+      retryCount: 0,
+      validationCategory: 'request-preflight-rejected',
+      validationReason: outboundValidation.reason,
+    }));
+  }
   let providerRetryCount = 0;
   let providerValidationCategory: RepositoryIntelligenceValidationCategory | undefined;
-  const logger = options.logger || safeOperationalLogger;
+  let providerValidationReason: RepositoryIntelligenceValidationReason | undefined;
   const provider = new OpenAiCompatibleRepositoryDeepIntelligenceProvider({
     config,
     fetcher: options.fetcher,
     logger: event => {
       providerRetryCount = Math.max(providerRetryCount, event.retryCount);
       if (event.validationCategory) providerValidationCategory = event.validationCategory;
+      if (event.validationReason) providerValidationReason = event.validationReason;
       logger(event);
     },
   });
@@ -91,6 +125,7 @@ export async function prepareProductionRepositoryIntelligence(
     durationMs,
     retryCount: providerRetryCount,
     validationCategory: providerValidationCategory || validationCategoryForExecution(execution),
+    validationReason: providerValidationReason,
   });
   if (execution.status === 'completed' && (execution.result?.findings.length || execution.result?.productIntelligence?.opportunities.length)) {
     const warnings = execution.result.summary.rejectedFindings + execution.result.summary.acceptedWithLimitations

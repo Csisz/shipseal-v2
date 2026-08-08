@@ -12,8 +12,11 @@ import {
   OpenAiCompatibleRepositoryDeepIntelligenceProvider,
   resolveProductionProviderConfig,
   stripSingleJsonFence,
+  validatePreparedProductionProviderRequest,
+  validateProductionProviderRequest,
   type ProductionProviderLogEvent,
 } from '../../api/_lib/repositoryDeepIntelligenceProvider';
+import { prepareProductionDeepIntelligenceContext } from '../../api/_lib/repositoryDeepIntelligenceContext';
 import type { RepoScanInput } from '@/lib/types';
 import { RepositoryIntelligenceEnhancementSingleFlight } from '@/lib/repositoryIntelligence/deepIntelligenceClient';
 
@@ -46,6 +49,43 @@ function fixtureRequest(
     requestedCapabilities,
   });
   return { request };
+}
+
+function productionShapeFixture() {
+  const textContents: Record<string, string> = {};
+  const files: RepoScanInput['files'] = Array.from({ length: 40 }, (_, index) => {
+    const path = `src/pages/home/team/page-${String(index).padStart(2, '0')}.tsx`;
+    const previous = index ? `import { Page${index - 1} } from './page-${String(index - 1).padStart(2, '0')}';\n` : '';
+    const symbols = Array.from({ length: 2 }, (_unused, symbolIndex) => `export const feature${index}_${symbolIndex} = ${index + symbolIndex};`).join('\n');
+    const boundedNarrative = Array.from({ length: 100 }, (_unused, lineIndex) => `// Synthetic product capability ${index}:${lineIndex} remains evidence-bound and deterministic.`).join('\n');
+    const content = `${previous}export function Page${index}() { return <main>Product capability ${index}</main>; }\n${symbols}\n${boundedNarrative}`;
+    textContents[path] = content;
+    return { path, size: content.length };
+  });
+  textContents['package.json'] = JSON.stringify({ dependencies: { react: '^18.0.0' }, devDependencies: { vite: '^5.0.0' } });
+  files.push({ path: 'package.json', size: textContents['package.json'].length });
+  const scanInput: RepoScanInput = {
+    repoName: 'synthetic-production-shape',
+    source: { sourceType: 'github-url', githubOwner: 'example', githubRepo: 'synthetic-production-shape', githubBranch: 'main' },
+    files,
+    textContents,
+  };
+  const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);
+  const contextBundle = prepareRepositoryIntelligenceContext({
+    scanInput,
+    evidenceResult,
+    policy: {
+      maximumSelectedFiles: 40,
+      maximumSupportingFiles: 8,
+      maximumFilesPerSourceRoot: 40,
+      maximumRepresentativesPerFolder: 40,
+    },
+  });
+  return buildRepositoryDeepIntelligenceRequest({
+    contextBundle,
+    evidenceResult,
+    requestedCapabilities: ['product-opportunity-analysis', 'structured-output'],
+  });
 }
 
 function validProviderPayload(request = fixtureRequest().request) {
@@ -149,6 +189,91 @@ const enabledEnv = {
 };
 
 describe('production Repository Intelligence provider', () => {
+  it('prepares and transmits a 40-file Production-shape Product Strategist request', async () => {
+    const request = productionShapeFixture();
+    const config = resolveProductionProviderConfig(enabledEnv);
+    const prepared = prepareProductionDeepIntelligenceContext({
+      request,
+      policy: config.policy,
+      maximumOutputTokens: config.policy.maximumOutputTokens,
+    });
+    expect(prepared.state).toBe('ready');
+    if (prepared.state !== 'ready') return;
+    expect(prepared.request.contextItems).toHaveLength(40);
+    expect(prepared.budget.estimatedInputTokens).toBeGreaterThanOrEqual(70_000);
+    expect(prepared.budget.estimatedInputTokens).toBeLessThanOrEqual(80_000);
+    expect(prepared.request.contextItems.some(item => item.selectionReasons.length > 0)).toBe(true);
+    expect(prepared.request.contextItems.some(item => (item.structuralOutline?.declaredSymbols.length || 0) > 0)).toBe(true);
+    expect(prepared.request.contextItems.some(item => (item.structuralOutline?.namedExports.length || 0) > 0)).toBe(true);
+    expect(prepared.request.contextItems.some(item => (item.structuralOutline?.localImports.length || 0) > 0)).toBe(true);
+    expect(prepared.request.relationshipSummary.length).toBeGreaterThan(0);
+    expect(prepared.request.frameworkEvidence.length).toBeGreaterThan(0);
+    const validation = validatePreparedProductionProviderRequest(prepared, config.policy);
+    expect(validation).toMatchObject({ valid: true });
+
+    const fetcher = vi.fn(async () => envelope(validProductProviderPayload(prepared.request)));
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: vi.fn() });
+    expect(result.body).toMatchObject({
+      state: 'enhanced',
+      deepState: 'completed',
+      result: { productIntelligence: { opportunities: [expect.objectContaining({ sourceId: 'op:guided-futures' })] } },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns stable bounded reasons for every strict preflight rejection class', () => {
+    const base = fixtureRequest().request;
+    const config = resolveProductionProviderConfig(enabledEnv);
+    const refingerprint = (request: typeof base) => {
+      const { fingerprint: _fingerprint, ...withoutFingerprint } = request;
+      return { ...withoutFingerprint, fingerprint: stableContextFingerprint(withoutFingerprint) };
+    };
+    const reasonFor = (request: unknown, policy = config.policy) => {
+      const result = validateProductionProviderRequest(request, policy);
+      return 'reason' in result ? result.reason : undefined;
+    };
+
+    const secret = structuredClone(base);
+    secret.contextItems[0].content = 'PASSWORD=synthetic-not-a-real-secret';
+    const absolutePath = structuredClone(base);
+    absolutePath.contextItems[0].content = '/home/operator/private/repository.ts';
+    const unsupportedSchema = { ...base, schemaVersion: 'unsupported-request-version' };
+    const unsafeRepositoryIdentity = refingerprint({ ...base, repository: { ...base.repository, name: 'archive /home/operator/private/repository' } });
+    const invalidPolicy = refingerprint({ ...base, resultLimits: { ...base.resultLimits, maximumFindings: -1 } });
+    const unsupportedCapability = refingerprint({ ...base, requestedCapabilities: ['unsupported-capability'] as unknown as typeof base.requestedCapabilities });
+    const structuralLimit = refingerprint({ ...base, contextItems: Array.from({ length: 121 }, () => structuredClone(base.contextItems[0])) });
+    const duplicateEvidence = refingerprint({ ...base, evidenceReferences: [...base.evidenceReferences, structuredClone(base.evidenceReferences[0])] });
+    const invalidPath = structuredClone(base);
+    invalidPath.contextItems[0].path = '../outside.ts';
+    const missingEvidence = structuredClone(base);
+    missingEvidence.contextItems[0].supportingEvidenceIds = ['evidence:not-present'];
+
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(reasonFor(null)).toBe('request-not-object');
+    expect(reasonFor(cyclic)).toBe('serialization-failed');
+    expect(reasonFor(refingerprint(secret))).toBe('content-safety-secret');
+    expect(reasonFor(refingerprint(absolutePath))).toBe('content-safety-absolute-path');
+    expect(reasonFor(unsupportedSchema)).toBe('unsupported-request-schema');
+    expect(reasonFor(unsafeRepositoryIdentity)).toBe('unsupported-request-schema');
+    expect(reasonFor(invalidPolicy)).toBe('invalid-result-policy');
+    expect(reasonFor(unsupportedCapability)).toBe('unsupported-capability');
+    expect(reasonFor(structuralLimit)).toBe('structural-limit-exceeded');
+    expect(reasonFor(duplicateEvidence)).toBe('duplicate-evidence-id');
+    expect(reasonFor(refingerprint(invalidPath))).toBe('invalid-context-path');
+    expect(reasonFor(refingerprint(missingEvidence))).toBe('missing-supporting-evidence');
+    expect(reasonFor({ ...base, fingerprint: 'mismatched-fingerprint' })).toBe('fingerprint-mismatch');
+    expect(reasonFor(base, { ...config.policy, maximumRequestBytes: 1 })).toBe('request-bytes-exceeded');
+    expect(reasonFor(base, { ...config.policy, maximumContextCharacters: 1 })).toBe('context-budget-exceeded');
+    expect(JSON.stringify(validateProductionProviderRequest(refingerprint(secret), config.policy))).not.toContain('synthetic-not-a-real-secret');
+    expect(JSON.stringify(validateProductionProviderRequest(refingerprint(absolutePath), config.policy))).not.toContain('/home/operator');
+    expect(JSON.stringify(validateProductionProviderRequest(refingerprint(missingEvidence), config.policy))).not.toContain('evidence:not-present');
+    expect(JSON.stringify(validateProductionProviderRequest(unsafeRepositoryIdentity, config.policy))).not.toContain('/home/operator');
+  });
+
   it('transmits server-prepared context when repository excerpts contain local absolute paths', async () => {
     const fixture = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const request = withProductionContextContent(
@@ -188,6 +313,7 @@ describe('production Repository Intelligence provider', () => {
     expect(logs).toEqual(expect.arrayContaining([expect.objectContaining({
       outcome: 'failure',
       validationCategory: 'request-preflight-rejected',
+      validationReason: 'fingerprint-mismatch',
     })]));
   });
 

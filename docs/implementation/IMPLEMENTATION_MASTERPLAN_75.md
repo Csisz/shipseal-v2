@@ -105,6 +105,14 @@ Server preparation now deterministically redacts Windows and Unix local absolute
 
 The OpenAI-compatible adapter intentionally retains `json_object` for this repair. Migrating the full provider response to strict `json_schema` remains a follow-up because the nested provider-neutral finding, Product Understanding, and Product Opportunity union must first be represented and compatibility-tested against the configured OpenAI-compatible target. Post-provider deterministic validation remains authoritative.
 
+#### Ω.18.5d.4b — Exact provider preflight diagnosis and Production-shape repair
+
+Strict preflight now returns a bounded `validationReason` and records the same safe enum in provider operations. The remaining Production-equivalent rejection was `content-safety-absolute-path`: whole-request serialization made a valid repository-relative metadata path such as `src/pages/home/team/page.tsx` match the Unix local-path pattern at `/home/team/`. Server redaction correctly preserved that path, but the field-insensitive second validation misclassified it before provider fetch.
+
+Outbound safety scanning is now field-aware. Repository-relative path/identity fields, system-controlled enums/text, and generated IDs/fingerprints retain their structure and are validated as those categories. Only repository-derived free text—source excerpts, extracted facts, item/outline/responsibility/folder limitations, and known limitations—is scanned for secret and absolute-path content after server redaction. Context, related-file, outline-import, relationship, evidence, responsibility, folder, and framework paths receive repository-relative path validation; context, relationship, and framework evidence references retain closure checks.
+
+The route applies the shared `prepare → ready → strict outbound validation` invariant before provider construction, and the provider defensively revalidates the same finalized request. A synthetic 40-file Product Strategist fixture exercises responsibilities, folders, relationships, framework evidence, structural outlines, selection metadata, server redaction, a 70k–80k token estimate, strict validation, provider envelope parsing, and one mock HTTP fetch. No limits, Product Opportunity behavior, fallback semantics, Future UX, or later-sprint scope changed.
+
 ### Ω.18.5e — Future artifacts and prompt packs
 
 Implement the canonical Future JSON/Markdown plan, artifact/evidence manifests, verification plan, reviewed repository artifacts, Codex/Claude Code/Cursor/Windsurf/human prompt packs and the immutable prepared snapshot. Reuse validated Repository Intelligence generators.

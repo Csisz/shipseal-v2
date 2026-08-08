@@ -10,6 +10,22 @@ export type RepositoryIntelligenceValidationCategory =
   | 'response-schema-rejected'
   | 'product-opportunity-schema-rejected';
 
+export type RepositoryIntelligenceValidationReason =
+  | 'request-not-object'
+  | 'serialization-failed'
+  | 'request-bytes-exceeded'
+  | 'content-safety-secret'
+  | 'content-safety-absolute-path'
+  | 'unsupported-request-schema'
+  | 'invalid-result-policy'
+  | 'unsupported-capability'
+  | 'structural-limit-exceeded'
+  | 'context-budget-exceeded'
+  | 'duplicate-evidence-id'
+  | 'invalid-context-path'
+  | 'missing-supporting-evidence'
+  | 'fingerprint-mismatch';
+
 export type RepositoryDeepIntelligenceState =
   | 'disabled' | 'unavailable' | 'pending' | 'completed' | 'completed-with-warnings'
   | 'rejected' | 'failed' | 'timed-out' | 'budget-exceeded';
@@ -36,6 +52,7 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   rejectedFindingCount?: number;
   validationWarningCount?: number;
   validationCategory?: RepositoryIntelligenceValidationCategory;
+  validationReason?: RepositoryIntelligenceValidationReason;
   costEstimate: 'unavailable';
   cacheUsed?: boolean;
 }
