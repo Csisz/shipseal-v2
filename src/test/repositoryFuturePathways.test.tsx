@@ -105,7 +105,7 @@ function chooseFirstPrimary() {
   fireEvent.click(buttons[0]);
 }
 
-describe('Omega 18.5d.4 canvas-first Repository Future Pathways', () => {
+describe('Omega 18.5d.5 focused Repository Future Pathways composer', () => {
   it('does not request Product Strategist again for Future Pathways interactions', async () => {
     const prepareEnhancement = vi.fn(async () => undefined);
     const onStageOverlayChange = vi.fn();
@@ -144,6 +144,32 @@ describe('Omega 18.5d.4 canvas-first Repository Future Pathways', () => {
     expect(screen.queryByRole('complementary', { name: 'Future Pathways inspector' })).not.toBeInTheDocument();
     expect(container.textContent).not.toContain('evidence:readme');
     expect(screen.queryByText(/Prospective artifacts and gates/)).not.toBeInTheDocument();
+  });
+
+  it('uses a compact three-layer composition flow with details disclosed on demand', async () => {
+    const { container } = await renderPathways();
+    expect(screen.getByRole('heading', { name: 'Strong product directions' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
+    const inspector = await screen.findByTestId('future-context-inspector');
+    const grounding = within(inspector).getByText('Technical grounding and caveats').closest('details');
+    expect(grounding).not.toHaveAttribute('open');
+    expect(within(inspector).getByText(/Proposed direction, not a current capability/i)).toBeInTheDocument();
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Close details' }));
+
+    chooseFirstPrimary();
+    expect(await screen.findByText(/01 · Primary future/i)).toBeInTheDocument();
+    expect(screen.getByText(/02 · Optional supports/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add supporting opportunity' })).toHaveAttribute('aria-expanded', 'false');
+
+    const requirements = screen.getByText(/03 · System-generated/i).closest('details');
+    expect(requirements).not.toHaveAttribute('open');
+    fireEvent.click(requirements!.querySelector('summary')!);
+    expect(requirements).toHaveAttribute('open');
+    expect(container.querySelectorAll('[data-future-node="dependency"]').length).toBeGreaterThan(0);
+
+    const draftDetails = screen.getByText('Plan grounding and implementation detail').closest('details');
+    expect(draftDetails).not.toHaveAttribute('open');
   });
 
   it('selects a primary directly on the composer and publishes its proposed Universe projection', async () => {

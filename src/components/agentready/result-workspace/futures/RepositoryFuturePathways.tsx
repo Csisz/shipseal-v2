@@ -360,11 +360,11 @@ export default function RepositoryFuturePathways({ report, universe, productInte
               <Orbit className="h-4 w-4" aria-hidden="true" /> Future Pathways
             </div>
             <h2 id="future-pathways-heading" className="mt-2 font-display text-2xl font-semibold text-foreground md:text-3xl">Where should this product go next?</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{productIntelligenceState === 'analysing'
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">{productIntelligenceState === 'analysing'
               ? 'ShipSeal is understanding the product and exploring its strongest next directions.'
               : productIntelligenceState === 'enhanced'
-                ? 'ShipSeal understood the product from bounded repository evidence and mapped its strongest user-facing next directions.'
-                : 'Repository-grounded improvements remain available while strategic Product Intelligence is unavailable.'}</p>
+                ? 'Choose a strong direction, combine compatible supports, and see what the repository would need.'
+                : 'Repository-grounded improvements remain available while Product Intelligence is unavailable.'}</p>
           </div>
           <ModeToggle mode={mode} onChange={setMode} />
         </div>
@@ -449,11 +449,11 @@ function ProductUnderstandingDisclosure({ productIntelligence, state }: {
 }) {
   const understanding = productIntelligence?.understanding;
   return (
-    <details className="border-b border-primary/15 bg-background/30 px-5 py-3 md:px-7">
+    <details className="group border-b border-primary/10 bg-background/20 px-5 py-3 md:px-7">
       <summary className="cursor-pointer list-none text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        <span className="flex flex-wrap items-center justify-between gap-2">
-          <span>What ShipSeal understood</span>
-          <span className="text-xs font-normal text-muted-foreground">
+        <span className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <span className="min-w-0"><span>What ShipSeal understood</span>{understanding && <span className="ml-2 hidden max-w-xl truncate text-xs font-normal text-muted-foreground md:inline">{understanding.productSummary.statement}</span>}</span>
+          <span className="shrink-0 text-xs font-normal text-muted-foreground">
             {state === 'analysing' ? 'Analysing product opportunities'
               : state === 'enhanced' ? 'Product opportunities enhanced'
                 : state === 'deterministic-fallback' ? 'Based on repository evidence only'
@@ -462,13 +462,13 @@ function ProductUnderstandingDisclosure({ productIntelligence, state }: {
         </span>
       </summary>
       {understanding ? (
-        <div className="mt-3 grid gap-3 text-sm md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-          <div className="rounded-xl border border-border/50 bg-background/35 p-3">
+        <div className="mt-3 grid gap-3 border-t border-border/30 pt-3 text-sm md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+          <div className="rounded-xl bg-background/25 p-3">
             <div className="text-xs font-mono uppercase tracking-wide text-primary">Product</div>
             <p className="mt-1 text-foreground">{understanding.productSummary.statement}</p>
             <p className="mt-2 text-xs text-muted-foreground">Primary problem: {understanding.primaryProblem.statement}</p>
           </div>
-          <div className="rounded-xl border border-border/50 bg-background/35 p-3">
+          <div className="rounded-xl bg-background/25 p-3">
             <div className="text-xs font-mono uppercase tracking-wide text-primary">Current loop</div>
             <p className="mt-1 text-muted-foreground">{understanding.currentProductLoop.map(item => item.statement).join(' → ') || 'Current loop remains incomplete.'}</p>
           </div>
@@ -521,21 +521,13 @@ function QuickPath({ draft, replaceSupportGoalId, onReplaceSupport, onCancelRepl
   onReplaceSupport: (goalId: string) => void;
   onCancelReplace: () => void;
 }) {
+  if (!draft || !replaceSupportGoalId) return null;
   return (
-    <div className="mt-5 space-y-4">
-      <div role="status" className="rounded-2xl border border-primary/15 bg-primary/5 p-4 text-sm text-muted-foreground">
-        {draft
-          ? 'The Future Draft is composed directly on the canvas above. Open details below only when you need dependency, trade-off, or provenance depth.'
-          : 'Select one product direction directly on the composer above.'}
-      </div>
-      {draft && replaceSupportGoalId && (
-            <section role="dialog" aria-labelledby="replace-support-heading" className="rounded-2xl border border-warning/35 bg-warning/10 p-4">
-              <h3 id="replace-support-heading" className="font-semibold">Replace one supporting goal</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Your Future Plan can include up to two supporting goals. Choose which selected support to replace; nothing is removed silently.</p>
-              <div className="mt-3 flex flex-wrap gap-2">{draft.supportingGoals.map(goal => <Button key={goal.goalId} type="button" variant="outline" className="min-h-11" onClick={() => onReplaceSupport(goal.goalId)}>Replace {goal.title}</Button>)}<Button type="button" variant="ghost" className="min-h-11" onClick={onCancelReplace}>Cancel</Button></div>
-            </section>
-      )}
-    </div>
+    <section role="dialog" aria-labelledby="replace-support-heading" className="mt-4 rounded-2xl border border-warning/35 bg-warning/10 p-4">
+      <h3 id="replace-support-heading" className="font-semibold">Replace one supporting goal</h3>
+      <p className="mt-1 text-sm text-muted-foreground">Choose which selected support to replace; nothing is removed silently.</p>
+      <div className="mt-3 flex flex-wrap gap-2">{draft.supportingGoals.map(goal => <Button key={goal.goalId} type="button" variant="outline" className="min-h-11" onClick={() => onReplaceSupport(goal.goalId)}>Replace {goal.title}</Button>)}<Button type="button" variant="ghost" className="min-h-11" onClick={onCancelReplace}>Cancel</Button></div>
+    </section>
   );
 }
 
@@ -599,16 +591,36 @@ function Filter({ label, value, options, onChange }: { label: string; value: str
 
 function DraftDetails({ draft, onDependencyFocus, onSavedFocus, onSavedPrimary, onSavedSupport }: { draft: RepositoryFutureDraft; onDependencyFocus: (id: string) => void; onSavedFocus: (id: string) => void; onSavedPrimary: (id: string) => void; onSavedSupport: (id: string) => void }) {
   return (
-    <div className="mt-6 space-y-3">
-      <details className="rounded-2xl border border-border/55 bg-background/25 p-4">
-        <summary className="cursor-pointer font-semibold">Required dependency path · {draft.dependencies.length}</summary>
-        <p className="mt-2 text-xs text-muted-foreground">Prerequisite-first and automatic. Dependencies cannot be toggled off independently.</p>
-        <ol className="mt-3 space-y-2">{draft.dependencies.map((dependency, index) => <li key={dependency.id}><button type="button" onClick={() => onDependencyFocus(dependency.id)} className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-border/50 bg-background/35 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-primary/35 font-mono text-xs">{index + 1}</span><span className="min-w-0 flex-1"><span className="block font-medium">{dependency.title}</span><span className="block text-xs text-muted-foreground">{dependency.state} · required by {dependency.dependentGoalIds.length} {dependency.dependentGoalIds.length === 1 ? 'goal' : 'goals'}</span></span><LockKeyhole className="h-4 w-4 text-muted-foreground" aria-label="Automatically required" /></button></li>)}</ol>
+    <div className="mt-5 space-y-3">
+      <div className="rounded-2xl border border-primary/20 bg-primary/[0.045] px-4 py-3">
+        <div className="flex items-center gap-3"><Sparkles className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" /><div className="min-w-0"><div className="text-sm font-semibold">Future Draft crystallized</div><p className="mt-0.5 text-xs text-muted-foreground">Stable and synthesized · still proposed, not prepared or applied</p></div></div>
+      </div>
+      <details className="group rounded-2xl border border-border/45 bg-background/20">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <span><span className="block text-sm">Plan grounding and implementation detail</span><span className="mt-0.5 block text-xs font-normal text-muted-foreground">Dependencies, prospective outputs, alternatives and trade-offs</span></span>
+          <span className="shrink-0 font-mono text-[10px] text-muted-foreground">Draft {draft.fingerprint.slice(0, 12)}</span>
+        </summary>
+        <div className="space-y-6 border-t border-border/35 p-4">
+          <section aria-labelledby="draft-dependencies-heading">
+            <h4 id="draft-dependencies-heading" className="text-sm font-semibold">Required dependency path · {draft.dependencies.length}</h4>
+            <p className="mt-1 text-xs text-muted-foreground">Prerequisite-first and automatic. Dependencies cannot be toggled off independently.</p>
+            <ol className="mt-3 grid gap-2 sm:grid-cols-2">{draft.dependencies.map((dependency, index) => <li key={dependency.id}><button type="button" onClick={() => onDependencyFocus(dependency.id)} className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-border/40 bg-background/25 px-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-primary/30 font-mono text-xs">{index + 1}</span><span className="min-w-0 flex-1"><span className="block font-medium">{dependency.title}</span><span className="block text-xs text-muted-foreground">{dependency.state} · required by {dependency.dependentGoalIds.length} {dependency.dependentGoalIds.length === 1 ? 'goal' : 'goals'}</span></span><LockKeyhole className="h-4 w-4 text-muted-foreground" aria-label="Automatically required" /></button></li>)}</ol>
+          </section>
+          <section aria-labelledby="draft-outputs-heading">
+            <h4 id="draft-outputs-heading" className="text-sm font-semibold">Prospective artifacts and gates · {draft.artifacts.length + draft.gates.length}</h4>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">{draft.artifacts.map(artifact => <div key={artifact.id} className="rounded-xl border border-border/35 p-3 text-sm"><Box className="mb-2 h-4 w-4 text-primary" aria-hidden="true" /><span className="font-medium">Prospective artifact</span><span className="mt-1 block text-muted-foreground">{artifact.title}</span></div>)}{draft.gates.map(gate => <div key={gate.id} className="rounded-xl border border-warning/25 p-3 text-sm"><ShieldCheck className="mb-2 h-4 w-4 text-warning" aria-hidden="true" /><span className="font-medium">Gate</span><span className="mt-1 block text-muted-foreground">{gate.title}</span></div>)}</div>
+            <p className="mt-2 text-xs text-muted-foreground">Metadata previews only. No files or prepared artifacts have been generated.</p>
+          </section>
+          <section aria-labelledby="draft-alternatives-heading">
+            <h4 id="draft-alternatives-heading" className="text-sm font-semibold">Saved for later · {draft.savedAlternatives.length}</h4>
+            <div className="mt-3 space-y-2">{draft.savedAlternatives.slice(0, 12).map(saved => <div key={saved.goalId} className="rounded-xl border border-dashed border-border/45 bg-background/20 p-3"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><button type="button" className="min-h-11 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onSavedFocus(saved.goalId)}>{saved.title}<span className="block text-xs font-normal text-muted-foreground">{REPOSITORY_FUTURE_COMPATIBILITY_LABELS[saved.compatibility]} · not selected · not prepared</span></button><div className="flex gap-2"><Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => onSavedPrimary(saved.goalId)}>Make primary</Button><Button type="button" size="sm" variant="ghost" className="min-h-11" disabled={!['compatible', 'compatible-with-review'].includes(saved.compatibility)} onClick={() => onSavedSupport(saved.goalId)}>Use as support</Button></div></div></div>)}</div>
+          </section>
+          <section aria-labelledby="draft-tradeoffs-heading">
+            <h4 id="draft-tradeoffs-heading" className="text-sm font-semibold">Trade-offs, review and conflicts</h4>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">{draft.tradeOffs.map(tradeOff => <div key={`${tradeOff.category}:${tradeOff.value}`} className="rounded-xl border border-border/35 p-3 text-sm"><span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">{humanize(tradeOff.category)}</span><span className="mt-1 block font-medium">{humanize(tradeOff.value)}</span><span className="mt-1 block text-xs text-muted-foreground">{tradeOff.rationale}</span></div>)}</div>{draft.conflicts.length > 0 && <div className="mt-3 space-y-2">{draft.conflicts.map(conflict => <div key={conflict.id} className="rounded-xl border border-warning/25 bg-warning/5 p-3 text-sm"><span className="font-medium">{humanize(conflict.kind)} · {conflict.severity}</span><p className="mt-1 text-muted-foreground">{conflict.rationale}</p></div>)}</div>}
+          </section>
+        </div>
       </details>
-      <details className="rounded-2xl border border-border/55 bg-background/25 p-4"><summary className="cursor-pointer font-semibold">Prospective artifacts and gates · {draft.artifacts.length + draft.gates.length}</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{draft.artifacts.map(artifact => <div key={artifact.id} className="rounded-xl border border-border/45 p-3 text-sm"><Box className="mb-2 h-4 w-4 text-primary" aria-hidden="true" /><span className="font-medium">Prospective artifact</span><span className="mt-1 block text-muted-foreground">{artifact.title}</span></div>)}{draft.gates.map(gate => <div key={gate.id} className="rounded-xl border border-warning/30 p-3 text-sm"><ShieldCheck className="mb-2 h-4 w-4 text-warning" aria-hidden="true" /><span className="font-medium">Gate</span><span className="mt-1 block text-muted-foreground">{gate.title}</span></div>)}</div><p className="mt-3 text-xs text-muted-foreground">These are metadata previews only. No files or prepared artifacts have been generated.</p></details>
-      <details className="rounded-2xl border border-border/55 bg-background/25 p-4"><summary className="cursor-pointer font-semibold">Saved for later · {draft.savedAlternatives.length}</summary><div className="mt-3 space-y-2">{draft.savedAlternatives.slice(0, 12).map(saved => <div key={saved.goalId} className="rounded-xl border border-dashed border-border/60 bg-background/25 p-3"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><button type="button" className="min-h-11 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onSavedFocus(saved.goalId)}>{saved.title}<span className="block text-xs font-normal text-muted-foreground">{REPOSITORY_FUTURE_COMPATIBILITY_LABELS[saved.compatibility]} · not selected · not prepared</span></button><div className="flex gap-2"><Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => onSavedPrimary(saved.goalId)}>Make primary</Button><Button type="button" size="sm" variant="ghost" className="min-h-11" disabled={!['compatible', 'compatible-with-review'].includes(saved.compatibility)} onClick={() => onSavedSupport(saved.goalId)}>Use as support</Button></div></div></div>)}</div></details>
-      <details className="rounded-2xl border border-border/55 bg-background/25 p-4"><summary className="cursor-pointer font-semibold">Trade-offs, review and conflicts</summary><div className="mt-3 grid gap-2 sm:grid-cols-2">{draft.tradeOffs.map(tradeOff => <div key={`${tradeOff.category}:${tradeOff.value}`} className="rounded-xl border border-border/45 p-3 text-sm"><span className="font-mono text-xs uppercase tracking-wide text-muted-foreground">{humanize(tradeOff.category)}</span><span className="mt-1 block font-medium">{humanize(tradeOff.value)}</span><span className="mt-1 block text-xs text-muted-foreground">{tradeOff.rationale}</span></div>)}</div>{draft.conflicts.length > 0 && <div className="mt-3 space-y-2">{draft.conflicts.map(conflict => <div key={conflict.id} className="rounded-xl border border-warning/30 bg-warning/5 p-3 text-sm"><span className="font-medium">{humanize(conflict.kind)} · {conflict.severity}</span><p className="mt-1 text-muted-foreground">{conflict.rationale}</p></div>)}</div>}</details>
-      <div className="rounded-2xl border border-primary/25 bg-primary/5 p-4"><div className="flex items-start gap-3"><Sparkles className="mt-0.5 h-5 w-5 text-primary" aria-hidden="true" /><div><div className="font-semibold">Future Draft crystallized</div><p className="mt-1 text-sm text-muted-foreground">This means the selected structure is stable and synthesized. It is not prepared, persisted or applied.</p><div className="mt-2 font-mono text-[10px] text-muted-foreground">Draft {draft.fingerprint.slice(0, 16)}</div></div></div></div>
     </div>
   );
 }
