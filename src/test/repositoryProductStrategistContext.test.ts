@@ -7,6 +7,7 @@ import {
   buildRepositoryProductStrategistRequest,
   prepareRepositoryIntelligenceContext,
   prepareRepositoryProductStrategistContext,
+  validateRepositoryDeepIntelligenceResponse,
 } from '@/lib/repositoryIntelligence';
 import { prepareProductionDeepIntelligenceContext } from '../../api/_lib/repositoryDeepIntelligenceContext';
 import { resolveProductionExecutionPolicy } from '../../api/repository-intelligence';
@@ -16,6 +17,7 @@ import {
   resolveProductionProviderConfig,
 } from '../../api/_lib/repositoryDeepIntelligenceProvider';
 import { buildProductStrategistProviderPayload } from '../../api/_lib/repositoryProductStrategistPayload';
+import { normalizeProductStrategistProviderResponse } from '../../api/_lib/repositoryProductStrategistResponse';
 
 function educationalProductFixture(): RepoScanInput {
   const textContents: Record<string, string> = {
@@ -69,7 +71,7 @@ function developerToolFixture(): RepoScanInput {
   return { repoName: 'traceforge-fixture', files: Object.entries(textContents).map(([path, content]) => ({ path, size: content.length })), textContents };
 }
 
-function productProjection(scanInput: RepoScanInput) {
+function preparedProductStrategistFixture(scanInput: RepoScanInput) {
   const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);
   const contextBundle = prepareRepositoryProductStrategistContext({ scanInput, evidenceResult });
   const request = buildRepositoryProductStrategistRequest({ contextBundle, evidenceResult });
@@ -81,7 +83,14 @@ function productProjection(scanInput: RepoScanInput) {
   const policy = resolveProductionExecutionPolicy(request, config.policy);
   const prepared = prepareProductionDeepIntelligenceContext({ request, policy, maximumOutputTokens: policy.maximumOutputTokens });
   if (prepared.state !== 'ready') throw new Error(`Unexpected Product Strategist preparation state: ${prepared.state}`);
-  return buildProductStrategistProviderPayload(prepared.request);
+  return {
+    request: prepared.request,
+    projection: buildProductStrategistProviderPayload(prepared.request),
+  };
+}
+
+function productProjection(scanInput: RepoScanInput) {
+  return preparedProductStrategistFixture(scanInput).projection;
 }
 
 describe('focused Product Strategist context', () => {
@@ -170,6 +179,93 @@ describe('focused Product Strategist context', () => {
       evidenceResult,
       requestedCapabilities: ['architecture-analysis', 'product-opportunity-analysis', 'structured-output'],
     })).toThrow(/execute separately/i);
+  });
+
+  it('preserves useful educational-product strategy through compact deterministic normalization', () => {
+    const { request, projection } = preparedProductStrategistFixture(educationalProductFixture());
+    expect(projection.evidenceIndex.length).toBeGreaterThan(0);
+    const compactResponse = {
+      p: {
+        s: 'BrightSteps helps parents create printable learning activities for children.',
+        u: ['Parents', 'Children'],
+        p: 'Parents need age-matched activities they can use quickly.',
+        loop: ['Choose topic and level', 'Generate activity', 'Print or share', 'Complete activity'],
+        caps: [
+          { id: 'activity-generation', t: 'Activity generation', d: 'Creates printable topic-based activities.', e: [0] },
+          { id: 'learning-profile', t: 'Learning profiles', d: 'Stores child age and completed activities.', e: [0] },
+        ],
+        constraints: ['No outcome scoring appears in evidence.'],
+        business: [],
+        missing: ['Progress interpretation', 'Interactive activity state'],
+        e: [0],
+        notes: ['Parent validation is still required.'],
+        q: 0.82,
+      },
+      o: [
+        {
+          id: 'progress-insight', t: 'Learning progress snapshots',
+          s: 'Turn completed activity history into simple skill and topic progress views.',
+          v: 'Parents see what to reinforce without reviewing every worksheet.',
+          f: 'Builds on stored activity history and the existing parent workflow.',
+          u: ['Parents'], e: [0], o: 'strategic', x: ['learning-profile'],
+          n: ['Progress aggregation'], support: [], conflicts: [],
+          areas: [{ l: 'Activity history analysis', p: -1 }], w: 'moderate', b: 'workflow',
+          verify: 'Parents identify the next topic from a progress snapshot in one minute.',
+          caveats: [{ t: 'Avoid unsupported learning claims.', r: true }], q: 0.78,
+        },
+        {
+          id: 'interactive-mode', t: 'Interactive activity mode',
+          s: 'Let children complete selected generated activities in an interactive flow.',
+          v: 'Families can use activities when printing is inconvenient.',
+          f: 'Extends the existing generation flow while preserving printable output.',
+          u: ['Parents', 'Children'], e: [0], o: 'strategic', x: ['activity-generation'],
+          n: ['Interactive activity runtime'], support: [], conflicts: [],
+          areas: [{ l: 'Activity experience', p: -1 }], w: 'broad', b: 'cross-product',
+          verify: 'A child completes a generated activity and the result is retained.',
+          caveats: [{ t: 'Validate accessibility for children.', r: true }], q: 0.74,
+        },
+        {
+          id: 'adaptive-followup', t: 'Adaptive follow-up activities',
+          s: 'Suggest a focused next activity from age and completion history.',
+          v: 'Parents spend less time choosing what should come next.',
+          f: 'Uses the learning profile to guide the established generation workflow.',
+          u: ['Parents'], e: [0], o: 'exploratory', x: ['activity-generation', 'learning-profile'],
+          n: ['Follow-up recommendation rules'], support: ['progress-insight'], conflicts: [],
+          areas: [{ l: 'Activity recommendations', p: -1 }], w: 'moderate', b: 'workflow',
+          verify: 'Parents accept or replace a suggested follow-up and record usefulness.',
+          caveats: [{ t: 'Keep recommendations explainable.', r: true }], q: 0.7,
+        },
+      ],
+    };
+
+    const first = normalizeProductStrategistProviderResponse(compactResponse, request, 'fixture-model');
+    const second = normalizeProductStrategistProviderResponse(compactResponse, request, 'fixture-model');
+    expect(first).toEqual(second);
+
+    const validation = validateRepositoryDeepIntelligenceResponse({
+      request,
+      rawResponse: first,
+      expectedProviderId: 'openai-compatible',
+    });
+    expect(validation).toEqual(expect.objectContaining({ success: true }));
+    if (!validation.success) return;
+    expect(validation.result.productIntelligence?.understanding).toMatchObject({
+      productSummary: { statement: expect.stringContaining('printable learning activities') },
+      primaryUsers: expect.arrayContaining([expect.objectContaining({ statement: 'Parents' })]),
+      existingCapabilities: expect.arrayContaining([
+        expect.objectContaining({ sourceId: 'activity-generation' }),
+        expect.objectContaining({ sourceId: 'learning-profile' }),
+      ]),
+    });
+    const opportunities = validation.result.productIntelligence?.opportunities || [];
+    expect(opportunities).toHaveLength(3);
+    expect(opportunities.map(item => item.sourceId)).toEqual(expect.arrayContaining([
+      'progress-insight',
+      'interactive-mode',
+      'adaptive-followup',
+    ]));
+    expect(opportunities.every(item => item.userValue && item.whyItFits && item.evidenceIds.length > 0)).toBe(true);
+    expect(opportunities.every(item => item.requiredNewCapabilities.length > 0)).toBe(true);
   });
 
   it.each([

@@ -1,0 +1,341 @@
+import { z } from 'zod';
+import {
+  REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
+} from '../../src/lib/repositoryIntelligence/deepIntelligenceSchema.js';
+import type { RepositoryDeepIntelligenceRequest } from '../../src/lib/repositoryIntelligence/deepIntelligenceRequest.js';
+import {
+  REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
+  REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
+} from '../../src/lib/repositoryIntelligence/productIntelligenceSchema.js';
+import {
+  PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION,
+  buildProductStrategistProviderPayload,
+} from './repositoryProductStrategistPayload.js';
+
+export { PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION } from './repositoryProductStrategistPayload.js';
+export const PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS = 2_200;
+
+export const PRODUCT_STRATEGIST_COMPACT_LIMITS = Object.freeze({
+  evidenceIndexes: 6,
+  understanding: {
+    summaryCharacters: 88,
+    users: 3,
+    userCharacters: 32,
+    problemCharacters: 64,
+    loopSteps: 4,
+    loopStepCharacters: 40,
+    capabilities: 4,
+    capabilityIdCharacters: 20,
+    capabilityTitleCharacters: 32,
+    capabilityDescriptionCharacters: 48,
+    constraints: 2,
+    businessClues: 2,
+    missingAreas: 3,
+    listItemCharacters: 40,
+    limitations: 2,
+  },
+  opportunity: {
+    idCharacters: 20,
+    titleCharacters: 40,
+    statementCharacters: 80,
+    userValueCharacters: 64,
+    fitCharacters: 80,
+    targetUsers: 3,
+    targetUserCharacters: 32,
+    existingCapabilities: 3,
+    newCapabilities: 2,
+    newCapabilityCharacters: 40,
+    supportingOpportunities: 1,
+    conflicts: 1,
+    conflictCharacters: 40,
+    implementationAreas: 1,
+    implementationAreaCharacters: 40,
+    verificationCharacters: 80,
+    caveats: 1,
+    caveatCharacters: 40,
+  },
+});
+
+const limits = PRODUCT_STRATEGIST_COMPACT_LIMITS;
+const evidenceIndexSchema = z.number().int().min(0).max(59);
+const evidenceIndexesSchema = z.array(evidenceIndexSchema).min(1).max(limits.evidenceIndexes);
+const compactString = (maximum: number) => z.string().trim().min(1).max(maximum);
+
+const compactCapabilitySchema = z.object({
+  id: compactString(limits.understanding.capabilityIdCharacters),
+  t: compactString(limits.understanding.capabilityTitleCharacters),
+  d: compactString(limits.understanding.capabilityDescriptionCharacters),
+  e: evidenceIndexesSchema,
+}).strict();
+
+export const productStrategistCompactUnderstandingSchema = z.object({
+  s: compactString(limits.understanding.summaryCharacters),
+  u: z.array(compactString(limits.understanding.userCharacters)).min(1).max(limits.understanding.users),
+  p: compactString(limits.understanding.problemCharacters),
+  loop: z.array(compactString(limits.understanding.loopStepCharacters)).min(1).max(limits.understanding.loopSteps),
+  caps: z.array(compactCapabilitySchema).min(1).max(limits.understanding.capabilities),
+  constraints: z.array(compactString(limits.understanding.listItemCharacters)).max(limits.understanding.constraints),
+  business: z.array(compactString(limits.understanding.listItemCharacters)).max(limits.understanding.businessClues),
+  missing: z.array(compactString(limits.understanding.listItemCharacters)).max(limits.understanding.missingAreas),
+  e: evidenceIndexesSchema,
+  notes: z.array(compactString(limits.understanding.listItemCharacters)).max(limits.understanding.limitations),
+  q: z.number().finite().min(0).max(1),
+}).strict();
+
+const compactImplementationAreaSchema = z.object({
+  l: compactString(limits.opportunity.implementationAreaCharacters),
+  p: z.number().int().min(-1).max(11),
+}).strict();
+
+const compactCaveatSchema = z.object({
+  t: compactString(limits.opportunity.caveatCharacters),
+  r: z.boolean(),
+}).strict();
+
+export const productStrategistCompactOpportunitySchema = z.object({
+  id: compactString(limits.opportunity.idCharacters),
+  t: compactString(limits.opportunity.titleCharacters),
+  s: compactString(limits.opportunity.statementCharacters),
+  v: compactString(limits.opportunity.userValueCharacters),
+  f: compactString(limits.opportunity.fitCharacters),
+  u: z.array(compactString(limits.opportunity.targetUserCharacters)).min(1).max(limits.opportunity.targetUsers),
+  e: evidenceIndexesSchema,
+  o: z.enum(['evidence-backed', 'strategic', 'exploratory']),
+  x: z.array(compactString(limits.understanding.capabilityIdCharacters)).max(limits.opportunity.existingCapabilities),
+  n: z.array(compactString(limits.opportunity.newCapabilityCharacters)).min(1).max(limits.opportunity.newCapabilities),
+  support: z.array(compactString(limits.opportunity.idCharacters)).max(limits.opportunity.supportingOpportunities),
+  conflicts: z.array(compactString(limits.opportunity.conflictCharacters)).max(limits.opportunity.conflicts),
+  areas: z.array(compactImplementationAreaSchema).max(limits.opportunity.implementationAreas),
+  w: z.enum(['small', 'moderate', 'broad']),
+  b: z.enum(['focused', 'workflow', 'cross-product']),
+  verify: compactString(limits.opportunity.verificationCharacters),
+  caveats: z.array(compactCaveatSchema).max(limits.opportunity.caveats),
+  q: z.number().finite().min(0).max(1),
+}).strict();
+
+const compactResponseCollectionSchema = z.object({
+  p: z.unknown(),
+  o: z.array(z.unknown()).min(3).max(5),
+}).strict();
+
+const stringJsonSchema = (maxLength: number, description: string) => ({
+  type: 'string', minLength: 1, maxLength, description,
+});
+const stringArrayJsonSchema = (maximumItems: number, maximumCharacters: number, description: string, minimumItems = 0) => ({
+  type: 'array', minItems: minimumItems, maxItems: maximumItems,
+  items: stringJsonSchema(maximumCharacters, description),
+});
+const evidenceJsonSchema = {
+  type: 'array', minItems: 1, maxItems: limits.evidenceIndexes,
+  description: 'Indexes into the supplied evidenceIndex array; include only necessary support.',
+  items: { type: 'integer', minimum: 0, maximum: 59 },
+};
+
+export const PRODUCT_STRATEGIST_COMPACT_JSON_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['p', 'o'],
+  properties: {
+    p: {
+      type: 'object', additionalProperties: false,
+      required: ['s', 'u', 'p', 'loop', 'caps', 'constraints', 'business', 'missing', 'e', 'notes', 'q'],
+      properties: {
+        s: stringJsonSchema(limits.understanding.summaryCharacters, 'One concise product summary, one or two short sentences.'),
+        u: stringArrayJsonSchema(limits.understanding.users, limits.understanding.userCharacters, 'Concise primary user group.', 1),
+        p: stringJsonSchema(limits.understanding.problemCharacters, 'One concise primary problem sentence.'),
+        loop: stringArrayJsonSchema(limits.understanding.loopSteps, limits.understanding.loopStepCharacters, 'Short current product-loop step.', 1),
+        caps: {
+          type: 'array', minItems: 1, maxItems: limits.understanding.capabilities,
+          items: {
+            type: 'object', additionalProperties: false, required: ['id', 't', 'd', 'e'],
+            properties: {
+              id: stringJsonSchema(limits.understanding.capabilityIdCharacters, 'Short stable capability ID used by opportunity x references.'),
+              t: stringJsonSchema(limits.understanding.capabilityTitleCharacters, 'Existing capability title.'),
+              d: stringJsonSchema(limits.understanding.capabilityDescriptionCharacters, 'One concise existing-capability description.'),
+              e: evidenceJsonSchema,
+            },
+          },
+        },
+        constraints: stringArrayJsonSchema(limits.understanding.constraints, limits.understanding.listItemCharacters, 'Material current constraint only.'),
+        business: stringArrayJsonSchema(limits.understanding.businessClues, limits.understanding.listItemCharacters, 'Material business-model clue only.'),
+        missing: stringArrayJsonSchema(limits.understanding.missingAreas, limits.understanding.listItemCharacters, 'Concise missing capability area.'),
+        e: evidenceJsonSchema,
+        notes: stringArrayJsonSchema(limits.understanding.limitations, limits.understanding.listItemCharacters, 'Material Product Understanding limitation only.'),
+        q: { type: 'number', minimum: 0, maximum: 1, description: 'Provider confidence.' },
+      },
+    },
+    o: {
+      type: 'array', minItems: 3, maxItems: 5,
+      description: 'Return three strong opportunities by default; add a fourth or fifth only when materially distinct and high-value.',
+      items: {
+        type: 'object', additionalProperties: false,
+        required: ['id', 't', 's', 'v', 'f', 'u', 'e', 'o', 'x', 'n', 'support', 'conflicts', 'areas', 'w', 'b', 'verify', 'caveats', 'q'],
+        properties: {
+          id: stringJsonSchema(limits.opportunity.idCharacters, 'Short unique opportunity ID.'),
+          t: stringJsonSchema(limits.opportunity.titleCharacters, 'Short user-facing opportunity title.'),
+          s: stringJsonSchema(limits.opportunity.statementCharacters, 'One concise opportunity statement.'),
+          v: stringJsonSchema(limits.opportunity.userValueCharacters, 'One concise user-value statement.'),
+          f: stringJsonSchema(limits.opportunity.fitCharacters, 'One concise explanation of product fit and strategic rationale.'),
+          u: stringArrayJsonSchema(limits.opportunity.targetUsers, limits.opportunity.targetUserCharacters, 'Concise target user group.', 1),
+          e: evidenceJsonSchema,
+          o: { type: 'string', enum: ['evidence-backed', 'strategic', 'exploratory'] },
+          x: stringArrayJsonSchema(limits.opportunity.existingCapabilities, limits.understanding.capabilityIdCharacters, 'Existing capability ID from p.caps.'),
+          n: stringArrayJsonSchema(limits.opportunity.newCapabilities, limits.opportunity.newCapabilityCharacters, 'Major required new capability title.', 1),
+          support: stringArrayJsonSchema(limits.opportunity.supportingOpportunities, limits.opportunity.idCharacters, 'Optional supporting opportunity ID.'),
+          conflicts: stringArrayJsonSchema(limits.opportunity.conflicts, limits.opportunity.conflictCharacters, 'Material known conflict only.'),
+          areas: {
+            type: 'array', maxItems: limits.opportunity.implementationAreas,
+            items: {
+              type: 'object', additionalProperties: false, required: ['l', 'p'],
+              properties: {
+                l: stringJsonSchema(limits.opportunity.implementationAreaCharacters, 'Concise implementation-area label.'),
+                p: { type: 'integer', minimum: -1, maximum: 11, description: 'Index into supplied permittedCurrentPaths, or -1 when no current path is claimed.' },
+              },
+            },
+          },
+          w: { type: 'string', enum: ['small', 'moderate', 'broad'] },
+          b: { type: 'string', enum: ['focused', 'workflow', 'cross-product'] },
+          verify: stringJsonSchema(limits.opportunity.verificationCharacters, 'One concise outcome-focused verification concept.'),
+          caveats: {
+            type: 'array', maxItems: limits.opportunity.caveats,
+            items: {
+              type: 'object', additionalProperties: false, required: ['t', 'r'],
+              properties: {
+                t: stringJsonSchema(limits.opportunity.caveatCharacters, 'Material limitation or review requirement.'),
+                r: { type: 'boolean', description: 'True only when this caveat requires explicit human review.' },
+              },
+            },
+          },
+          q: { type: 'number', minimum: 0, maximum: 1, description: 'Provider confidence.' },
+        },
+      },
+    },
+  },
+} as const;
+
+export const PRODUCT_STRATEGIST_RESPONSE_FORMAT = Object.freeze({
+  type: 'json_schema' as const,
+  json_schema: {
+    name: 'shipseal_product_strategist',
+    description: `Compact ${PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION} response normalized and revalidated by ShipSeal.`,
+    strict: true,
+    schema: PRODUCT_STRATEGIST_COMPACT_JSON_SCHEMA,
+  },
+});
+
+export type ProductStrategistCompactUnderstanding = z.infer<typeof productStrategistCompactUnderstandingSchema>;
+export type ProductStrategistCompactOpportunity = z.infer<typeof productStrategistCompactOpportunitySchema>;
+
+export function normalizeProductStrategistProviderResponse(
+  input: unknown,
+  request: RepositoryDeepIntelligenceRequest,
+  modelId?: string,
+): unknown {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
+  const record = input as Record<string, unknown>;
+  if (record.schemaVersion === REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION) return input;
+  const { usage, ...candidate } = record;
+  const collection = compactResponseCollectionSchema.safeParse(candidate);
+  if (!collection.success) return input;
+  const payload = buildProductStrategistProviderPayload(request);
+  const understandingResult = productStrategistCompactUnderstandingSchema.safeParse(collection.data.p);
+  const opportunityResults = collection.data.o.map(raw => {
+    const parsed = productStrategistCompactOpportunitySchema.safeParse(raw);
+    return parsed.success ? normalizeOpportunity(parsed.data, payload) : raw;
+  });
+  return {
+    schemaVersion: REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
+    providerId: 'openai-compatible',
+    ...(modelId ? { modelId } : {}),
+    returnedCapabilities: [...request.requestedCapabilities],
+    findings: [],
+    productUnderstanding: understandingResult.success
+      ? normalizeUnderstanding(understandingResult.data, payload)
+      : collection.data.p,
+    productOpportunities: opportunityResults,
+    warnings: [],
+    ...(usage === undefined ? {} : { usage }),
+  };
+}
+
+function normalizeUnderstanding(
+  value: ProductStrategistCompactUnderstanding,
+  payload: ReturnType<typeof buildProductStrategistProviderPayload>,
+) {
+  const evidenceIds = resolveEvidenceIndexes(value.e, payload);
+  const insight = (statement: string) => ({ statement, inferenceLevel: 'inferred' as const, evidenceIds });
+  return {
+    schemaVersion: REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
+    productSummary: insight(value.s),
+    primaryUsers: value.u.map(insight),
+    primaryProblem: insight(value.p),
+    currentProductLoop: value.loop.map(insight),
+    existingCapabilities: value.caps.map(capability => ({
+      id: capability.id,
+      title: capability.t,
+      description: capability.d,
+      evidenceIds: resolveEvidenceIndexes(capability.e, payload),
+    })),
+    constraints: value.constraints.map(insight),
+    businessModelClues: value.business.map(insight),
+    missingCapabilityAreas: value.missing.map(insight),
+    providerConfidence: value.q,
+    limitations: [...value.notes],
+  };
+}
+
+function normalizeOpportunity(
+  value: ProductStrategistCompactOpportunity,
+  payload: ReturnType<typeof buildProductStrategistProviderPayload>,
+) {
+  const evidenceIds = resolveEvidenceIndexes(value.e, payload);
+  const inferenceLevel = value.o === 'evidence-backed'
+    ? 'evidence-linked' as const
+    : value.o === 'strategic' ? 'strategic-inference' as const : 'exploratory-inference' as const;
+  return {
+    schemaVersion: REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
+    id: value.id,
+    title: value.t,
+    opportunityStatement: value.s,
+    userValue: value.v,
+    whyItFits: value.f,
+    targetUsers: [...value.u],
+    evidenceIds,
+    origin: value.o,
+    inferenceLevel,
+    strategicRationale: value.f,
+    existingCapabilityIds: [...value.x],
+    requiredNewCapabilities: value.n.map(title => ({ title, rationale: value.f })),
+    optionalSupportingOpportunityIds: [...value.support],
+    knownConflicts: [...value.conflicts],
+    expectedImplementationAreas: value.areas.map(area => {
+      const existingPath = resolvePathIndex(area.p, payload);
+      return {
+        label: area.l,
+        ...(existingPath ? { existingPath } : {}),
+        evidenceIds,
+      };
+    }),
+    changeWeight: value.w,
+    impactBreadth: value.b,
+    verificationConcept: value.verify,
+    humanReviewRequirements: value.caveats.filter(caveat => caveat.r).map(caveat => caveat.t),
+    limitations: value.caveats.map(caveat => caveat.t),
+    providerConfidence: value.q,
+  };
+}
+
+function resolveEvidenceIndexes(
+  indexes: readonly number[],
+  payload: ReturnType<typeof buildProductStrategistProviderPayload>,
+) {
+  return indexes.map(index => payload.evidenceIndex[index]?.id || `unknown-evidence-index:${index}`);
+}
+
+function resolvePathIndex(
+  index: number,
+  payload: ReturnType<typeof buildProductStrategistProviderPayload>,
+) {
+  if (index === -1) return undefined;
+  return payload.responseContract.permittedCurrentPaths[index] || `unknown-current-path-index:${index}`;
+}

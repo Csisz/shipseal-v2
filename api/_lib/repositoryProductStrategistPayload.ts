@@ -2,6 +2,7 @@ import type { RepositoryDeepIntelligenceRequest } from '../../src/lib/repository
 import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../../src/lib/repositoryIntelligence/productStrategistContext.js';
 
 export const PRODUCT_STRATEGIST_PROVIDER_PAYLOAD_VERSION = 'shipseal.product-strategist-provider-payload.v1' as const;
+export const PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION = 'shipseal.product-strategist-compact-response.v1' as const;
 
 const PRODUCT_FLOW_RE = /(?:generate|create|upload|scan|review|export|share|print|progress|history|onboard|checkout|learn|activity|workflow)/i;
 const MAXIMUM_EVIDENCE_REFERENCES = 60;
@@ -39,8 +40,10 @@ export interface ProductStrategistProviderPayload {
   limitations: string[];
   responseContract: {
     schemaVersion: string;
+    compactResponseVersion: typeof PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION;
     returnedCapabilities: string[];
     opportunityCount: { minimum: 3; maximum: 5 };
+    defaultOpportunityCount: 3;
     findingsMustBeEmpty: true;
     permittedEvidenceIds: string[];
     permittedCurrentPaths: string[];
@@ -112,8 +115,10 @@ export function buildProductStrategistProviderPayload(request: RepositoryDeepInt
     limitations: unique(request.knownLimitations.map(value => compactText(value, 240))).filter(Boolean).slice(0, MAXIMUM_LIMITATIONS),
     responseContract: {
       schemaVersion: request.responseSchemaVersion,
+      compactResponseVersion: PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION,
       returnedCapabilities: [...request.requestedCapabilities],
       opportunityCount: { minimum: 3, maximum: 5 },
+      defaultOpportunityCount: 3,
       findingsMustBeEmpty: true,
       permittedEvidenceIds: evidenceIndex.map(item => item.id),
       permittedCurrentPaths: context.map(item => item.path),

@@ -19,7 +19,16 @@ import {
   validateProductionProviderRequest,
   type ProductionProviderLogEvent,
 } from '../../api/_lib/repositoryDeepIntelligenceProvider';
-import { prepareProductionDeepIntelligenceContext } from '../../api/_lib/repositoryDeepIntelligenceContext';
+import {
+  estimateDeepIntelligenceInputTokens,
+  prepareProductionDeepIntelligenceContext,
+} from '../../api/_lib/repositoryDeepIntelligenceContext';
+import { buildProductStrategistProviderPayload } from '../../api/_lib/repositoryProductStrategistPayload';
+import {
+  PRODUCT_STRATEGIST_COMPACT_LIMITS,
+  PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS,
+  normalizeProductStrategistProviderResponse,
+} from '../../api/_lib/repositoryProductStrategistResponse';
 import type { RepoScanInput } from '@/lib/types';
 import { RepositoryIntelligenceEnhancementSingleFlight } from '@/lib/repositoryIntelligence/deepIntelligenceClient';
 
@@ -120,7 +129,7 @@ function validProviderPayload(request = fixtureRequest().request) {
   };
 }
 
-function validProductProviderPayload(request = fixtureRequest(['product-opportunity-analysis', 'structured-output']).request) {
+function validCanonicalProductProviderPayload(request = fixtureRequest(['product-opportunity-analysis', 'structured-output']).request) {
   const evidence = request.evidenceReferences.find(item => item.path === 'README.md') || request.evidenceReferences[0];
   const insight = (statement: string, inferenceLevel: 'observed' | 'inferred' = 'observed') => ({
     statement,
@@ -179,6 +188,117 @@ function validProductProviderPayload(request = fixtureRequest(['product-opportun
     { ...baseOpportunity, id: 'op:adaptive-follow-up', title: 'Adaptive Follow-up', requiredNewCapabilities: [{ title: 'Adaptive follow-up', rationale: 'Users need relevant next steps after completing the current loop.' }] },
   ];
   return payload;
+}
+
+function validProductProviderPayload(
+  request = fixtureRequest(['product-opportunity-analysis', 'structured-output']).request,
+  opportunityCount: 3 | 4 | 5 = 3,
+) {
+  const projection = buildProductStrategistProviderPayload(request);
+  if (!projection.evidenceIndex.length) throw new Error('Compact Product Strategist fixture requires evidence.');
+  const paths = projection.responseContract.permittedCurrentPaths;
+  const opportunities = [
+    { id: 'op-progress', t: 'Progress and History Insight', s: 'Show families learning progress and completed activity history.', v: 'Parents can see continuity and choose useful next activities.', f: 'The product already records profiles, activity history, and generated work.', n: ['Progress summaries', 'History timeline'] },
+    { id: 'op-modes', t: 'Interactive Usage Modes', s: 'Turn printable activities into guided interactive learning sessions.', v: 'Children can complete activities with immediate guidance.', f: 'Generation and worksheet flows provide a grounded base for interactive modes.', n: ['Interactive activity runner', 'Session state'] },
+    { id: 'op-follow', t: 'Adaptive Follow-up', s: 'Recommend a relevant follow-up activity after each completed session.', v: 'Families receive a clearer next step matched to recent learning.', f: 'Existing profile and activity signals can ground bounded follow-up choices.', n: ['Follow-up recommendations'] },
+    { id: 'op-feedback', t: 'Feedback and Review Workflow', s: 'Let parents review outcomes and record concise activity feedback.', v: 'Feedback makes future activity choices more relevant.', f: 'Account, history, and sharing surfaces support a review loop extension.', n: ['Outcome feedback', 'Parent review queue'] },
+    { id: 'op-plans', t: 'Guided Learning Plans', s: 'Group distinct activities into a small goal-oriented learning plan.', v: 'Parents coordinate activities around a clear learning goal.', f: 'Topic, difficulty, profile, and generation inputs can anchor plan structure.', n: ['Plan composition'] },
+  ].slice(0, opportunityCount).map((opportunity, index, selected) => ({
+    ...opportunity,
+    u: ['Parents', 'Children'],
+    e: [0],
+    o: 'strategic' as const,
+    x: ['cap-generate'],
+    support: index === 0 && selected.length > 1 ? [selected[1].id] : [],
+    conflicts: [],
+    areas: [{ l: 'Product workflow', p: paths.length ? 0 : -1 }],
+    w: 'moderate' as const,
+    b: 'workflow' as const,
+    verify: 'A parent completes the flow and can confirm the proposed outcome.',
+    caveats: [{ t: 'Product-owner review required.', r: true }],
+    q: 0.78,
+  }));
+  return {
+    p: {
+      s: 'An educational activity product that helps parents create learning materials.',
+      u: ['Parents', 'Children'],
+      p: 'Families need activities matched to a child and learning goal.',
+      loop: ['Choose a topic and difficulty.', 'Generate an activity.', 'Use or print the result.'],
+      caps: [{ id: 'cap-generate', t: 'Activity generation', d: 'Creates learning activities from parent inputs.', e: [0] }],
+      constraints: ['Evidence is static and bounded.'],
+      business: [],
+      missing: ['Progress continuity', 'Adaptive follow-up'],
+      e: [0],
+      notes: ['Product-owner review is required.'],
+      q: 0.82,
+    },
+    o: opportunities,
+  };
+}
+
+function maximumCompactProductProviderPayload(
+  request = fixtureRequest(['product-opportunity-analysis', 'structured-output']).request,
+) {
+  const max = PRODUCT_STRATEGIST_COMPACT_LIMITS;
+  const fill = (prefix: string, length: number) => `${prefix}${'x'.repeat(Math.max(0, length - prefix.length))}`;
+  const projection = buildProductStrategistProviderPayload(request);
+  const evidenceIndexes = projection.evidenceIndex
+    .slice(0, max.evidenceIndexes)
+    .map((_evidence, index) => index);
+  const capabilityIds = Array.from(
+    { length: max.understanding.capabilities },
+    (_, index) => fill(`cap-${index}-`, max.understanding.capabilityIdCharacters),
+  );
+  const opportunityIds = Array.from(
+    { length: 5 },
+    (_, index) => fill(`op-${index}-`, max.opportunity.idCharacters),
+  );
+  return {
+    p: {
+      s: fill('Summary ', max.understanding.summaryCharacters),
+      u: Array.from({ length: max.understanding.users }, (_, index) => fill(`User ${index} `, max.understanding.userCharacters)),
+      p: fill('Problem ', max.understanding.problemCharacters),
+      loop: Array.from({ length: max.understanding.loopSteps }, (_, index) => fill(`Step ${index} `, max.understanding.loopStepCharacters)),
+      caps: capabilityIds.map((id, index) => ({
+        id,
+        t: fill(`Capability ${index} `, max.understanding.capabilityTitleCharacters),
+        d: fill(`Current capability ${index} `, max.understanding.capabilityDescriptionCharacters),
+        e: evidenceIndexes,
+      })),
+      constraints: Array.from({ length: max.understanding.constraints }, (_, index) => fill(`Constraint ${index} `, max.understanding.listItemCharacters)),
+      business: Array.from({ length: max.understanding.businessClues }, (_, index) => fill(`Business ${index} `, max.understanding.listItemCharacters)),
+      missing: Array.from({ length: max.understanding.missingAreas }, (_, index) => fill(`Missing ${index} `, max.understanding.listItemCharacters)),
+      e: evidenceIndexes,
+      notes: Array.from({ length: max.understanding.limitations }, (_, index) => fill(`Limitation ${index} `, max.understanding.listItemCharacters)),
+      q: 0.75,
+    },
+    o: opportunityIds.map((id, index) => ({
+      id,
+      t: fill(`Opportunity ${index} `, max.opportunity.titleCharacters),
+      s: fill(`Direction ${index} `, max.opportunity.statementCharacters),
+      v: fill(`Value ${index} `, max.opportunity.userValueCharacters),
+      f: fill(`Fit ${index} `, max.opportunity.fitCharacters),
+      u: Array.from({ length: max.opportunity.targetUsers }, (_, userIndex) => fill(`User ${userIndex} `, max.opportunity.targetUserCharacters)),
+      e: evidenceIndexes,
+      o: 'strategic' as const,
+      x: capabilityIds.slice(0, max.opportunity.existingCapabilities),
+      n: Array.from({ length: max.opportunity.newCapabilities }, (_, capabilityIndex) => fill(`New ${capabilityIndex} `, max.opportunity.newCapabilityCharacters)),
+      support: opportunityIds.filter(otherId => otherId !== id).slice(0, max.opportunity.supportingOpportunities),
+      conflicts: Array.from({ length: max.opportunity.conflicts }, (_, conflictIndex) => fill(`Conflict ${conflictIndex} `, max.opportunity.conflictCharacters)),
+      areas: Array.from({ length: max.opportunity.implementationAreas }, (_, areaIndex) => ({
+        l: fill(`Area ${areaIndex} `, max.opportunity.implementationAreaCharacters),
+        p: request.contextItems.length ? 0 : -1,
+      })),
+      w: 'broad' as const,
+      b: 'cross-product' as const,
+      verify: fill(`Verify ${index} `, max.opportunity.verificationCharacters),
+      caveats: Array.from({ length: max.opportunity.caveats }, (_, caveatIndex) => ({
+        t: fill(`Caveat ${caveatIndex} `, max.opportunity.caveatCharacters),
+        r: caveatIndex % 2 === 0,
+      })),
+      q: 0.75,
+    })),
+  };
 }
 
 function envelope(payload: unknown, fenced = false) {
@@ -257,9 +377,12 @@ describe('production Repository Intelligence provider', () => {
       const body = String(init?.body || '');
       expect(body).toContain('[REDACTED:');
       expect(body).not.toMatch(/sk_test_placeholder_12345|sk_example_placeholder_12345|ghp_123456789012|github_pat_123456789012/);
-      const providerBody = JSON.parse(body || '{}') as { response_format: { type: string }; messages: Array<{ role: string; content: string }> };
-      expect(PRODUCT_STRATEGIST_STRUCTURED_OUTPUT_DECISION).toBe('json-object-with-deterministic-validation');
-      expect(providerBody.response_format).toEqual({ type: 'json_object' });
+      const providerBody = JSON.parse(body || '{}') as { response_format: { type: string; json_schema?: { name: string; strict: boolean; schema: unknown } }; messages: Array<{ role: string; content: string }> };
+      expect(PRODUCT_STRATEGIST_STRUCTURED_OUTPUT_DECISION).toBe('strict-json-schema-with-deterministic-normalization');
+      expect(providerBody.response_format).toMatchObject({
+        type: 'json_schema',
+        json_schema: { name: 'shipseal_product_strategist', strict: true, schema: expect.any(Object) },
+      });
       const transmitted = JSON.parse(providerBody.messages.find(message => message.role === 'user')!.content);
       expect(transmitted.context.length).toBeLessThanOrEqual(12);
       expect(transmitted.responseContract.returnedCapabilities).toEqual(['product-opportunity-analysis', 'structured-output']);
@@ -275,7 +398,7 @@ describe('production Repository Intelligence provider', () => {
     expect(result.body).toMatchObject({
       state: 'enhanced',
       deepState: 'completed',
-      result: { productIntelligence: { opportunities: expect.arrayContaining([expect.objectContaining({ sourceId: 'op:guided-futures' })]) } },
+      result: { productIntelligence: { opportunities: expect.arrayContaining([expect.objectContaining({ sourceId: 'op-progress' })]) } },
     });
     expect(result.body.state === 'enhanced' && result.body.diagnostics).toMatchObject({
       executionProfile: 'product-strategist',
@@ -295,6 +418,109 @@ describe('production Repository Intelligence provider', () => {
     expect(body.max_completion_tokens).toBe(4_000);
     expect(body.messages[0].content).toContain('Each finding requires');
     expect(body.messages[0].content).not.toContain('focused product strategist');
+  });
+
+  it('normalizes a compact response deterministically and keeps three to five useful opportunities below the output target', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const canonicalBefore = validCanonicalProductProviderPayload(request);
+    const compact = validProductProviderPayload(request);
+    const compactBytes = new TextEncoder().encode(JSON.stringify(compact)).byteLength;
+    const compactTokens = estimateDeepIntelligenceInputTokens(compactBytes);
+    const canonicalBytes = new TextEncoder().encode(JSON.stringify(canonicalBefore)).byteLength;
+    const firstNormalized = normalizeProductStrategistProviderResponse(compact, request, 'controlled-model');
+    const secondNormalized = normalizeProductStrategistProviderResponse(structuredClone(compact), request, 'controlled-model');
+    expect(firstNormalized).toEqual(secondNormalized);
+    expect(firstNormalized).toMatchObject({
+      schemaVersion: REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
+      productUnderstanding: {
+        productSummary: { statement: expect.stringMatching(/educational activity product/i) },
+        primaryUsers: expect.arrayContaining([expect.objectContaining({ statement: 'Parents' })]),
+        existingCapabilities: expect.arrayContaining([expect.objectContaining({ id: 'cap-generate' })]),
+        missingCapabilityAreas: expect.arrayContaining([expect.objectContaining({ statement: 'Adaptive follow-up' })]),
+      },
+      productOpportunities: expect.arrayContaining([
+        expect.objectContaining({ requiredNewCapabilities: expect.arrayContaining([expect.objectContaining({ title: expect.any(String), rationale: expect.any(String) })]) }),
+      ]),
+    });
+    expect(compact.o).toHaveLength(3);
+    expect(new Set(compact.o.map(opportunity => opportunity.t)).size).toBe(3);
+    expect(compact.o.every(opportunity => opportunity.s !== opportunity.v && opportunity.v !== opportunity.f)).toBe(true);
+    expect(compactTokens).toBeLessThanOrEqual(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
+    expect(compactBytes).toBeLessThan(canonicalBytes);
+
+    const maximum = maximumCompactProductProviderPayload(request);
+    const maximumBytes = new TextEncoder().encode(JSON.stringify(maximum)).byteLength;
+    const maximumTokens = estimateDeepIntelligenceInputTokens(maximumBytes);
+    const serializedBytes = (value: unknown) => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+    const productBytes = serializedBytes(maximum.p);
+    const opportunitiesBytes = maximum.o.map(serializedBytes);
+    const productAnatomy = {
+      productSummary: serializedBytes(maximum.p.s),
+      primaryUsers: serializedBytes(maximum.p.u),
+      primaryProblem: serializedBytes(maximum.p.p),
+      currentProductLoop: serializedBytes(maximum.p.loop),
+      existingCapabilities: serializedBytes(maximum.p.caps),
+      constraints: serializedBytes(maximum.p.constraints),
+      businessModelClues: serializedBytes(maximum.p.business),
+      missingCapabilityAreas: serializedBytes(maximum.p.missing),
+      evidenceIndexes: serializedBytes(maximum.p.e),
+      limitations: serializedBytes(maximum.p.notes),
+      confidence: serializedBytes(maximum.p.q),
+    };
+    const firstOpportunity = maximum.o[0];
+    const opportunityAnatomy = {
+      id: serializedBytes(firstOpportunity.id),
+      title: serializedBytes(firstOpportunity.t),
+      opportunityStatement: serializedBytes(firstOpportunity.s),
+      userValue: serializedBytes(firstOpportunity.v),
+      whyItFitsAndStrategicRationale: serializedBytes(firstOpportunity.f),
+      targetUsers: serializedBytes(firstOpportunity.u),
+      evidenceIndexes: serializedBytes(firstOpportunity.e),
+      originAndDerivedInference: serializedBytes(firstOpportunity.o),
+      existingCapabilityIds: serializedBytes(firstOpportunity.x),
+      requiredNewCapabilities: serializedBytes(firstOpportunity.n),
+      optionalSupportingOpportunityIds: serializedBytes(firstOpportunity.support),
+      knownConflicts: serializedBytes(firstOpportunity.conflicts),
+      expectedImplementationAreas: serializedBytes(firstOpportunity.areas),
+      changeWeightAndImpactBreadth: serializedBytes([firstOpportunity.w, firstOpportunity.b]),
+      verificationConcept: serializedBytes(firstOpportunity.verify),
+      limitationsAndHumanReview: serializedBytes(firstOpportunity.caveats),
+      providerConfidence: serializedBytes(firstOpportunity.q),
+    };
+    console.info(JSON.stringify({
+      diagnostic: 'product-strategist-compact-output-anatomy',
+      canonicalThreeOpportunityBytes: canonicalBytes,
+      canonicalUnderstandingBytes: serializedBytes(canonicalBefore.productUnderstanding),
+      canonicalOpportunityBytes: canonicalBefore.productOpportunities.map(serializedBytes),
+      compactThreeOpportunityBytes: compactBytes,
+      compactThreeOpportunityEstimatedTokens: compactTokens,
+      maximumUnderstandingBytes: productBytes,
+      maximumUnderstandingAnatomyBytes: productAnatomy,
+      maximumOpportunityBytes: opportunitiesBytes,
+      maximumSingleOpportunityAnatomyBytes: opportunityAnatomy,
+      maximumResponseBytes: maximumBytes,
+      maximumResponseEstimatedTokens: maximumTokens,
+      targetTokens: PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS,
+      hardCapTokens: 2_500,
+    }));
+    expect(maximum.o).toHaveLength(5);
+    expect(maximumTokens).toBeLessThanOrEqual(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
+    expect(maximumTokens).toBeLessThan(2_500);
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+    }, {
+      env: enabledEnv,
+      fetcher: vi.fn(async () => envelope(maximum)) as unknown as typeof fetch,
+      logger: vi.fn(),
+    });
+    expect(result.body).toMatchObject({
+      state: 'enhanced',
+      diagnostics: { outputTokenCap: 2_500 },
+      result: { productIntelligence: { understanding: expect.any(Object), opportunities: expect.any(Array) } },
+    });
+    expect(result.body.state === 'enhanced' && result.body.result.productIntelligence?.opportunities).toHaveLength(5);
   });
 
   it('returns stable bounded reasons for every strict preflight rejection class', () => {
@@ -613,7 +839,7 @@ describe('production Repository Intelligence provider', () => {
   it('distinguishes Product Opportunity schema rejection and accepts valid Product Intelligence', async () => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const invalidProduct = validProductProviderPayload(request);
-    invalidProduct.productOpportunities[0].inferenceLevel = 'unsupported-inference' as 'strategic-inference';
+    invalidProduct.o[0].x = ['cap-not-present'];
     const rejected = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv,
       fetcher: vi.fn(async () => envelope(invalidProduct)) as unknown as typeof fetch,
@@ -631,7 +857,7 @@ describe('production Repository Intelligence provider', () => {
     });
 
     const invalidUnderstanding = validProductProviderPayload(request);
-    invalidUnderstanding.productUnderstanding.productSummary = { statement: '', inferenceLevel: 'observed', evidenceIds: [] };
+    invalidUnderstanding.p.e = [59];
     const understandingRejected = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv,
       fetcher: vi.fn(async () => envelope(invalidUnderstanding)) as unknown as typeof fetch,
@@ -639,18 +865,18 @@ describe('production Repository Intelligence provider', () => {
     });
     expect(understandingRejected.body).toMatchObject({
       state: 'fallback',
-      category: 'schema_validation_failed',
-      diagnostics: { validationCategory: 'product-understanding-schema-rejected' },
+      category: 'evidence_validation_failed',
+      diagnostics: { productUnderstandingAccepted: false },
     });
 
     const tooFew = validProductProviderPayload(request);
-    tooFew.productOpportunities = tooFew.productOpportunities.slice(0, 1);
+    tooFew.o = tooFew.o.slice(0, 1);
     const insufficient = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv,
       fetcher: vi.fn(async () => envelope(tooFew)) as unknown as typeof fetch,
       logger: vi.fn(),
     });
-    expect(insufficient.body).toMatchObject({ state: 'fallback', category: 'evidence_validation_failed' });
+    expect(insufficient.body).toMatchObject({ state: 'fallback' });
 
     const fetcher = vi.fn(async () => envelope(validProductProviderPayload(request)));
     const enhanced = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
@@ -662,16 +888,12 @@ describe('production Repository Intelligence provider', () => {
     expect(enhanced.body).toMatchObject({ state: 'enhanced', deepState: 'completed' });
     expect(enhanced.body.state === 'enhanced' && enhanced.body.result.productIntelligence?.opportunities).toHaveLength(3);
 
-    const maximumPayload = validProductProviderPayload(request);
-    maximumPayload.productOpportunities.push(
-      { ...maximumPayload.productOpportunities[0], id: 'op:workflow-briefing', title: 'Workflow Briefing', requiredNewCapabilities: [{ title: 'Workflow briefing', rationale: 'Users need a concise product workflow briefing.' }] },
-      { ...maximumPayload.productOpportunities[0], id: 'op:guided-review', title: 'Guided Review', requiredNewCapabilities: [{ title: 'Guided review', rationale: 'Users need a bounded way to review proposed product directions.' }] },
-    );
+    const maximumPayload = validProductProviderPayload(request, 5);
     const maximumResponseBytes = new TextEncoder().encode(JSON.stringify(maximumPayload)).byteLength;
-    const maximumResponseTokenEstimate = Math.ceil(maximumResponseBytes / 4);
+    const maximumResponseTokenEstimate = estimateDeepIntelligenceInputTokens(maximumResponseBytes);
     console.info(JSON.stringify({
       diagnostic: 'product-strategist-maximum-valid-response',
-      opportunityCount: maximumPayload.productOpportunities.length,
+      opportunityCount: maximumPayload.o.length,
       responseBytes: maximumResponseBytes,
       estimatedTokens: maximumResponseTokenEstimate,
       outputTokenCap: 2_500,
@@ -688,14 +910,8 @@ describe('production Repository Intelligence provider', () => {
 
   it('preserves a valid partial Product Strategist result when one of five opportunities is rejected', async () => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
-    const payload = validProductProviderPayload(request);
-    payload.productOpportunities.push({
-      ...payload.productOpportunities[0],
-      id: 'op:workflow-briefing',
-      title: 'Workflow Briefing',
-      requiredNewCapabilities: [{ title: 'Workflow briefing', rationale: 'Users need a concise product workflow briefing.' }],
-    });
-    payload.productOpportunities.push({ id: 'op:invalid-shape' } as unknown as typeof payload.productOpportunities[number]);
+    const payload = validProductProviderPayload(request, 5);
+    payload.o[4].e = [59];
     const result = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv,
       fetcher: vi.fn(async () => envelope(payload)) as unknown as typeof fetch,
