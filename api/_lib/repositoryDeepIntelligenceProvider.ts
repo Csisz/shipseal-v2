@@ -33,7 +33,7 @@ import {
 import { buildProductStrategistProviderPayload } from './repositoryProductStrategistPayload.js';
 import {
   PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION,
-  PRODUCT_STRATEGIST_RESPONSE_FORMAT,
+  buildProductStrategistResponseFormat,
   normalizeProductStrategistProviderResponse,
 } from './repositoryProductStrategistResponse.js';
 import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../../src/lib/repositoryIntelligence/productStrategistContext.js';
@@ -500,7 +500,7 @@ export function buildProductionProviderBody(request: RepositoryDeepIntelligenceR
     model: config.model,
     max_completion_tokens: config.policy.maximumOutputTokens,
     response_format: productStrategist
-      ? PRODUCT_STRATEGIST_RESPONSE_FORMAT
+      ? buildProductStrategistResponseFormat(providerPayload as ReturnType<typeof buildProductStrategistProviderPayload>)
       : { type: 'json_object' as const },
     messages: [
       { role: 'system', content: systemPrompt },
@@ -610,7 +610,7 @@ function productStrategistSystemPrompt(request: RepositoryDeepIntelligenceReques
     `Return only the strict ${PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION} JSON object described by response_format; no Markdown, prose outside JSON, or hidden reasoning.`,
     'You are a focused product strategist. Infer the current product, users, problem, workflow, existing capabilities, constraints, and business clues; then propose three to five meaningful user-facing product capabilities.',
     'Return three strong opportunities by default. Return a fourth or fifth only when materially distinct and high-value; never add weak filler.',
-    'Use short IDs. Evidence arrays contain zero-based indexes into evidenceIndex. Area p contains a zero-based permittedCurrentPaths index or -1 when no current path is claimed.',
+    'Evidence arrays contain zero-based indexes into evidenceIndex. Opportunity x contains distinct zero-based indexes into p.caps. Opportunity support contains distinct indexes of earlier opportunities only. Area p contains a zero-based permittedCurrentPaths index or -1 when no current path is claimed.',
     'Keep Product Understanding concise: one short summary, one to three user groups, one problem sentence, three or four short loop steps, bounded capabilities, and only material constraints, clues, gaps, and limitations.',
     'Each opportunity needs a short title and one concise statement each for direction, user value, product fit, and verification. Include only necessary evidence, major new capabilities, implementation areas, conflicts, and caveats.',
     'Do not restate the same rationale in s, v, f, verify, caveats, or capability titles. No essays.',

@@ -2,7 +2,7 @@ import type { RepositoryDeepIntelligenceRequest } from '../../src/lib/repository
 import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../../src/lib/repositoryIntelligence/productStrategistContext.js';
 
 export const PRODUCT_STRATEGIST_PROVIDER_PAYLOAD_VERSION = 'shipseal.product-strategist-provider-payload.v1' as const;
-export const PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION = 'shipseal.product-strategist-compact-response.v1' as const;
+export const PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION = 'shipseal.product-strategist-compact-response.v2' as const;
 
 const PRODUCT_FLOW_RE = /(?:generate|create|upload|scan|review|export|share|print|progress|history|onboard|checkout|learn|activity|workflow)/i;
 const MAXIMUM_EVIDENCE_REFERENCES = 60;

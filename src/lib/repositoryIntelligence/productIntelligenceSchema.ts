@@ -11,6 +11,65 @@ export type RepositoryProductOpportunityOrigin = typeof REPOSITORY_PRODUCT_OPPOR
 export type RepositoryProductInferenceLevel = 'observed' | 'inferred';
 export type RepositoryProductOpportunityInferenceLevel = 'evidence-linked' | 'strategic-inference' | 'exploratory-inference';
 export type RepositoryProductConfidence = 'low' | 'medium' | 'high';
+export type RepositoryProductUnderstandingRejectionReason =
+  | 'invalid-understanding-shape'
+  | 'unsafe-understanding-text'
+  | 'missing-understanding-evidence'
+  | 'unknown-understanding-evidence'
+  | 'invalid-existing-capability-evidence'
+  | 'compact-evidence-index-out-of-range';
+
+export type RepositoryProductOpportunityRejectionReason =
+  | 'invalid-shape'
+  | 'duplicate-provider-id'
+  | 'result-limit'
+  | 'prohibited-output'
+  | 'unknown-evidence'
+  | 'unsupported-current-capability'
+  | 'invalid-current-path'
+  | 'unknown-supporting-opportunity'
+  | 'origin-inference-mismatch'
+  | 'compact-evidence-index-out-of-range'
+  | 'compact-capability-index-out-of-range'
+  | 'compact-capability-reference-duplicate'
+  | 'compact-path-index-out-of-range'
+  | 'compact-support-index-out-of-range'
+  | 'compact-support-target-invalid'
+  | 'compact-support-self-reference'
+  | 'compact-support-forward-reference'
+  | 'compact-support-reference-duplicate';
+
+export interface RepositoryProductNormalizationDiagnostics {
+  understandingRejectionReason?: RepositoryProductUnderstandingRejectionReason;
+  parsedOpportunityCount?: number;
+  opportunityRejectionReasons?: Array<RepositoryProductOpportunityRejectionReason | undefined>;
+  compactEvidenceReferenceCount?: number;
+  compactEvidenceReferenceRejectedCount?: number;
+  compactCapabilityReferenceRejectedCount?: number;
+  compactPathReferenceRejectedCount?: number;
+  compactSupportReferenceRejectedCount?: number;
+}
+
+export const REPOSITORY_PRODUCT_NORMALIZATION_DIAGNOSTICS = Symbol.for('shipseal.repository-product-normalization-diagnostics');
+
+export function attachRepositoryProductNormalizationDiagnostics<T extends object>(
+  value: T,
+  diagnostics: RepositoryProductNormalizationDiagnostics,
+): T {
+  Object.defineProperty(value, REPOSITORY_PRODUCT_NORMALIZATION_DIAGNOSTICS, {
+    value: { ...diagnostics },
+    enumerable: false,
+    configurable: false,
+    writable: false,
+  });
+  return value;
+}
+
+export function readRepositoryProductNormalizationDiagnostics(value: unknown): RepositoryProductNormalizationDiagnostics | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const normalized = value as { [REPOSITORY_PRODUCT_NORMALIZATION_DIAGNOSTICS]?: RepositoryProductNormalizationDiagnostics };
+  return normalized[REPOSITORY_PRODUCT_NORMALIZATION_DIAGNOSTICS];
+}
 
 const boundedText = z.string().trim().min(1).max(2_000);
 const evidenceIds = z.array(z.string().trim().min(1).max(240)).max(20);
@@ -165,16 +224,28 @@ export interface RepositoryProductOpportunity {
 
 export interface RepositoryProductOpportunityRejection {
   sourceId?: string;
-  reasonCodes: string[];
+  reasonCodes: RepositoryProductOpportunityRejectionReason[];
   message: string;
+}
+
+export interface RepositoryProductValidationDiagnostics {
+  parsedOpportunityCount: number;
+  rejectedOpportunityReasonCounts: Partial<Record<RepositoryProductOpportunityRejectionReason, number>>;
+  compactEvidenceReferenceCount: number;
+  compactEvidenceReferenceRejectedCount: number;
+  compactCapabilityReferenceRejectedCount: number;
+  compactPathReferenceRejectedCount: number;
+  compactSupportReferenceRejectedCount: number;
 }
 
 export interface RepositoryProductIntelligenceResult {
   version: typeof REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION;
   sourceAnalysisFingerprint: string;
   understanding?: RepositoryProductUnderstanding;
+  understandingRejectionReason?: RepositoryProductUnderstandingRejectionReason;
   opportunities: RepositoryProductOpportunity[];
   rejectedOpportunities: RepositoryProductOpportunityRejection[];
+  validationDiagnostics: RepositoryProductValidationDiagnostics;
   evidenceReferences: RepositoryProductEvidenceReference[];
   limitations: string[];
   humanReviewRequired: boolean;
@@ -189,6 +260,7 @@ export function validateRepositoryProductIntelligence(input: {
   knownPaths: ReadonlySet<string>;
   knownLimitations?: readonly string[];
   maximumOpportunities?: number;
+  normalizationDiagnostics?: RepositoryProductNormalizationDiagnostics;
 }): RepositoryProductIntelligenceResult {
   const evidenceById = new Map(input.evidenceReferences.map(item => [item.id, item]));
   const understandingResult = repositoryProductUnderstandingProviderSchema.safeParse(input.rawUnderstanding);
@@ -196,19 +268,29 @@ export function validateRepositoryProductIntelligence(input: {
     ...(input.knownLimitations || []),
     ...(!understandingResult.success ? ['Product Understanding was unavailable or rejected; strategic Product Opportunities were not accepted.'] : []),
   ]);
-  const understanding = understandingResult.success
+  const understandingValidation = understandingResult.success
     ? normalizeUnderstanding(understandingResult.data, evidenceById, limitations)
-    : undefined;
+    : { rejectionReason: 'invalid-understanding-shape' as const };
+  const understanding = understandingValidation.understanding;
+  const understandingRejectionReason = understanding
+    ? undefined
+    : input.normalizationDiagnostics?.understandingRejectionReason || understandingValidation.rejectionReason;
   if (understandingResult.success && !understanding) limitations.push('Product Understanding failed deterministic provenance or safety validation.');
   const rawOpportunityArray = Array.isArray(input.rawOpportunities) ? input.rawOpportunities : [];
   const maximum = Math.min(MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES, Math.max(0, input.maximumOpportunities ?? MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES));
   const parsedOpportunities: RepositoryProductOpportunityProviderValue[] = [];
   const rejectedOpportunities: RepositoryProductOpportunityRejection[] = [];
   const seenSourceIds = new Set<string>();
-  for (const raw of rawOpportunityArray.slice(0, maximum)) {
+  for (const [index, raw] of rawOpportunityArray.slice(0, maximum).entries()) {
     const parsed = repositoryProductOpportunityProviderSchema.safeParse(raw);
     if (!parsed.success) {
-      rejectedOpportunities.push({ reasonCodes: ['invalid-shape'], message: 'Product Opportunity did not match the bounded schema.' });
+      const compactReason = input.normalizationDiagnostics?.opportunityRejectionReasons?.[index];
+      rejectedOpportunities.push({
+        reasonCodes: [compactReason || 'invalid-shape'],
+        message: compactReason
+          ? 'Product Opportunity contained an invalid compact reference.'
+          : 'Product Opportunity did not match the bounded schema.',
+      });
       continue;
     }
     if (seenSourceIds.has(parsed.data.id)) {
@@ -249,12 +331,27 @@ export function validateRepositoryProductIntelligence(input: {
     .filter(item => understanding?.evidenceIds.includes(item.id) || normalizedOpportunities.some(opportunity => opportunity.evidenceIds.includes(item.id)))
     .map(item => ({ ...item }))
     .sort((left, right) => left.id.localeCompare(right.id));
+  const rejectedOpportunityReasonCounts = rejectedOpportunities.reduce<Partial<Record<RepositoryProductOpportunityRejectionReason, number>>>((counts, item) => {
+    for (const reason of item.reasonCodes) counts[reason] = (counts[reason] || 0) + 1;
+    return counts;
+  }, {});
+  const validationDiagnostics: RepositoryProductValidationDiagnostics = {
+    parsedOpportunityCount: input.normalizationDiagnostics?.parsedOpportunityCount ?? parsedOpportunities.length,
+    rejectedOpportunityReasonCounts,
+    compactEvidenceReferenceCount: input.normalizationDiagnostics?.compactEvidenceReferenceCount || 0,
+    compactEvidenceReferenceRejectedCount: input.normalizationDiagnostics?.compactEvidenceReferenceRejectedCount || 0,
+    compactCapabilityReferenceRejectedCount: input.normalizationDiagnostics?.compactCapabilityReferenceRejectedCount || 0,
+    compactPathReferenceRejectedCount: input.normalizationDiagnostics?.compactPathReferenceRejectedCount || 0,
+    compactSupportReferenceRejectedCount: input.normalizationDiagnostics?.compactSupportReferenceRejectedCount || 0,
+  };
   const core = {
     version: REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION,
     sourceAnalysisFingerprint: input.sourceAnalysisFingerprint,
     understanding,
+    understandingRejectionReason,
     opportunities: normalizedOpportunities,
     rejectedOpportunities: rejectedOpportunities.sort((left, right) => `${left.sourceId || ''}:${left.reasonCodes.join(':')}`.localeCompare(`${right.sourceId || ''}:${right.reasonCodes.join(':')}`)),
+    validationDiagnostics,
     evidenceReferences,
     limitations: sortedUnique([
       ...limitations,
@@ -270,14 +367,20 @@ function normalizeUnderstanding(
   raw: RepositoryProductUnderstandingProviderValue,
   evidenceById: ReadonlyMap<string, RepositoryProductEvidenceReference>,
   knownLimitations: readonly string[],
-): RepositoryProductUnderstanding | undefined {
+): { understanding?: RepositoryProductUnderstanding; rejectionReason?: RepositoryProductUnderstandingRejectionReason } {
   const insights = [raw.productSummary, ...raw.primaryUsers, raw.primaryProblem, ...raw.currentProductLoop, ...raw.constraints, ...raw.businessModelClues, ...raw.missingCapabilityAreas];
   const text = [raw.productSummary.statement, ...insights.map(item => item.statement), ...raw.existingCapabilities.flatMap(item => [item.title, item.description]), ...raw.limitations];
-  if (text.some(unsafeProductText)) return undefined;
+  if (text.some(unsafeProductText)) return { rejectionReason: 'unsafe-understanding-text' };
   const allEvidenceIds = sortedUnique([...insights.flatMap(item => item.evidenceIds), ...raw.existingCapabilities.flatMap(item => item.evidenceIds)]);
-  if (!allEvidenceIds.length || allEvidenceIds.some(id => !evidenceById.has(id))) return undefined;
-  if (insights.some(item => item.inferenceLevel === 'observed' && item.evidenceIds.length === 0)) return undefined;
-  if (raw.existingCapabilities.some(item => item.evidenceIds.length === 0 || item.evidenceIds.some(id => !evidenceById.has(id)))) return undefined;
+  if (raw.existingCapabilities.some(item => item.evidenceIds.length === 0 || item.evidenceIds.some(id => !evidenceById.has(id)))) {
+    return { rejectionReason: 'invalid-existing-capability-evidence' };
+  }
+  if (!allEvidenceIds.length || insights.some(item => item.inferenceLevel === 'observed' && item.evidenceIds.length === 0)) {
+    return { rejectionReason: 'missing-understanding-evidence' };
+  }
+  if (insights.some(item => item.evidenceIds.some(id => !evidenceById.has(id)))) {
+    return { rejectionReason: 'unknown-understanding-evidence' };
+  }
   const normalizedInsight = (value: z.infer<typeof insightSchema>): RepositoryProductInsight => ({
     statement: value.statement,
     inferenceLevel: value.inferenceLevel,
@@ -313,7 +416,7 @@ function normalizeUnderstanding(
     limitations: sortedUnique([...raw.limitations, ...knownLimitations]),
     humanReviewState: text.some(humanReviewText) ? 'required' as const : 'not-required' as const,
   };
-  return { ...core, fingerprint: stableContextFingerprint(core) };
+  return { understanding: { ...core, fingerprint: stableContextFingerprint(core) } };
 }
 
 function validateOpportunity(raw: RepositoryProductOpportunityProviderValue, indexes: {
@@ -433,7 +536,7 @@ function normalizeTitle(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
-function rejection(sourceId: string, code: string, message: string): RepositoryProductOpportunityRejection {
+function rejection(sourceId: string, code: RepositoryProductOpportunityRejectionReason, message: string): RepositoryProductOpportunityRejection {
   return { sourceId, reasonCodes: [code], message };
 }
 

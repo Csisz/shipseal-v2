@@ -1,5 +1,9 @@
 import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
 import type { RepositoryDeepIntelligenceValidatedResult } from './deepIntelligenceSchema.js';
+import type {
+  RepositoryProductOpportunityRejectionReason,
+  RepositoryProductUnderstandingRejectionReason,
+} from './productIntelligenceSchema.js';
 
 export const REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION = 'shipseal.repository-intelligence-provider-api.v1' as const;
 
@@ -10,6 +14,7 @@ export type RepositoryIntelligenceValidationCategory =
   | 'response-schema-rejected'
   | 'product-understanding-schema-rejected'
   | 'product-opportunity-schema-rejected'
+  | 'insufficient-product-evidence'
   | 'insufficient-product-opportunities';
 
 export type RepositoryProviderEnvelopeValidationReason =
@@ -79,8 +84,16 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   outputTokenCap?: number;
   selectedFileCount?: number;
   productUnderstandingAccepted?: boolean;
+  productUnderstandingRejectionReason?: RepositoryProductUnderstandingRejectionReason;
+  parsedProductOpportunityCount?: number;
   acceptedProductOpportunityCount?: number;
   rejectedProductOpportunityCount?: number;
+  rejectedProductOpportunityReasonCounts?: Partial<Record<RepositoryProductOpportunityRejectionReason, number>>;
+  compactEvidenceReferenceCount?: number;
+  compactEvidenceReferenceRejectedCount?: number;
+  compactCapabilityReferenceRejectedCount?: number;
+  compactPathReferenceRejectedCount?: number;
+  compactSupportReferenceRejectedCount?: number;
   providerHttpContentType?: string;
   providerOuterJsonParsed?: boolean;
   providerChoicesCount?: number;

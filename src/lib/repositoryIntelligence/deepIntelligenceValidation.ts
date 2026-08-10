@@ -1,7 +1,10 @@
 import { normalizeEvidencePath, type RepositoryResponsibility } from './evidence.js';
 import { stableContextFingerprint } from './contextSelection.js';
 import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
-import { validateRepositoryProductIntelligence } from './productIntelligenceSchema.js';
+import {
+  readRepositoryProductNormalizationDiagnostics,
+  validateRepositoryProductIntelligence,
+} from './productIntelligenceSchema.js';
 import {
   REPOSITORY_DEEP_INTELLIGENCE_RESULT_VERSION,
   REPOSITORY_DEEP_INTELLIGENCE_VALIDATOR_VERSION,
@@ -43,6 +46,7 @@ export function validateRepositoryDeepIntelligenceResponse({
   expectedProviderId,
   policy: policyOverride,
 }: ValidateRepositoryDeepIntelligenceResponseInput): RepositoryDeepIntelligenceValidationOutcome {
+  const productNormalizationDiagnostics = readRepositoryProductNormalizationDiagnostics(rawResponse);
   const policy = resolveRepositoryDeepIntelligenceResultPolicy(policyOverride ?? request.resultLimits);
   const rawSize = safeSerializedSize(rawResponse);
   if (rawSize === undefined) return invalid('malformed-response', 'Provider response could not be safely serialized.');
@@ -94,6 +98,7 @@ export function validateRepositoryDeepIntelligenceResponse({
       evidenceReferences: request.evidenceReferences,
       knownPaths,
       knownLimitations: request.knownLimitations,
+      normalizationDiagnostics: productNormalizationDiagnostics,
     })
     : undefined;
   const seenProviderIds = new Set<string>();

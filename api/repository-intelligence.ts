@@ -22,6 +22,7 @@ import { stableContextFingerprint } from '../src/lib/repositoryIntelligence/cont
 import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../src/lib/repositoryIntelligence/productStrategistContext.js';
 import type { RepositoryDeepIntelligenceRequest } from '../src/lib/repositoryIntelligence/deepIntelligenceRequest.js';
 import type { ProductionProviderPolicy } from './_lib/repositoryDeepIntelligenceProvider.js';
+import { buildProductStrategistProviderPayload } from './_lib/repositoryProductStrategistPayload.js';
 import type {
   RepositoryIntelligenceSafeDiagnostics,
   RepositoryIntelligenceValidationCategory,
@@ -100,6 +101,26 @@ export async function prepareProductionRepositoryIntelligence(
       executionProfile: preparedContext.request.executionProfile,
     }));
   }
+  if (preparedContext.request.executionProfile === 'product-strategist') {
+    const productPayload = buildProductStrategistProviderPayload(preparedContext.request);
+    if (!productPayload.evidenceIndex.length) {
+      return fallback(200, 'evidence_validation_failed', false, diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
+        requestId: `ri-${preparedContext.request.fingerprint.slice(0, 16)}`,
+        executionProfile: 'product-strategist',
+        validationCategory: 'insufficient-product-evidence',
+        productUnderstandingAccepted: false,
+        productUnderstandingRejectionReason: 'missing-understanding-evidence',
+        parsedProductOpportunityCount: 0,
+        acceptedProductOpportunityCount: 0,
+        rejectedProductOpportunityCount: 0,
+        compactEvidenceReferenceCount: 0,
+        compactEvidenceReferenceRejectedCount: 0,
+        compactCapabilityReferenceRejectedCount: 0,
+        compactPathReferenceRejectedCount: 0,
+        compactSupportReferenceRejectedCount: 0,
+      }));
+    }
+  }
   let providerMeasurement;
   try {
     providerMeasurement = measureProductionProviderBody(preparedContext.request, executionConfig);
@@ -152,6 +173,7 @@ export async function prepareProductionRepositoryIntelligence(
   const durationMs = Math.max(0, Date.now() - startedAt);
   const productStrategistExecution = preparedContext.request.executionProfile === 'product-strategist';
   const productIntelligence = execution.result?.productIntelligence;
+  const productValidationDiagnostics = productIntelligence?.validationDiagnostics;
   const acceptedProductOpportunityCount = productIntelligence?.opportunities.length || 0;
   const diagnostics = diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
     requestId: `ri-${preparedContext.request.fingerprint.slice(0, 16)}`,
@@ -172,8 +194,17 @@ export async function prepareProductionRepositoryIntelligence(
     selectedFileCount: providerMeasurement.selectedFileCount,
     ...(productStrategistExecution ? {
       productUnderstandingAccepted: Boolean(productIntelligence?.understanding),
+      productUnderstandingRejectionReason: productIntelligence?.understandingRejectionReason
+        || (execution.error?.code === 'product-understanding-schema-rejected' ? 'invalid-understanding-shape' : undefined),
+      parsedProductOpportunityCount: productValidationDiagnostics?.parsedOpportunityCount || 0,
       acceptedProductOpportunityCount,
       rejectedProductOpportunityCount: productIntelligence?.rejectedOpportunities.length || 0,
+      rejectedProductOpportunityReasonCounts: productValidationDiagnostics?.rejectedOpportunityReasonCounts || {},
+      compactEvidenceReferenceCount: productValidationDiagnostics?.compactEvidenceReferenceCount || 0,
+      compactEvidenceReferenceRejectedCount: productValidationDiagnostics?.compactEvidenceReferenceRejectedCount || 0,
+      compactCapabilityReferenceRejectedCount: productValidationDiagnostics?.compactCapabilityReferenceRejectedCount || 0,
+      compactPathReferenceRejectedCount: productValidationDiagnostics?.compactPathReferenceRejectedCount || 0,
+      compactSupportReferenceRejectedCount: productValidationDiagnostics?.compactSupportReferenceRejectedCount || 0,
     } : {}),
     ...providerResponseDiagnostics,
   });

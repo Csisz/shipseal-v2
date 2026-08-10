@@ -17,7 +17,10 @@ import {
   resolveProductionProviderConfig,
 } from '../../api/_lib/repositoryDeepIntelligenceProvider';
 import { buildProductStrategistProviderPayload } from '../../api/_lib/repositoryProductStrategistPayload';
-import { normalizeProductStrategistProviderResponse } from '../../api/_lib/repositoryProductStrategistResponse';
+import {
+  buildProductStrategistResponseFormat,
+  normalizeProductStrategistProviderResponse,
+} from '../../api/_lib/repositoryProductStrategistResponse';
 
 function educationalProductFixture(): RepoScanInput {
   const textContents: Record<string, string> = {
@@ -184,6 +187,11 @@ describe('focused Product Strategist context', () => {
   it('preserves useful educational-product strategy through compact deterministic normalization', () => {
     const { request, projection } = preparedProductStrategistFixture(educationalProductFixture());
     expect(projection.evidenceIndex.length).toBeGreaterThan(0);
+    const responseFormat = buildProductStrategistResponseFormat(projection);
+    expect(responseFormat.json_schema.schema.properties.p.properties.e.items.maximum)
+      .toBe(projection.evidenceIndex.length - 1);
+    expect(responseFormat.json_schema.schema.properties.o.items.properties.areas.items.properties.p.maximum)
+      .toBe(projection.responseContract.permittedCurrentPaths.length - 1);
     const compactResponse = {
       p: {
         s: 'BrightSteps helps parents create printable learning activities for children.',
@@ -191,8 +199,8 @@ describe('focused Product Strategist context', () => {
         p: 'Parents need age-matched activities they can use quickly.',
         loop: ['Choose topic and level', 'Generate activity', 'Print or share', 'Complete activity'],
         caps: [
-          { id: 'activity-generation', t: 'Activity generation', d: 'Creates printable topic-based activities.', e: [0] },
-          { id: 'learning-profile', t: 'Learning profiles', d: 'Stores child age and completed activities.', e: [0] },
+          { t: 'Activity generation', d: 'Creates printable topic-based activities.', e: [0] },
+          { t: 'Learning profiles', d: 'Stores child age and completed activities.', e: [0] },
         ],
         constraints: ['No outcome scoring appears in evidence.'],
         business: [],
@@ -203,34 +211,34 @@ describe('focused Product Strategist context', () => {
       },
       o: [
         {
-          id: 'progress-insight', t: 'Learning progress snapshots',
+          t: 'Learning progress snapshots',
           s: 'Turn completed activity history into simple skill and topic progress views.',
           v: 'Parents see what to reinforce without reviewing every worksheet.',
           f: 'Builds on stored activity history and the existing parent workflow.',
-          u: ['Parents'], e: [0], o: 'strategic', x: ['learning-profile'],
+          u: ['Parents'], e: [0], o: 'strategic', x: [1],
           n: ['Progress aggregation'], support: [], conflicts: [],
           areas: [{ l: 'Activity history analysis', p: -1 }], w: 'moderate', b: 'workflow',
           verify: 'Parents identify the next topic from a progress snapshot in one minute.',
           caveats: [{ t: 'Avoid unsupported learning claims.', r: true }], q: 0.78,
         },
         {
-          id: 'interactive-mode', t: 'Interactive activity mode',
+          t: 'Interactive activity mode',
           s: 'Let children complete selected generated activities in an interactive flow.',
           v: 'Families can use activities when printing is inconvenient.',
           f: 'Extends the existing generation flow while preserving printable output.',
-          u: ['Parents', 'Children'], e: [0], o: 'strategic', x: ['activity-generation'],
+          u: ['Parents', 'Children'], e: [0], o: 'strategic', x: [0],
           n: ['Interactive activity runtime'], support: [], conflicts: [],
           areas: [{ l: 'Activity experience', p: -1 }], w: 'broad', b: 'cross-product',
           verify: 'A child completes a generated activity and the result is retained.',
           caveats: [{ t: 'Validate accessibility for children.', r: true }], q: 0.74,
         },
         {
-          id: 'adaptive-followup', t: 'Adaptive follow-up activities',
+          t: 'Adaptive follow-up activities',
           s: 'Suggest a focused next activity from age and completion history.',
           v: 'Parents spend less time choosing what should come next.',
           f: 'Uses the learning profile to guide the established generation workflow.',
-          u: ['Parents'], e: [0], o: 'exploratory', x: ['activity-generation', 'learning-profile'],
-          n: ['Follow-up recommendation rules'], support: ['progress-insight'], conflicts: [],
+          u: ['Parents'], e: [0], o: 'exploratory', x: [0, 1],
+          n: ['Follow-up recommendation rules'], support: [0], conflicts: [],
           areas: [{ l: 'Activity recommendations', p: -1 }], w: 'moderate', b: 'workflow',
           verify: 'Parents accept or replace a suggested follow-up and record usefulness.',
           caveats: [{ t: 'Keep recommendations explainable.', r: true }], q: 0.7,
@@ -253,16 +261,26 @@ describe('focused Product Strategist context', () => {
       productSummary: { statement: expect.stringContaining('printable learning activities') },
       primaryUsers: expect.arrayContaining([expect.objectContaining({ statement: 'Parents' })]),
       existingCapabilities: expect.arrayContaining([
-        expect.objectContaining({ sourceId: 'activity-generation' }),
-        expect.objectContaining({ sourceId: 'learning-profile' }),
+        expect.objectContaining({ sourceId: 'cap-0' }),
+        expect.objectContaining({ sourceId: 'cap-1' }),
       ]),
     });
     const opportunities = validation.result.productIntelligence?.opportunities || [];
+    expect(validation.result.productIntelligence).toMatchObject({
+      understandingRejectionReason: undefined,
+      validationDiagnostics: {
+        parsedOpportunityCount: 3,
+        compactEvidenceReferenceRejectedCount: 0,
+        compactCapabilityReferenceRejectedCount: 0,
+        compactPathReferenceRejectedCount: 0,
+        compactSupportReferenceRejectedCount: 0,
+      },
+    });
     expect(opportunities).toHaveLength(3);
     expect(opportunities.map(item => item.sourceId)).toEqual(expect.arrayContaining([
-      'progress-insight',
-      'interactive-mode',
-      'adaptive-followup',
+      'op-0',
+      'op-1',
+      'op-2',
     ]));
     expect(opportunities.every(item => item.userValue && item.whyItFits && item.evidenceIds.length > 0)).toBe(true);
     expect(opportunities.every(item => item.requiredNewCapabilities.length > 0)).toBe(true);

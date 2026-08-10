@@ -179,8 +179,11 @@ export type {
   RepositoryProductOpportunityInferenceLevel,
   RepositoryProductOpportunityOrigin,
   RepositoryProductOpportunityRejection,
+  RepositoryProductOpportunityRejectionReason,
   RepositoryProductRequiredCapability,
   RepositoryProductUnderstanding,
+  RepositoryProductUnderstandingRejectionReason,
+  RepositoryProductValidationDiagnostics,
 } from './productIntelligenceSchema';
 
 export type {
@@ -203,7 +206,9 @@ export type {
   RepositoryIntelligenceProviderApiRequest,
   RepositoryIntelligenceProviderApiResponse,
   RepositoryIntelligenceProviderFailureCategory,
+  RepositoryIntelligenceSafeDiagnostics,
   RepositoryIntelligenceProviderStatus,
+  RepositoryIntelligenceValidationCategory,
 } from './productionProviderContract';
 
 export type {
