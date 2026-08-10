@@ -58,7 +58,13 @@ function productionShapeFixture() {
     const previous = index ? `import { Page${index - 1} } from './page-${String(index - 1).padStart(2, '0')}';\n` : '';
     const symbols = Array.from({ length: 2 }, (_unused, symbolIndex) => `export const feature${index}_${symbolIndex} = ${index + symbolIndex};`).join('\n');
     const boundedNarrative = Array.from({ length: 100 }, (_unused, lineIndex) => `// Synthetic product capability ${index}:${lineIndex} remains evidence-bound and deterministic.`).join('\n');
-    const content = `${previous}export function Page${index}() { return <main>Product capability ${index}</main>; }\n${symbols}\n${boundedNarrative}`;
+    const syntheticSafetyText = index === 0 ? [
+      'const exampleStripe = "sk_test_placeholder_12345";',
+      'const exampleGeneric = "sk_example_placeholder_12345";',
+      'const exampleGithub = "ghp_123456789012";',
+      'const examplePat = "github_pat_123456789012";',
+    ].join('\n') : '';
+    const content = `${previous}export function Page${index}() { return <main>Product capability ${index}</main>; }\n${symbols}\n${syntheticSafetyText}\n${boundedNarrative}`;
     textContents[path] = content;
     return { path, size: content.length };
   });
@@ -230,9 +236,14 @@ describe('production Repository Intelligence provider', () => {
     expect(focused.budget.estimatedInputTokens).toBeLessThanOrEqual(35_000);
     expect(focused.budget.estimatedInputTokens).toBeLessThan(prepared.budget.estimatedInputTokens);
     expect(focused.budget.includedContextBytes).toBeLessThan(prepared.budget.includedContextBytes);
+    expect(focused.redaction.redactedValueCount).toBeGreaterThanOrEqual(4);
+    expect(validatePreparedProductionProviderRequest(focused, focusedPolicy)).toMatchObject({ valid: true });
 
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
-      const providerBody = JSON.parse(String(init?.body || '{}')) as { messages: Array<{ role: string; content: string }> };
+      const body = String(init?.body || '');
+      expect(body).toContain('[REDACTED:');
+      expect(body).not.toMatch(/sk_test_placeholder_12345|sk_example_placeholder_12345|ghp_123456789012|github_pat_123456789012/);
+      const providerBody = JSON.parse(body || '{}') as { messages: Array<{ role: string; content: string }> };
       const transmitted = JSON.parse(providerBody.messages.find(message => message.role === 'user')!.content);
       expect(transmitted.contextItems.length).toBeLessThanOrEqual(18);
       expect(transmitted.requestedCapabilities).toEqual(['product-opportunity-analysis', 'structured-output']);

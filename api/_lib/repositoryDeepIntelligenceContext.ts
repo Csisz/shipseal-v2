@@ -1,5 +1,10 @@
 import { stableContextFingerprint } from '../../src/lib/repositoryIntelligence/contextSelection.js';
 import type { RepositoryDeepIntelligenceRequest } from '../../src/lib/repositoryIntelligence/deepIntelligenceRequest.js';
+import {
+  containsRepositoryProviderSecret,
+  providerBoundRepositoryFreeText,
+  redactRepositoryProviderFreeText,
+} from './repositoryDeepIntelligenceSafety.js';
 
 export const PRODUCTION_DEEP_INTELLIGENCE_CONTEXT_VERSION = 'shipseal.deep-intelligence-context.v1' as const;
 export const PRODUCTION_DEEP_INTELLIGENCE_REDACTION_VERSION = 'shipseal.deep-intelligence-redaction.v1' as const;
@@ -58,18 +63,6 @@ interface RedactionResult {
   kinds: string[];
 }
 
-const PRIVATE_KEY_RE = /-----BEGIN [A-Z0-9 ]*(?:PRIVATE KEY|CERTIFICATE)-----[\s\S]*?(?:-----END [A-Z0-9 ]*(?:PRIVATE KEY|CERTIFICATE)-----|$)/gi;
-const SUSPICIOUS_UNTERMINATED_PRIVATE_KEY_RE = /-----BEGIN [A-Z0-9 ]*(?:PRIVATE KEY|CERTIFICATE)-----/i;
-const ASSIGNMENT_RE = /((?:^|[\s,{;])(?:export\s+)?(?:const\s+|let\s+|var\s+)?["']?([A-Za-z0-9_.-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|secret|password|passwd|private[_-]?key|client[_-]?secret|connection[_-]?string)[A-Za-z0-9_.-]*)["']?\s*[:=]\s*)(["'`]?)([^\s,"'`;}]*)\3/gi;
-const AUTHORIZATION_RE = /(authorization\s*[:=]\s*["']?(?:bearer|basic)\s+)[A-Za-z0-9._~+/-]+=*/gi;
-const CONNECTION_RE = /\b(postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis|amqps?):\/\/([^\s/@:]+):([^\s/@]+)@/gi;
-const GITHUB_TOKEN_RE = /\b(?:gh[opusr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g;
-const OPENAI_TOKEN_RE = /\bsk-(?:proj-)?[A-Za-z0-9_-]{16,}\b/g;
-const AWS_ACCESS_RE = /\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/g;
-const GOOGLE_API_RE = /\bAIza[A-Za-z0-9_-]{30,}\b/g;
-const SLACK_TOKEN_RE = /\bxox[baprs]-[A-Za-z0-9-]{16,}\b/g;
-const STRIPE_SECRET_RE = /\bsk_(?:live|test)_[A-Za-z0-9]{16,}\b/g;
-const JWT_RE = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 const WINDOWS_LOCAL_ABSOLUTE_PATH_RE = /\b[A-Za-z]:[\\/](?:Users|Documents|home)[\\/][^\s"'`<>{}(),;]*/gi;
 const UNIX_LOCAL_ABSOLUTE_PATH_RE = /(?:file:\/\/\/[^\s"'`<>{}(),;]*|\/(?:Users|home)\/[^/\s"'`<>{}(),;]+(?:\/[^\s"'`<>{}(),;]*)?)/g;
 
@@ -253,33 +246,28 @@ export function prepareProductionDeepIntelligenceContext(input: {
   if (estimatedInputTokens > input.policy.maximumInputTokens || requestBytes > input.policy.maximumRequestBytes) {
     return { state: 'budget-exceeded', message: 'Bounded repository metadata still exceeds the configured provider input budget.', budget, redaction };
   }
-  if (containsSensitiveValue(JSON.stringify(prepared))) {
+  if (containsSensitiveValue(prepared)) {
     return { state: 'redaction-failed', message: 'Provider context still contained suspicious sensitive material after redaction.', budget, redaction };
   }
   return { state: 'ready', request: prepared, budget, redaction };
 }
 
 export function redactSensitiveContent(value: string, redactAllAssignments = false): RedactionResult {
-  if (!value) return { content: '', excluded: false, redactedValueCount: 0, kinds: [] };
-  if (SUSPICIOUS_UNTERMINATED_PRIVATE_KEY_RE.test(value)) {
-    return { content: '', excluded: true, redactedValueCount: 1, kinds: ['private-key-material'] };
+  const secretSafety = redactRepositoryProviderFreeText(value);
+  if (secretSafety.excluded) {
+    return {
+      content: '',
+      excluded: true,
+      redactedValueCount: secretSafety.redactedValueCount,
+      kinds: secretSafety.categories,
+    };
   }
-  const kinds = new Set<string>();
-  let count = 0;
+  const kinds = new Set<string>(secretSafety.categories);
+  let count = secretSafety.redactedValueCount;
   const replace = (kind: string, marker: string) => {
     kinds.add(kind); count += 1; return marker;
   };
-  let content = value.replace(PRIVATE_KEY_RE, () => replace('private-key-material', '[REDACTED:PRIVATE_KEY_MATERIAL]'));
-  content = content.replace(AUTHORIZATION_RE, (_match, prefix: string) => `${prefix}${replace('authorization-header', '[REDACTED:AUTHORIZATION]')}`);
-  content = content.replace(CONNECTION_RE, (_match, scheme: string) => `${scheme}://${replace('connection-string', '[REDACTED:CONNECTION_CREDENTIALS]')}@`);
-  content = content.replace(GITHUB_TOKEN_RE, () => replace('github-token', '[REDACTED:GITHUB_TOKEN]'));
-  content = content.replace(OPENAI_TOKEN_RE, () => replace('api-token', '[REDACTED:API_TOKEN]'));
-  content = content.replace(AWS_ACCESS_RE, () => replace('cloud-credential', '[REDACTED:CLOUD_CREDENTIAL]'));
-  content = content.replace(GOOGLE_API_RE, () => replace('cloud-credential', '[REDACTED:CLOUD_CREDENTIAL]'));
-  content = content.replace(SLACK_TOKEN_RE, () => replace('service-token', '[REDACTED:SERVICE_TOKEN]'));
-  content = content.replace(STRIPE_SECRET_RE, () => replace('service-token', '[REDACTED:SERVICE_TOKEN]'));
-  content = content.replace(JWT_RE, () => replace('bearer-token', '[REDACTED:BEARER_TOKEN]'));
-  content = content.replace(ASSIGNMENT_RE, (_match, prefix: string) => `${prefix}${replace('credential-assignment', '[REDACTED:CREDENTIAL_VALUE]')}`);
+  let content = secretSafety.content;
   content = content.replace(WINDOWS_LOCAL_ABSOLUTE_PATH_RE, () => replace('absolute-local-path', '[REDACTED:ABSOLUTE_PATH]'));
   content = content.replace(UNIX_LOCAL_ABSOLUTE_PATH_RE, () => replace('absolute-local-path', '[REDACTED:ABSOLUTE_PATH]'));
   if (redactAllAssignments) {
@@ -296,14 +284,8 @@ function fingerprintRequest(value: Omit<RepositoryDeepIntelligenceRequest, 'fing
   const { fingerprint: _oldFingerprint, ...withoutFingerprint } = value;
   return { ...withoutFingerprint, fingerprint: stableContextFingerprint(withoutFingerprint) } as RepositoryDeepIntelligenceRequest;
 }
-function containsSensitiveValue(value: string) {
-  return [SUSPICIOUS_UNTERMINATED_PRIVATE_KEY_RE, GITHUB_TOKEN_RE, OPENAI_TOKEN_RE, AWS_ACCESS_RE, GOOGLE_API_RE, SLACK_TOKEN_RE, STRIPE_SECRET_RE, JWT_RE, AUTHORIZATION_RE, CONNECTION_RE]
-    .some(pattern => {
-      pattern.lastIndex = 0;
-      const matched = pattern.test(value);
-      pattern.lastIndex = 0;
-      return matched;
-    });
+function containsSensitiveValue(request: RepositoryDeepIntelligenceRequest) {
+  return providerBoundRepositoryFreeText(request).some(containsRepositoryProviderSecret);
 }
 function estimateTokens(bytes: number) { return Math.ceil(bytes / 3); }
 function utf8Bytes(value: string) { return Buffer.byteLength(value, 'utf8'); }

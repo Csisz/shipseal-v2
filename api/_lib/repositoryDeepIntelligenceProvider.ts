@@ -24,6 +24,10 @@ import type {
   RepositoryIntelligenceValidationCategory,
   RepositoryIntelligenceValidationReason,
 } from '../../src/lib/repositoryIntelligence/productionProviderContract.js';
+import {
+  containsRepositoryProviderSecret,
+  providerBoundRepositoryFreeText,
+} from './repositoryDeepIntelligenceSafety.js';
 
 export const PRODUCTION_PROVIDER_POLICY_VERSION = 'shipseal.production-provider-policy.v1' as const;
 
@@ -98,7 +102,6 @@ const DEFAULT_POLICY: ProductionProviderPolicy = Object.freeze({
   maximumRetryDelayMs: 1_500,
 });
 
-const SECRET_VALUE_RE = /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|\b(?:sk|ghp|github_pat)_[A-Za-z0-9_-]{12,}|\b(?:API[_-]?KEY|ACCESS[_-]?TOKEN|SECRET|PASSWORD)\s*[:=]\s*\S+/i;
 const ABSOLUTE_PATH_RE = /(?:[A-Za-z]:[\\/]+(?:Users|Documents|home)[\\/]+|file:\/\/\/|\/Users\/[^/]+\/|\/home\/[^/]+\/)/i;
 
 export function resolveProductionProviderConfig(env: NodeJS.ProcessEnv = process.env): ProductionProviderConfig {
@@ -169,11 +172,9 @@ export function validateProductionProviderRequest(
   } else if (request.requestedCapabilities.includes('product-opportunity-analysis')) {
     return rejection('unsupported-capability', 'Product Opportunity analysis requires the focused Product Strategist profile.');
   }
-  const safetyText = providerBoundFreeText(request as RepositoryDeepIntelligenceRequest)
-    .join('\n')
-    .replace(/(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|secret|password|passwd|private[_-]?key|client[_-]?secret|connection[_-]?string)\s*[:=]\s*(?:["'`]?)\[REDACTED:[A-Z0-9_]+\](?:["'`]?)/gi, '[REDACTED_ASSIGNMENT]')
-    .replace(/\[REDACTED:[A-Z0-9_]+\]/g, '[REDACTED_VALUE]');
-  if (!options.allowSensitiveContent && SECRET_VALUE_RE.test(safetyText)) return rejection('content-safety-secret', 'Bounded intelligence request failed content safety validation.');
+  const providerFreeText = providerBoundRepositoryFreeText(request as RepositoryDeepIntelligenceRequest);
+  const safetyText = providerFreeText.join('\n');
+  if (!options.allowSensitiveContent && providerFreeText.some(containsRepositoryProviderSecret)) return rejection('content-safety-secret', 'Bounded intelligence request failed content safety validation.');
   if (!options.allowSensitiveContent && ABSOLUTE_PATH_RE.test(safetyText)) return rejection('content-safety-absolute-path', 'Bounded intelligence request failed content safety validation.');
   try { resolveRepositoryDeepIntelligenceResultPolicy(request.resultLimits); } catch { return rejection('invalid-result-policy', 'Bounded intelligence result policy is invalid.'); }
   const capabilities = new Set<string>(REPOSITORY_DEEP_INTELLIGENCE_CAPABILITIES);
@@ -266,26 +267,12 @@ function safeBoundedScalar(value: unknown, maximumLength: number, rejectSensitiv
     && value.length > 0
     && value.length <= maximumLength
     && !/[\0\r\n]/.test(value)
-    && (!rejectSensitiveShape || (!SECRET_VALUE_RE.test(value) && !ABSOLUTE_PATH_RE.test(value)
+    && (!rejectSensitiveShape || (!containsRepositoryProviderSecret(value) && !ABSOLUTE_PATH_RE.test(value)
       && !value.includes('../') && !value.includes('..\\') && !value.toLowerCase().includes('file:///')));
 }
 
 function safeGeneratedId(value: unknown) {
   return typeof value === 'string' && value.length >= 8 && value.length <= 500 && /^[A-Za-z0-9._:-]+$/.test(value);
-}
-
-function providerBoundFreeText(request: RepositoryDeepIntelligenceRequest) {
-  return [
-    ...request.contextItems.flatMap(item => [
-      item.content,
-      ...item.limitations,
-      ...(item.structuralOutline?.limitations || []),
-    ]),
-    ...request.evidenceReferences.map(item => item.extractedFact),
-    ...request.responsibilitySummary.flatMap(item => item.limitations),
-    ...request.folderResponsibilitySummary.flatMap(item => item.limitations),
-    ...request.knownLimitations,
-  ].filter((value): value is string => typeof value === 'string');
 }
 
 function providerBoundPaths(request: RepositoryDeepIntelligenceRequest) {

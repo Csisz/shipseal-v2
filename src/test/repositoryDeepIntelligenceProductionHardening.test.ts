@@ -22,6 +22,7 @@ import {
   OpenAiCompatibleRepositoryDeepIntelligenceProvider,
   resolveProductionProviderConfig,
   validatePreparedProductionProviderRequest,
+  validateProductionProviderRequest,
 } from '../../api/_lib/repositoryDeepIntelligenceProvider';
 import { prepareProductionRepositoryIntelligence } from '../../api/repository-intelligence';
 
@@ -30,6 +31,26 @@ const enabledEnv = {
   SHIPSEAL_DEEP_INTELLIGENCE_MODEL: 'controlled-model',
   SHIPSEAL_DEEP_INTELLIGENCE_API_KEY: 'provider-test-key',
 };
+
+const syntheticSecretSafetyCases = [
+  { name: 'OpenAI project token shape', value: 'sk-proj-syntheticplaceholder12345' },
+  { name: 'OpenAI token shape', value: 'sk-syntheticplaceholder12345' },
+  { name: 'Stripe-shaped placeholder', value: 'sk_test_placeholder_12345' },
+  { name: 'generic sk placeholder', value: 'sk_example_placeholder_12345' },
+  { name: 'GitHub boundary token shape', value: 'ghp_123456789012' },
+  { name: 'GitHub PAT boundary token shape', value: 'github_pat_123456789012' },
+  { name: 'API key assignment', value: 'API_KEY=synthetic-placeholder-value' },
+  { name: 'password assignment', value: 'password: synthetic-password-value' },
+  { name: 'client secret assignment', value: 'CLIENT_SECRET=synthetic-client-value' },
+  { name: 'authorization header', value: 'Authorization: Bearer syntheticBearerValue12345' },
+  { name: 'connection credential', value: 'postgres://synthetic-user:synthetic-password@db.example.test/app' },
+  { name: 'JWT shape', value: 'eyJsynthetic1.eyJsynthetic2.eyJsynthetic3' },
+  { name: 'AWS access ID shape', value: 'AKIA1234567890ABCDEF' },
+  { name: 'Google API key shape', value: 'AIzaSyntheticPlaceholderValue1234567890' },
+  { name: 'Slack token shape', value: 'xoxb-synthetic-placeholder-12345' },
+  { name: 'private key material', value: '-----BEGIN PRIVATE KEY-----\nsynthetic-placeholder-only' },
+  { name: 'certificate material', value: '-----BEGIN CERTIFICATE-----\nsynthetic-placeholder-only' },
+] as const;
 
 function fixtureRequest() {
   const scanInput: RepoScanInput = {
@@ -162,6 +183,59 @@ describe('production Deep Intelligence context and redaction', () => {
     expect(redacted.content).not.toMatch(/hunter2|supersecret|sk-proj-|AKIA123|ghp_|AIza/);
     expect(redacted.content).toContain('[REDACTED:');
     expect(redactSensitiveContent('-----BEGIN PRIVATE KEY-----\nunclosed')).toMatchObject({ excluded: true });
+  });
+
+  it('keeps canonical preparation and strict outbound secret validation aligned for every synthetic family', () => {
+    const config = resolveProductionProviderConfig(enabledEnv);
+    for (const sample of syntheticSecretSafetyCases) {
+      const request = structuredClone(fixtureRequest());
+      const selected = request.contextItems.find(item => item.path === 'src/main.ts')!;
+      selected.content = `export const safetyFixture = true;\n${sample.value}`;
+      selected.includedCharacters = selected.content.length;
+      const unsafeRequest = refingerprint(request);
+      expect(validateProductionProviderRequest(unsafeRequest, config.policy), sample.name).toMatchObject({
+        valid: false,
+        reason: 'content-safety-secret',
+      });
+      const prepared = prepareProductionDeepIntelligenceContext({
+        request: unsafeRequest,
+        policy: config.policy,
+        maximumOutputTokens: config.policy.maximumOutputTokens,
+      });
+
+      expect(prepared.state, sample.name).toBe('ready');
+      if (prepared.state !== 'ready') continue;
+      expect(JSON.stringify(prepared.request), sample.name).not.toContain(sample.value);
+      expect(prepared.redaction.redactedValueCount + prepared.redaction.excludedContentCount, sample.name).toBeGreaterThan(0);
+      expect(validatePreparedProductionProviderRequest(prepared, config.policy), sample.name).toMatchObject({ valid: true });
+    }
+  });
+
+  it('preserves ordinary product copy, code identifiers, symbols, and repository-relative paths', () => {
+    const ordinaryText = [
+      'export function secretFeature() { return true; }',
+      'export const tokenBudget = 12;',
+      "export const keyLabel = 'activity-key';",
+      'export function useApiKeyLabel() { return true; }',
+      'Product copy: Keep your secret garden organized with token counters and keyboard shortcuts.',
+      'Repository path: src/features/secret-token/page.tsx',
+    ].join('\n');
+    const request = structuredClone(fixtureRequest());
+    const selected = request.contextItems.find(item => item.path === 'src/main.ts')!;
+    selected.content = ordinaryText;
+    selected.includedCharacters = ordinaryText.length;
+    const config = resolveProductionProviderConfig(enabledEnv);
+    const prepared = prepareProductionDeepIntelligenceContext({
+      request: refingerprint(request),
+      policy: config.policy,
+      maximumOutputTokens: config.policy.maximumOutputTokens,
+    });
+
+    expect(prepared.state).toBe('ready');
+    if (prepared.state !== 'ready') return;
+    expect(prepared.request.contextItems.find(item => item.path === 'src/main.ts')?.content).toBe(ordinaryText);
+    expect(prepared.redaction.redactedValueCount).toBe(0);
+    expect(validatePreparedProductionProviderRequest(prepared, config.policy)).toMatchObject({ valid: true });
   });
 
   it('redacts Windows and Unix local absolute paths without changing repository-relative paths', () => {
