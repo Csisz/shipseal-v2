@@ -10,6 +10,8 @@ import { stableContextFingerprint } from '@/lib/repositoryIntelligence/contextSe
 import { prepareProductionRepositoryIntelligence, resolveProductionExecutionPolicy } from '../../api/repository-intelligence';
 import {
   OpenAiCompatibleRepositoryDeepIntelligenceProvider,
+  PRODUCT_STRATEGIST_STRUCTURED_OUTPUT_DECISION,
+  buildProductionProviderBody,
   measureProductionProviderBody,
   resolveProductionProviderConfig,
   stripSingleJsonFence,
@@ -181,9 +183,16 @@ function validProductProviderPayload(request = fixtureRequest(['product-opportun
 
 function envelope(payload: unknown, fenced = false) {
   const content = JSON.stringify(payload);
-  return new Response(JSON.stringify({ choices: [{ message: { content: fenced ? `\`\`\`json\n${content}\n\`\`\`` : content } }] }), {
+  return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: fenced ? `\`\`\`json\n${content}\n\`\`\`` : content } }] }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+function rawEnvelope(value: unknown, contentType = 'application/json') {
+  return new Response(typeof value === 'string' ? value : JSON.stringify(value), {
+    status: 200,
+    headers: { 'Content-Type': contentType },
   });
 }
 
@@ -248,7 +257,9 @@ describe('production Repository Intelligence provider', () => {
       const body = String(init?.body || '');
       expect(body).toContain('[REDACTED:');
       expect(body).not.toMatch(/sk_test_placeholder_12345|sk_example_placeholder_12345|ghp_123456789012|github_pat_123456789012/);
-      const providerBody = JSON.parse(body || '{}') as { messages: Array<{ role: string; content: string }> };
+      const providerBody = JSON.parse(body || '{}') as { response_format: { type: string }; messages: Array<{ role: string; content: string }> };
+      expect(PRODUCT_STRATEGIST_STRUCTURED_OUTPUT_DECISION).toBe('json-object-with-deterministic-validation');
+      expect(providerBody.response_format).toEqual({ type: 'json_object' });
       const transmitted = JSON.parse(providerBody.messages.find(message => message.role === 'user')!.content);
       expect(transmitted.context.length).toBeLessThanOrEqual(12);
       expect(transmitted.responseContract.returnedCapabilities).toEqual(['product-opportunity-analysis', 'structured-output']);
@@ -274,6 +285,16 @@ describe('production Repository Intelligence provider', () => {
       providerEstimatedInputTokens: expect.any(Number),
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps general Deep Intelligence on its independent response and prompt contract', () => {
+    const { request } = fixtureRequest();
+    const config = resolveProductionProviderConfig(enabledEnv);
+    const body = buildProductionProviderBody(request, config);
+    expect(body.response_format).toEqual({ type: 'json_object' });
+    expect(body.max_completion_tokens).toBe(4_000);
+    expect(body.messages[0].content).toContain('Each finding requires');
+    expect(body.messages[0].content).not.toContain('focused product strategist');
   });
 
   it('returns stable bounded reasons for every strict preflight rejection class', () => {
@@ -451,9 +472,117 @@ describe('production Repository Intelligence provider', () => {
     expect(malformed.body).toMatchObject({
       state: 'fallback',
       category: 'schema_validation_failed',
-      diagnostics: { validationCategory: 'provider-envelope-invalid' },
+      diagnostics: {
+        validationCategory: 'provider-envelope-invalid',
+        validationReason: 'outer-json-invalid',
+        providerOuterJsonParsed: false,
+        providerJsonParsingStage: 'outer-json',
+      },
     });
     expect(malformedFetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts supported text content parts and reports bounded usage metadata', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const content = JSON.stringify(validProductProviderPayload(request));
+    const fetcher = vi.fn(async () => rawEnvelope({
+      model: 'controlled-model-2026-08',
+      choices: [{
+        finish_reason: 'stop',
+        message: {
+          content: [{ type: 'text', text: content }],
+          annotations: [{ type: 'safe-citation-metadata' }],
+        },
+      }],
+      usage: {
+        prompt_tokens: 10_492,
+        completion_tokens: 1_842,
+        completion_tokens_details: { reasoning_tokens: 640 },
+        total_tokens: 12_334,
+      },
+    }));
+    const result = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
+      env: enabledEnv,
+      fetcher: fetcher as typeof fetch,
+      logger: vi.fn(),
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.body).toMatchObject({
+      state: 'enhanced',
+      diagnostics: {
+        providerOuterJsonParsed: true,
+        providerChoicesCount: 1,
+        providerFinishReason: 'stop',
+        providerMessagePresent: true,
+        providerContentShape: 'array',
+        providerRefusalPresent: false,
+        providerAnnotationsPresent: true,
+        providerToolCallsPresent: false,
+        providerPromptTokens: 10_492,
+        providerCompletionTokens: 1_842,
+        providerReasoningTokens: 640,
+        providerTotalTokens: 12_334,
+        providerModelId: 'controlled-model-2026-08',
+        providerJsonParsingStage: 'complete',
+      },
+    });
+    expect(result.body.state === 'enhanced' && result.body.result.productIntelligence?.opportunities).toHaveLength(3);
+  });
+
+  it.each([
+    ['refusal field', { choices: [{ finish_reason: 'stop', message: { refusal: 'bounded refusal text', content: null } }] }, 'refusal'],
+    ['refusal content part', { choices: [{ finish_reason: 'stop', message: { content: [{ type: 'refusal', refusal: 'bounded refusal text' }] } }] }, 'refusal'],
+    ['missing choices', { model: 'controlled-model' }, 'choices-missing'],
+    ['missing message', { choices: [{ finish_reason: 'stop' }] }, 'message-missing'],
+    ['null content', { choices: [{ finish_reason: 'stop', message: { content: null } }] }, 'content-missing'],
+    ['completion length', { choices: [{ finish_reason: 'length', message: { content: '{"partial":' } }] }, 'completion-truncated'],
+    ['content filter', { choices: [{ finish_reason: 'content_filter', message: { content: null } }] }, 'content-filtered'],
+    ['malformed structured JSON', { choices: [{ finish_reason: 'stop', message: { content: '{"partial":' } }] }, 'structured-content-json-invalid'],
+    ['unknown content part', { choices: [{ finish_reason: 'stop', message: { content: [{ type: 'image_url', image_url: 'not-consumed' }] } }] }, 'unsupported-content-shape'],
+    ['unrequested tool call', { choices: [{ finish_reason: 'tool_calls', message: { content: null, tool_calls: [{ id: 'tool-1' }] } }] }, 'unsupported-response-state'],
+  ])('diagnoses %s without retrying or exposing provider content', async (_label, providerEnvelope, validationReason) => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const fetcher = vi.fn(async () => rawEnvelope(providerEnvelope));
+    const logs: ProductionProviderLogEvent[] = [];
+    const result = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
+      env: enabledEnv,
+      fetcher: fetcher as typeof fetch,
+      logger: event => logs.push(event),
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.body).toMatchObject({
+      state: 'fallback',
+      category: 'schema_validation_failed',
+      diagnostics: {
+        validationCategory: 'provider-envelope-invalid',
+        validationReason,
+      },
+    });
+    const serialized = JSON.stringify({ body: result.body, logs });
+    expect(serialized).not.toContain('bounded refusal text');
+    expect(serialized).not.toContain('{"partial":');
+    expect(serialized).not.toContain('not-consumed');
+  });
+
+  it('diagnoses non-JSON content type without reading or retrying provider content', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const fetcher = vi.fn(async () => rawEnvelope('provider prose that must not be surfaced', 'text/plain; charset=utf-8'));
+    const result = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
+      env: enabledEnv,
+      fetcher: fetcher as typeof fetch,
+      logger: vi.fn(),
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.body).toMatchObject({
+      state: 'fallback',
+      diagnostics: {
+        validationReason: 'content-type-not-json',
+        providerHttpContentType: 'text/plain; charset=utf-8',
+        providerOuterJsonParsed: false,
+        providerJsonParsingStage: 'content-type',
+      },
+    });
+    expect(JSON.stringify(result.body)).not.toContain('provider prose');
   });
 
   it('rejects missing fields and unsupported artifact targets through the existing schema', async () => {
@@ -538,7 +667,16 @@ describe('production Repository Intelligence provider', () => {
       { ...maximumPayload.productOpportunities[0], id: 'op:workflow-briefing', title: 'Workflow Briefing', requiredNewCapabilities: [{ title: 'Workflow briefing', rationale: 'Users need a concise product workflow briefing.' }] },
       { ...maximumPayload.productOpportunities[0], id: 'op:guided-review', title: 'Guided Review', requiredNewCapabilities: [{ title: 'Guided review', rationale: 'Users need a bounded way to review proposed product directions.' }] },
     );
-    expect(Math.ceil(new TextEncoder().encode(JSON.stringify(maximumPayload)).byteLength / 4)).toBeLessThanOrEqual(2_500);
+    const maximumResponseBytes = new TextEncoder().encode(JSON.stringify(maximumPayload)).byteLength;
+    const maximumResponseTokenEstimate = Math.ceil(maximumResponseBytes / 4);
+    console.info(JSON.stringify({
+      diagnostic: 'product-strategist-maximum-valid-response',
+      opportunityCount: maximumPayload.productOpportunities.length,
+      responseBytes: maximumResponseBytes,
+      estimatedTokens: maximumResponseTokenEstimate,
+      outputTokenCap: 2_500,
+    }));
+    expect(maximumResponseTokenEstimate).toBeLessThanOrEqual(2_500);
     const maximum = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv,
       fetcher: vi.fn(async () => envelope(maximumPayload)) as unknown as typeof fetch,

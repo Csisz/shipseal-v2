@@ -382,7 +382,7 @@ describe('Result Workspace composition', () => {
     expect(await screen.findByText(/Secondary repository improvements/i)).toBeInTheDocument();
   });
 
-  it('mounts chapters on first visit, retains them, and prepares Repository Universe immediately', async () => {
+  it('keeps post-scan controls interactive and initializes Repository Universe once after explicit intent', async () => {
     globalThis.IntersectionObserver = class DeferredIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = '240px 0px';
@@ -394,10 +394,26 @@ describe('Result Workspace composition', () => {
       takeRecords() { return []; }
     } as unknown as typeof IntersectionObserver;
 
-    render(<ResultDashboard report={buildSampleReport()} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
+    const prepareRepositoryProductIntelligence = vi.fn(async () => undefined);
+    render(<ResultDashboard
+      report={buildSampleReport()}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{ state: 'deterministic', message: 'Repository evidence is ready.', retryable: false }}
+      prepareRepositoryProductIntelligence={prepareRepositoryProductIntelligence}
+    />);
 
-    expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 10000 })).toBeInTheDocument();
+    expect(await screen.findByTestId('repository-universe-deferred')).toBeInTheDocument();
+    expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: /Result chapters/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Prepare delivery/i })).not.toBeInTheDocument();
+    switchResultChapter('Improve');
+    expect(await screen.findByTestId('future-neural-field', {}, { timeout: 10000 })).toBeInTheDocument();
+    await waitFor(() => expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1));
+    expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Explore Repository Universe/i }));
     await screen.findByRole('img', { name: /Repository Universe 3D graph/i }, { timeout: 10000 });
     expect(new Set(universeMockState.models).size).toBe(1);
 
@@ -407,6 +423,37 @@ describe('Result Workspace composition', () => {
     switchResultChapter('Understand');
     expect(deliverHeading).not.toBeVisible();
     expect(new Set(universeMockState.models).size).toBe(1);
+    expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Product Strategist pending state local while the workspace remains interactive', async () => {
+    globalThis.IntersectionObserver = class DeferredIntersectionObserver implements IntersectionObserver {
+      readonly root = null;
+      readonly rootMargin = '240px 0px';
+      readonly thresholds = [0];
+      constructor(_callback: IntersectionObserverCallback) {}
+      observe() {}
+      disconnect() {}
+      unobserve() {}
+      takeRecords() { return []; }
+    } as unknown as typeof IntersectionObserver;
+
+    render(<ResultDashboard
+      report={buildSampleReport()}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{ state: 'preparing', message: 'Product Strategist is analysing repository evidence.', retryable: false }}
+      prepareRepositoryProductIntelligence={vi.fn(async () => undefined)}
+    />);
+
+    expect(await screen.findByTestId('repository-universe-deferred')).toBeInTheDocument();
+    switchResultChapter('Improve');
+    expect((await screen.findAllByText('Analysing product opportunities')).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Quick Path/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Deep Configuration/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Explore Repository Universe/i })).toBeEnabled();
+    expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
   });
 
   it('opens with a simplified repository-specific entry and routes the primary action to Repository Intelligence review', async () => {

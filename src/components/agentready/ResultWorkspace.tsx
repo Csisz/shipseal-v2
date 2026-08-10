@@ -105,22 +105,28 @@ export function ResultWorkspace({
   onRescanRepositoryIntelligence,
   persistenceControl,
 }: Props) {
+  const reportIdentity = `${report.repoName}:${report.scannedAt}`;
   const repositoryHealth = report.repositoryHealth;
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
   const [localStoryChapterId, setLocalStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
   const [activeResultChapter, setActiveResultChapter] = useState<ResultChapterId>('understand');
   const [visitedResultChapters, setVisitedResultChapters] = useState<Set<ResultChapterId>>(() => new Set(['understand']));
-  const [workspaceHeroRequested, setWorkspaceHeroRequested] = useState(true);
+  const [workspaceHeroRequested, setWorkspaceHeroRequested] = useState(false);
   const [flightPathRequested, setFlightPathRequested] = useState(false);
   const [pendingDashboardFocus, setPendingDashboardFocus] = useState<'repository-intelligence' | 'repository-universe' | null>(null);
   const [planReviewed, setPlanReviewed] = useState(false);
   const [packagePrepared, setPackagePrepared] = useState(false);
   const [prCreated, setPrCreated] = useState(false);
   const [futureStageOverlay, setFutureStageOverlay] = useState<RepositoryFutureStageOverlay | null>(null);
+  const [workspaceReportIdentity, setWorkspaceReportIdentity] = useState(reportIdentity);
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
-  const repositoryUniverse = useMemo(() => buildRepositoryUniverseModel(report), [report]);
+  const repositoryUniverseNeeded = workspaceReportIdentity === reportIdentity
+    && (workspaceHeroRequested || visitedResultChapters.has('improve'));
+  const repositoryUniverse = useMemo(() => repositoryUniverseNeeded
+    ? buildRepositoryUniverseModel(report)
+    : null, [report, repositoryUniverseNeeded]);
   const effectiveStoryChapterId = activeStoryChapterId ?? localStoryChapterId;
   const activeStoryChapter = selectActiveWorkspaceStoryChapter(workspaceStory, effectiveStoryChapterId);
   const limitedScanReason = selectLimitedScanReason(report);
@@ -129,16 +135,17 @@ export function ResultWorkspace({
     ? buildRepositoryVerificationResult({ baseline: verificationBaseline, currentReport: report })
     : null, [report, verificationBaseline]);
   useEffect(() => {
+    setWorkspaceReportIdentity(reportIdentity);
     setActiveResultChapter('understand');
     setVisitedResultChapters(new Set(['understand']));
-    setWorkspaceHeroRequested(true);
+    setWorkspaceHeroRequested(false);
     setFlightPathRequested(false);
     setPendingDashboardFocus(null);
     setPlanReviewed(false);
     setPackagePrepared(false);
     setPrCreated(false);
     setFutureStageOverlay(null);
-  }, [initialIntake, intakeSkipped, report.repoName, report.scannedAt]);
+  }, [initialIntake, intakeSkipped, reportIdentity]);
 
   useEffect(() => {
     if (!activeStoryChapter || effectiveStoryChapterId === activeStoryChapter.id) return;
@@ -177,10 +184,6 @@ export function ResultWorkspace({
   const clearRepositoryIntelligenceFocus = useCallback(() => setPendingDashboardFocus(current => current === 'repository-intelligence' ? null : current), []);
 
   useEffect(() => {
-    if (activeResultChapter === 'improve' || activeResultChapter === 'verify') setWorkspaceHeroRequested(true);
-  }, [activeResultChapter]);
-
-  useEffect(() => {
     if (pendingDashboardFocus !== 'repository-universe' || !workspaceHeroRequested || activeResultChapter !== 'understand') return;
     const frame = requestAnimationFrame(() => {
       focusDashboardTarget(repositoryUniverseRef.current);
@@ -190,9 +193,10 @@ export function ResultWorkspace({
   }, [activeResultChapter, focusDashboardTarget, pendingDashboardFocus, workspaceHeroRequested]);
 
   useEffect(() => {
-    // Fetch the isolated visualization chunk once a truthful report exists; it remains lazily mounted.
+    if (!workspaceHeroRequested) return;
+    // Fetch the isolated visualization chunk only after viewport proximity or explicit intent.
     void import('./RepositoryUniverse3D');
-  }, [report.repoName, report.scannedAt]);
+  }, [workspaceHeroRequested]);
 
   useEffect(() => {
     if (workspaceHeroRequested || typeof IntersectionObserver === 'undefined') return;
@@ -219,7 +223,7 @@ export function ResultWorkspace({
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
 
-      {(!['understand', 'improve'].includes(activeResultChapter) || repositoryHealth.overall.score === null) && <PostScanOverview
+      {(!['understand', 'improve'].includes(activeResultChapter) || repositoryHealth.overall.score === null || (activeResultChapter === 'understand' && !workspaceHeroRequested)) && <PostScanOverview
         report={report}
         limitedScanReason={limitedScanReason}
         frictions={repositoryFrictions}
@@ -230,13 +234,13 @@ export function ResultWorkspace({
         persistenceControl={persistenceControl}
       />}
 
-      {(!['understand', 'improve'].includes(activeResultChapter) || repositoryHealth.overall.score === null) && <ResultChapterNav
+      {(!['understand', 'improve'].includes(activeResultChapter) || repositoryHealth.overall.score === null || (activeResultChapter === 'understand' && !workspaceHeroRequested)) && <ResultChapterNav
         activeChapter={activeResultChapter}
         statuses={chapterStatuses}
         onChange={handleResultChapterChange}
       />}
 
-      {visitedResultChapters.has('improve') && (
+      {visitedResultChapters.has('improve') && repositoryUniverse && (
         <ResultChapterShell chapter="improve" active={activeResultChapter === 'improve'}>
           <ResultChapterLoadBoundary chapterLabel="Future Pathways">
             <Suspense fallback={<ResultChapterLoading chapterLabel="Future Pathways" />}>
@@ -270,7 +274,7 @@ export function ResultWorkspace({
       </header>
 
       <div key="repository-universe" ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} aria-labelledby={activeResultChapter === 'improve' ? 'repository-future-impact-title' : undefined} className="relative left-1/2 min-h-[calc(100dvh-5rem)] w-screen -translate-x-1/2 scroll-mt-20 overflow-hidden bg-background focus:outline-none">
-        {workspaceHeroRequested ? <AiWorkspaceHero
+        {workspaceHeroRequested && repositoryUniverse ? <AiWorkspaceHero
           report={report}
           limitationReason={limitedScanReason}
           story={workspaceStory}
@@ -310,10 +314,21 @@ export function ResultWorkspace({
           onDiscardVerificationBaseline={onDiscardVerificationBaseline}
           futureStageOverlay={activeResultChapter === 'improve' ? futureStageOverlay : null}
           universeModel={repositoryUniverse}
-        /> : null}
+        /> : (
+          <div data-testid="repository-universe-deferred" className="mx-auto flex min-h-[60dvh] max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
+            <div className="font-mono text-xs uppercase tracking-[0.16em] text-primary-glow">Repository Universe</div>
+            <h2 className="mt-3 font-display text-2xl font-semibold md:text-3xl">Explore the repository when you are ready</h2>
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
+              Future Pathways and the rest of your scan remain interactive while the heavier visual repository view stays deferred.
+            </p>
+            <button type="button" className="mt-6 min-h-11 rounded-xl bg-primary px-5 py-2.5 font-medium text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setWorkspaceHeroRequested(true)}>
+              Explore Repository Universe
+            </button>
+          </div>
+        )}
       </div>
 
-      {visitedResultChapters.has('improve') && (
+      {visitedResultChapters.has('improve') && repositoryUniverse && (
         <div hidden={activeResultChapter !== 'improve'} className="mb-6">
           <ResultChapterLoadBoundary chapterLabel="Other improvements">
             <Suspense fallback={<ResultChapterLoading chapterLabel="Other improvements" />}>

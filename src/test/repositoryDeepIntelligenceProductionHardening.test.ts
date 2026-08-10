@@ -110,7 +110,7 @@ function providerPayload(request: RepositoryDeepIntelligenceRequest) {
 }
 
 function envelope(payload: unknown, headers: Record<string, string> = { 'Content-Type': 'application/json' }) {
-  return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(payload) } }] }), { status: 200, headers });
+  return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(payload) } }] }), { status: 200, headers });
 }
 
 afterEach(() => {

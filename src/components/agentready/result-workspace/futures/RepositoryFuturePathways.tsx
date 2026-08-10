@@ -16,32 +16,17 @@ import {
 import type { ReadinessReport } from '@/lib/types';
 import type { RepositoryIntelligenceProviderStatus, RepositoryProductIntelligenceResult } from '@/lib/repositoryIntelligence';
 import {
-  buildRepositoryActionableImprovements,
-  buildRepositoryAtlasModel,
-  buildRepositoryOptimizationPlan,
-  buildRepositoryTransformationProposalModel,
-  buildWorkspaceStory,
-} from '@/lib/workspace';
-import {
-  REPOSITORY_FUTURE_CAPABILITIES,
   DEFAULT_REPOSITORY_FUTURE_DEPENDENCY_DEFINITIONS,
   REPOSITORY_FUTURE_COMPATIBILITY_LABELS,
   REPOSITORY_FUTURE_FIT_LABELS,
   addRepositoryFutureSupportingGoal,
-  adaptActionableImprovementCandidates,
-  adaptProductOpportunityCandidates,
-  adaptRepositoryHealthCandidates,
-  adaptWorkspaceStoryCandidates,
-  buildRepositoryFutureGraph,
   buildRepositoryFutureUniverseProjection,
   buildRepositoryFutureQuickPathModel,
-  buildProductOpportunityCapabilityDefinitions,
   compareRepositoryFutureCandidates,
   inspectRepositoryFutureCandidateCompatibility,
   inspectRepositoryFutureDependencyImpact,
   removeRepositoryFutureSupportingGoal,
   replaceRepositoryFuturePrimary,
-  productOpportunitySatisfiedCapabilityIds,
   synthesizeRepositoryFutureDraft,
   type RepositoryFutureCompatibilityState,
   type RepositoryFutureDraft,
@@ -59,6 +44,7 @@ import type {
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
 import { RepositoryFuturePathwaysStage } from './RepositoryFuturePathwaysStage';
+import { buildRepositoryFuturePathwaysGraph } from './repositoryFuturePathwaysGraph';
 
 interface RepositoryFuturePathwaysProps {
   report: ReadinessReport;
@@ -85,7 +71,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   const [fitFilter, setFitFilter] = useState<'all' | RepositoryFutureFit>('all');
   const [originFilter, setOriginFilter] = useState<'all' | RepositoryFutureOrigin>('all');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
-  const graph = useMemo(() => buildFutureGraph(report, universe, productIntelligence), [productIntelligence, report, universe]);
+  const graph = useMemo(() => buildRepositoryFuturePathwaysGraph(report, universe, productIntelligence), [productIntelligence, report, universe]);
   const quickPath = useMemo(() => buildRepositoryFutureQuickPathModel(graph, draft), [draft, graph]);
   const goalById = useMemo(() => new Map(graph.nodes
     .filter(node => node.kind === 'future-goal' && node.candidateId)
@@ -455,42 +441,6 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       </div>
     </section>
   );
-}
-
-function buildFutureGraph(report: ReadinessReport, universe: RepositoryUniverseModel, productIntelligence?: RepositoryProductIntelligenceResult | null) {
-  const atlas = buildRepositoryAtlasModel(report);
-  const transformation = buildRepositoryTransformationProposalModel(report, universe, atlas);
-  const plan = buildRepositoryOptimizationPlan({ report, universe, atlas, transformation });
-  const improvements = buildRepositoryActionableImprovements({ transformation, plan });
-  const sourceScanId = `scan:${report.repoName}:${report.scannedAt}`;
-  const sourceScanFingerprint = sourceScanId;
-  const repository = {
-    repositoryId: report.source.sourceType === 'github-app'
-      ? `github:${report.source.githubOwner}/${report.source.githubRepo}`
-      : `upload:${report.repoName}`,
-    sourceScanId,
-    sourceScanFingerprint,
-    limited: Boolean(report.scanEvidence.limitedScan || report.scanSummary.limited),
-  };
-  const context = { repository, universe };
-  return buildRepositoryFutureGraph({
-    repository,
-    universe,
-    candidateResults: [
-      ...(productIntelligence?.opportunities.length ? [adaptProductOpportunityCandidates({ productIntelligence, context })] : []),
-      adaptActionableImprovementCandidates(improvements, context),
-      adaptRepositoryHealthCandidates(report.repositoryHealth, context),
-      adaptWorkspaceStoryCandidates(buildWorkspaceStory(report), context),
-    ],
-    capabilityDefinitions: [
-      ...DEFAULT_REPOSITORY_FUTURE_DEPENDENCY_DEFINITIONS,
-      ...(productIntelligence ? buildProductOpportunityCapabilityDefinitions(productIntelligence) : []),
-    ],
-    satisfiedCapabilityIds: [
-      REPOSITORY_FUTURE_CAPABILITIES.repositoryEvidence,
-      ...(productIntelligence ? productOpportunitySatisfiedCapabilityIds(productIntelligence) : []),
-    ],
-  });
 }
 
 function ProductUnderstandingDisclosure({ productIntelligence, state }: {

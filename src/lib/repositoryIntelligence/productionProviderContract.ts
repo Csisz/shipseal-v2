@@ -12,6 +12,23 @@ export type RepositoryIntelligenceValidationCategory =
   | 'product-opportunity-schema-rejected'
   | 'insufficient-product-opportunities';
 
+export type RepositoryProviderEnvelopeValidationReason =
+  | 'content-type-not-json'
+  | 'outer-json-invalid'
+  | 'choices-missing'
+  | 'message-missing'
+  | 'refusal'
+  | 'content-missing'
+  | 'unsupported-content-shape'
+  | 'completion-truncated'
+  | 'content-filtered'
+  | 'unsupported-finish-reason'
+  | 'unsupported-response-state'
+  | 'structured-content-json-invalid';
+
+export type RepositoryProviderContentShape = 'string' | 'array' | 'null' | 'missing' | 'unsupported';
+export type RepositoryProviderJsonParsingStage = 'content-type' | 'outer-json' | 'message-content' | 'structured-content' | 'complete';
+
 export type RepositoryIntelligenceValidationReason =
   | 'request-not-object'
   | 'serialization-failed'
@@ -26,7 +43,8 @@ export type RepositoryIntelligenceValidationReason =
   | 'duplicate-evidence-id'
   | 'invalid-context-path'
   | 'missing-supporting-evidence'
-  | 'fingerprint-mismatch';
+  | 'fingerprint-mismatch'
+  | RepositoryProviderEnvelopeValidationReason;
 
 export type RepositoryDeepIntelligenceState =
   | 'disabled' | 'unavailable' | 'pending' | 'completed' | 'completed-with-warnings'
@@ -63,6 +81,23 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   productUnderstandingAccepted?: boolean;
   acceptedProductOpportunityCount?: number;
   rejectedProductOpportunityCount?: number;
+  providerHttpContentType?: string;
+  providerOuterJsonParsed?: boolean;
+  providerChoicesCount?: number;
+  providerFinishReason?: string;
+  providerMessagePresent?: boolean;
+  providerContentShape?: RepositoryProviderContentShape;
+  providerContentCharacters?: number;
+  providerContentBytes?: number;
+  providerRefusalPresent?: boolean;
+  providerAnnotationsPresent?: boolean;
+  providerToolCallsPresent?: boolean;
+  providerPromptTokens?: number;
+  providerCompletionTokens?: number;
+  providerReasoningTokens?: number;
+  providerTotalTokens?: number;
+  providerModelId?: string;
+  providerJsonParsingStage?: RepositoryProviderJsonParsingStage;
   costEstimate: 'unavailable';
   cacheUsed?: boolean;
 }

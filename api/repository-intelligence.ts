@@ -112,6 +112,7 @@ export async function prepareProductionRepositoryIntelligence(
   let providerRetryCount = 0;
   let providerValidationCategory: RepositoryIntelligenceValidationCategory | undefined;
   let providerValidationReason: RepositoryIntelligenceValidationReason | undefined;
+  let providerResponseDiagnostics: Partial<RepositoryIntelligenceSafeDiagnostics> = {};
   const provider = new OpenAiCompatibleRepositoryDeepIntelligenceProvider({
     config: executionConfig,
     fetcher: options.fetcher,
@@ -119,6 +120,25 @@ export async function prepareProductionRepositoryIntelligence(
       providerRetryCount = Math.max(providerRetryCount, event.retryCount);
       if (event.validationCategory) providerValidationCategory = event.validationCategory;
       if (event.validationReason) providerValidationReason = event.validationReason;
+      providerResponseDiagnostics = {
+        ...(event.providerHttpContentType === undefined ? {} : { providerHttpContentType: event.providerHttpContentType }),
+        ...(event.providerOuterJsonParsed === undefined ? {} : { providerOuterJsonParsed: event.providerOuterJsonParsed }),
+        ...(event.providerChoicesCount === undefined ? {} : { providerChoicesCount: event.providerChoicesCount }),
+        ...(event.providerFinishReason === undefined ? {} : { providerFinishReason: event.providerFinishReason }),
+        ...(event.providerMessagePresent === undefined ? {} : { providerMessagePresent: event.providerMessagePresent }),
+        ...(event.providerContentShape === undefined ? {} : { providerContentShape: event.providerContentShape }),
+        ...(event.providerContentCharacters === undefined ? {} : { providerContentCharacters: event.providerContentCharacters }),
+        ...(event.providerContentBytes === undefined ? {} : { providerContentBytes: event.providerContentBytes }),
+        ...(event.providerRefusalPresent === undefined ? {} : { providerRefusalPresent: event.providerRefusalPresent }),
+        ...(event.providerAnnotationsPresent === undefined ? {} : { providerAnnotationsPresent: event.providerAnnotationsPresent }),
+        ...(event.providerToolCallsPresent === undefined ? {} : { providerToolCallsPresent: event.providerToolCallsPresent }),
+        ...(event.providerPromptTokens === undefined ? {} : { providerPromptTokens: event.providerPromptTokens }),
+        ...(event.providerCompletionTokens === undefined ? {} : { providerCompletionTokens: event.providerCompletionTokens }),
+        ...(event.providerReasoningTokens === undefined ? {} : { providerReasoningTokens: event.providerReasoningTokens }),
+        ...(event.providerTotalTokens === undefined ? {} : { providerTotalTokens: event.providerTotalTokens }),
+        ...(event.providerModelId === undefined ? {} : { providerModelId: event.providerModelId }),
+        ...(event.providerJsonParsingStage === undefined ? {} : { providerJsonParsingStage: event.providerJsonParsingStage }),
+      };
       logger(event);
     },
   });
@@ -155,6 +175,7 @@ export async function prepareProductionRepositoryIntelligence(
       acceptedProductOpportunityCount,
       rejectedProductOpportunityCount: productIntelligence?.rejectedOpportunities.length || 0,
     } : {}),
+    ...providerResponseDiagnostics,
   });
   const hasAcceptedExecutionOutput = productStrategistExecution
     ? acceptedProductOpportunityCount >= 3 && acceptedProductOpportunityCount <= 5

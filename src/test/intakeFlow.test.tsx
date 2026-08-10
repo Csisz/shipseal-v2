@@ -183,6 +183,8 @@ describe('ShipSeal pre-scan intake flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 
+    expect(await screen.findByRole('heading', { name: /Explore the repository when you are ready/i }, { timeout: 15000 })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Explore Repository Universe/i }));
     expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 15000 })).toBeInTheDocument();
     const resultActionsTrigger = screen.getByRole('button', { name: /More result actions/i });
     fireEvent.keyDown(resultActionsTrigger, { key: 'ArrowDown' });
@@ -199,6 +201,8 @@ describe('ShipSeal pre-scan intake flow', () => {
     expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
 
+    const deferredUniverseButton = screen.queryByRole('button', { name: /Explore Repository Universe/i });
+    if (deferredUniverseButton) fireEvent.click(deferredUniverseButton);
     expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 15000 })).toBeInTheDocument();
     const storyTab = await screen.findByRole('tab', { name: /Story/i }, { timeout: 5000 });
     fireEvent.click(storyTab);

@@ -21,6 +21,8 @@ import {
   type ProductionDeepIntelligenceContextResult,
 } from './repositoryDeepIntelligenceContext.js';
 import type {
+  RepositoryProviderContentShape,
+  RepositoryProviderJsonParsingStage,
   RepositoryIntelligenceValidationCategory,
   RepositoryIntelligenceValidationReason,
 } from '../../src/lib/repositoryIntelligence/productionProviderContract.js';
@@ -32,6 +34,7 @@ import { buildProductStrategistProviderPayload } from './repositoryProductStrate
 import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../../src/lib/repositoryIntelligence/productStrategistContext.js';
 
 export const PRODUCTION_PROVIDER_POLICY_VERSION = 'shipseal.production-provider-policy.v1' as const;
+export const PRODUCT_STRATEGIST_STRUCTURED_OUTPUT_DECISION = 'json-object-with-deterministic-validation' as const;
 
 export interface ProductionProviderPolicy {
   version: typeof PRODUCTION_PROVIDER_POLICY_VERSION;
@@ -89,6 +92,23 @@ export type ProductionProviderLogEvent = {
   providerInputTokenEstimate?: number;
   outputTokenCap?: number;
   selectedFileCount?: number;
+  providerHttpContentType?: string;
+  providerOuterJsonParsed?: boolean;
+  providerChoicesCount?: number;
+  providerFinishReason?: string;
+  providerMessagePresent?: boolean;
+  providerContentShape?: RepositoryProviderContentShape;
+  providerContentCharacters?: number;
+  providerContentBytes?: number;
+  providerRefusalPresent?: boolean;
+  providerAnnotationsPresent?: boolean;
+  providerToolCallsPresent?: boolean;
+  providerPromptTokens?: number;
+  providerCompletionTokens?: number;
+  providerReasoningTokens?: number;
+  providerTotalTokens?: number;
+  providerModelId?: string;
+  providerJsonParsingStage?: RepositoryProviderJsonParsingStage;
 };
 
 export type ProductionProviderLogger = (event: ProductionProviderLogEvent) => void;
@@ -371,10 +391,14 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
         }
         const contentType = response.headers.get('Content-Type') || '';
         if (!contentType.toLowerCase().includes('application/json')) {
-          throw new RepositoryDeepIntelligenceProviderError('provider_envelope_invalid', 'Provider response content type was not JSON.', false, 'provider-envelope');
+          throw providerEnvelopeFailure('content-type-not-json', 'Provider response content type was not JSON.', {
+            providerHttpContentType: safeDiagnosticScalar(contentType, 120),
+            providerOuterJsonParsed: false,
+            providerJsonParsingStage: 'content-type',
+          });
         }
         const rawText = await readBoundedResponseText(response, config.policy.maximumResponseBytes, runOptions?.signal);
-        const payload = parseProviderEnvelope(rawText);
+        const parsedEnvelope = parseProviderEnvelope(rawText, contentType);
         this.log(requestId, 'success', startedAt, validation.requestBytes, retryCount, undefined, {
           repositoryIdentityHash: stableContextFingerprint(request.repository),
           promptVersion: request.promptContractVersion,
@@ -384,12 +408,14 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
           inputTokenEstimate: estimateDeepIntelligenceInputTokens(validation.requestBytes),
           outputBytes: Buffer.byteLength(rawText, 'utf8'),
           ...providerDetails,
+          ...parsedEnvelope.diagnostics,
         });
-        return payload;
+        return parsedEnvelope.payload;
       } catch (error) {
         if (error instanceof RepositoryDeepIntelligenceProviderError) {
           this.log(requestId, 'failure', startedAt, validation.requestBytes, retryCount, error.code, {
             validationCategory: providerValidationCategory(error.code, error.failureStage),
+            ...(error instanceof ProductionProviderEnvelopeError ? error.safeDiagnostics : {}),
             inputTokenEstimate: estimateDeepIntelligenceInputTokens(validation.requestBytes),
             ...providerDetails,
           });
@@ -462,6 +488,10 @@ export function buildProductionProviderBody(request: RepositoryDeepIntelligenceR
   const body = {
     model: config.model,
     max_completion_tokens: config.policy.maximumOutputTokens,
+    // Product Strategist deliberately remains on the provider-neutral JSON object mode.
+    // The canonical contract contains optional fields and independently validated
+    // opportunity candidates; forcing a vendor strict schema would weaken that
+    // partial-valid strategy or require a parallel response contract.
     response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: systemPrompt },
@@ -597,17 +627,148 @@ function generalSystemPrompt() {
   ].join(' ');
 }
 
-function parseProviderEnvelope(rawText: string): unknown {
+type ProviderEnvelopeDiagnostics = Pick<ProductionProviderLogEvent,
+  'validationReason'
+  | 'providerHttpContentType'
+  | 'providerOuterJsonParsed'
+  | 'providerChoicesCount'
+  | 'providerFinishReason'
+  | 'providerMessagePresent'
+  | 'providerContentShape'
+  | 'providerContentCharacters'
+  | 'providerContentBytes'
+  | 'providerRefusalPresent'
+  | 'providerAnnotationsPresent'
+  | 'providerToolCallsPresent'
+  | 'providerPromptTokens'
+  | 'providerCompletionTokens'
+  | 'providerReasoningTokens'
+  | 'providerTotalTokens'
+  | 'providerModelId'
+  | 'providerJsonParsingStage'>;
+
+class ProductionProviderEnvelopeError extends RepositoryDeepIntelligenceProviderError {
+  constructor(
+    message: string,
+    readonly safeDiagnostics: ProviderEnvelopeDiagnostics,
+  ) {
+    super('provider_envelope_invalid', message, false, 'provider-envelope');
+    this.name = 'ProductionProviderEnvelopeError';
+  }
+}
+
+function providerEnvelopeFailure(
+  reason: NonNullable<RepositoryIntelligenceValidationReason>,
+  message: string,
+  diagnostics: Omit<ProviderEnvelopeDiagnostics, 'validationReason'>,
+) {
+  return new ProductionProviderEnvelopeError(message, { ...diagnostics, validationReason: reason });
+}
+
+export function parseProviderEnvelope(rawText: string, contentType = 'application/json'):
+  { payload: unknown; diagnostics: ProviderEnvelopeDiagnostics } {
+  const initialDiagnostics: ProviderEnvelopeDiagnostics = {
+    providerHttpContentType: safeDiagnosticScalar(contentType, 120),
+    providerOuterJsonParsed: false,
+    providerJsonParsingStage: 'outer-json',
+  };
   let envelope: unknown;
-  try { envelope = JSON.parse(rawText); } catch { throw new RepositoryDeepIntelligenceProviderError('provider_envelope_invalid', 'Provider returned malformed JSON.', false, 'provider-envelope'); }
-  const content = extractMessageContent(envelope);
-  if (typeof content !== 'string') throw new RepositoryDeepIntelligenceProviderError('provider_envelope_invalid', 'Provider response did not contain structured message content.', false, 'provider-envelope');
-  const normalized = stripSingleJsonFence(content);
   try {
-    const payload = JSON.parse(normalized) as Record<string, unknown>;
-    const usage = extractUsage(envelope);
-    return usage ? { ...payload, usage } : payload;
-  } catch { throw new RepositoryDeepIntelligenceProviderError('provider_envelope_invalid', 'Provider structured content was not valid JSON.', false, 'provider-envelope'); }
+    envelope = JSON.parse(rawText);
+  } catch {
+    throw providerEnvelopeFailure('outer-json-invalid', 'Provider returned malformed outer JSON.', initialDiagnostics);
+  }
+  if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
+    throw providerEnvelopeFailure('choices-missing', 'Provider response did not contain choices.', {
+      ...initialDiagnostics,
+      providerOuterJsonParsed: true,
+    });
+  }
+  const envelopeRecord = envelope as Record<string, unknown>;
+  const usageDiagnostics = extractUsageDiagnostics(envelopeRecord);
+  const choices = envelopeRecord.choices;
+  const baseDiagnostics: ProviderEnvelopeDiagnostics = {
+    ...initialDiagnostics,
+    ...usageDiagnostics,
+    providerOuterJsonParsed: true,
+    providerChoicesCount: Array.isArray(choices) ? choices.length : 0,
+    providerModelId: safeDiagnosticScalar(envelopeRecord.model, 160),
+  };
+  if (!Array.isArray(choices) || !choices.length) {
+    throw providerEnvelopeFailure('choices-missing', 'Provider response did not contain choices.', baseDiagnostics);
+  }
+  const choice = choices[0];
+  if (!choice || typeof choice !== 'object' || Array.isArray(choice)) {
+    throw providerEnvelopeFailure('message-missing', 'Provider response choice did not contain a message.', baseDiagnostics);
+  }
+  const choiceRecord = choice as Record<string, unknown>;
+  const finishReason = normalizeFinishReason(choiceRecord.finish_reason);
+  const message = choiceRecord.message;
+  const messagePresent = Boolean(message && typeof message === 'object' && !Array.isArray(message));
+  const finishDiagnostics: ProviderEnvelopeDiagnostics = {
+    ...baseDiagnostics,
+    providerFinishReason: finishReason,
+    providerMessagePresent: messagePresent,
+  };
+  if (!messagePresent) {
+    throw providerEnvelopeFailure('message-missing', 'Provider response choice did not contain a message.', finishDiagnostics);
+  }
+  const messageRecord = message as Record<string, unknown>;
+  const content = messageRecord.content;
+  const contentShape = providerContentShape(content);
+  const refusalPresent = hasProviderRefusal(messageRecord, content);
+  const toolCallsPresent = Array.isArray(messageRecord.tool_calls) && messageRecord.tool_calls.length > 0
+    || messageRecord.function_call !== undefined;
+  const messageDiagnostics: ProviderEnvelopeDiagnostics = {
+    ...finishDiagnostics,
+    providerContentShape: contentShape,
+    providerRefusalPresent: refusalPresent,
+    providerAnnotationsPresent: Array.isArray(messageRecord.annotations) && messageRecord.annotations.length > 0,
+    providerToolCallsPresent: toolCallsPresent,
+    providerJsonParsingStage: 'message-content',
+  };
+  if (refusalPresent) {
+    throw providerEnvelopeFailure('refusal', 'Provider refused the Product Strategist request.', messageDiagnostics);
+  }
+  if (finishReason === 'length') {
+    throw providerEnvelopeFailure('completion-truncated', 'Provider completion reached its output limit.', messageDiagnostics);
+  }
+  if (finishReason === 'content_filter') {
+    throw providerEnvelopeFailure('content-filtered', 'Provider filtered the Product Strategist response.', messageDiagnostics);
+  }
+  if (finishReason === 'tool_calls' || finishReason === 'function_call') {
+    throw providerEnvelopeFailure('unsupported-response-state', 'Provider returned an unrequested tool response.', messageDiagnostics);
+  }
+  if (finishReason !== 'stop') {
+    throw providerEnvelopeFailure('unsupported-finish-reason', 'Provider returned an unsupported completion state.', messageDiagnostics);
+  }
+  if (toolCallsPresent) {
+    throw providerEnvelopeFailure('unsupported-response-state', 'Provider returned unrequested tool metadata.', messageDiagnostics);
+  }
+  const extracted = extractSupportedMessageText(content);
+  if ('reason' in extracted) {
+    throw providerEnvelopeFailure(extracted.reason, extracted.message, messageDiagnostics);
+  }
+  const structuredDiagnostics: ProviderEnvelopeDiagnostics = {
+    ...messageDiagnostics,
+    providerContentCharacters: extracted.text.length,
+    providerContentBytes: Buffer.byteLength(extracted.text, 'utf8'),
+    providerJsonParsingStage: 'structured-content',
+  };
+  const normalized = stripSingleJsonFence(extracted.text);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(normalized);
+  } catch {
+    throw providerEnvelopeFailure('structured-content-json-invalid', 'Provider structured content was not valid JSON.', structuredDiagnostics);
+  }
+  const usage = extractUsage(envelope);
+  return {
+    payload: usage && payload && typeof payload === 'object' && !Array.isArray(payload)
+      ? { ...payload as Record<string, unknown>, usage }
+      : payload,
+    diagnostics: { ...structuredDiagnostics, providerJsonParsingStage: 'complete' },
+  };
 }
 
 function extractUsage(value: unknown) {
@@ -622,14 +783,80 @@ function extractUsage(value: unknown) {
   return { ...(inputUnits === undefined ? {} : { inputUnits }), ...(outputUnits === undefined ? {} : { outputUnits }), ...(totalUnits === undefined ? {} : { totalUnits }), cacheUsed: false };
 }
 
-function extractMessageContent(value: unknown): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const choices = (value as { choices?: unknown }).choices;
-  if (!Array.isArray(choices) || !choices[0] || typeof choices[0] !== 'object') return undefined;
-  const message = (choices[0] as { message?: unknown }).message;
-  return message && typeof message === 'object' && !Array.isArray(message)
-    ? (message as { content?: unknown }).content
+function extractUsageDiagnostics(envelope: Record<string, unknown>): ProviderEnvelopeDiagnostics {
+  const usage = envelope.usage;
+  if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return {};
+  const record = usage as Record<string, unknown>;
+  const completionDetails = record.completion_tokens_details;
+  const reasoningTokens = completionDetails && typeof completionDetails === 'object' && !Array.isArray(completionDetails)
+    ? finiteNonnegative((completionDetails as Record<string, unknown>).reasoning_tokens)
     : undefined;
+  return {
+    providerPromptTokens: finiteNonnegative(record.prompt_tokens),
+    providerCompletionTokens: finiteNonnegative(record.completion_tokens),
+    providerReasoningTokens: reasoningTokens,
+    providerTotalTokens: finiteNonnegative(record.total_tokens),
+  };
+}
+
+function providerContentShape(value: unknown): RepositoryProviderContentShape {
+  if (typeof value === 'string') return 'string';
+  if (Array.isArray(value)) return 'array';
+  if (value === null) return 'null';
+  if (value === undefined) return 'missing';
+  return 'unsupported';
+}
+
+function hasProviderRefusal(message: Record<string, unknown>, content: unknown) {
+  if (typeof message.refusal === 'string' && message.refusal.trim().length > 0) return true;
+  return Array.isArray(content) && content.some(part => part && typeof part === 'object' && !Array.isArray(part)
+    && (part as Record<string, unknown>).type === 'refusal');
+}
+
+function extractSupportedMessageText(content: unknown):
+  | { ok: true; text: string }
+  | { ok: false; reason: 'content-missing' | 'unsupported-content-shape'; message: string } {
+  if (typeof content === 'string') {
+    return content.trim().length
+      ? { ok: true, text: content }
+      : { ok: false, reason: 'content-missing', message: 'Provider message content was empty.' };
+  }
+  if (content === null || content === undefined) {
+    return { ok: false, reason: 'content-missing', message: 'Provider message content was missing.' };
+  }
+  if (!Array.isArray(content)) {
+    return { ok: false, reason: 'unsupported-content-shape', message: 'Provider message content shape was unsupported.' };
+  }
+  const textParts: string[] = [];
+  for (const part of content) {
+    if (!part || typeof part !== 'object' || Array.isArray(part)) {
+      return { ok: false, reason: 'unsupported-content-shape', message: 'Provider message content part was unsupported.' };
+    }
+    const record = part as Record<string, unknown>;
+    if (record.type === 'refusal') {
+      return { ok: false, reason: 'unsupported-content-shape', message: 'Provider refusal content was not accepted as Product Intelligence.' };
+    }
+    if (record.type !== 'text' || typeof record.text !== 'string') {
+      return { ok: false, reason: 'unsupported-content-shape', message: 'Provider message content part was unsupported.' };
+    }
+    textParts.push(record.text);
+  }
+  const text = textParts.join('\n');
+  return text.trim().length
+    ? { ok: true, text }
+    : { ok: false, reason: 'content-missing', message: 'Provider message content was empty.' };
+}
+
+function normalizeFinishReason(value: unknown) {
+  return typeof value === 'string' && ['stop', 'length', 'content_filter', 'tool_calls', 'function_call'].includes(value)
+    ? value
+    : value === undefined || value === null ? 'missing' : 'unknown';
+}
+
+function safeDiagnosticScalar(value: unknown, maximumLength: number) {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.replace(/[\0\r\n]/g, ' ').trim();
+  return normalized ? normalized.slice(0, maximumLength) : undefined;
 }
 
 export function stripSingleJsonFence(value: string) {
