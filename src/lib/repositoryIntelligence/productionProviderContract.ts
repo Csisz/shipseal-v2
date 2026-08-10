@@ -8,7 +8,9 @@ export type RepositoryIntelligenceValidationCategory =
   | 'provider-http-rejected'
   | 'provider-envelope-invalid'
   | 'response-schema-rejected'
-  | 'product-opportunity-schema-rejected';
+  | 'product-understanding-schema-rejected'
+  | 'product-opportunity-schema-rejected'
+  | 'insufficient-product-opportunities';
 
 export type RepositoryIntelligenceValidationReason =
   | 'request-not-object'
@@ -53,6 +55,14 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   validationWarningCount?: number;
   validationCategory?: RepositoryIntelligenceValidationCategory;
   validationReason?: RepositoryIntelligenceValidationReason;
+  executionProfile?: RepositoryDeepIntelligenceRequest['executionProfile'];
+  providerRequestBytes?: number;
+  providerEstimatedInputTokens?: number;
+  outputTokenCap?: number;
+  selectedFileCount?: number;
+  productUnderstandingAccepted?: boolean;
+  acceptedProductOpportunityCount?: number;
+  rejectedProductOpportunityCount?: number;
   costEstimate: 'unavailable';
   cacheUsed?: boolean;
 }

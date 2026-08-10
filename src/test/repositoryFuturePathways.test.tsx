@@ -106,6 +106,36 @@ function chooseFirstPrimary() {
 }
 
 describe('Omega 18.5d.4 canvas-first Repository Future Pathways', () => {
+  it('does not request Product Strategist again for Future Pathways interactions', async () => {
+    const prepareEnhancement = vi.fn(async () => undefined);
+    const onStageOverlayChange = vi.fn();
+    const report = futureReport();
+    const universe = buildRepositoryUniverseModel(report);
+    const view = render(<RepositoryFuturePathways
+      report={report}
+      universe={universe}
+      productIntelligence={null}
+      providerStatus={{ state: 'deterministic', deepState: 'disabled', message: 'Product analysis is available.', retryable: false }}
+      prepareEnhancement={prepareEnhancement}
+      onStageOverlayChange={onStageOverlayChange}
+    />);
+    await waitFor(() => expect(prepareEnhancement).toHaveBeenCalledTimes(1));
+    view.rerender(<RepositoryFuturePathways
+      report={report}
+      universe={universe}
+      productIntelligence={productIntelligence()}
+      providerStatus={{ state: 'enhanced', deepState: 'completed', message: 'Product opportunities enhanced.', retryable: false, providerId: 'test-provider' }}
+      prepareEnhancement={prepareEnhancement}
+      onStageOverlayChange={onStageOverlayChange}
+    />);
+
+    chooseFirstPrimary();
+    fireEvent.click(await screen.findByRole('button', { name: 'Add supporting opportunity' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add support' })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Deep Configuration' }));
+    expect(prepareEnhancement).toHaveBeenCalledTimes(1);
+  });
+
   it('shows 3–5 Product Futures, selects nothing automatically, and keeps technical detail secondary', async () => {
     const { container, overlay } = await renderPathways();
     expect(screen.getByRole('heading', { name: 'Where should this product go next?' })).toBeInTheDocument();

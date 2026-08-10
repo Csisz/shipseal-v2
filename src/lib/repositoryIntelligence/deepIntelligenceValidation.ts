@@ -49,11 +49,16 @@ export function validateRepositoryDeepIntelligenceResponse({
   if (rawSize > policy.maximumRawResponseCharacters) return invalid('response-too-large', 'Provider response exceeded the bounded raw-response limit.');
   const parsed = repositoryDeepIntelligenceProviderResponseSchema.safeParse(rawResponse);
   if (!parsed.success) {
-    const productSchemaRejected = parsed.error.issues.some(issue => ['productUnderstanding', 'productOpportunities'].includes(String(issue.path[0] || '')));
+    const productUnderstandingRejected = parsed.error.issues.some(issue => String(issue.path[0] || '') === 'productUnderstanding');
+    const productOpportunityRejected = parsed.error.issues.some(issue => String(issue.path[0] || '') === 'productOpportunities');
     return invalid(
-      productSchemaRejected ? 'product-opportunity-schema-rejected' : 'malformed-response',
-      productSchemaRejected
-        ? 'Provider Product Intelligence did not match the required structured schema.'
+      productUnderstandingRejected
+        ? 'product-understanding-schema-rejected'
+        : productOpportunityRejected ? 'product-opportunity-schema-rejected' : 'malformed-response',
+      productUnderstandingRejected
+        ? 'Provider Product Understanding did not match the required structured schema.'
+        : productOpportunityRejected
+          ? 'Provider Product Opportunities did not match the required bounded collection schema.'
         : 'Provider response did not match the required structured schema.',
     );
   }

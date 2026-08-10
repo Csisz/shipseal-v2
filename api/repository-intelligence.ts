@@ -7,6 +7,7 @@ import {
 } from '../src/lib/repositoryIntelligence/productionProviderContract.js';
 import {
   OpenAiCompatibleRepositoryDeepIntelligenceProvider,
+  measureProductionProviderBody,
   resolveProductionProviderConfig,
   validatePreparedProductionProviderRequest,
   validateProductionProviderRequest,
@@ -96,6 +97,16 @@ export async function prepareProductionRepositoryIntelligence(
       retryCount: 0,
       validationCategory: 'request-preflight-rejected',
       validationReason: outboundValidation.reason,
+      executionProfile: preparedContext.request.executionProfile,
+    }));
+  }
+  let providerMeasurement;
+  try {
+    providerMeasurement = measureProductionProviderBody(preparedContext.request, executionConfig);
+  } catch {
+    return fallback(200, 'schema_validation_failed', false, diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
+      executionProfile: preparedContext.request.executionProfile,
+      validationCategory: 'request-preflight-rejected',
     }));
   }
   let providerRetryCount = 0;
@@ -119,6 +130,9 @@ export async function prepareProductionRepositoryIntelligence(
     timeoutMs: executionPolicy.timeoutMs,
   });
   const durationMs = Math.max(0, Date.now() - startedAt);
+  const productStrategistExecution = preparedContext.request.executionProfile === 'product-strategist';
+  const productIntelligence = execution.result?.productIntelligence;
+  const acceptedProductOpportunityCount = productIntelligence?.opportunities.length || 0;
   const diagnostics = diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
     requestId: `ri-${preparedContext.request.fingerprint.slice(0, 16)}`,
     reportIdentityHash: stableContextFingerprint(preparedContext.request.repository),
@@ -131,9 +145,17 @@ export async function prepareProductionRepositoryIntelligence(
     retryCount: providerRetryCount,
     validationCategory: providerValidationCategory || validationCategoryForExecution(execution),
     validationReason: providerValidationReason,
+    executionProfile: providerMeasurement.executionProfile,
+    providerRequestBytes: providerMeasurement.providerRequestBytes,
+    providerEstimatedInputTokens: providerMeasurement.providerInputTokenEstimate,
+    outputTokenCap: providerMeasurement.outputTokenCap,
+    selectedFileCount: providerMeasurement.selectedFileCount,
+    ...(productStrategistExecution ? {
+      productUnderstandingAccepted: Boolean(productIntelligence?.understanding),
+      acceptedProductOpportunityCount,
+      rejectedProductOpportunityCount: productIntelligence?.rejectedOpportunities.length || 0,
+    } : {}),
   });
-  const productStrategistExecution = preparedContext.request.executionProfile === 'product-strategist';
-  const acceptedProductOpportunityCount = execution.result?.productIntelligence?.opportunities.length || 0;
   const hasAcceptedExecutionOutput = productStrategistExecution
     ? acceptedProductOpportunityCount >= 3 && acceptedProductOpportunityCount <= 5
     : Boolean(execution.result?.findings.length);
@@ -172,6 +194,11 @@ export async function prepareProductionRepositoryIntelligence(
       acceptedFindingCount: enhancedDiagnostics.acceptedFindingCount,
       rejectedFindingCount: enhancedDiagnostics.rejectedFindingCount,
       validationWarningCount: warnings,
+      executionProfile: enhancedDiagnostics.executionProfile,
+      providerRequestBytes: enhancedDiagnostics.providerRequestBytes,
+      providerInputTokenEstimate: enhancedDiagnostics.providerEstimatedInputTokens,
+      outputTokenCap: enhancedDiagnostics.outputTokenCap,
+      selectedFileCount: enhancedDiagnostics.selectedFileCount,
     });
     return {
       status: 200,
@@ -188,8 +215,8 @@ export async function prepareProductionRepositoryIntelligence(
   }
   if (execution.status === 'completed') return fallback(200, 'evidence_validation_failed', false, {
     ...diagnostics,
-    validationCategory: execution.result?.productIntelligence?.rejectedOpportunities.length
-      ? 'product-opportunity-schema-rejected'
+    validationCategory: productStrategistExecution && acceptedProductOpportunityCount < 3
+      ? 'insufficient-product-opportunities'
       : diagnostics.validationCategory,
     acceptedFindingCount: execution.result?.findings.length || 0,
     rejectedFindingCount: execution.result?.rejectedFindings.length || 0,
@@ -224,7 +251,8 @@ function mapExecutionError(code?: string): RepositoryIntelligenceProviderFailure
     || code === 'response_too_large' || code === 'request_cancelled') return code;
   if (code === 'response-too-large') return 'response_too_large';
   if (['malformed-response', 'unsupported-schema', 'provider-mismatch', 'unsafe-provider-metadata', 'invalid_response',
-    'request_preflight_rejected', 'provider_http_rejected', 'provider_envelope_invalid', 'product-opportunity-schema-rejected'].includes(code || '')) {
+    'request_preflight_rejected', 'provider_http_rejected', 'provider_envelope_invalid',
+    'product-understanding-schema-rejected', 'product-opportunity-schema-rejected'].includes(code || '')) {
     return 'schema_validation_failed';
   }
   if (code === 'unsupported-capability') return 'schema_validation_failed';
@@ -235,6 +263,7 @@ function validationCategoryForExecution(execution: Awaited<ReturnType<typeof run
   if (execution.error?.code === 'request_preflight_rejected') return 'request-preflight-rejected';
   if (execution.error?.code === 'provider_http_rejected') return 'provider-http-rejected';
   if (execution.error?.code === 'provider_envelope_invalid') return 'provider-envelope-invalid';
+  if (execution.error?.code === 'product-understanding-schema-rejected') return 'product-understanding-schema-rejected';
   if (execution.error?.code === 'product-opportunity-schema-rejected') return 'product-opportunity-schema-rejected';
   if (execution.status === 'invalid-response') return 'response-schema-rejected';
   if (execution.status === 'completed' && execution.result?.productIntelligence?.rejectedOpportunities.length) {

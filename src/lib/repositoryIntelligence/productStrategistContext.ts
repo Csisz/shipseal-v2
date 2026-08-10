@@ -9,15 +9,17 @@ export const PRODUCT_STRATEGIST_REQUEST_PROFILE = 'product-strategist' as const;
 
 export const PRODUCT_STRATEGIST_CONTEXT_POLICY = Object.freeze({
   version: PRODUCT_STRATEGIST_CONTEXT_POLICY_VERSION,
-  maximumSelectedFiles: 18,
-  maximumTotalCharacters: 48_000,
-  maximumCharactersPerFile: 6_000,
-  targetInputTokens: 25_000,
+  maximumSelectedFiles: 12,
+  maximumTotalCharacters: 24_000,
+  maximumCharactersPerFile: 3_200,
+  targetInputTokens: 15_000,
   maximumInputTokens: 35_000,
-  maximumExcerptBytesPerFile: 6_144,
-  maximumContextBytes: 28_000,
+  maximumProviderInputTokens: 20_000,
+  maximumExcerptBytesPerFile: 3_200,
+  maximumContextBytes: 24_000,
   maximumRequestBytes: 160_000,
-  maximumOutputTokens: 4_000,
+  maximumProviderBodyBytes: 60_000,
+  maximumOutputTokens: 2_500,
   timeoutMs: 45_000,
 });
 
@@ -56,12 +58,27 @@ export function prepareRepositoryProductStrategistContext(input: {
     ['state-management'], ['service', 'integration'], ['test-or-fixture'],
   ];
   responsibilityGroups.forEach(group => add(ranked.find(file => group.includes(file.primaryResponsibility))));
-  ranked.forEach(file => {
+  ranked.filter(file => productContextScore(file) >= 2_000).forEach(file => {
     if (priorityFiles.length < PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumSelectedFiles) add(file);
   });
   const explicitPriorityPaths = priorityFiles.map(file => file.path);
+  const focusedPaths = new Set(explicitPriorityPaths);
+  const focusedEvidenceResult: RepositoryIntelligenceEvidenceModel = {
+    ...input.evidenceResult,
+    files: input.evidenceResult.files.filter(file => focusedPaths.has(file.path)),
+    evidence: input.evidenceResult.evidence.filter(evidence => focusedPaths.has(evidence.repositoryRelativePath)),
+    relationships: input.evidenceResult.relationships.filter(relationship => focusedPaths.has(relationship.sourcePath) && focusedPaths.has(relationship.targetPath)),
+    folders: input.evidenceResult.folders
+      .map(folder => ({
+        ...folder,
+        importantChildFiles: folder.importantChildFiles.filter(path => focusedPaths.has(path)),
+        supportingEvidenceIds: folder.supportingEvidenceIds.filter(id => input.evidenceResult.evidence.some(evidence => evidence.id === id && focusedPaths.has(evidence.repositoryRelativePath))),
+      }))
+      .filter(folder => folder.importantChildFiles.length > 0 || [...focusedPaths].some(path => folder.path === '.' || path.startsWith(`${folder.path}/`))),
+  };
   return prepareRepositoryIntelligenceContext({
-    ...input,
+    scanInput: input.scanInput,
+    evidenceResult: focusedEvidenceResult,
     policy: {
       maximumSelectedFiles: PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumSelectedFiles,
       maximumTotalCharacters: PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumTotalCharacters,
@@ -140,7 +157,7 @@ function summarizeProductContextItem(item: RepositoryDeepIntelligenceRequest['co
   ].filter(Boolean).join('\n');
   const productFacing = ['route-or-page', 'layout', 'ui-component', 'api-route-or-request-handler', 'authentication-or-authorization-area', 'state-management', 'schema-or-model', 'repository-or-data-access-layer', 'service']
     .includes(item.responsibility.primary);
-  const excerpt = productFacing && item.content ? item.content.slice(0, 2_500) : '';
+  const excerpt = productFacing && item.content ? item.content.slice(0, 1_800) : '';
   const content = `${summary}${excerpt ? `\n\nBounded product-relevant source excerpt:\n${excerpt}` : ''}`.slice(0, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumCharactersPerFile);
   const omitted = Math.max(0, (item.content?.length || 0) - excerpt.length);
   return {

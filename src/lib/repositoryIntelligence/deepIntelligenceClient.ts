@@ -27,12 +27,16 @@ export async function requestRepositoryIntelligenceEnhancement(
   const cacheEligible = !options.fetcher;
   if (cacheEligible) {
     const cached = completedEnhancements.get(request.fingerprint);
-    if (cached?.state === 'enhanced') return { ...cached, diagnostics: { ...cached.diagnostics, cacheUsed: true } };
+    if (cached) return cached.state === 'enhanced'
+      ? { ...cached, diagnostics: { ...cached.diagnostics, cacheUsed: true } }
+      : { ...cached, diagnostics: { ...cached.diagnostics, costEstimate: 'unavailable', cacheUsed: true } };
   }
   const active = activeEnhancements.get(request.fingerprint);
   if (active) return active;
   const operation = performRequest(request, options).then(result => {
-    if (cacheEligible && result.state === 'enhanced') completedEnhancements.set(request.fingerprint, result);
+    if (cacheEligible && (result.state === 'enhanced' || request.executionProfile === 'product-strategist')) {
+      completedEnhancements.set(request.fingerprint, result);
+    }
     return result;
   }).finally(() => {
     if (activeEnhancements.get(request.fingerprint) === operation) activeEnhancements.delete(request.fingerprint);

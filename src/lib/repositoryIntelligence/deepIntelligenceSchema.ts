@@ -7,7 +7,6 @@ import type {
 } from './evidence.js';
 import {
   MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES,
-  repositoryProductOpportunityProviderSchema,
   repositoryProductUnderstandingProviderSchema,
   type RepositoryProductIntelligenceResult,
 } from './productIntelligenceSchema.js';
@@ -223,7 +222,9 @@ export const repositoryDeepIntelligenceProviderResponseSchema = z.object({
   returnedCapabilities: z.array(capabilitySchema),
   findings: z.array(rawFindingSchema),
   productUnderstanding: repositoryProductUnderstandingProviderSchema.optional(),
-  productOpportunities: z.array(repositoryProductOpportunityProviderSchema).max(MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES * 4).optional(),
+  // Product Opportunities are validated independently so one malformed candidate cannot discard
+  // three or more otherwise valid, evidence-grounded candidates.
+  productOpportunities: z.array(z.unknown()).max(MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES * 4).optional(),
   warnings: z.array(z.string()).optional(),
   usage: usageSchema.optional(),
   truncated: z.boolean().optional(),

@@ -52,7 +52,9 @@ const syntheticSecretSafetyCases = [
   { name: 'certificate material', value: '-----BEGIN CERTIFICATE-----\nsynthetic-placeholder-only' },
 ] as const;
 
-function fixtureRequest() {
+function fixtureRequest(
+  requestedCapabilities: Parameters<typeof buildRepositoryDeepIntelligenceRequest>[0]['requestedCapabilities'] = ['architecture-analysis', 'structured-output'],
+) {
   const scanInput: RepoScanInput = {
     repoName: 'production-hardening-fixture',
     source: { sourceType: 'github-url', githubOwner: 'example', githubRepo: 'production-hardening-fixture', githubBranch: 'main' },
@@ -75,7 +77,7 @@ function fixtureRequest() {
   return buildRepositoryDeepIntelligenceRequest({
     contextBundle,
     evidenceResult,
-    requestedCapabilities: ['architecture-analysis', 'structured-output'],
+    requestedCapabilities,
   });
 }
 
@@ -361,6 +363,25 @@ describe('production Deep Intelligence transmission, response and caching', () =
     const second = await requestRepositoryIntelligenceEnhancement(request);
     expect(first.state).toBe('enhanced');
     expect(second.state === 'enhanced' && second.diagnostics.cacheUsed).toBe(true);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('issues at most one Product Strategist request per scan fingerprint even after fallback', async () => {
+    const request = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      state: 'fallback',
+      category: 'request_timeout',
+      retryable: true,
+      message: 'Product Strategist timed out safely.',
+      deepState: 'timed-out',
+      diagnostics: { costEstimate: 'unavailable', retryCount: 0, cacheUsed: false },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+    vi.stubGlobal('fetch', fetcher);
+    const first = await requestRepositoryIntelligenceEnhancement(request);
+    const second = await requestRepositoryIntelligenceEnhancement(request);
+    expect(first).toMatchObject({ state: 'fallback', category: 'request_timeout' });
+    expect(second).toMatchObject({ state: 'fallback', category: 'request_timeout', diagnostics: { cacheUsed: true } });
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });

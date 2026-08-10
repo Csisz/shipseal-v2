@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
   REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
@@ -214,6 +214,38 @@ describe('provider execution boundary', () => {
     expect((await runRepositoryDeepIntelligence({ provider: slow, request, signal: controller.signal })).status).toBe('cancelled');
     const unsupported = new FixtureRepositoryDeepIntelligenceProvider({ capabilities: ['structured-output'], response: response(request, []) });
     expect((await runRepositoryDeepIntelligence({ provider: unsupported, request })).status).toBe('unsupported-capability');
+  });
+
+  it('keeps healthy, near-timeout, timeout, and cancellation lifecycle states deterministic under fake timers', async () => {
+    vi.useFakeTimers();
+    try {
+      const { request } = preparedFixture();
+      const payload = response(request, [finding(request)]);
+      const execute = async (delayMs: number, timeoutMs: number) => {
+        const operation = runRepositoryDeepIntelligence({
+          provider: new FixtureRepositoryDeepIntelligenceProvider({ delayMs, response: payload }),
+          request,
+          timeoutMs,
+        });
+        await vi.advanceTimersByTimeAsync(Math.min(delayMs, timeoutMs));
+        return operation;
+      };
+      expect((await execute(10, 100)).status).toBe('completed');
+      expect((await execute(99, 100)).status).toBe('completed');
+      expect((await execute(101, 100)).status).toBe('timeout');
+
+      const controller = new AbortController();
+      const cancelled = runRepositoryDeepIntelligence({
+        provider: new FixtureRepositoryDeepIntelligenceProvider({ delayMs: 100, response: payload }),
+        request,
+        timeoutMs: 200,
+        signal: controller.signal,
+      });
+      controller.abort();
+      expect((await cancelled).status).toBe('cancelled');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
