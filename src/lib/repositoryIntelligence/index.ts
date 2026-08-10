@@ -283,6 +283,15 @@ export {
   verifyRepositoryIntelligenceArtifacts,
 } from './repositoryIntelligenceVerification';
 
+export {
+  PRODUCT_STRATEGIST_CONTEXT_POLICY,
+  PRODUCT_STRATEGIST_CONTEXT_POLICY_VERSION,
+  PRODUCT_STRATEGIST_REQUEST_PROFILE,
+  buildRepositoryProductStrategistRequest,
+  prepareRepositoryProductStrategistContext,
+  productContextScore,
+} from './productStrategistContext';
+
 export type {
   RepositoryIntelligenceArtifactVerification,
   RepositoryIntelligenceArtifactVerificationState,
