@@ -62,9 +62,19 @@ export function RepositoryFuturePathwaysStage({ overlay }: { overlay: Repository
       >
         {!primary ? (
           <div className="mx-auto max-w-6xl">
+            {overlay.productIntelligenceState === 'analysing' ? (
+              <div role="status" aria-live="polite" className="mx-auto mt-16 max-w-2xl rounded-3xl border border-primary/30 bg-primary/5 p-8 text-center shadow-[0_0_42px_hsl(var(--primary)/0.1)]">
+                <Sparkles className="mx-auto h-6 w-6 text-primary" aria-hidden="true" />
+                <h3 className="mt-4 font-display text-xl font-semibold">Understanding this product</h3>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">ShipSeal is understanding the product and exploring its strongest next directions.</p>
+                <p className="mt-3 text-xs text-muted-foreground">Deterministic repository improvements remain available under Other improvements.</p>
+              </div>
+            ) : <>
             <div className="mb-5 text-center">
-              <h3 className="font-display text-xl font-semibold">Strong product directions</h3>
-              <p className="mt-1 text-sm text-muted-foreground">Nothing is selected automatically. Choose the direction that should define the product’s next chapter.</p>
+              <h3 className="font-display text-xl font-semibold">{overlay.productIntelligenceState === 'enhanced' ? 'Strong product directions' : 'Repository evidence fallback'}</h3>
+              <p className="mt-1 text-sm text-muted-foreground">{overlay.productIntelligenceState === 'enhanced'
+                ? 'Nothing is selected automatically. Choose the direction that should define the product’s next chapter.'
+                : 'Strategic Product Intelligence is unavailable. These technical improvements are explicit fallback options, not final product directions.'}</p>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" role="list" aria-label="Recommended Product Futures">
               {initialCandidates.map((candidate, index) => (
@@ -82,6 +92,7 @@ export function RepositoryFuturePathwaysStage({ overlay }: { overlay: Repository
               ))}
             </div>
             {!initialCandidates.length && <FallbackEmpty state={overlay.productIntelligenceState} />}
+            </>}
           </div>
         ) : (
           <div className="mx-auto flex max-w-5xl flex-col items-center">

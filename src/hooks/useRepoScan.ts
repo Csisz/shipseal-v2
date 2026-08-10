@@ -28,6 +28,7 @@ export interface RepoScanState {
   repositoryIntelligenceReviewPreparing: boolean;
   repositoryIntelligenceReviewError: string | null;
   repositoryIntelligenceProviderStatus: RepositoryIntelligenceProviderStatus;
+  repositoryProductIntelligenceStatus: RepositoryIntelligenceProviderStatus;
   /** Validated, bounded Product Understanding and proposed opportunities; never raw provider output. */
   repositoryProductIntelligence: RepositoryProductIntelligenceResult | null;
   /** Safe internal UI boundary: fingerprints, finite states and repository-relative paths only. */
@@ -60,6 +61,7 @@ const initialState: RepoScanState = {
   repositoryIntelligenceReviewPreparing: false,
   repositoryIntelligenceReviewError: null,
   repositoryIntelligenceProviderStatus: { state: 'deterministic', deepState: 'disabled', message: 'Deterministic repository intelligence is ready for review.', retryable: false },
+  repositoryProductIntelligenceStatus: { state: 'deterministic', deepState: 'disabled', message: 'Product opportunity analysis is ready to start.', retryable: false },
   repositoryProductIntelligence: null,
   repositoryIntelligenceVerification: null,
   repositoryIntelligenceVerificationStatus: 'idle',
@@ -82,7 +84,9 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
   const [state, setState] = useState<RepoScanState>(initialState);
   const abortRef = useRef<AbortController | null>(null);
   const providerAbortRef = useRef<AbortController | null>(null);
+  const productAbortRef = useRef<AbortController | null>(null);
   const providerSingleFlightRef = useRef<import('@/lib/repositoryIntelligence/deepIntelligenceClient').RepositoryIntelligenceEnhancementSingleFlight | null>(null);
+  const productSingleFlightRef = useRef<import('@/lib/repositoryIntelligence/deepIntelligenceClient').RepositoryIntelligenceEnhancementSingleFlight | null>(null);
   const repositoryIntelligencePreparationRef = useRef<BuildRepositoryIntelligenceArtifactReviewResult | null>(null);
   const repositoryIntelligenceScanInputRef = useRef<RepoScanInput | null>(null);
   const scanTokenRef = useRef(0);
@@ -90,6 +94,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
   const resetScan = useCallback(() => {
     abortRef.current?.abort();
     providerAbortRef.current?.abort();
+    productAbortRef.current?.abort();
     abortRef.current = null;
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
@@ -100,6 +105,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
   const cancelScan = useCallback(() => {
     abortRef.current?.abort();
     providerAbortRef.current?.abort();
+    productAbortRef.current?.abort();
     abortRef.current = null;
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
@@ -120,12 +126,16 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     }));
   }, []);
 
-  useEffect(() => () => providerAbortRef.current?.abort(), []);
+  useEffect(() => () => {
+    providerAbortRef.current?.abort();
+    productAbortRef.current?.abort();
+  }, []);
 
   const startScan = useCallback(async (file: File) => {
     const token = scanTokenRef.current + 1;
     scanTokenRef.current = token;
     providerAbortRef.current?.abort();
+    productAbortRef.current?.abort();
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
     const controller = new AbortController();
@@ -215,6 +225,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     const token = scanTokenRef.current + 1;
     scanTokenRef.current = token;
     providerAbortRef.current?.abort();
+    productAbortRef.current?.abort();
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
     const controller = new AbortController();
@@ -333,6 +344,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     const token = scanTokenRef.current + 1;
     scanTokenRef.current = token;
     providerAbortRef.current?.abort();
+    productAbortRef.current?.abort();
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
     const controller = new AbortController();
@@ -456,7 +468,6 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
             'architecture-analysis', 'responsibility-refinement', 'task-routing', 'risk-identification',
             'documentation-conflict-detection', 'agent-instruction-recommendations',
             'artifact-statement-generation', 'structured-output',
-            'product-opportunity-analysis',
           ],
         });
         const response = await requestRepositoryIntelligenceEnhancement(request, { signal: controller.signal });
@@ -472,7 +483,6 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           setState(current => ({
             ...current,
             repositoryIntelligenceReview: { artifactSet: enhanced.artifactSet, review: enhanced.review },
-            repositoryProductIntelligence: response.result.productIntelligence || null,
             repositoryIntelligenceProviderStatus: {
               state: 'enhanced', deepState: response.deepState, message: 'Validated deep analysis is available alongside deterministic findings.', retryable: false,
               providerId: response.providerId, modelId: response.modelId, diagnostics: response.diagnostics,
@@ -515,6 +525,82 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     });
   }, []);
 
+  const prepareRepositoryProductIntelligence = useCallback(() => {
+    const preparation = repositoryIntelligencePreparationRef.current;
+    const scanInput = repositoryIntelligenceScanInputRef.current;
+    if (!preparation || !scanInput) return Promise.resolve();
+    const run = async () => {
+      const token = scanTokenRef.current;
+      const controller = new AbortController();
+      productAbortRef.current?.abort();
+      productAbortRef.current = controller;
+      setState(current => ({
+        ...current,
+        repositoryProductIntelligenceStatus: {
+          state: 'preparing', deepState: 'pending',
+          message: 'ShipSeal is understanding the product and exploring its strongest next directions.', retryable: false,
+        },
+      }));
+      try {
+        const [productModule, clientModule] = await Promise.all([
+          import('@/lib/repositoryIntelligence/productStrategistContext'),
+          import('@/lib/repositoryIntelligence/deepIntelligenceClient'),
+        ]);
+        const contextBundle = productModule.prepareRepositoryProductStrategistContext({
+          scanInput,
+          evidenceResult: preparation.evidenceResult,
+        });
+        const request = productModule.buildRepositoryProductStrategistRequest({
+          contextBundle,
+          evidenceResult: preparation.evidenceResult,
+        });
+        const response = await clientModule.requestRepositoryIntelligenceEnhancement(request, { signal: controller.signal });
+        if (scanTokenRef.current !== token || controller.signal.aborted) return;
+        if (response.state === 'enhanced') {
+          if (response.result.productIntelligence?.opportunities.length) {
+            setState(current => ({
+              ...current,
+              repositoryProductIntelligence: response.result.productIntelligence || null,
+              repositoryProductIntelligenceStatus: {
+                state: 'enhanced', deepState: response.deepState,
+                message: 'Validated Product Understanding and Product Opportunities are available.', retryable: false,
+                providerId: response.providerId, modelId: response.modelId, diagnostics: response.diagnostics,
+              },
+            }));
+          } else {
+            setState(current => ({
+              ...current,
+              repositoryProductIntelligenceStatus: {
+                state: 'fallback', deepState: 'rejected', category: 'evidence_validation_failed', retryable: false,
+                message: 'Product opportunity analysis did not return an accepted strategic result. Repository evidence fallback remains available.',
+                diagnostics: response.diagnostics,
+              },
+            }));
+          }
+          return;
+        }
+        const fallbackStatus: RepositoryIntelligenceProviderStatus = response.category === 'request_cancelled'
+          ? { state: 'cancelled', deepState: response.deepState, message: response.message, retryable: true, category: response.category, diagnostics: response.diagnostics }
+          : { state: 'fallback', deepState: response.deepState, message: response.message, retryable: response.retryable, category: response.category, diagnostics: response.diagnostics };
+        setState(current => ({ ...current, repositoryProductIntelligenceStatus: fallbackStatus }));
+      } catch {
+        if (scanTokenRef.current !== token) return;
+        setState(current => ({
+          ...current,
+          repositoryProductIntelligenceStatus: controller.signal.aborted
+            ? { state: 'cancelled', deepState: 'failed', category: 'request_cancelled', retryable: true, message: 'Product opportunity analysis was cancelled. Repository evidence fallback remains available.' }
+            : { state: 'fallback', deepState: 'failed', category: 'provider_unavailable', retryable: true, message: 'Product opportunity analysis is unavailable. Repository evidence fallback remains available.' },
+        }));
+      } finally {
+        if (productAbortRef.current === controller) productAbortRef.current = null;
+      }
+    };
+    return import('@/lib/repositoryIntelligence/deepIntelligenceClient').then(({ RepositoryIntelligenceEnhancementSingleFlight }) => {
+      productSingleFlightRef.current ||= new RepositoryIntelligenceEnhancementSingleFlight();
+      return productSingleFlightRef.current.run(run);
+    });
+  }, []);
+
   return {
     ...state,
     startScan,
@@ -523,6 +609,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     cancelScan,
     resetScan,
     prepareRepositoryIntelligenceEnhancement,
+    prepareRepositoryProductIntelligence,
   };
 }
 

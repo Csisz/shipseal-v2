@@ -94,6 +94,25 @@ export function prepareProductionDeepIntelligenceContext(input: {
   const ordered = [...input.request.contextItems].sort((left, right) => (left.selectionOrder ?? Number.MAX_SAFE_INTEGER) - (right.selectionOrder ?? Number.MAX_SAFE_INTEGER)
     || left.path.localeCompare(right.path));
   const selected = ordered.slice(0, input.policy.maximumSelectedFiles);
+  const productStrategist = input.request.executionProfile === 'product-strategist';
+  const selectedPaths = new Set(selected.map(item => item.path));
+  const relationshipSummary = productStrategist
+    ? input.request.relationshipSummary.filter(item => selectedPaths.has(item.sourcePath) && selectedPaths.has(item.targetPath))
+    : input.request.relationshipSummary;
+  const evidencePathById = new Map(input.request.evidenceReferences.map(item => [item.id, item.path]));
+  const frameworkEvidence = productStrategist
+    ? input.request.frameworkEvidence.map(item => ({
+      ...item,
+      paths: item.paths.filter(path => selectedPaths.has(path)),
+      evidenceIds: item.evidenceIds.filter(id => selectedPaths.has(evidencePathById.get(id) || '')),
+    })).filter(item => item.paths.length > 0 && item.evidenceIds.length > 0)
+    : input.request.frameworkEvidence;
+  const selectedEvidenceIds = productStrategist ? new Set([
+    ...selected.flatMap(item => item.supportingEvidenceIds),
+    ...relationshipSummary.flatMap(item => item.supportingEvidenceIds),
+    ...frameworkEvidence.flatMap(item => item.evidenceIds),
+    ...input.request.evidenceReferences.filter(item => selectedPaths.has(item.path)).map(item => item.id),
+  ]) : undefined;
   const contextItems: RepositoryDeepIntelligenceRequest['contextItems'] = [];
   let remainingContextBytes = input.policy.maximumContextBytes;
 
@@ -146,15 +165,22 @@ export function prepareProductionDeepIntelligenceContext(input: {
     });
   }
 
-  const evidenceReferences = input.request.evidenceReferences.map(item => ({
+  const evidenceReferences = input.request.evidenceReferences
+    .filter(item => !selectedEvidenceIds || selectedEvidenceIds.has(item.id))
+    .map(item => ({
     ...item,
     extractedFact: redactFreeText(item.extractedFact),
   }));
-  const responsibilitySummary = input.request.responsibilitySummary.map(item => ({
+  const responsibilitySummary = input.request.responsibilitySummary
+    .filter(item => !productStrategist || selectedPaths.has(item.path))
+    .map(item => ({
     ...item,
     limitations: item.limitations.map(value => redactFreeText(value)),
   }));
-  const folderResponsibilitySummary = input.request.folderResponsibilitySummary.map(item => ({
+  const selectedFolderPaths = productStrategist ? ancestorFolders(selectedPaths) : undefined;
+  const folderResponsibilitySummary = input.request.folderResponsibilitySummary
+    .filter(item => !selectedFolderPaths || selectedFolderPaths.has(item.path))
+    .map(item => ({
     ...item,
     limitations: item.limitations.map(value => redactFreeText(value)),
   }));
@@ -178,6 +204,8 @@ export function prepareProductionDeepIntelligenceContext(input: {
     evidenceReferences,
     responsibilitySummary,
     folderResponsibilitySummary,
+    relationshipSummary,
+    frameworkEvidence,
     knownLimitations,
     transmission,
   });
@@ -286,3 +314,12 @@ function clipUtf8(value: string, maximumBytes: number) {
   return { value: new TextDecoder('utf-8', { fatal: false }).decode(bytes).replace(/\uFFFD$/, ''), truncated: true };
 }
 function sortedUnique(values: string[]) { return [...new Set(values.filter(Boolean))].sort((left, right) => left.localeCompare(right)); }
+function ancestorFolders(paths: Set<string>) {
+  const folders = new Set<string>(['.']);
+  for (const path of paths) {
+    const segments = path.split('/');
+    segments.pop();
+    for (let index = 1; index <= segments.length; index += 1) folders.add(segments.slice(0, index).join('/'));
+  }
+  return folders;
+}

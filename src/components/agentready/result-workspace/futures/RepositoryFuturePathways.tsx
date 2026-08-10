@@ -374,7 +374,11 @@ export default function RepositoryFuturePathways({ report, universe, productInte
               <Orbit className="h-4 w-4" aria-hidden="true" /> Future Pathways
             </div>
             <h2 id="future-pathways-heading" className="mt-2 font-display text-2xl font-semibold text-foreground md:text-3xl">Where should this product go next?</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">ShipSeal understood the product from bounded repository evidence and mapped its strongest user-facing next directions.</p>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{productIntelligenceState === 'analysing'
+              ? 'ShipSeal is understanding the product and exploring its strongest next directions.'
+              : productIntelligenceState === 'enhanced'
+                ? 'ShipSeal understood the product from bounded repository evidence and mapped its strongest user-facing next directions.'
+                : 'Repository-grounded improvements remain available while strategic Product Intelligence is unavailable.'}</p>
           </div>
           <ModeToggle mode={mode} onChange={setMode} />
         </div>
@@ -521,7 +525,9 @@ function ProductUnderstandingDisclosure({ productIntelligence, state }: {
           <p className="text-xs text-muted-foreground md:col-span-2">Observed statements cite repository evidence. Inferred statements are hypotheses for review. {understanding.evidenceIds.length} evidence references · {understanding.confidence} bounded confidence.</p>
         </div>
       ) : (
-        <p className="mt-3 text-sm text-muted-foreground">Repository improvement opportunities remain available, but ShipSeal is not presenting them as equivalent to strategic user-facing Product Opportunities.</p>
+        <p className="mt-3 text-sm text-muted-foreground">{state === 'analysing'
+          ? 'ShipSeal is understanding the product and exploring its strongest next directions.'
+          : 'Repository improvement opportunities remain available, but ShipSeal is not presenting them as equivalent to strategic user-facing Product Opportunities.'}</p>
       )}
     </details>
   );

@@ -460,7 +460,7 @@ describe('Result Workspace composition', () => {
     const futureField = screen.getByTestId('future-neural-field');
     const pathwaysStage = screen.getByTestId('future-pathways-hero-stage');
     expect(futureField).toHaveAttribute('data-future-direction', 'left-to-right');
-    expect(within(futureField).getByRole('heading', { name: /Strong product directions/i })).toBeInTheDocument();
+    expect(within(futureField).getByRole('heading', { name: /Repository evidence fallback/i })).toBeInTheDocument();
     expect(within(futureField).getAllByRole('button', { name: /Make primary/i }).length).toBeGreaterThan(0);
     expect(futureField.querySelectorAll('[data-future-node="goal"]').length).toBeGreaterThan(0);
     expect(pathwaysStage).not.toContainElement(universe);

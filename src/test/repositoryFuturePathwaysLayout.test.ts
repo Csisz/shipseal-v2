@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import React from 'react';
+import { render, screen } from '@testing-library/react';
 import { buildFutureFieldLayout, futureImpulseEvent, futureRoutePath } from '@/components/agentready/result-workspace/futures/futurePathwaysLayout';
+import { RepositoryFuturePathwaysStage } from '@/components/agentready/result-workspace/futures/RepositoryFuturePathwaysStage';
 import type { RepositoryFutureStageOverlay } from '@/components/agentready/result-workspace/futures/futurePathwaysPresentation';
 
 const callbacks = {
@@ -58,6 +61,14 @@ function overlay(values: Partial<RepositoryFutureStageOverlay> = {}): Repository
 }
 
 describe('Omega 18.5d.2 directional Future Pathways layout', () => {
+  it('does not present deterministic fallback cards as strong product directions while Product Strategist is analysing', () => {
+    render(React.createElement(RepositoryFuturePathwaysStage, { overlay: overlay({ productIntelligenceState: 'analysing' }) }));
+    expect(screen.getByRole('heading', { name: 'Understanding this product' })).toBeInTheDocument();
+    expect(screen.getByText(/exploring its strongest next directions/i)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Strong product directions/i })).not.toBeInTheDocument();
+    expect(document.querySelector('[data-future-node="goal"]')).not.toBeInTheDocument();
+  });
+
   it('is stable, curved and moves from specific evidence through capability to outcome without root routing', () => {
     const input = overlay();
     const projections = {

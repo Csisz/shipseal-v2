@@ -161,6 +161,14 @@ export function validateProductionProviderRequest(
   if (!hasSupportedNestedRequestShape(request as RepositoryDeepIntelligenceRequest)) {
     return rejection('unsupported-request-schema', 'Bounded intelligence request schema is unsupported.');
   }
+  if (request.executionProfile === 'product-strategist') {
+    const capabilities = [...request.requestedCapabilities].sort();
+    if (capabilities.join('|') !== ['product-opportunity-analysis', 'structured-output'].sort().join('|')) {
+      return rejection('unsupported-capability', 'Product Strategist capabilities are invalid.');
+    }
+  } else if (request.requestedCapabilities.includes('product-opportunity-analysis')) {
+    return rejection('unsupported-capability', 'Product Opportunity analysis requires the focused Product Strategist profile.');
+  }
   const safetyText = providerBoundFreeText(request as RepositoryDeepIntelligenceRequest)
     .join('\n')
     .replace(/(?:api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|secret|password|passwd|private[_-]?key|client[_-]?secret|connection[_-]?string)\s*[:=]\s*(?:["'`]?)\[REDACTED:[A-Z0-9_]+\](?:["'`]?)/gi, '[REDACTED_ASSIGNMENT]')
@@ -205,6 +213,7 @@ function rejection(reason: RepositoryIntelligenceValidationReason, message: stri
 
 function hasSupportedNestedRequestShape(request: RepositoryDeepIntelligenceRequest) {
   return safeRepositoryIdentity(request.repository)
+    && ['general-deep-intelligence', 'product-strategist'].includes(request.executionProfile)
     && (request.locale === undefined || safeBoundedScalar(request.locale, 32))
     && safeGeneratedId(request.contextBundleFingerprint)
     && request.contextItems.every(item => !!item
@@ -404,6 +413,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
 }
 
 function buildProviderBody(request: RepositoryDeepIntelligenceRequest, config: ProductionProviderConfig) {
+  const productStrategist = request.executionProfile === 'product-strategist';
   return {
     model: config.model,
     max_completion_tokens: config.policy.maximumOutputTokens,
@@ -420,9 +430,13 @@ function buildProviderBody(request: RepositoryDeepIntelligenceRequest, config: P
           'Never invent files, entities, relationships, benefits, savings, compliance, or guaranteed outcomes. State uncertainty explicitly.',
           'Do not reveal chain-of-thought. Provide concise rationale and cited evidence only.',
           'Required top-level keys: schemaVersion, providerId, modelId, returnedCapabilities, findings, warnings.',
-          'Each finding requires id, category, title, statement, referencedPaths, referencedEvidenceIds, providerConfidence, inferenceType, limitations, and artifactTargets.',
-          'Optional evidenceQuotes must contain only short verbatim text present in the supplied excerpt for the same path.',
-          'Future directions are optional, non-executable hypotheses using the futureDirection category and must include goal, rationale, dependencies, expectedArtifactFamilies, repository evidence, and a verification method.',
+          ...(productStrategist ? [
+            'This is a focused Product Strategist execution. Return findings as an empty array and do not perform architecture analysis, task routing, risk analysis, documentation analysis, agent-instruction work, or artifact statement generation.',
+          ] : [
+            'Each finding requires id, category, title, statement, referencedPaths, referencedEvidenceIds, providerConfidence, inferenceType, limitations, and artifactTargets.',
+            'Optional evidenceQuotes must contain only short verbatim text present in the supplied excerpt for the same path.',
+            'Future directions are optional, non-executable hypotheses using the futureDirection category and must include goal, rationale, dependencies, expectedArtifactFamilies, repository evidence, and a verification method.',
+          ]),
           ...(request.requestedCapabilities.includes('product-opportunity-analysis') ? [
             'Act as a product strategist grounded in this repository: determine what user-facing product it implements, who it serves, its current user loop, existing capabilities, and meaningful next product directions.',
             `Return productUnderstanding using schemaVersion shipseal.repository-product-understanding.v1 and between three and ${5} productOpportunities using schemaVersion shipseal.repository-product-opportunity.v1 when evidence is sufficient.`,

@@ -18,6 +18,9 @@ import {
   type ProductionDeepIntelligenceRedactionSummary,
 } from './_lib/repositoryDeepIntelligenceContext.js';
 import { stableContextFingerprint } from '../src/lib/repositoryIntelligence/contextSelection.js';
+import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../src/lib/repositoryIntelligence/productStrategistContext.js';
+import type { RepositoryDeepIntelligenceRequest } from '../src/lib/repositoryIntelligence/deepIntelligenceRequest.js';
+import type { ProductionProviderPolicy } from './_lib/repositoryDeepIntelligenceProvider.js';
 import type {
   RepositoryIntelligenceSafeDiagnostics,
   RepositoryIntelligenceValidationCategory,
@@ -54,16 +57,18 @@ export async function prepareProductionRepositoryIntelligence(
     allowConfiguredBudgetOverflow: true,
   });
   if (!requestValidation.valid) return fallback(400, 'invalid_request', false);
+  const executionPolicy = resolveProductionExecutionPolicy(requestValidation.request, config.policy);
+  const executionConfig = { ...config, policy: executionPolicy };
   const preparedContext = prepareProductionDeepIntelligenceContext({
     request: requestValidation.request,
-    policy: config.policy,
-    maximumOutputTokens: config.policy.maximumOutputTokens,
+    policy: executionPolicy,
+    maximumOutputTokens: executionPolicy.maximumOutputTokens,
   });
   if (preparedContext.state !== 'ready') {
     const category = preparedContext.state === 'budget-exceeded' ? 'budget_exceeded' : 'redaction_failed';
     return fallback(200, category, false, diagnosticsFor(preparedContext.budget, preparedContext.redaction));
   }
-  const outboundValidation = validatePreparedProductionProviderRequest(preparedContext, config.policy);
+  const outboundValidation = validatePreparedProductionProviderRequest(preparedContext, executionPolicy);
   if ('reason' in outboundValidation) {
     const requestId = `ri-${preparedContext.request.fingerprint.slice(0, 16)}`;
     logger({
@@ -97,7 +102,7 @@ export async function prepareProductionRepositoryIntelligence(
   let providerValidationCategory: RepositoryIntelligenceValidationCategory | undefined;
   let providerValidationReason: RepositoryIntelligenceValidationReason | undefined;
   const provider = new OpenAiCompatibleRepositoryDeepIntelligenceProvider({
-    config,
+    config: executionConfig,
     fetcher: options.fetcher,
     logger: event => {
       providerRetryCount = Math.max(providerRetryCount, event.retryCount);
@@ -111,7 +116,7 @@ export async function prepareProductionRepositoryIntelligence(
     provider,
     request: preparedContext.request,
     signal: options.signal,
-    timeoutMs: config.policy.timeoutMs,
+    timeoutMs: executionPolicy.timeoutMs,
   });
   const durationMs = Math.max(0, Date.now() - startedAt);
   const diagnostics = diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
@@ -127,7 +132,12 @@ export async function prepareProductionRepositoryIntelligence(
     validationCategory: providerValidationCategory || validationCategoryForExecution(execution),
     validationReason: providerValidationReason,
   });
-  if (execution.status === 'completed' && (execution.result?.findings.length || execution.result?.productIntelligence?.opportunities.length)) {
+  const productStrategistExecution = preparedContext.request.executionProfile === 'product-strategist';
+  const acceptedProductOpportunityCount = execution.result?.productIntelligence?.opportunities.length || 0;
+  const hasAcceptedExecutionOutput = productStrategistExecution
+    ? acceptedProductOpportunityCount >= 3 && acceptedProductOpportunityCount <= 5
+    : Boolean(execution.result?.findings.length);
+  if (execution.status === 'completed' && hasAcceptedExecutionOutput) {
     const warnings = execution.result.summary.rejectedFindings + execution.result.summary.acceptedWithLimitations
       + execution.result.summary.requiringHumanReview + execution.result.metadata.providerWarnings.length
       + execution.result.summary.validationMessages.length + config.configurationWarnings.length
@@ -189,6 +199,24 @@ export async function prepareProductionRepositoryIntelligence(
   if (execution.status === 'cancelled') return fallback(200, 'request_cancelled', true, diagnostics);
   const category = mapExecutionError(execution.error?.code);
   return fallback(200, category, execution.error?.retryable === true, diagnostics);
+}
+
+export function resolveProductionExecutionPolicy(
+  request: RepositoryDeepIntelligenceRequest,
+  configured: ProductionProviderPolicy,
+): ProductionProviderPolicy {
+  if (request.executionProfile !== 'product-strategist') return configured;
+  return {
+    ...configured,
+    maximumInputTokens: Math.min(configured.maximumInputTokens, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumInputTokens),
+    maximumSelectedFiles: Math.min(configured.maximumSelectedFiles, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumSelectedFiles),
+    maximumExcerptBytesPerFile: Math.min(configured.maximumExcerptBytesPerFile, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumExcerptBytesPerFile),
+    maximumContextBytes: Math.min(configured.maximumContextBytes, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumContextBytes),
+    maximumContextCharacters: Math.min(configured.maximumContextCharacters, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumContextBytes),
+    maximumRequestBytes: Math.min(configured.maximumRequestBytes, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumRequestBytes),
+    maximumOutputTokens: Math.min(configured.maximumOutputTokens, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumOutputTokens),
+    timeoutMs: Math.min(configured.timeoutMs, PRODUCT_STRATEGIST_CONTEXT_POLICY.timeoutMs),
+  };
 }
 
 function mapExecutionError(code?: string): RepositoryIntelligenceProviderFailureCategory {

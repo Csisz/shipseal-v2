@@ -52,8 +52,10 @@ interface Props {
   repositoryIntelligenceReviewError?: string | null;
   prepareRepositoryIntelligenceReview?: () => Promise<RepositoryIntelligenceReviewUiSession>;
   repositoryIntelligenceProviderStatus?: RepositoryIntelligenceProviderStatus;
+  repositoryProductIntelligenceStatus?: RepositoryIntelligenceProviderStatus;
   repositoryProductIntelligence?: RepositoryProductIntelligenceResult | null;
   prepareRepositoryIntelligenceEnhancement?: () => Promise<void>;
+  prepareRepositoryProductIntelligence?: () => Promise<void>;
   agentOperatingMode?: AgentOperatingModeId;
   githubConnection?: GitHubConnectionState;
   verificationBaseline?: RepositoryVerificationBaseline | null;
@@ -85,8 +87,10 @@ export function ResultWorkspace({
   repositoryIntelligenceReviewError,
   prepareRepositoryIntelligenceReview,
   repositoryIntelligenceProviderStatus,
+  repositoryProductIntelligenceStatus,
   repositoryProductIntelligence,
   prepareRepositoryIntelligenceEnhancement,
+  prepareRepositoryProductIntelligence,
   agentOperatingMode,
   githubConnection,
   verificationBaseline,
@@ -246,8 +250,8 @@ export function ResultWorkspace({
                 report={report}
                 universe={repositoryUniverse}
                 productIntelligence={repositoryProductIntelligence}
-                providerStatus={repositoryIntelligenceProviderStatus}
-                prepareEnhancement={prepareRepositoryIntelligenceEnhancement}
+                providerStatus={repositoryProductIntelligenceStatus}
+                prepareEnhancement={prepareRepositoryProductIntelligence}
                 onFutureStageOverlayChange={setFutureStageOverlay}
               />
             </Suspense>

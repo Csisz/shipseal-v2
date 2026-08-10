@@ -535,6 +535,8 @@ const Index = () => {
               repositoryIntelligenceProviderStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus}
               repositoryProductIntelligence={sampleReport ? null : scan.repositoryProductIntelligence}
               prepareRepositoryIntelligenceEnhancement={sampleReport ? undefined : scan.prepareRepositoryIntelligenceEnhancement}
+              prepareRepositoryProductIntelligence={sampleReport ? undefined : scan.prepareRepositoryProductIntelligence}
+              repositoryProductIntelligenceStatus={scan.repositoryProductIntelligenceStatus}
               history={history}
               onReset={reset}
               onClearHistory={handleClearHistory}

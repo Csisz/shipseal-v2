@@ -51,6 +51,7 @@ export interface RepositoryDeepIntelligenceRequest {
   contextBundleVersion: typeof REPOSITORY_CONTEXT_BUNDLE_VERSION;
   contextBundleFingerprint: string;
   repository: RepositoryIntelligenceContextBundle['repository'];
+  executionProfile: 'general-deep-intelligence' | 'product-strategist';
   requestedCapabilities: RepositoryDeepIntelligenceCapability[];
   locale?: string;
   contextItems: RepositoryDeepIntelligenceRequestContextItem[];
@@ -119,6 +120,10 @@ export function buildRepositoryDeepIntelligenceRequest({
   if (!capabilities.length) throw new Error('At least one deep-intelligence capability must be requested.');
   const knownCapabilities = new Set<string>(REPOSITORY_DEEP_INTELLIGENCE_CAPABILITIES);
   if (capabilities.some(capability => !knownCapabilities.has(capability))) throw new Error('Unknown deep-intelligence capability requested.');
+  const productStrategistRequested = capabilities.includes('product-opportunity-analysis');
+  if (productStrategistRequested && capabilities.some(capability => !['product-opportunity-analysis', 'structured-output'].includes(capability))) {
+    throw new Error('Product Strategist must execute separately from general deep-intelligence capabilities.');
+  }
 
   const evidenceById = new Map(evidenceResult.evidence.map(evidence => [evidence.id, evidence]));
   const fileByPath = new Map(evidenceResult.files.map(file => [file.path, file]));
@@ -241,6 +246,7 @@ export function buildRepositoryDeepIntelligenceRequest({
     contextBundleVersion: REPOSITORY_CONTEXT_BUNDLE_VERSION,
     contextBundleFingerprint: contextBundle.fingerprint,
     repository,
+    executionProfile: productStrategistRequested ? 'product-strategist' as const : 'general-deep-intelligence' as const,
     requestedCapabilities: capabilities,
     locale: normalizedLocale,
     contextItems,
