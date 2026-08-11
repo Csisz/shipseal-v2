@@ -382,7 +382,7 @@ describe('Result Workspace composition', () => {
     expect(await screen.findByText(/Secondary repository improvements/i)).toBeInTheDocument();
   });
 
-  it('keeps post-scan controls interactive and initializes Repository Universe once after explicit intent', async () => {
+  it('prepares product directions in the workspace and initializes one Universe when Future Pathways opens', async () => {
     globalThis.IntersectionObserver = class DeferredIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = '240px 0px';
@@ -408,12 +408,9 @@ describe('Result Workspace composition', () => {
     expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: /Result chapters/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Prepare delivery/i })).not.toBeInTheDocument();
+    await waitFor(() => expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1));
     switchResultChapter('Improve');
     expect(await screen.findByTestId('future-neural-field', {}, { timeout: 10000 })).toBeInTheDocument();
-    await waitFor(() => expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1));
-    expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /Explore Repository Universe/i }));
     await screen.findByRole('img', { name: /Repository Universe 3D graph/i }, { timeout: 10000 });
     expect(new Set(universeMockState.models).size).toBe(1);
 
@@ -452,8 +449,8 @@ describe('Result Workspace composition', () => {
     expect((await screen.findAllByText('Analysing product opportunities')).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Quick Path/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /Deep Configuration/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Explore Repository Universe/i })).toBeEnabled();
-    expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
+    expect(screen.getByTestId('future-neural-field')).toBeInTheDocument();
+    expect(screen.getByTestId('repository-universe-canvas')).toBeInTheDocument();
   });
 
   it('opens with a simplified repository-specific entry and routes the primary action to Repository Intelligence review', async () => {
@@ -505,10 +502,11 @@ describe('Result Workspace composition', () => {
     await waitFor(() => expect(document.activeElement).toHaveAttribute('id', 'repository-intelligence-review'), { timeout: 10000 });
     expect(screen.getByRole('heading', { name: /Preparing repository-specific artifact review/i })).toBeInTheDocument();
     const futureField = screen.getByTestId('future-neural-field');
+    const pathControls = screen.getByTestId('future-path-controls');
     const pathwaysStage = screen.getByTestId('future-pathways-hero-stage');
     expect(futureField).toHaveAttribute('data-future-direction', 'left-to-right');
-    expect(within(futureField).getByRole('heading', { name: /Repository evidence fallback/i })).toBeInTheDocument();
-    expect(within(futureField).getAllByRole('button', { name: /Make primary/i }).length).toBeGreaterThan(0);
+    expect(futureField.querySelector('[data-future-zone="current"]')).toBeInTheDocument();
+    expect(within(futureField).getAllByRole('button', { name: /Activate to choose as primary/i }).length).toBeGreaterThan(0);
     expect(futureField.querySelectorAll('[data-future-node="goal"]').length).toBeGreaterThan(0);
     expect(pathwaysStage).not.toContainElement(universe);
     expect(pathwaysStage.compareDocumentPosition(stage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -517,12 +515,12 @@ describe('Result Workspace composition', () => {
     expect(within(impactMode).getByRole('button', { name: 'Current repository' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(impactMode).getByRole('button', { name: 'With this path' })).toBeDisabled();
     expect(screen.queryByTestId('future-context-inspector')).not.toBeInTheDocument();
-    fireEvent.click(within(futureField).getAllByRole('button', { name: 'Details' })[0]);
+    fireEvent.click(within(pathControls).getAllByRole('button', { name: 'Details' })[0]);
     expect(await screen.findByTestId('future-context-inspector')).toBeInTheDocument();
     fireEvent.click(within(screen.getByTestId('future-context-inspector')).getByRole('button', { name: 'Close details' }));
     await waitFor(() => expect(screen.queryByTestId('future-context-inspector')).not.toBeInTheDocument());
-    fireEvent.click(within(futureField).getAllByRole('button', { name: 'Make primary' })[0]);
-    expect(screen.getByTestId('future-selected-path-summary')).toHaveTextContent(/0 of 2 supports.*automatic requirements/);
+    fireEvent.click(within(futureField).getAllByRole('button', { name: /Activate to choose as primary/i })[0]);
+    expect(screen.getByTestId('future-selected-path-summary')).toHaveTextContent(/0\/2 supports.*automatic/);
     expect(within(impactMode).getByRole('button', { name: 'Current repository' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(impactMode).getByRole('button', { name: 'With this path' })).toBeEnabled();
     fireEvent.click(within(impactMode).getByRole('button', { name: 'With this path' }));

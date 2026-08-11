@@ -331,9 +331,9 @@ export function buildFutureFieldLayout(
     routes,
     horizonX: 38,
     zones: [
-      { id: 'current', label: 'Current evidence', x: 14 },
-      { id: 'intervention', label: 'Intervention', x: 43 },
-      { id: 'decision', label: 'Decision + dependencies', x: 61 },
+      { id: 'current', label: 'Current signals', x: 14 },
+      { id: 'intervention', label: 'Possible directions', x: 43 },
+      { id: 'decision', label: 'Shared enablers', x: 61 },
       { id: 'outcome', label: 'Future outcome', x: 70 },
     ],
   };

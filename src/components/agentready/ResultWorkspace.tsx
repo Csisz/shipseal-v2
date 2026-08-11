@@ -119,6 +119,7 @@ export function ResultWorkspace({
   const [prCreated, setPrCreated] = useState(false);
   const [futureStageOverlay, setFutureStageOverlay] = useState<RepositoryFutureStageOverlay | null>(null);
   const [workspaceReportIdentity, setWorkspaceReportIdentity] = useState(reportIdentity);
+  const productIntelligenceRequestRef = useRef('');
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
@@ -148,6 +149,14 @@ export function ResultWorkspace({
   }, [initialIntake, intakeSkipped, reportIdentity]);
 
   useEffect(() => {
+    if (!prepareRepositoryProductIntelligence || repositoryProductIntelligence?.opportunities.length) return;
+    if (repositoryProductIntelligenceStatus && repositoryProductIntelligenceStatus.state !== 'deterministic') return;
+    if (productIntelligenceRequestRef.current === reportIdentity) return;
+    productIntelligenceRequestRef.current = reportIdentity;
+    void prepareRepositoryProductIntelligence().catch(() => undefined);
+  }, [prepareRepositoryProductIntelligence, reportIdentity, repositoryProductIntelligence, repositoryProductIntelligenceStatus]);
+
+  useEffect(() => {
     if (!activeStoryChapter || effectiveStoryChapterId === activeStoryChapter.id) return;
     setLocalStoryChapterId(activeStoryChapter.id);
     onActiveStoryChapterChange?.(activeStoryChapter.id);
@@ -165,6 +174,7 @@ export function ResultWorkspace({
   }, []);
   const handleResultChapterChange = useCallback((chapter: ResultChapterId) => {
     setVisitedResultChapters(current => current.has(chapter) ? current : new Set([...current, chapter]));
+    if (chapter === 'improve') setWorkspaceHeroRequested(true);
     setActiveResultChapter(chapter);
   }, []);
   const handleReviewRepositoryIntelligence = () => {

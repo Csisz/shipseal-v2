@@ -113,7 +113,7 @@ describe('ShipSeal pre-scan intake flow', () => {
     window.history.pushState({}, '', '/');
   });
 
-  it('shows outcome-first project context after ZIP selection', async () => {
+  it('moves directly from source to one scan with delivery focus kept optional', async () => {
     render(
       <MemoryRouter>
         <Index />
@@ -123,33 +123,31 @@ describe('ShipSeal pre-scan intake flow', () => {
     expect(within(screen.getByLabelText('Scan setup progress')).getByText('Source').closest('li')).toHaveAttribute('aria-current', 'step');
     fireEvent.click(screen.getByRole('button', { name: /analyze repository/i }));
 
-    expect(within(screen.getByLabelText('Scan setup progress')).getByText('Outcome').closest('li')).toHaveAttribute('aria-current', 'step');
+    expect(within(screen.getByLabelText('Scan setup progress')).getByText('Scan').closest('li')).toHaveAttribute('aria-current', 'step');
     expect(screen.getByText('Project Source')).toBeInTheDocument();
     expect(screen.getByText('ZIP upload')).toBeInTheDocument();
     expect(screen.getByText('real-repo.zip')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /change project/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /What outcome should ShipSeal prepare/i })).toBeInTheDocument();
-    expect(screen.getByText('Build with AI')).toBeInTheDocument();
-    expect(screen.getByText('Ship to Client')).toBeInTheDocument();
-    expect(screen.getByText('Production Readiness')).toBeInTheDocument();
-    expect(screen.getByText('Security Review')).toBeInTheDocument();
-    expect(screen.getByText('Full Workspace Analysis')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Understand this repository/i })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /What outcome should ShipSeal prepare/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Build with AI')).not.toBeInTheDocument();
+    expect(screen.getByText('Full workspace by default')).toBeInTheDocument();
     expect(screen.queryByText('MCP readiness and tool integration')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Project name')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Scan project$/i })).toBeDisabled();
-
-    fireEvent.click(screen.getByRole('checkbox', { name: /Ship to Client/i }));
-
-    expect(screen.getByText('Selected: Prepare for client handoff')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Scan project$/i })).toBeEnabled();
     expect(screen.getByText('Advanced options')).toBeInTheDocument();
     expect(screen.queryByText('Tell ShipSeal what this AI app does')).not.toBeInTheDocument();
     expect(screen.queryByText('What ShipSeal will prepare')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Back$/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Scan project$/i })).toBeEnabled();
     expect(screen.queryByRole('button', { name: /skip intake and scan repository only/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Advanced options'));
 
+    expect(screen.getByRole('heading', { name: /Focus the generated package/i })).toBeInTheDocument();
+    expect(screen.getByText('Build with AI')).toBeInTheDocument();
+    expect(screen.getByText('Ship to Client')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Ship to Client/i }));
+    expect(screen.getByText('Prepare for client handoff')).toBeInTheDocument();
     expect(screen.getByText('Tell ShipSeal what this AI app does')).toBeInTheDocument();
     expect(screen.getByText(/Optional, but recommended for client-ready reports/i)).toBeInTheDocument();
     expect(screen.getByText('Advanced details')).toBeInTheDocument();
@@ -217,8 +215,8 @@ describe('ShipSeal pre-scan intake flow', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /analyze repository/i }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /Build with AI/i }));
     fireEvent.click(screen.getByText('Advanced options'));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Build with AI/i }));
 
     expect(screen.getByText('Agent Cost Optimizer')).toBeInTheDocument();
     expect(screen.getByText('Choose how AI agents should spend attention')).toBeInTheDocument();
@@ -264,7 +262,6 @@ describe('ShipSeal pre-scan intake flow', () => {
     expect(await screen.findByRole('button', { name: /Scan selected repository: Csisz\/shipseal/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Scan selected repository: Csisz\/shipseal/i }));
-    fireEvent.click(screen.getByRole('checkbox', { name: /Full Workspace Analysis/i }));
     fireEvent.click(screen.getByRole('button', { name: /^Scan project$/i }));
 
     expect(scanMocks.startGitHubAppScan).toHaveBeenCalledWith({

@@ -105,37 +105,7 @@ function chooseFirstPrimary() {
   fireEvent.click(buttons[0]);
 }
 
-describe('Omega 18.5d.5 focused Repository Future Pathways composer', () => {
-  it('does not request Product Strategist again for Future Pathways interactions', async () => {
-    const prepareEnhancement = vi.fn(async () => undefined);
-    const onStageOverlayChange = vi.fn();
-    const report = futureReport();
-    const universe = buildRepositoryUniverseModel(report);
-    const view = render(<RepositoryFuturePathways
-      report={report}
-      universe={universe}
-      productIntelligence={null}
-      providerStatus={{ state: 'deterministic', deepState: 'disabled', message: 'Product analysis is available.', retryable: false }}
-      prepareEnhancement={prepareEnhancement}
-      onStageOverlayChange={onStageOverlayChange}
-    />);
-    await waitFor(() => expect(prepareEnhancement).toHaveBeenCalledTimes(1));
-    view.rerender(<RepositoryFuturePathways
-      report={report}
-      universe={universe}
-      productIntelligence={productIntelligence()}
-      providerStatus={{ state: 'enhanced', deepState: 'completed', message: 'Product opportunities enhanced.', retryable: false, providerId: 'test-provider' }}
-      prepareEnhancement={prepareEnhancement}
-      onStageOverlayChange={onStageOverlayChange}
-    />);
-
-    chooseFirstPrimary();
-    fireEvent.click(await screen.findByRole('button', { name: 'Add supporting opportunity' }));
-    fireEvent.click(screen.getAllByRole('button', { name: 'Add support' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'Deep Configuration' }));
-    expect(prepareEnhancement).toHaveBeenCalledTimes(1);
-  });
-
+describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
   it('shows 3–5 Product Futures, selects nothing automatically, and keeps technical detail secondary', async () => {
     const { container, overlay } = await renderPathways();
     expect(screen.getByRole('heading', { name: 'Where should this product go next?' })).toBeInTheDocument();
@@ -146,9 +116,9 @@ describe('Omega 18.5d.5 focused Repository Future Pathways composer', () => {
     expect(screen.queryByText(/Prospective artifacts and gates/)).not.toBeInTheDocument();
   });
 
-  it('uses a compact three-layer composition flow with details disclosed on demand', async () => {
+  it('uses compact horizontal path controls with details disclosed on demand', async () => {
     const { container } = await renderPathways();
-    expect(screen.getByRole('heading', { name: 'Strong product directions' })).toBeInTheDocument();
+    expect(screen.getByTestId('future-path-controls')).toHaveAttribute('data-future-direction', 'left-to-right');
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
     const inspector = await screen.findByTestId('future-context-inspector');
@@ -158,11 +128,10 @@ describe('Omega 18.5d.5 focused Repository Future Pathways composer', () => {
     fireEvent.click(within(inspector).getByRole('button', { name: 'Close details' }));
 
     chooseFirstPrimary();
-    expect(await screen.findByText(/01 · Primary future/i)).toBeInTheDocument();
-    expect(screen.getByText(/02 · Optional supports/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText('Composed Future Path')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add supporting opportunity' })).toHaveAttribute('aria-expanded', 'false');
 
-    const requirements = screen.getByText(/03 · System-generated/i).closest('details');
+    const requirements = screen.getByText(/requirements$/i).closest('details');
     expect(requirements).not.toHaveAttribute('open');
     fireEvent.click(requirements!.querySelector('summary')!);
     expect(requirements).toHaveAttribute('open');
@@ -226,7 +195,7 @@ describe('Omega 18.5d.5 focused Repository Future Pathways composer', () => {
   it('keeps Pathways independent from Universe controls and WebGL', async () => {
     await renderPathways();
     const hero = screen.getByTestId('future-pathways-hero-stage');
-    expect(within(hero).getByTestId('future-neural-field')).toHaveAttribute('data-future-direction', 'left-to-right');
+    expect(within(hero).getByTestId('future-path-controls')).toHaveAttribute('data-future-direction', 'left-to-right');
     expect(within(hero).queryByLabelText(/Search repository atlas or universe/i)).not.toBeInTheDocument();
     expect(within(hero).queryByRole('button', { name: /Universe 3D/i })).not.toBeInTheDocument();
     expect(hero.querySelector('canvas')).not.toBeInTheDocument();

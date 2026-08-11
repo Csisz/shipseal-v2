@@ -63,8 +63,8 @@ function overlay(values: Partial<RepositoryFutureStageOverlay> = {}): Repository
 describe('Omega 18.5d.2 directional Future Pathways layout', () => {
   it('does not present deterministic fallback cards as strong product directions while Product Strategist is analysing', () => {
     render(React.createElement(RepositoryFuturePathwaysStage, { overlay: overlay({ productIntelligenceState: 'analysing' }) }));
-    expect(screen.getByRole('heading', { name: 'Understanding this product' })).toBeInTheDocument();
-    expect(screen.getByText(/exploring its strongest next directions/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Future paths are forming' })).toBeInTheDocument();
+    expect(screen.getByText(/without another loading screen/i)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Strong product directions/i })).not.toBeInTheDocument();
     expect(document.querySelector('[data-future-node="goal"]')).not.toBeInTheDocument();
   });
@@ -80,6 +80,7 @@ describe('Omega 18.5d.2 directional Future Pathways layout', () => {
 
     expect(first).toEqual(second);
     expect(first.zones.map(zone => zone.id)).toEqual(['current', 'intervention', 'decision', 'outcome']);
+    expect(first.zones.map(zone => zone.label)).toEqual(['Current signals', 'Possible directions', 'Shared enablers', 'Future outcome']);
     expect(first.nodes.find(node => node.sourceUniverseNodeId === 'universe:test')).toMatchObject({ x: 21, y: 42, kind: 'evidence' });
     expect(first.nodes.some(node => node.sourceUniverseNodeId === 'repository:root')).toBe(false);
     expect(first.nodes.find(node => node.id === 'bundle:goal:a')!.x).toBeLessThan(first.nodes.find(node => node.id === 'intervention:goal:a')!.x);
@@ -114,7 +115,10 @@ describe('Omega 18.5d.2 directional Future Pathways layout', () => {
     expect(saved.opacity).toBeLessThan(support.opacity);
     expect(dependencies.map(node => node.id)).toEqual(['dep:a', 'dep:b']);
     expect(new Set(dependencies.map(node => node.id)).size).toBe(dependencies.length);
+    expect(dependencies.find(node => node.id === 'dep:b')?.pathGoalIds).toEqual(['goal:primary', 'goal:support']);
     expect(layout.routes.some(path => path.id === 'support:goal:support' && path.target.x > path.source.x)).toBe(true);
+    const sharedDependency = dependencies.find(node => node.id === 'dep:b')!;
+    expect(layout.routes.find(path => path.id === 'support:goal:support')?.target).toMatchObject({ x: sharedDependency.x, y: sharedDependency.y });
     expect(layout.routes.filter(path => path.kind === 'execution')).toHaveLength(3);
     expect(layout.routes.some(path => path.kind === 'saved' && !path.deterministic)).toBe(true);
   });

@@ -58,7 +58,7 @@ export default function ImproveChapter({
   }, [focusTarget, onTargetFocused, targetRef, variant]);
 
   if (variant === 'pathways') {
-    return <RepositoryFuturePathways report={report} universe={universe} productIntelligence={productIntelligence} providerStatus={providerStatus} prepareEnhancement={prepareEnhancement} onStageOverlayChange={onFutureStageOverlayChange} />;
+    return <RepositoryFuturePathways report={report} universe={universe} productIntelligence={productIntelligence} providerStatus={providerStatus} onStageOverlayChange={onFutureStageOverlayChange} />;
   }
 
   return (

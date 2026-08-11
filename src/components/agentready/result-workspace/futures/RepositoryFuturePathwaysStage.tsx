@@ -41,16 +41,13 @@ export function RepositoryFuturePathwaysStage({ overlay }: { overlay: Repository
   };
 
   return (
-    <section data-testid="future-pathways-hero-stage" aria-label="Future Path visual composer" className="relative overflow-hidden border-b border-primary/15 bg-[radial-gradient(circle_at_50%_0%,hsl(var(--primary)/0.1),transparent_38%),linear-gradient(135deg,hsl(var(--universe-stage-bg)),hsl(var(--universe-surface)/0.74))]">
-      <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(hsl(var(--border)/0.055)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--border)/0.055)_1px,transparent_1px)] bg-[size:4.5rem_4.5rem] [mask-image:radial-gradient(circle_at_center,black,transparent_82%)]" />
-      <div className="relative z-10 flex flex-col gap-3 border-b border-primary/10 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between md:px-6">
+    <section data-testid="future-pathways-hero-stage" aria-label="Future Path controls" className="relative overflow-hidden border-b border-primary/10 bg-[linear-gradient(110deg,hsl(var(--universe-stage-bg)),hsl(var(--universe-surface)/0.62))]">
+      <div className="relative z-10 flex flex-col gap-3 border-b border-primary/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between md:px-6">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-[0.18em] text-primary">
-            <Layers3 className="h-3.5 w-3.5" aria-hidden="true" /> Product direction composer
+            <Layers3 className="h-3.5 w-3.5" aria-hidden="true" /> Path controls
           </div>
-          <div data-testid="future-selected-path-summary" className="mt-1 truncate text-sm font-semibold">
-            {primary ? `${primary.title} · ${supports.length} of 2 supports · ${overlay.dependencies.length} automatic requirements` : 'Choose one primary Product Future'}
-          </div>
+          <div className="mt-1 truncate text-sm font-semibold">{primary ? primary.title : 'Choose a primary direction on the future map'}</div>
         </div>
         <span className="w-fit shrink-0 rounded-full border border-border/45 bg-background/35 px-3 py-1.5 text-[10px] text-muted-foreground">
           {overlay.productIntelligenceState === 'enhanced' ? 'Product opportunities enhanced'
@@ -60,30 +57,20 @@ export function RepositoryFuturePathwaysStage({ overlay }: { overlay: Repository
       </div>
 
       <div
-        data-testid="future-neural-field"
+        data-testid="future-path-controls"
         data-future-phase={overlay.phase}
         data-future-direction={mobile ? 'top-to-bottom' : 'left-to-right'}
         data-mobile-dom-sequence={mobile || undefined}
         data-reduced-motion-contract={reducedMotion ? 'static' : 'one-shot'}
-        className="relative z-10 min-h-[28rem] px-3 py-5 sm:px-5 md:min-h-[31rem] md:px-6 md:py-7"
+        className="relative z-10 px-3 py-4 sm:px-5 md:px-6"
       >
-        {!primary ? (
-          <div className="mx-auto max-w-6xl">
-            {overlay.productIntelligenceState === 'analysing' ? (
-              <div role="status" aria-live="polite" className="mx-auto mt-12 max-w-xl rounded-3xl border border-primary/25 bg-primary/5 p-7 text-center shadow-[0_0_36px_hsl(var(--primary)/0.08)]">
-                <Sparkles className="mx-auto h-6 w-6 text-primary" aria-hidden="true" />
-                <h3 className="mt-4 font-display text-xl font-semibold">Understanding this product</h3>
-                <p className="mt-2 text-sm text-muted-foreground">ShipSeal is exploring its strongest next directions.</p>
-                <p className="mt-3 text-xs text-muted-foreground">Repository improvements remain available under Other improvements.</p>
-              </div>
-            ) : <>
-              <div className="mb-4 max-w-2xl">
-                <h3 className="font-display text-lg font-semibold sm:text-xl">{overlay.productIntelligenceState === 'enhanced' ? 'Strong product directions' : 'Repository evidence fallback'}</h3>
-                <p className="mt-1 text-sm text-muted-foreground">{overlay.productIntelligenceState === 'enhanced'
-                  ? 'Choose the building block that should lead the product’s next chapter.'
-                  : 'These are technical improvement options, not strategic Product Opportunities.'}</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" role="list" aria-label="Recommended Product Futures">
+        {overlay.productIntelligenceState === 'analysing' ? (
+          <div role="status" aria-live="polite" className="flex min-h-20 items-center gap-3 rounded-2xl border border-primary/20 bg-primary/[0.04] px-4 py-3">
+            <Sparkles className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><div><h3 className="text-sm font-semibold">Future paths are forming</h3><p className="mt-0.5 text-xs text-muted-foreground">Stay in the workspace—directions will appear here without another loading screen.</p></div>
+          </div>
+        ) : !primary ? (
+          <div className="overflow-x-auto pb-2 [scrollbar-width:thin]">
+            <div className="flex min-w-max items-stretch gap-2" role="list" aria-label="Recommended Product Futures">
                 {initialCandidates.map(candidate => (
                   <OpportunityNode
                     key={candidate.goalId}
@@ -96,14 +83,14 @@ export function RepositoryFuturePathwaysStage({ overlay }: { overlay: Repository
                     </>}
                   />
                 ))}
-              </div>
-              {!initialCandidates.length && <FallbackEmpty state={overlay.productIntelligenceState} />}
-            </>}
+            </div>
+            {!initialCandidates.length && <FallbackEmpty state={overlay.productIntelligenceState} />}
           </div>
         ) : (
           <div className="mx-auto max-w-6xl">
-            <section aria-labelledby="primary-future-heading" className="flex flex-col items-center">
-              <ZoneLabel step="01" title="Primary future" description="The direction leading this chapter" />
+            <div className="overflow-x-auto pb-2 [scrollbar-width:thin]">
+              <div className="flex min-w-max items-stretch gap-2" aria-label="Composed Future Path">
+                <span aria-hidden="true" className="self-center text-xs font-mono text-muted-foreground">PRIMARY</span>
               <OpportunityNode
                 candidate={primary}
                 label="Chosen direction"
@@ -111,18 +98,8 @@ export function RepositoryFuturePathwaysStage({ overlay }: { overlay: Repository
                 prominent
                 actions={<NodeAction label="Details" onClick={() => inspectCandidate(primary.goalId)} expanded={activeId === primary.goalId} />}
               />
-              <h3 id="primary-future-heading" className="sr-only">Primary Product Future</h3>
-            </section>
-
-            <ComposerConnector label="combine with" />
-
-            <section aria-labelledby="supporting-futures-heading">
-              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                <ZoneLabel step="02" title="Optional supports" description="Add up to two compatible directions" align="left" />
-                <span className="text-xs text-muted-foreground">{supports.length} of 2 selected</span>
-              </div>
-              <h3 id="supporting-futures-heading" className="sr-only">Supporting Product Futures</h3>
-              <div className="mx-auto grid max-w-4xl gap-3 sm:grid-cols-2" role="list" aria-label="Supporting Product Futures">
+                <span aria-hidden="true" className="self-center text-primary/60">→</span>
+                <div className="flex items-stretch gap-2" role="list" aria-label="Supporting Product Futures">
                 {supports.map((candidate, index) => (
                   <OpportunityNode
                     key={candidate.goalId}
@@ -137,56 +114,33 @@ export function RepositoryFuturePathwaysStage({ overlay }: { overlay: Repository
                   />
                 ))}
                 {supports.length < 2 && (
-                  <button type="button" onClick={() => setSupportChooserOpen(value => !value)} aria-label="Add supporting opportunity" aria-expanded={supportChooserOpen} className="group grid min-h-28 place-items-center rounded-2xl border border-dashed border-primary/40 bg-primary/[0.035] p-4 text-sm font-medium text-primary transition-colors hover:border-primary/65 hover:bg-primary/[0.075] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">
-                    <span><span className="mx-auto mb-2 grid h-8 w-8 place-items-center rounded-full border border-primary/30 bg-primary/10"><Plus className="h-4 w-4" aria-hidden="true" /></span>Add supporting opportunity<span className="mt-1 block text-[10px] font-normal text-muted-foreground">Slot {supports.length + 1} of 2</span></span>
+                  <button type="button" onClick={() => setSupportChooserOpen(value => !value)} aria-label="Add supporting opportunity" aria-expanded={supportChooserOpen} className="grid min-h-20 w-44 place-items-center rounded-2xl border border-dashed border-primary/35 bg-primary/[0.03] px-3 text-xs font-medium text-primary hover:bg-primary/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <span><Plus className="mx-auto mb-1 h-4 w-4" aria-hidden="true" />Add support · {supports.length + 1}/2</span>
                   </button>
                 )}
-                {supports.length === 0 && <div aria-hidden="true" className="hidden min-h-28 place-items-center rounded-2xl border border-dashed border-border/25 bg-background/15 text-xs text-muted-foreground/60 sm:grid">Support slot 2</div>}
               </div>
-
-              {supports.length === 2 && (
-                <div className="mt-3 text-center">
+                {supports.length === 2 && (
                   <button type="button" onClick={() => setSupportChooserOpen(value => !value)} aria-expanded={supportChooserOpen} className="min-h-10 rounded-full border border-border/50 bg-background/30 px-4 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                     <Replace className="mr-2 inline h-3.5 w-3.5" aria-hidden="true" />Replace a supporting goal
                   </button>
-                </div>
-              )}
-
-              {supportChooserOpen && (
-                <SupportChooser
-                  candidates={compatibleCandidates}
-                  supports={supports}
-                  onClose={() => setSupportChooserOpen(false)}
-                  onAdd={goalId => { overlay.onCandidateAddSupport(goalId); setSupportChooserOpen(false); }}
-                  onReplace={(addedGoalId, removedGoalId) => { overlay.onCandidateReplaceSupport(addedGoalId, removedGoalId); setSupportChooserOpen(false); }}
-                  onDetails={inspectCandidate}
-                />
-              )}
-            </section>
-
-            <ComposerConnector label="automatically enables" subtle />
-
-            <section aria-labelledby="automatic-requirements-heading" className="mx-auto max-w-5xl">
-              <h3 id="automatic-requirements-heading" className="sr-only">Automatic requirements</h3>
-              <details className="group rounded-2xl border border-accent/20 bg-background/20">
-                <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 rounded-2xl px-4 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:px-5">
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-accent/25 bg-accent/[0.07] text-accent"><LockKeyhole className="h-4 w-4" aria-hidden="true" /></span>
-                    <span className="min-w-0"><span className="block text-[10px] font-mono uppercase tracking-[0.16em] text-accent">03 · System-generated</span><span className="mt-0.5 block text-sm font-medium text-foreground">Automatic requirements <span className="font-normal text-muted-foreground">· {overlay.dependencies.length}</span></span></span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground"><span className="hidden sm:inline">View required capabilities</span><ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" /></span>
-                </summary>
-                <div className="border-t border-accent/15 px-4 py-4 sm:px-5">
-                  <p className="mb-3 text-xs text-muted-foreground">Added from the selected direction and supports. They are required, not manually selected opportunities.</p>
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                )}
+                <span aria-hidden="true" className="self-center text-primary/60">→</span>
+                <details className="group w-64 shrink-0 rounded-2xl border border-accent/20 bg-background/20">
+                  <summary className="flex min-h-20 cursor-pointer list-none items-center justify-between gap-3 px-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <span className="flex items-center gap-2"><LockKeyhole className="h-4 w-4 text-accent" aria-hidden="true" /><span><span className="block text-[9px] font-mono uppercase tracking-[0.14em] text-accent">Automatic</span><span className="block text-xs font-medium">{overlay.dependencies.length} requirements</span></span></span><ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+                  </summary>
+                  <div className="grid gap-2 border-t border-accent/15 p-3">
                     {orderedDependencies.map(dependency => (
                       <DependencyNode key={dependency.id} dependency={dependency} active={activeId === dependency.id} onInspect={() => inspectDependency(dependency.id)} />
                     ))}
-                    {!orderedDependencies.length && <p className="text-sm text-muted-foreground">No additional capability requirement was derived.</p>}
+                    {!orderedDependencies.length && <p className="text-xs text-muted-foreground">No additional capability required.</p>}
                   </div>
-                </div>
-              </details>
-            </section>
+                </details>
+              </div>
+            </div>
+            {supportChooserOpen && (
+              <SupportChooser candidates={compatibleCandidates} supports={supports} onClose={() => setSupportChooserOpen(false)} onAdd={goalId => { overlay.onCandidateAddSupport(goalId); setSupportChooserOpen(false); }} onReplace={(addedGoalId, removedGoalId) => { overlay.onCandidateReplaceSupport(addedGoalId, removedGoalId); setSupportChooserOpen(false); }} onDetails={inspectCandidate} />
+            )}
           </div>
         )}
 
@@ -207,18 +161,18 @@ function OpportunityNode({ candidate, label, active, prominent = false, compact 
   actions: ReactNode;
 }) {
   return (
-    <article role={prominent ? undefined : 'listitem'} data-future-node="goal" data-future-role={candidate.role} data-product-opportunity-origin={candidate.opportunityOrigin} className={`relative flex h-full flex-col rounded-2xl border bg-[hsl(var(--universe-surface-raised)/0.86)] ${compact ? 'p-3.5' : 'p-4'} backdrop-blur-sm transition-[border-color,box-shadow,transform] motion-reduce:transition-none ${prominent ? 'w-full max-w-xl border-primary/60 shadow-[0_0_30px_hsl(var(--primary)/0.13)] md:p-5' : active ? 'border-primary/60 shadow-[0_0_22px_hsl(var(--primary)/0.08)]' : 'border-border/45 shadow-[var(--shadow-sm-semantic)] hover:border-primary/35'}`}>
+    <article role={prominent ? undefined : 'listitem'} data-future-node="goal" data-future-role={candidate.role} data-product-opportunity-origin={candidate.opportunityOrigin} className={`relative flex h-full w-56 shrink-0 flex-col rounded-2xl border bg-[hsl(var(--universe-surface-raised)/0.82)] p-3 backdrop-blur-sm transition-[border-color,box-shadow] motion-reduce:transition-none ${prominent ? 'w-64 border-primary/60 shadow-[0_0_26px_hsl(var(--primary)/0.13)]' : active ? 'border-primary/60 shadow-[0_0_20px_hsl(var(--primary)/0.08)]' : 'border-border/40 hover:border-primary/35'}`}>
       {prominent && <span aria-hidden="true" className="absolute -inset-px -z-10 rounded-2xl bg-gradient-to-r from-primary/15 via-transparent to-accent/10 blur-lg" />}
       <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-mono uppercase tracking-[0.13em] text-primary">
         <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />{label}
       </div>
-      <h4 className={`${prominent ? 'mt-2.5 text-xl md:text-2xl' : 'mt-2 text-base'} font-display font-semibold leading-tight text-foreground`}>{candidate.title}</h4>
-      <p className={`${compact ? 'line-clamp-1' : 'line-clamp-2'} mt-1.5 text-sm leading-relaxed text-muted-foreground`}>{candidate.userValue || candidate.rationale || 'Proposed repository-grounded direction.'}</p>
-      <div className="mt-3 flex flex-wrap gap-1.5">
+      <h4 className="mt-1.5 line-clamp-2 text-sm font-semibold leading-snug text-foreground">{candidate.title}</h4>
+      {!compact && <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">{candidate.userValue || candidate.rationale || 'Proposed repository-grounded direction.'}</p>}
+      <div className="mt-2 flex flex-wrap gap-1.5">
         <NodeTag>{originLabel(candidate)}</NodeTag>
         <NodeTag>{candidate.fit}</NodeTag>
       </div>
-      <div className="mt-auto flex flex-wrap gap-2 border-t border-border/35 pt-3">{actions}</div>
+      <div className="mt-auto flex flex-wrap gap-1.5 border-t border-border/30 pt-2">{actions}</div>
     </article>
   );
 }
@@ -310,14 +264,6 @@ function ComposerDetails({ candidate, dependency, onClose }: { candidate?: Repos
 
 function DetailList({ label, items }: { label: string; items: string[] }) {
   return <div><div className="font-medium text-foreground">{label}</div><ul className="mt-1 space-y-1">{items.slice(0, 8).map(item => <li key={item} className="break-all">{item}</li>)}</ul></div>;
-}
-
-function ZoneLabel({ step, title, description, align = 'center' }: { step: string; title: string; description: string; align?: 'left' | 'center' }) {
-  return <div className={`${align === 'center' ? 'mb-3 text-center' : ''}`}><div className="text-[9px] font-mono uppercase tracking-[0.16em] text-primary">{step} · {title}</div><p className="mt-0.5 text-xs text-muted-foreground">{description}</p></div>;
-}
-
-function ComposerConnector({ label, subtle = false }: { label: string; subtle?: boolean }) {
-  return <div aria-hidden="true" className={`${subtle ? 'h-14' : 'h-16'} flex flex-col items-center justify-center`}><span className={`h-5 w-px ${subtle ? 'bg-border/45' : 'bg-gradient-to-b from-primary/65 to-accent/50'}`} /><span className="rounded-full border border-border/35 bg-background/30 px-2 py-0.5 text-[8px] font-mono uppercase tracking-[0.13em] text-muted-foreground">{label}</span><span className={`h-5 w-px ${subtle ? 'bg-border/35' : 'bg-gradient-to-b from-accent/50 to-primary/20'}`} /></div>;
 }
 
 function FallbackEmpty({ state }: { state: RepositoryFutureStageOverlay['productIntelligenceState'] }) {

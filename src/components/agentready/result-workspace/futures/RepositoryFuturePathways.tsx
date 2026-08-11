@@ -51,16 +51,14 @@ interface RepositoryFuturePathwaysProps {
   universe: RepositoryUniverseModel;
   productIntelligence?: RepositoryProductIntelligenceResult | null;
   providerStatus?: RepositoryIntelligenceProviderStatus;
-  prepareEnhancement?: () => Promise<void>;
   onStageOverlayChange: (overlay: RepositoryFutureStageOverlay | null) => void;
 }
 
 type RoleFilter = 'all' | 'selected' | 'saved' | 'available' | 'blocked';
 type Focus = { kind: 'goal'; id: string } | { kind: 'dependency'; id: string } | null;
 
-export default function RepositoryFuturePathways({ report, universe, productIntelligence, providerStatus, prepareEnhancement, onStageOverlayChange }: RepositoryFuturePathwaysProps) {
+export default function RepositoryFuturePathways({ report, universe, productIntelligence, providerStatus, onStageOverlayChange }: RepositoryFuturePathwaysProps) {
   const rootRef = useRef<HTMLElement | null>(null);
-  const productRequestRef = useRef(false);
   const [mode, setMode] = useState<RepositoryFuturePathwaysMode>('quick');
   const [draft, setDraft] = useState<RepositoryFutureDraft>();
   const [focus, setFocus] = useState<Focus>(null);
@@ -92,17 +90,6 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       : providerStatus?.state === 'fallback' || providerStatus?.state === 'cancelled'
         ? 'deterministic-fallback' as const
         : 'unavailable' as const;
-
-  useEffect(() => {
-    productRequestRef.current = false;
-  }, [report.repoName, report.scannedAt]);
-
-  useEffect(() => {
-    if (productIntelligence?.opportunities.length || !prepareEnhancement || productRequestRef.current) return;
-    if (providerStatus && providerStatus.state !== 'deterministic') return;
-    productRequestRef.current = true;
-    void prepareEnhancement();
-  }, [prepareEnhancement, productIntelligence, providerStatus]);
 
   useEffect(() => {
     setDraft(undefined);

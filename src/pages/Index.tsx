@@ -17,7 +17,7 @@ import { createDefaultProjectIntake, hasMeaningfulProjectContext } from '@/lib/i
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import { Button } from '@/components/ui/button';
 import { PackageCards } from '@/components/agentready/PackageCards';
-import { FULL_PACKAGE_ID, getShipSealPackage, type ShipSealPackageId } from '@/lib/packages';
+import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages, type ShipSealPackageId } from '@/lib/packages';
 import { AGENT_OPERATING_MODES, DEFAULT_AGENT_OPERATING_MODE, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
 import { getGitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
@@ -681,8 +681,8 @@ function ProjectContextStep({
   onBack: () => void;
   onContinue: () => void;
 }) {
-  const hasGoalSelection = selectedPackages.length > 0;
-  const selectedGoal = selectedPackages[0] ? getShipSealPackage(selectedPackages[0]) : null;
+  const effectivePackages = resolveSelectedPackages(selectedPackages);
+  const selectedGoal = getShipSealPackage(effectivePackages[0]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   return (
@@ -703,54 +703,51 @@ function ProjectContextStep({
       </div>
 
       <div className="glass rounded-2xl p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-2xl">
-            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Goal</div>
-            <h2 className="mt-1 font-display text-2xl font-semibold">What outcome should ShipSeal prepare?</h2>
-            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Pick one. ShipSeal can scan now; optional details can wait.
-            </p>
+            <div className="text-xs font-mono uppercase tracking-wider text-primary-glow">Ready to scan</div>
+            <h2 className="mt-1 font-display text-2xl font-semibold">Understand this repository</h2>
+            <p className="mt-2 text-sm text-muted-foreground">One scan forms the repository workspace. Product directions emerge after ShipSeal understands the current system.</p>
           </div>
-          {selectedGoal && (
-            <div className="rounded-full border border-primary/45 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary-glow">
-              Selected: {selectedGoal.id === FULL_PACKAGE_ID ? 'Full Workspace Analysis' : selectedGoal.title}
-            </div>
-          )}
-        </div>
-        <div className="mt-6">
-          <PackageCards variant="select" selected={selectedPackages} onToggle={onTogglePackage} />
+          <div className="shrink-0 rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary-glow">Full workspace by default</div>
         </div>
       </div>
 
-      {hasGoalSelection && (
-        <div className="rounded-2xl border border-border/60 bg-secondary/15">
+      <div className="rounded-2xl border border-border/60 bg-secondary/15">
           <button
             type="button"
             onClick={() => setAdvancedOpen(open => !open)}
             aria-expanded={advancedOpen}
-            className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+            className="flex min-h-12 w-full items-center justify-between gap-3 px-5 py-4 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
           >
-            <span>Advanced options</span>
-            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${advancedOpen ? 'rotate-180' : ''}`} />
+            <span><span className="block text-foreground">Advanced options</span><span className="mt-0.5 block text-xs font-normal">Delivery focus and optional project context</span></span>
+            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none ${advancedOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
           </button>
           {advancedOpen && (
             <div className="space-y-5 border-t border-border/50 p-5">
-              {selectionUsesAgentDevelopment(selectedPackages) && (
+              <section aria-labelledby="delivery-focus-heading" className="rounded-2xl border border-border/50 bg-background/20 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div><div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Optional delivery preference</div><h3 id="delivery-focus-heading" className="mt-1 font-semibold">Focus the generated package</h3></div>
+                  {selectedGoal && <span className="w-fit rounded-full border border-primary/35 bg-primary/10 px-2.5 py-1 text-[10px] font-medium text-primary-glow">{selectedGoal.id === FULL_PACKAGE_ID ? 'Full Workspace Analysis' : selectedGoal.title}</span>}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">This changes delivery emphasis, not what ShipSeal can understand or which Future Path you can compose later.</p>
+                <div className="mt-4"><PackageCards variant="select" selected={effectivePackages} onToggle={onTogglePackage} /></div>
+              </section>
+              {selectionUsesAgentDevelopment(effectivePackages) && (
                 <AgentOperatingModeSelector value={agentOperatingMode} onChange={onAgentOperatingModeChange} compact />
               )}
               <ProjectIntakeForm value={intake} onChange={onChange} />
-              <OutputPreview selectedPackages={selectedPackages} />
+              <OutputPreview selectedPackages={effectivePackages} />
               <div className="rounded-xl border border-border/60 bg-background/25 px-4 py-3 text-sm text-muted-foreground">
-                These details improve Delivery Outputs. They are optional for the first scan.
+                These preferences improve Delivery Outputs. They are optional for the first scan.
               </div>
             </div>
           )}
-        </div>
-      )}
+      </div>
 
       <div className="flex flex-col sm:flex-row gap-3 justify-end">
         <Button type="button" variant="ghost" onClick={onBack}>Back</Button>
-        <Button type="button" className="bg-gradient-primary border-0 shadow-glow hover:opacity-90" onClick={onContinue} disabled={!hasGoalSelection}>
+        <Button type="button" className="bg-gradient-primary border-0 shadow-glow hover:opacity-90" onClick={onContinue}>
           Scan project
         </Button>
       </div>
@@ -828,7 +825,6 @@ function AgentOperatingModeSelector({
 function FlowSteps({ activeStep }: { activeStep: number }) {
   const steps = [
     'Source',
-    'Outcome',
     'Scan',
   ];
 
