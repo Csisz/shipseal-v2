@@ -179,7 +179,6 @@ export function AiWorkspaceHero({
   onRescan,
   onSaveVerificationBaseline,
   onDiscardVerificationBaseline,
-  futureStageOverlay,
 }: {
   report: ReadinessReport;
   universeModel: RepositoryUniverseModel;
@@ -204,7 +203,6 @@ export function AiWorkspaceHero({
   onRescan?: () => void;
   onSaveVerificationBaseline?: (baseline: RepositoryVerificationBaseline) => void;
   onDiscardVerificationBaseline?: () => void;
-  futureStageOverlay?: RepositoryFutureStageOverlay | null;
 }) {
   const health = report.repositoryHealth;
   const unavailable = health.overall.score === null;
@@ -254,7 +252,6 @@ export function AiWorkspaceHero({
               onRescan={onRescan}
               onSaveVerificationBaseline={onSaveVerificationBaseline}
               onDiscardVerificationBaseline={onDiscardVerificationBaseline}
-              futureStageOverlay={futureStageOverlay}
             />
           </>
         )}

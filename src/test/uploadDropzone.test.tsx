@@ -104,6 +104,20 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(screen.getByRole('button', { name: /Use public URL/i })).toBeInTheDocument();
   });
 
+  it('starts scanning as soon as a ZIP passes validation', () => {
+    const onFile = vi.fn();
+    const { container } = render(<UploadDropzone onFile={onFile} onGitHubImport={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Upload ZIP/i }));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    const file = new File(['valid zip'], 'repository.zip', { type: 'application/zip' });
+    fireEvent.change(input!, { target: { files: [file] } });
+
+    expect(onFile).toHaveBeenCalledTimes(1);
+    expect(onFile).toHaveBeenCalledWith(file);
+    expect(screen.queryByRole('button', { name: /Analyze repository/i })).not.toBeInTheDocument();
+  });
+
   it('starts popup GitHub Connect when source-level Connect GitHub is configured', () => {
     const onConnect = vi.fn();
 
@@ -155,7 +169,7 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(onInstall).toHaveBeenCalledTimes(1);
   });
 
-  it('renders a searchable repository picker and confirms a selected GitHub App repo', async () => {
+  it('starts a connected scan directly from the searchable repository picker', async () => {
     const onSelect = vi.fn();
     mockPointerCaptureForRadixSelect();
 
@@ -199,11 +213,7 @@ describe('UploadDropzone GitHub import copy', () => {
     });
     fireEvent.click(await screen.findByText('Csisz/shipseal'));
 
-    expect(onSelect).not.toHaveBeenCalled();
-    expect(screen.getAllByText('Public').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('main').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('button', { name: /scan selected repository/i }));
-
+    expect(screen.queryByRole('button', { name: /scan selected repository/i })).not.toBeInTheDocument();
     expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({
       owner: 'Csisz',
       name: 'shipseal',

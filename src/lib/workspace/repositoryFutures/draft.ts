@@ -10,8 +10,8 @@ import type {
   RepositoryFutureRepositoryBinding,
 } from './schema.js';
 
-export const REPOSITORY_FUTURE_DRAFT_VERSION = 'shipseal.repository-future-draft.v1' as const;
-export const REPOSITORY_FUTURE_SYNTHESIS_VERSION = 'shipseal.repository-future-synthesis.omega18.5.v1' as const;
+export const REPOSITORY_FUTURE_DRAFT_VERSION = 'shipseal.repository-future-draft.v2' as const;
+export const REPOSITORY_FUTURE_SYNTHESIS_VERSION = 'shipseal.repository-future-synthesis.omega18.5.v2' as const;
 export const REPOSITORY_FUTURE_QUICK_PATH_LIMIT = 24;
 
 export type RepositoryFutureCompatibilityState =
@@ -33,6 +33,7 @@ export interface RepositoryFutureDraftSelection {
   sourceGraphFingerprint: string;
   primaryGoalIds: string[];
   supportingGoalIds: string[];
+  savedGoalIds?: string[];
 }
 
 export interface RepositoryFutureDraftGoal {
@@ -78,6 +79,7 @@ export interface RepositoryFutureCompatibilityResult {
 
 export type RepositoryFutureExclusionReason =
   | 'not-selected'
+  | 'saved-for-later'
   | 'conflicts-with-primary'
   | 'conflicts-with-support'
   | 'support-limit-reached'
@@ -104,6 +106,7 @@ export interface RepositoryFutureSavedAlternative {
   compatibilityReasons: string[];
   conflictIds: string[];
   exclusionReasons: RepositoryFutureExclusionReason[];
+  savedForLater: boolean;
   limitations: string[];
 }
 
@@ -166,6 +169,7 @@ export interface RepositoryFutureDraft {
   sourceRepository: RepositoryFutureRepositoryBinding;
   primaryGoal: RepositoryFutureDraftGoal;
   supportingGoals: RepositoryFutureDraftGoal[];
+  savedGoalIds: string[];
   dependencies: RepositoryFutureDraftDependency[];
   dependencyExecutionOrder: string[];
   executionOrder: string[];

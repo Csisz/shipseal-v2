@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter as RouterMemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import Index from '@/pages/Index';
@@ -13,48 +13,76 @@ const scanMocks = vi.hoisted(() => ({
   startScan: vi.fn(),
   startGitHubScan: vi.fn(),
   startGitHubAppScan: vi.fn(),
+  failNext: false as boolean,
+  completeWithReport: false as boolean,
 }));
 
 vi.mock('@/components/agentready/Landing', () => ({
-  Landing: ({ onSampleReport, onScrollScan, scanSlot }: { onSampleReport: () => void; onScrollScan: () => void; scanSlot?: React.ReactNode }) => (
+  Landing: ({ onSampleReport, scanSlot }: { onSampleReport: () => void; scanSlot?: React.ReactNode }) => (
     <div>
       <button type="button" onClick={onSampleReport}>Try sample project</button>
-      <button type="button" onClick={onScrollScan}>Go to scan</button>
       {scanSlot}
+    </div>
+  ),
+}));
+
+vi.mock('@/components/agentready/ResultDashboard', () => ({
+  ResultDashboard: ({ initialIntake, intakeSkipped, selectedPackages, agentOperatingMode, githubConnection }: {
+    initialIntake?: { projectName?: string };
+    intakeSkipped?: boolean;
+    selectedPackages?: string[];
+    agentOperatingMode?: string;
+    githubConnection?: { installationId?: string; owner?: string; repo?: string; defaultBranch?: string };
+  }) => (
+    <div data-testid="result-dashboard">
+      <span>Project: {initialIntake?.projectName}</span>
+      <span>Intake skipped: {String(intakeSkipped)}</span>
+      <span>Packages: {JSON.stringify(selectedPackages)}</span>
+      <span>Agent mode: {agentOperatingMode}</span>
+      {githubConnection && <span>Connection: {githubConnection.installationId}/{githubConnection.owner}/{githubConnection.repo}/{githubConnection.defaultBranch}</span>}
     </div>
   ),
 }));
 
 vi.mock('@/hooks/useRepoScan', async () => {
   const React = await import('react');
+  const { buildSampleReport } = await import('@/lib/readiness');
   return {
     useRepoScan: () => {
-      const [status, setStatus] = React.useState<'idle' | 'scanning'>('idle');
+      const [state, setState] = React.useState({
+        status: 'idle' as 'idle' | 'scanning' | 'failed' | 'cancelled' | 'completed',
+        error: null as string | null,
+        report: null as ReturnType<typeof buildSampleReport> | null,
+      });
+      const begin = () => {
+        if (scanMocks.failNext) {
+          scanMocks.failNext = false;
+          setState({ status: 'failed', error: 'Synthetic scan failure', report: null });
+        } else if (scanMocks.completeWithReport) {
+          setState({ status: 'completed', error: null, report: buildSampleReport() });
+        } else {
+          setState({ status: 'scanning', error: null, report: null });
+        }
+        return Promise.resolve(null);
+      };
       return {
         selectedFile: null,
-        status,
-        currentStep: null,
+        ...state,
+        errorCategory: state.status === 'failed' ? 'network-cors-blocked' : null,
+        currentStep: state.status === 'scanning' ? 'Reading repository' : null,
         currentStepIndex: 0,
-        progress: 0,
+        progress: 10,
         warnings: [],
-        error: null,
-        errorCategory: null,
-        report: null,
         steps: ['Reading repository'],
-        startScan: scanMocks.startScan.mockImplementation(() => {
-          setStatus('scanning');
-          return Promise.resolve(null);
-        }),
-        startGitHubScan: scanMocks.startGitHubScan.mockImplementation(() => {
-          setStatus('scanning');
-          return Promise.resolve(null);
-        }),
-        startGitHubAppScan: scanMocks.startGitHubAppScan.mockImplementation(() => {
-          setStatus('scanning');
-          return Promise.resolve(null);
-        }),
-        cancelScan: vi.fn(),
-        resetScan: vi.fn(() => setStatus('idle')),
+        activeRepositoryLabel: 'Selected repository',
+        activeScanSourceLabel: 'Test source',
+        discoveredFileCount: 0,
+        analyzedFileCount: 0,
+        startScan: (file: File) => { scanMocks.startScan(file); return begin(); },
+        startGitHubScan: (url: string, branch?: string) => { scanMocks.startGitHubScan(url, branch); return begin(); },
+        startGitHubAppScan: (source: unknown) => { scanMocks.startGitHubAppScan(source); return begin(); },
+        cancelScan: vi.fn(() => setState({ status: 'cancelled', error: 'Scan cancelled', report: null })),
+        resetScan: vi.fn(() => setState({ status: 'idle', error: null, report: null })),
       };
     },
   };
@@ -63,6 +91,7 @@ vi.mock('@/hooks/useRepoScan', async () => {
 vi.mock('@/components/agentready/UploadDropzone', () => ({
   UploadDropzone: ({
     onFile,
+    onGitHubImport,
     githubInstallationId,
     repositoryListStatus,
     repositories = [],
@@ -73,6 +102,7 @@ vi.mock('@/components/agentready/UploadDropzone', () => ({
     onGitHubRepositoryRetry,
   }: {
     onFile: (file: File) => void;
+    onGitHubImport?: (url: string, branch?: string) => void;
     githubInstallationId?: string;
     repositoryListStatus?: GitHubAppRepositoryListStatus;
     repositories?: GitHubAppRepository[];
@@ -83,278 +113,147 @@ vi.mock('@/components/agentready/UploadDropzone', () => ({
     onGitHubRepositoryRetry?: () => void;
   }) => (
     <div>
-      <button
-        type="button"
-        onClick={() => onFile(new File(['demo'], 'real-repo.zip', { type: 'application/zip' }))}
-      >
-        Analyze repository
-      </button>
+      <button type="button" onClick={() => {
+        const file = new File(['demo'], 'real-repo.zip', { type: 'application/zip' });
+        onFile(file);
+        onFile(file);
+      }}>Choose valid ZIP</button>
+      <button type="button" onClick={() => onGitHubImport?.('https://github.com/Csisz/public-repo', 'develop')}>Accept public GitHub URL</button>
       {githubInstallationId && <div>Installation: {githubInstallationId}</div>}
       {repositoryListStatus === 'loading' && <div>GitHub App installation detected. Loading repositories...</div>}
-      {repositoryListStatus === 'not_configured' && <div>{repositoryListMessage}</div>}
-      {repositoryListStatus === 'error' && <div>{repositoryListMessage}</div>}
+      {(repositoryListStatus === 'not_configured' || repositoryListStatus === 'error') && <div>{repositoryListMessage}</div>}
       <button type="button" onClick={onGitHubConnect}>Connect GitHub</button>
       <button type="button" onClick={onGitHubRepositoryRetry}>Retry repository listing</button>
       <button type="button" onClick={onGitHubDisconnect}>Disconnect GitHub</button>
-      {repositoryListStatus === 'loaded' && (
+      {repositoryListStatus === 'loaded' && repositories[0] && (
         <button type="button" onClick={() => onGitHubAppRepositorySelect?.(repositories[0])}>
-          Scan selected repository: {repositories[0]?.fullName}
+          Select repository: {repositories[0].fullName}
         </button>
       )}
     </div>
   ),
 }));
 
-describe('ShipSeal pre-scan intake flow', () => {
+describe('ShipSeal direct scan entry', () => {
   afterEach(() => {
+    scanMocks.failNext = false;
+    scanMocks.completeWithReport = false;
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     window.localStorage.clear();
     window.history.pushState({}, '', '/');
   });
 
-  it('moves directly from source to one scan with delivery focus kept optional', async () => {
-    render(
-      <MemoryRouter>
-        <Index />
-      </MemoryRouter>
-    );
+  it('starts a valid ZIP immediately without the removed confirmation screen or duplicate scans', () => {
+    render(<MemoryRouter><Index /></MemoryRouter>);
 
-    expect(within(screen.getByLabelText('Scan setup progress')).getByText('Source').closest('li')).toHaveAttribute('aria-current', 'step');
-    fireEvent.click(screen.getByRole('button', { name: /analyze repository/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Choose valid ZIP/i }));
 
-    expect(within(screen.getByLabelText('Scan setup progress')).getByText('Scan').closest('li')).toHaveAttribute('aria-current', 'step');
-    expect(screen.getByText('Project Source')).toBeInTheDocument();
-    expect(screen.getByText('ZIP upload')).toBeInTheDocument();
-    expect(screen.getByText('real-repo.zip')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /change project/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Understand this repository/i })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /What outcome should ShipSeal prepare/i })).not.toBeInTheDocument();
-    expect(screen.queryByText('Build with AI')).not.toBeInTheDocument();
-    expect(screen.getByText('Full workspace by default')).toBeInTheDocument();
-    expect(screen.queryByText('MCP readiness and tool integration')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Project name')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Scan project$/i })).toBeEnabled();
-    expect(screen.getByText('Advanced options')).toBeInTheDocument();
-    expect(screen.queryByText('Tell ShipSeal what this AI app does')).not.toBeInTheDocument();
-    expect(screen.queryByText('What ShipSeal will prepare')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Back$/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /skip intake and scan repository only/i })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Advanced options'));
-
-    expect(screen.getByRole('heading', { name: /Focus the generated package/i })).toBeInTheDocument();
-    expect(screen.getByText('Build with AI')).toBeInTheDocument();
-    expect(screen.getByText('Ship to Client')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('checkbox', { name: /Ship to Client/i }));
-    expect(screen.getByText('Prepare for client handoff')).toBeInTheDocument();
-    expect(screen.getByText('Tell ShipSeal what this AI app does')).toBeInTheDocument();
-    expect(screen.getByText(/Optional, but recommended for client-ready reports/i)).toBeInTheDocument();
-    expect(screen.getByText('Advanced details')).toBeInTheDocument();
-    expect(screen.getByText('What ShipSeal will prepare')).toBeInTheDocument();
-    expect(screen.queryByText('Agent Cost Optimizer')).not.toBeInTheDocument();
-    expect(screen.getByText('Client handoff')).toBeInTheDocument();
-    expect(screen.getByText('AI agent development pack')).toBeInTheDocument();
-    expect(screen.getByText(/View generated file list/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Project name')).toHaveValue('real-repo');
-    expect(screen.getByLabelText('Project name')).not.toHaveValue('Customer Support RAG Assistant');
-
-    fireEvent.click(screen.getByRole('button', { name: /^Scan project$/i }));
-
+    expect(scanMocks.startScan).toHaveBeenCalledTimes(1);
+    expect(scanMocks.startScan.mock.calls[0][0]).toHaveProperty('name', 'real-repo.zip');
     expect(screen.getByText(/The workspace is forming/i)).toBeInTheDocument();
-    expect(screen.getByText(/Living Repository/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Skip to workspace/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Ready to scan')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Understand this repository/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Scan project$/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Scan setup progress')).not.toBeInTheDocument();
   });
 
-  it('shows Intelligence Reveal for the sample project and enters the workspace without scanning', async () => {
-    render(
-      <MemoryRouter>
-        <Index />
-      </MemoryRouter>
-    );
+  it('starts an accepted public GitHub URL immediately with its branch', () => {
+    render(<MemoryRouter><Index /></MemoryRouter>);
 
-    fireEvent.click(screen.getByRole('button', { name: /Try sample project/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Accept public GitHub URL/i }));
 
-    expect(screen.getByRole('heading', { name: /Understanding repository structure/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
-    expect(scanMocks.startScan).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
-
-    expect(await screen.findByRole('heading', { name: /Explore the repository when you are ready/i }, { timeout: 15000 })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Explore Repository Universe/i }));
-    expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 15000 })).toBeInTheDocument();
-    const resultActionsTrigger = screen.getByRole('button', { name: /More result actions/i });
-    fireEvent.keyDown(resultActionsTrigger, { key: 'ArrowDown' });
-    expect(screen.getByRole('menuitem', { name: /Replay reveal/i })).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    const universeControls = screen.getByRole('button', { name: /More Universe controls/i });
-    fireEvent.keyDown(universeControls, { key: 'ArrowDown' });
-    fireEvent.click(screen.getByRole('menuitem', { name: /Open repository story/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Knowledge and docs/i }));
-    expect(screen.getByRole('tab', { name: /Story/i })).toHaveAttribute('aria-selected', 'true');
-
-    fireEvent.keyDown(resultActionsTrigger, { key: 'ArrowDown' });
-    fireEvent.click(screen.getByRole('menuitem', { name: /Replay reveal/i }));
-    expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
-
-    const deferredUniverseButton = screen.queryByRole('button', { name: /Explore Repository Universe/i });
-    if (deferredUniverseButton) fireEvent.click(deferredUniverseButton);
-    expect(await screen.findByRole('heading', { name: /Explore the repository universe/i }, { timeout: 15000 })).toBeInTheDocument();
-    const storyTab = await screen.findByRole('tab', { name: /Story/i }, { timeout: 5000 });
-    fireEvent.click(storyTab);
-    expect(screen.getByRole('button', { name: /Knowledge and docs/i })).toBeInTheDocument();
-  }, 30000);
-
-  it('shows and updates Agent Operating Mode for AI Agent Development package', async () => {
-    render(
-      <MemoryRouter>
-        <Index />
-      </MemoryRouter>
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /analyze repository/i }));
-    fireEvent.click(screen.getByText('Advanced options'));
-    fireEvent.click(screen.getByRole('checkbox', { name: /Build with AI/i }));
-
-    expect(screen.getByText('Agent Cost Optimizer')).toBeInTheDocument();
-    expect(screen.getByText('Choose how AI agents should spend attention')).toBeInTheDocument();
-    expect(screen.getByText('Balanced context use')).toBeInTheDocument();
-    expect(screen.getByText('Recommended default')).toBeInTheDocument();
-    expect(screen.getByText('Lowest context use')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Balanced Context/i })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(screen.getByRole('button', { name: /Focused Context/i }));
-
-    expect(screen.getByRole('button', { name: /Focused Context/i })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: /Balanced Context/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(scanMocks.startGitHubScan).toHaveBeenCalledTimes(1);
+    expect(scanMocks.startGitHubScan).toHaveBeenCalledWith('https://github.com/Csisz/public-repo', 'develop');
+    expect(screen.getByText(/The workspace is forming/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Scan project$/i })).not.toBeInTheDocument();
   });
 
-  it('recognizes GitHub App callback query params and exposes repository listing state', async () => {
+  it('starts a connected GitHub scan on repository selection and preserves defaults and connection metadata', async () => {
+    scanMocks.completeWithReport = true;
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         status: 'ok',
-        repositories: [{
-          id: 1,
-          owner: 'Csisz',
-          name: 'shipseal',
-          fullName: 'Csisz/shipseal',
-          defaultBranch: 'main',
-          private: false,
-          htmlUrl: 'https://github.com/Csisz/shipseal',
-        }],
+        repositories: [{ id: 1, owner: 'Csisz', name: 'shipseal', fullName: 'Csisz/shipseal', defaultBranch: 'main', private: true, htmlUrl: 'https://github.com/Csisz/shipseal' }],
       }),
     });
     vi.stubGlobal('fetch', fetchMock);
-    window.history.pushState({}, '', '/?githubInstallationId=12345&githubSetupAction=install#scan');
+    window.history.pushState({}, '', '/?githubInstallationId=12345');
+    render(<MemoryRouter><Index /></MemoryRouter>);
 
-    render(
-      <MemoryRouter>
-        <Index />
-      </MemoryRouter>
-    );
+    fireEvent.click(await screen.findByRole('button', { name: /Select repository: Csisz\/shipseal/i }));
 
-    expect(screen.getByText('Installation: 12345')).toBeInTheDocument();
-    expect(screen.getByText(/GitHub App installation detected. Loading repositories/i)).toBeInTheDocument();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/repositories?installationId=12345'));
-    expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBe('12345');
-    expect(await screen.findByRole('button', { name: /Scan selected repository: Csisz\/shipseal/i })).toBeInTheDocument();
+    expect(scanMocks.startGitHubAppScan).toHaveBeenCalledTimes(1);
+    expect(scanMocks.startGitHubAppScan).toHaveBeenCalledWith({ installationId: '12345', owner: 'Csisz', repo: 'shipseal', ref: 'main' });
+    expect(await screen.findByRole('heading', { name: /Understanding repository structure/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
+    expect(await screen.findByText('Project: shipseal')).toBeInTheDocument();
+    expect(screen.getByText('Intake skipped: true')).toBeInTheDocument();
+    expect(screen.getByText('Packages: []')).toBeInTheDocument();
+    expect(screen.getByText(/Agent mode:/)).not.toHaveTextContent('Agent mode: undefined');
+    expect(screen.getByText('Connection: 12345/Csisz/shipseal/main')).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: /Scan selected repository: Csisz\/shipseal/i }));
-    fireEvent.click(screen.getByRole('button', { name: /^Scan project$/i }));
+  it('keeps failure recovery usable and retries the registered source once', async () => {
+    scanMocks.failNext = true;
+    render(<MemoryRouter><Index /></MemoryRouter>);
 
-    expect(scanMocks.startGitHubAppScan).toHaveBeenCalledWith({
-      installationId: '12345',
-      owner: 'Csisz',
-      repo: 'shipseal',
-      ref: 'main',
-    });
+    fireEvent.click(screen.getByRole('button', { name: /Choose valid ZIP/i }));
+
+    expect(await screen.findByText('Synthetic scan failure')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Retry scan/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Choose another source/i })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: /Retry scan/i }));
+
+    expect(scanMocks.startScan).toHaveBeenCalledTimes(2);
     expect(screen.getByText(/The workspace is forming/i)).toBeInTheDocument();
+  });
+
+  it('keeps the sample project flow scan-free', () => {
+    render(<MemoryRouter><Index /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: /Try sample project/i }));
+
+    expect(screen.getByRole('heading', { name: /Understanding repository structure/i })).toBeInTheDocument();
+    expect(scanMocks.startScan).not.toHaveBeenCalled();
+    expect(scanMocks.startGitHubScan).not.toHaveBeenCalled();
+    expect(scanMocks.startGitHubAppScan).not.toHaveBeenCalled();
   });
 
   it('opens popup connect, receives postMessage, persists installation, retries and disconnects', async () => {
     const openMock = vi.spyOn(window, 'open').mockImplementation(() => null);
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({
-        status: 'ok',
-        repositories: [{
-          id: 1,
-          owner: 'Csisz',
-          name: 'shipseal',
-          fullName: 'Csisz/shipseal',
-          defaultBranch: 'main',
-          private: false,
-          htmlUrl: 'https://github.com/Csisz/shipseal',
-        }],
-      }),
+      json: async () => ({ status: 'ok', repositories: [{ id: 1, owner: 'Csisz', name: 'shipseal', fullName: 'Csisz/shipseal', defaultBranch: 'main', private: false, htmlUrl: 'https://github.com/Csisz/shipseal' }] }),
     });
     vi.stubGlobal('fetch', fetchMock);
-
-    render(
-      <MemoryRouter>
-        <Index />
-      </MemoryRouter>
-    );
+    render(<MemoryRouter><Index /></MemoryRouter>);
 
     fireEvent.click(screen.getByRole('button', { name: /^Connect GitHub$/i }));
     expect(openMock).toHaveBeenCalledWith('/api/github-app/login', 'shipseal-github-connect', expect.stringContaining('popup=yes'));
-
-    act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        origin: window.location.origin,
-        data: {
-          source: 'shipseal-github-connect',
-          status: 'ok',
-          installationId: '777',
-          installations: [{ id: '777', accountLogin: 'Csisz' }],
-        },
-      }));
-    });
+    act(() => window.dispatchEvent(new MessageEvent('message', {
+      origin: window.location.origin,
+      data: { source: 'shipseal-github-connect', status: 'ok', installationId: '777', installations: [{ id: '777', accountLogin: 'Csisz' }] },
+    })));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/repositories?installationId=777'));
     expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBe('777');
-    expect(await screen.findByRole('button', { name: /Scan selected repository: Csisz\/shipseal/i })).toBeInTheDocument();
-
     fireEvent.click(screen.getByRole('button', { name: /Retry repository listing/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-
     fireEvent.click(screen.getByRole('button', { name: /Disconnect GitHub/i }));
     expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBeNull();
-    expect(screen.queryByText('Installation: 777')).not.toBeInTheDocument();
   });
 
-  it('maps repository listing backend errors to actionable messages', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
+  it('maps repository listing backend errors to actionable recovery copy', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: false,
-      json: async () => ({
-        status: 'not_configured',
-        code: 'invalid_private_key_format',
-        message: 'raw backend message',
-      }),
-    });
-    vi.stubGlobal('fetch', fetchMock);
+      json: async () => ({ status: 'not_configured', code: 'invalid_private_key_format', message: 'raw backend message' }),
+    }));
     window.localStorage.setItem('shipseal.githubInstallationId', '999');
-
-    render(
-      <MemoryRouter>
-        <Index />
-      </MemoryRouter>
-    );
+    render(<MemoryRouter><Index /></MemoryRouter>);
 
     expect(await screen.findByText('GitHub App private key is missing or invalid in Vercel.')).toBeInTheDocument();
-    expect(screen.queryByText('Repository listing is not available yet.')).not.toBeInTheDocument();
-  });
-
-  it('keeps public GitHub URL import separate from GitHub Connect', () => {
-    render(
-      <MemoryRouter>
-        <Index />
-      </MemoryRouter>
-    );
-
-    expect(within(screen.getByLabelText('Scan setup progress')).getByText('Source').closest('li')).toHaveAttribute('aria-current', 'step');
-    expect(scanMocks.startGitHubScan).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /^Connect GitHub$/i })).toBeEnabled();
   });
 });

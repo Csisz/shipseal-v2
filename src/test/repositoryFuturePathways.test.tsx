@@ -106,9 +106,14 @@ function chooseFirstPrimary() {
 }
 
 describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
-  it('shows 3–5 Product Futures, selects nothing automatically, and keeps technical detail secondary', async () => {
+  it('makes the canvas primary, removes duplicate introduction, and keeps configuration secondary', async () => {
     const { container, overlay } = await renderPathways();
-    expect(screen.getByRole('heading', { name: 'Where should this product go next?' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Where should this product go next?' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-reveal-motion', 'topology-one-shot');
+    const configure = screen.getByText('Configure path').closest('details');
+    expect(configure).toHaveAttribute('data-secondary-surface', 'configure-path');
+    expect(configure).not.toHaveAttribute('open');
+    expect(container.querySelectorAll('[data-futures-mode-owner]')).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Make primary' })).toHaveLength(4);
     expect(overlay()?.candidates.filter(candidate => candidate.role === 'primary')).toHaveLength(0);
     expect(screen.queryByRole('complementary', { name: 'Future Pathways inspector' })).not.toBeInTheDocument();
@@ -163,9 +168,11 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     await waitFor(() => expect(overlay()?.supportCount).toBe(2));
     expect(screen.queryByRole('button', { name: 'Add supporting opportunity' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Replace a supporting goal' }));
-    expect(screen.getAllByRole('button', { name: 'Replace support 1' }).length).toBeGreaterThan(0);
+    const replacement = screen.getByRole('region', { name: 'Replace a supporting Product Future' });
+    const replacementButtons = within(replacement).getAllByRole('button', { name: /^Replace / });
+    expect(replacementButtons.length).toBeGreaterThan(0);
     const before = overlay()?.draftFingerprint;
-    fireEvent.click(screen.getAllByRole('button', { name: 'Replace support 1' })[0]);
+    fireEvent.click(replacementButtons[0]);
     await waitFor(() => expect(overlay()?.draftFingerprint).not.toBe(before));
     expect(overlay()?.supportCount).toBe(2);
   });
@@ -199,5 +206,91 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     expect(within(hero).queryByLabelText(/Search repository atlas or universe/i)).not.toBeInTheDocument();
     expect(within(hero).queryByRole('button', { name: /Universe 3D/i })).not.toBeInTheDocument();
     expect(hero.querySelector('canvas')).not.toBeInTheDocument();
+  });
+
+  it('preserves the deterministic repository-evidence fallback in the separated Futures surface', () => {
+    const report = futureReport();
+    render(<RepositoryFuturePathways
+      report={report}
+      universe={buildRepositoryUniverseModel(report)}
+      providerStatus={{ state: 'fallback', message: 'Using repository evidence fallback.', retryable: true, category: 'provider_unavailable' }}
+    />);
+
+    expect(screen.getByText('Repository evidence fallback')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Make primary' }).length).toBeGreaterThan(0);
+    expect(screen.queryByLabelText(/Search repository atlas or universe/i)).not.toBeInTheDocument();
+  });
+
+  it('composes the authoritative plan from explicit canvas actions while preserving the inspected camera', async () => {
+    const { overlay } = await renderPathways();
+    const first = overlay()!.candidates.find(candidate => candidate.role === 'candidate')!;
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`Candidate future goal: ${first.title}`, 'i') }));
+    const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
+    const camera = screen.getByTestId('repository-futures-camera');
+    const focusedTransform = camera.style.transform;
+
+    fireEvent.click(within(inspector).getByRole('button', { name: /Make primary/i }));
+    await waitFor(() => expect(overlay()?.candidates.find(candidate => candidate.goalId === first.goalId)?.role).toBe('primary'));
+    expect(camera.style.transform).toBe(focusedTransform);
+    expect(screen.getByLabelText('Live Future Plan summary')).toHaveTextContent(first.title);
+  });
+
+  it('keeps canvas and Configure path synchronized through one draft state', async () => {
+    const { overlay } = await renderPathways();
+    chooseFirstPrimary();
+    await waitFor(() => expect(overlay()?.phase).toBe('synthesis'));
+    const primary = overlay()!.candidates.find(candidate => candidate.role === 'primary')!;
+    expect(screen.getByRole('button', { name: new RegExp(`Primary future goal: ${primary.title}`, 'i') })).toHaveAttribute('data-neural-role', 'primary');
+
+    fireEvent.click(screen.getByText('Configure path'));
+    const composer = screen.getByText('Configure path').closest('details')!;
+    expect(composer).toHaveAttribute('open');
+    expect(within(composer).getByLabelText('Composed Future Path')).toHaveTextContent(primary.title);
+
+    const available = overlay()!.candidates.find(candidate => candidate.role === 'candidate')!;
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`Candidate future goal: ${available.title}`, 'i') }));
+    fireEvent.click(within(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).getByRole('button', { name: /Add as support/i }));
+    await waitFor(() => expect(overlay()?.candidates.find(candidate => candidate.goalId === available.goalId)?.role).toBe('supporting'));
+    expect(within(composer).getByLabelText('Composed Future Path')).toHaveTextContent(available.title);
+  });
+
+  it('persists save and restore semantics across canvas and DOM fallback views', async () => {
+    const { overlay } = await renderPathways();
+    chooseFirstPrimary();
+    await waitFor(() => expect(overlay()?.phase).toBe('synthesis'));
+    const available = overlay()!.candidates.find(candidate => candidate.role === 'candidate')!;
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`Candidate future goal: ${available.title}`, 'i') }));
+    fireEvent.click(within(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).getByRole('button', { name: 'Save for later' }));
+    await waitFor(() => expect(overlay()?.candidates.find(candidate => candidate.goalId === available.goalId)?.role).toBe('saved'));
+    expect(screen.getByRole('button', { name: new RegExp(`Saved future goal: ${available.title}`, 'i') })).toHaveAttribute('data-neural-role', 'saved');
+
+    fireEvent.click(screen.getByText('Configure path'));
+    fireEvent.click(screen.getByRole('button', { name: 'Deep Configuration' }));
+    expect(screen.getAllByRole('button', { name: 'Return to options' }).length).toBeGreaterThan(0);
+
+    fireEvent.click(within(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).getByRole('button', { name: /Return to options/i }));
+    await waitFor(() => expect(overlay()?.candidates.find(candidate => candidate.goalId === available.goalId)?.role).toBe('candidate'));
+  });
+
+  it('clears stale dependency focus when removing its only requiring support', async () => {
+    const { overlay } = await renderPathways();
+    chooseFirstPrimary();
+    fireEvent.click(await screen.findByRole('button', { name: 'Add supporting opportunity' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add support' })[0]);
+    await waitFor(() => expect(overlay()?.supportCount).toBe(1));
+    const support = overlay()!.candidates.find(candidate => candidate.role === 'supporting')!;
+    const supportOnlyDependency = overlay()!.dependencies.find(dependency => dependency.dependentGoalIds.length === 1 && dependency.dependentGoalIds[0] === support.goalId)!;
+    expect(supportOnlyDependency).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: new RegExp(`(?:Required|Existing) dependency: ${supportOnlyDependency.title}`, 'i') }));
+    expect(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).toHaveTextContent(supportOnlyDependency.title);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+    await waitFor(() => expect(overlay()?.dependencies.some(dependency => dependency.id === supportOnlyDependency.id)).toBe(false));
+    expect(screen.queryByRole('button', { name: new RegExp(`dependency: ${supportOnlyDependency.title}`, 'i') })).not.toBeInTheDocument();
+    const updatedInspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
+    expect(updatedInspector).toHaveTextContent(support.title);
+    expect(updatedInspector).not.toHaveTextContent(supportOnlyDependency.title);
   });
 });

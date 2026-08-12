@@ -61,6 +61,16 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
   ),
 }));
 
+vi.mock('@/components/agentready/result-dashboard/PostScanViewSelector', async () => {
+  const React = await import('react');
+  return {
+    PostScanViewSelector: ({ onSelect }: { onSelect: (view: 'universe') => void }) => {
+      React.useEffect(() => onSelect('universe'), [onSelect]);
+      return null;
+    },
+  };
+});
+
 vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
   default: ({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode, onSceneSettled, focusRequest }: {
     model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string; position: { x: number; y: number; z: number } }[] };

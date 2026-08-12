@@ -107,7 +107,9 @@ export {
   inspectRepositoryFutureDependencyImpact,
   removeRepositoryFutureSupportingGoal,
   replaceRepositoryFuturePrimary,
+  restoreRepositoryFutureAlternative,
   requestRepositoryFutureDependencyExclusion,
+  saveRepositoryFutureAlternative,
   synthesizeRepositoryFutureDraft,
 } from './synthesis.js';
 export {

@@ -9,7 +9,6 @@ import {
   GitBranch,
   LockKeyhole,
   Network,
-  Orbit,
   ShieldCheck,
   Sparkles,
 } from 'lucide-react';
@@ -27,6 +26,8 @@ import {
   inspectRepositoryFutureDependencyImpact,
   removeRepositoryFutureSupportingGoal,
   replaceRepositoryFuturePrimary,
+  restoreRepositoryFutureAlternative,
+  saveRepositoryFutureAlternative,
   synthesizeRepositoryFutureDraft,
   type RepositoryFutureCompatibilityState,
   type RepositoryFutureDraft,
@@ -44,6 +45,7 @@ import type {
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
 import { RepositoryFuturePathwaysStage } from './RepositoryFuturePathwaysStage';
+import { RepositoryFuturesNeuralCanvas } from './RepositoryFuturesNeuralCanvas';
 import { buildRepositoryFuturePathwaysGraph } from './repositoryFuturePathwaysGraph';
 
 interface RepositoryFuturePathwaysProps {
@@ -51,7 +53,7 @@ interface RepositoryFuturePathwaysProps {
   universe: RepositoryUniverseModel;
   productIntelligence?: RepositoryProductIntelligenceResult | null;
   providerStatus?: RepositoryIntelligenceProviderStatus;
-  onStageOverlayChange: (overlay: RepositoryFutureStageOverlay | null) => void;
+  onStageOverlayChange?: (overlay: RepositoryFutureStageOverlay | null) => void;
 }
 
 type RoleFilter = 'all' | 'selected' | 'saved' | 'available' | 'blocked';
@@ -59,6 +61,7 @@ type Focus = { kind: 'goal'; id: string } | { kind: 'dependency'; id: string } |
 
 export default function RepositoryFuturePathways({ report, universe, productIntelligence, providerStatus, onStageOverlayChange }: RepositoryFuturePathwaysProps) {
   const rootRef = useRef<HTMLElement | null>(null);
+  const composerRef = useRef<HTMLDetailsElement | null>(null);
   const [mode, setMode] = useState<RepositoryFuturePathwaysMode>('quick');
   const [draft, setDraft] = useState<RepositoryFutureDraft>();
   const [focus, setFocus] = useState<Focus>(null);
@@ -70,6 +73,9 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   const [originFilter, setOriginFilter] = useState<'all' | RepositoryFutureOrigin>('all');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const graph = useMemo(() => buildRepositoryFuturePathwaysGraph(report, universe, productIntelligence), [productIntelligence, report, universe]);
+  const previousGraphFingerprintRef = useRef(graph.fingerprint);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
   const quickPath = useMemo(() => buildRepositoryFutureQuickPathModel(graph, draft), [draft, graph]);
   const goalById = useMemo(() => new Map(graph.nodes
     .filter(node => node.kind === 'future-goal' && node.candidateId)
@@ -78,7 +84,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   const selectedGoalIds = useMemo(() => new Set(draft
     ? [draft.primaryGoal.goalId, ...draft.supportingGoals.map(goal => goal.goalId)]
     : []), [draft]);
-  const savedGoalIds = useMemo(() => new Set(draft?.savedAlternatives.map(item => item.goalId) || []), [draft]);
+  const savedGoalIds = useMemo(() => new Set(draft?.savedGoalIds || []), [draft]);
   const focusedCandidate = focus?.kind === 'goal' ? goalById.get(focus.id) : undefined;
   const focusedDependency = focus?.kind === 'dependency' && draft
     ? inspectRepositoryFutureDependencyImpact(draft, focus.id)
@@ -92,11 +98,16 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         : 'unavailable' as const;
 
   useEffect(() => {
+    const graphChanged = previousGraphFingerprintRef.current !== graph.fingerprint;
+    const replacedExistingDraft = graphChanged && Boolean(draftRef.current);
+    previousGraphFingerprintRef.current = graph.fingerprint;
     setDraft(undefined);
     setFocus(null);
     setTracePreviewId(undefined);
     setTracePinnedId(undefined);
-    setNotice('');
+    setNotice(replacedExistingDraft
+      ? 'Available Futures changed with new repository intelligence. The previous draft was cleared so ShipSeal does not silently reinterpret your selections.'
+      : '');
     setReplaceSupportGoalId(undefined);
   }, [graph.fingerprint]);
 
@@ -153,12 +164,31 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   const removeSupport = useCallback((goalId: string) => {
     if (!draft) return;
     const accepted = acceptResult(removeRepositoryFutureSupportingGoal(graph, draft, goalId), 'Supporting goal removed. Dependencies were recomputed from the remaining path.');
-    if (accepted && tracePinnedId === goalId) {
-      setTracePinnedId(undefined);
+    if (accepted) {
+      setTracePinnedId(goalId);
       setTracePreviewId(undefined);
-      setFocus(null);
+      setFocus({ kind: 'goal', id: goalId });
     }
-  }, [acceptResult, draft, graph, tracePinnedId]);
+  }, [acceptResult, draft, graph]);
+
+  const saveForLater = useCallback((goalId: string) => {
+    if (!draft) {
+      setNotice('Choose a primary future before saving alternatives for this plan.');
+      return;
+    }
+    if (acceptResult(saveRepositoryFutureAlternative(graph, draft, goalId), 'Future saved for later. It remains visible and does not count toward the active plan.')) {
+      setFocus({ kind: 'goal', id: goalId });
+      setTracePinnedId(goalId);
+    }
+  }, [acceptResult, draft, graph]);
+
+  const restoreOption = useCallback((goalId: string) => {
+    if (!draft) return;
+    if (acceptResult(restoreRepositoryFutureAlternative(graph, draft, goalId), 'Future returned to available options.')) {
+      setFocus({ kind: 'goal', id: goalId });
+      setTracePinnedId(goalId);
+    }
+  }, [acceptResult, draft, graph]);
 
   const replaceSupport = useCallback((removedGoalId: string) => {
     if (!draft || !replaceSupportGoalId) return;
@@ -210,13 +240,20 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     const primaryIsProduct = draft ? goalById.get(draft.primaryGoal.goalId)?.candidateClass === 'product-opportunity' : false;
     const compatibleIds = draft ? [...goalById.entries()]
       .filter(([goalId, candidate]) => !selectedGoalIds.has(goalId)
+        && !savedGoalIds.has(goalId)
         && ['compatible', 'compatible-with-review'].includes(compatibilityFor(goalId))
         && (!primaryIsProduct || candidate.candidateClass === 'product-opportunity'))
       .sort(([, left], [, right]) => compareRepositoryFutureCandidates(left, right))
       .slice(0, 5)
       .map(([goalId]) => goalId) : [];
+    const constrainedIds = draft ? [...goalById.keys()]
+      .filter(goalId => !selectedGoalIds.has(goalId)
+        && !savedGoalIds.has(goalId)
+        && ['blocked', 'incompatible'].includes(compatibilityFor(goalId)))
+      .sort()
+      .slice(0, 2) : [];
     const displayIds = draft
-      ? [draft.primaryGoal.goalId, ...draft.supportingGoals.map(goal => goal.goalId), ...compatibleIds, ...draft.savedAlternatives.map(item => item.goalId).slice(0, 2)]
+      ? [draft.primaryGoal.goalId, ...draft.supportingGoals.map(goal => goal.goalId), ...compatibleIds, ...draft.savedGoalIds, ...constrainedIds]
       : recommendedIds;
     return [...new Set(displayIds)].flatMap(goalId => {
       const candidate = goalById.get(goalId);
@@ -237,7 +274,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         ? 'primary' as const
         : draft?.supportingGoals.some(goal => goal.goalId === goalId)
           ? 'supporting' as const
-          : draft?.savedAlternatives.some(item => item.goalId === goalId)
+          : savedGoalIds.has(goalId)
             ? 'saved' as const
             : compatibilityFor(goalId) === 'blocked' || compatibilityFor(goalId) === 'incompatible'
               ? 'blocked' as const
@@ -251,6 +288,9 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         capabilityId: candidate.targetCapabilityId,
         confidence: candidate.confidence,
         compatibility: compatibilityFor(goalId),
+        compatibilityReasons: draft?.compatibilityMatrix.find(item => item.goalId === goalId)?.reasons || [],
+        eligibleAsPrimary: candidate.eligibility === 'eligible',
+        savedForLater: savedGoalIds.has(goalId),
         humanReviewRequired: candidate.humanReviewState === 'required',
         evidenceCount: candidate.evidence.length,
         mappedEvidenceCount: candidate.universeMappings.length,
@@ -268,7 +308,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         replaceableSupportGoalIds,
       }];
     });
-  }, [compatibilityFor, draft, goalById, graph, quickPath.primaryRecommendations.candidates, selectedGoalIds]);
+  }, [compatibilityFor, draft, goalById, graph, quickPath.primaryRecommendations.candidates, savedGoalIds, selectedGoalIds]);
   const universeProjection = useMemo(() => draft
     ? buildRepositoryFutureUniverseProjection({ universe, graph, draft })
     : undefined, [draft, graph, universe]);
@@ -302,12 +342,18 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     tracePinned: Boolean(tracePinnedId),
     supportCount: draft?.supportingGoals.length || 0,
     productIntelligenceState,
-    onModeChange: setMode,
+    notice,
+    onModeChange: nextMode => {
+      setMode(nextMode);
+      if (nextMode === 'deep' && composerRef.current) composerRef.current.open = true;
+    },
     onCandidateFocus: goalId => setFocus({ kind: 'goal', id: goalId }),
     onCandidateSelect: choosePrimary,
     onCandidateAddSupport: addSupport,
     onCandidateRemoveSupport: removeSupport,
     onCandidateReplaceSupport: replaceSupportDirect,
+    onCandidateSave: saveForLater,
+    onCandidateRestore: restoreOption,
     onDependencyFocus: dependencyId => setFocus({ kind: 'dependency', id: dependencyId }),
     onTracePreview: setTracePreviewId,
     onTracePin: id => {
@@ -321,11 +367,21 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       setTracePinnedId(undefined);
       setFocus(null);
     },
-    onOpenDomControls: () => rootRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' }),
-  }), [addSupport, choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, productIntelligenceState, removeSupport, replaceSupportDirect, stageCandidates, tracePinnedId, tracePreviewId, universeProjection]);
+    onOpenDomControls: () => {
+      if (composerRef.current) composerRef.current.open = true;
+      composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    },
+  }), [addSupport, choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, notice, productIntelligenceState, removeSupport, replaceSupportDirect, restoreOption, saveForLater, stageCandidates, tracePinnedId, tracePreviewId, universeProjection]);
 
-  useEffect(() => onStageOverlayChange(overlay), [onStageOverlayChange, overlay]);
-  useEffect(() => () => onStageOverlayChange(null), [onStageOverlayChange]);
+  useEffect(() => {
+    if (focus?.kind !== 'dependency' || !draft || draft.dependencies.some(dependency => dependency.id === focus.id)) return;
+    setFocus(null);
+    setTracePreviewId(undefined);
+    setTracePinnedId(undefined);
+  }, [draft, focus]);
+
+  useEffect(() => onStageOverlayChange?.(overlay), [onStageOverlayChange, overlay]);
+  useEffect(() => () => onStageOverlayChange?.(null), [onStageOverlayChange]);
 
   const deepCandidates = useMemo(() => [...goalById.entries()].filter(([goalId, candidate]) => {
     if (fitFilter !== 'all' && candidate.fit !== fitFilter) return false;
@@ -339,35 +395,20 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   }), [compatibilityFor, fitFilter, goalById, originFilter, roleFilter, savedGoalIds, selectedGoalIds]);
 
   return (
-    <section ref={rootRef} aria-labelledby="future-pathways-heading" className="scroll-mt-20 overflow-hidden rounded-[2rem] border border-primary/20 bg-[hsl(var(--universe-surface)/0.5)] shadow-[var(--shadow-md-semantic)]">
-      <div className="border-b border-primary/15 bg-[radial-gradient(circle_at_15%_0%,hsl(var(--primary)/0.13),transparent_38%)] p-5 md:p-7">
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 text-xs font-mono uppercase tracking-[0.16em] text-primary">
-              <Orbit className="h-4 w-4" aria-hidden="true" /> Future Pathways
-            </div>
-            <h2 id="future-pathways-heading" className="mt-2 font-display text-2xl font-semibold text-foreground md:text-3xl">Where should this product go next?</h2>
-            <p className="mt-2 max-w-xl text-sm text-muted-foreground">{productIntelligenceState === 'analysing'
-              ? 'ShipSeal is understanding the product and exploring its strongest next directions.'
-              : productIntelligenceState === 'enhanced'
-                ? 'Choose a strong direction, combine compatible supports, and see what the repository would need.'
-                : 'Repository-grounded improvements remain available while Product Intelligence is unavailable.'}</p>
-          </div>
-          <ModeToggle mode={mode} onChange={setMode} />
-        </div>
-        {graph.summary.limited && (
-          <div role="status" className="mt-4 flex gap-2 rounded-2xl border border-warning/35 bg-warning/10 p-3 text-sm text-warning">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            Recommendations are limited by the available scan evidence. Exploratory and blocked paths are not presented as safe plans.
-          </div>
-        )}
+    <section ref={rootRef} aria-label="Repository Future pathways" className="scroll-mt-20" data-futures-composition="canvas-first">
+      <div data-primary-surface="neural-field">
+        <RepositoryFuturesNeuralCanvas repositoryName={report.repoName} overlay={overlay} />
       </div>
 
-      <ProductUnderstandingDisclosure productIntelligence={productIntelligence} state={productIntelligenceState} />
-
-      <RepositoryFuturePathwaysStage overlay={overlay} />
-
-      <div className="grid gap-0">
+      <details ref={composerRef} data-secondary-surface="configure-path" className="group mt-4 scroll-mt-20 border-t border-border/40 bg-transparent">
+        <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:px-3">
+          <span>Configure path</span>
+          <span className="font-mono text-[9px] uppercase tracking-[0.12em] group-open:text-primary">Precision controls</span>
+        </summary>
+        <div className="border-t border-border/40">
+          <ProductUnderstandingDisclosure productIntelligence={productIntelligence} state={productIntelligenceState} />
+          <RepositoryFuturePathwaysStage overlay={overlay} />
+          <div className="grid gap-0">
         <div className="min-w-0 p-4 md:p-6">
           {mode === 'deep' && <PathComposer draft={draft} />}
           {notice && <div role="status" aria-live="polite" className="mt-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground">{notice}</div>}
@@ -403,6 +444,8 @@ export default function RepositoryFuturePathways({ report, universe, productInte
               onChoosePrimary={choosePrimary}
               onAddSupport={addSupport}
               onRemoveSupport={removeSupport}
+              onSave={saveForLater}
+              onRestore={restoreOption}
             />
           )}
 
@@ -413,6 +456,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
               onSavedFocus={id => setFocus({ kind: 'goal', id })}
               onSavedPrimary={choosePrimary}
               onSavedSupport={addSupport}
+              onSavedRestore={restoreOption}
             />
           )}
         </div>
@@ -425,7 +469,9 @@ export default function RepositoryFuturePathways({ report, universe, productInte
           onChoosePrimary={choosePrimary}
           onAddSupport={addSupport}
         />}
-      </div>
+          </div>
+        </div>
+      </details>
     </section>
   );
 }
@@ -436,7 +482,7 @@ function ProductUnderstandingDisclosure({ productIntelligence, state }: {
 }) {
   const understanding = productIntelligence?.understanding;
   return (
-    <details className="group border-b border-primary/10 bg-background/20 px-5 py-3 md:px-7">
+    <details className="group border-b border-border/35 bg-background/10 px-4 py-3 md:px-6">
       <summary className="cursor-pointer list-none text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
         <span className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <span className="min-w-0"><span>What ShipSeal understood</span>{understanding && <span className="ml-2 hidden max-w-xl truncate text-xs font-normal text-muted-foreground md:inline">{understanding.productSummary.statement}</span>}</span>
@@ -467,18 +513,6 @@ function ProductUnderstandingDisclosure({ productIntelligence, state }: {
           : 'Repository improvement opportunities remain available, but ShipSeal is not presenting them as equivalent to strategic user-facing Product Opportunities.'}</p>
       )}
     </details>
-  );
-}
-
-function ModeToggle({ mode, onChange }: { mode: RepositoryFuturePathwaysMode; onChange: (mode: RepositoryFuturePathwaysMode) => void }) {
-  return (
-    <div role="group" aria-label="Future Pathways mode" className="inline-flex min-h-11 rounded-xl border border-border/60 bg-background/50 p-1">
-      {(['quick', 'deep'] as const).map(value => (
-        <button key={value} type="button" aria-pressed={mode === value} onClick={() => onChange(value)} className={`min-h-9 rounded-lg px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${mode === value ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-          {value === 'quick' ? 'Quick Path' : 'Deep Configuration'}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -518,7 +552,7 @@ function QuickPath({ draft, replaceSupportGoalId, onReplaceSupport, onCancelRepl
   );
 }
 
-function DeepConfiguration({ candidates, draft, selectedGoalIds, savedGoalIds, fitFilter, originFilter, roleFilter, compatibilityFor, onFitFilter, onOriginFilter, onRoleFilter, onFocus, onChoosePrimary, onAddSupport, onRemoveSupport }: {
+function DeepConfiguration({ candidates, draft, selectedGoalIds, savedGoalIds, fitFilter, originFilter, roleFilter, compatibilityFor, onFitFilter, onOriginFilter, onRoleFilter, onFocus, onChoosePrimary, onAddSupport, onRemoveSupport, onSave, onRestore }: {
   candidates: Array<[string, RepositoryFutureNormalizedCandidate]>;
   draft?: RepositoryFutureDraft;
   selectedGoalIds: Set<string>;
@@ -534,6 +568,8 @@ function DeepConfiguration({ candidates, draft, selectedGoalIds, savedGoalIds, f
   onChoosePrimary: (goalId: string) => void;
   onAddSupport: (goalId: string) => void;
   onRemoveSupport: (goalId: string) => void;
+  onSave: (goalId: string) => void;
+  onRestore: (goalId: string) => void;
 }) {
   return (
     <section aria-labelledby="deep-configuration-heading" className="mt-5">
@@ -560,7 +596,12 @@ function DeepConfiguration({ candidates, draft, selectedGoalIds, savedGoalIds, f
                 </button>
                 <div className="flex flex-wrap gap-2">
                   {!primary && <Button type="button" size="sm" variant="outline" className="min-h-11" disabled={blocked} onClick={() => onChoosePrimary(goalId)}>Make primary</Button>}
-                  {support ? <Button type="button" size="sm" variant="ghost" className="min-h-11" onClick={() => onRemoveSupport(goalId)}>Remove support</Button> : draft && !primary && <Button type="button" size="sm" className="min-h-11" disabled={blocked} onClick={() => onAddSupport(goalId)}>Use as support</Button>}
+                  {support
+                    ? <Button type="button" size="sm" variant="ghost" className="min-h-11" onClick={() => onRemoveSupport(goalId)}>Remove support</Button>
+                    : savedGoalIds.has(goalId)
+                      ? <Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => onRestore(goalId)}>Return to options</Button>
+                      : draft && !primary && <Button type="button" size="sm" className="min-h-11" disabled={blocked} onClick={() => onAddSupport(goalId)}>Use as support</Button>}
+                  {draft && !selected && !savedGoalIds.has(goalId) && <Button type="button" size="sm" variant="ghost" className="min-h-11" onClick={() => onSave(goalId)}>Save for later</Button>}
                 </div>
               </div>
               {blocked && <p className="mt-2 flex items-center gap-2 text-xs text-warning"><LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />This branch remains inspectable but cannot join the current path: {REPOSITORY_FUTURE_COMPATIBILITY_LABELS[compatibility]}.</p>}
@@ -576,7 +617,8 @@ function Filter({ label, value, options, onChange }: { label: string; value: str
   return <label className="text-xs font-medium text-muted-foreground">{label}<select value={value} onChange={event => onChange(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}</select></label>;
 }
 
-function DraftDetails({ draft, onDependencyFocus, onSavedFocus, onSavedPrimary, onSavedSupport }: { draft: RepositoryFutureDraft; onDependencyFocus: (id: string) => void; onSavedFocus: (id: string) => void; onSavedPrimary: (id: string) => void; onSavedSupport: (id: string) => void }) {
+function DraftDetails({ draft, onDependencyFocus, onSavedFocus, onSavedPrimary, onSavedSupport, onSavedRestore }: { draft: RepositoryFutureDraft; onDependencyFocus: (id: string) => void; onSavedFocus: (id: string) => void; onSavedPrimary: (id: string) => void; onSavedSupport: (id: string) => void; onSavedRestore: (id: string) => void }) {
+  const explicitlySaved = draft.savedAlternatives.filter(item => item.savedForLater);
   return (
     <div className="mt-5 space-y-3">
       <div className="rounded-2xl border border-primary/20 bg-primary/[0.045] px-4 py-3">
@@ -599,8 +641,9 @@ function DraftDetails({ draft, onDependencyFocus, onSavedFocus, onSavedPrimary, 
             <p className="mt-2 text-xs text-muted-foreground">Metadata previews only. No files or prepared artifacts have been generated.</p>
           </section>
           <section aria-labelledby="draft-alternatives-heading">
-            <h4 id="draft-alternatives-heading" className="text-sm font-semibold">Saved for later · {draft.savedAlternatives.length}</h4>
-            <div className="mt-3 space-y-2">{draft.savedAlternatives.slice(0, 12).map(saved => <div key={saved.goalId} className="rounded-xl border border-dashed border-border/45 bg-background/20 p-3"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><button type="button" className="min-h-11 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onSavedFocus(saved.goalId)}>{saved.title}<span className="block text-xs font-normal text-muted-foreground">{REPOSITORY_FUTURE_COMPATIBILITY_LABELS[saved.compatibility]} · not selected · not prepared</span></button><div className="flex gap-2"><Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => onSavedPrimary(saved.goalId)}>Make primary</Button><Button type="button" size="sm" variant="ghost" className="min-h-11" disabled={!['compatible', 'compatible-with-review'].includes(saved.compatibility)} onClick={() => onSavedSupport(saved.goalId)}>Use as support</Button></div></div></div>)}</div>
+            <h4 id="draft-alternatives-heading" className="text-sm font-semibold">Saved for later · {explicitlySaved.length}</h4>
+            <div className="mt-3 space-y-2">{explicitlySaved.map(saved => <div key={saved.goalId} className="rounded-xl border border-dashed border-border/45 bg-background/20 p-3"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><button type="button" className="min-h-11 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onSavedFocus(saved.goalId)}>{saved.title}<span className="block text-xs font-normal text-muted-foreground">{REPOSITORY_FUTURE_COMPATIBILITY_LABELS[saved.compatibility]} · intentionally parked · not prepared</span></button><div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => onSavedRestore(saved.goalId)}>Return to options</Button><Button type="button" size="sm" variant="outline" className="min-h-11" onClick={() => onSavedPrimary(saved.goalId)}>Make primary</Button><Button type="button" size="sm" variant="ghost" className="min-h-11" disabled={!['compatible', 'compatible-with-review'].includes(saved.compatibility)} onClick={() => onSavedSupport(saved.goalId)}>Use as support</Button></div></div></div>)}</div>
+            {!explicitlySaved.length && <p className="mt-2 text-xs text-muted-foreground">No Futures are intentionally parked.</p>}
           </section>
           <section aria-labelledby="draft-tradeoffs-heading">
             <h4 id="draft-tradeoffs-heading" className="text-sm font-semibold">Trade-offs, review and conflicts</h4>

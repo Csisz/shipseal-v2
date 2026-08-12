@@ -11,10 +11,9 @@ export function RepositoryFuturePathwaysStage({ overlay }: { overlay: Repository
   const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
   const supports = overlay.candidates.filter(candidate => candidate.role === 'supporting');
   const compatibleCandidates = useMemo(() => overlay.candidates
-    .filter(candidate => ['candidate', 'saved'].includes(candidate.role)
-      && (overlay.supportCount >= 2
-        ? Boolean(candidate.replaceableSupportGoalIds?.length)
-        : ['compatible', 'compatible-with-review'].includes(candidate.compatibility)))
+    .filter(candidate => overlay.supportCount >= 2
+      ? ['candidate', 'blocked'].includes(candidate.role) && Boolean(candidate.replaceableSupportGoalIds?.length)
+      : candidate.role === 'candidate' && ['compatible', 'compatible-with-review'].includes(candidate.compatibility))
     .slice(0, 5), [overlay.candidates, overlay.supportCount]);
   const initialCandidates = overlay.candidates.filter(candidate => candidate.role === 'candidate').slice(0, 5);
   const activeCandidate = overlay.candidates.find(candidate => candidate.goalId === activeId);

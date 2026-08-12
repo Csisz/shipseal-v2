@@ -1,12 +1,11 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { GitBranch, Github, Search, Upload, FileArchive, X, Plug, ShieldCheck, Play } from 'lucide-react';
+import { GitBranch, Github, Search, Upload, FileArchive, Plug, ShieldCheck, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { formatFileSize, validateZipUpload } from '@/lib/uploadValidation';
+import { validateZipUpload } from '@/lib/uploadValidation';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import { getGitHubAppClientConfig, type GitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
@@ -51,7 +50,6 @@ export function UploadDropzone({
   const appConfig = useMemo(() => githubAppConfig || getGitHubAppClientConfig(), [githubAppConfig]);
   const [mode, setMode] = useState<'github-app' | 'github' | 'zip'>('github-app');
   const [dragging, setDragging] = useState(false);
-  const [selected, setSelected] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [githubUrl, setGithubUrl] = useState('');
   const [githubBranch, setGithubBranch] = useState('');
@@ -73,12 +71,11 @@ export function UploadDropzone({
     const validation = validateZipUpload(f);
     if (!validation.valid) {
       setError(validation.error || 'That ZIP did not pass validation. Choose a repository .zip file under the local size limit.');
-      setSelected(null);
       return;
     }
     setError(null);
-    setSelected(f);
-  }, []);
+    onFile(f);
+  }, [onFile]);
 
   useEffect(() => {
     if (selectedRepositoryFullName && !repositories.some(repository => repository.fullName === selectedRepositoryFullName)) {
@@ -100,15 +97,6 @@ export function UploadDropzone({
       return haystack.includes(query);
     });
   }, [repositories, repositorySearch]);
-
-  const selectedRepository = useMemo(
-    () => repositories.find(repository => repository.fullName === selectedRepositoryFullName),
-    [repositories, selectedRepositoryFullName]
-  );
-
-  const confirmGitHubRepository = useCallback(() => {
-    if (selectedRepository) onGitHubAppRepositorySelect?.(selectedRepository);
-  }, [onGitHubAppRepositorySelect, selectedRepository]);
 
   const onDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -231,7 +219,11 @@ export function UploadDropzone({
                 </div>
                 <Select
                   value={selectedRepositoryFullName}
-                  onValueChange={value => setSelectedRepositoryFullName(value)}
+                  onValueChange={value => {
+                    setSelectedRepositoryFullName(value);
+                    const repository = repositories.find(candidate => candidate.fullName === value);
+                    if (repository) onGitHubAppRepositorySelect?.(repository);
+                  }}
                 >
                   <SelectTrigger aria-label="Select repository" className={shipSealSelectTriggerClass}>
                     <SelectValue placeholder={filteredRepositories.length ? 'Choose a repository' : 'No matching repositories'} />
@@ -255,31 +247,6 @@ export function UploadDropzone({
                 {filteredRepositories.length === 0 && (
                   <div className="rounded-lg border border-border/60 bg-secondary/20 px-3 py-2 text-xs text-muted-foreground">
                     No repositories match that search.
-                  </div>
-                )}
-                {selectedRepository && (
-                  <div className="rounded-xl border border-primary/30 bg-primary/10 p-4">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-foreground">{selectedRepository.fullName}</div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <Badge variant="outline" className="border-border/70 bg-background/25 text-[10px]">
-                            {selectedRepository.private ? 'Private' : 'Public'}
-                          </Badge>
-                          <span className="inline-flex items-center gap-1">
-                            <GitBranch className="h-3 w-3" /> {selectedRepository.defaultBranch || 'default branch'}
-                          </span>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        onClick={confirmGitHubRepository}
-                        disabled={disabled}
-                        className="bg-gradient-primary border-0 shadow-glow hover:opacity-90 sm:shrink-0"
-                      >
-                        Scan selected repository
-                      </Button>
-                    </div>
                   </div>
                 )}
               </div>
@@ -345,11 +312,9 @@ export function UploadDropzone({
           <div className="text-xs text-muted-foreground/70 mt-4 max-w-md">
             ShipSeal does not execute uploaded code. Scanning runs in your browser on structure and metadata only.
           </div>
-          {!selected && (
-            <div className="mt-4 rounded-lg border border-border/60 bg-secondary/25 px-3 py-2 text-xs text-muted-foreground">
-              No file selected yet. Choose a repository ZIP when you are ready.
-            </div>
-          )}
+          <div className="mt-4 rounded-lg border border-border/60 bg-secondary/25 px-3 py-2 text-xs text-muted-foreground">
+            Choosing a valid repository ZIP starts the scan immediately.
+          </div>
           <input
             ref={inputRef}
             id="agentready-file"
@@ -422,27 +387,6 @@ export function UploadDropzone({
         </div>
       )}
 
-      {selected && (
-        <div className="mt-4 glass rounded-xl p-4 flex items-center gap-3 animate-fade-in">
-          <div className="h-10 w-10 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center">
-            <FileArchive className="h-5 w-5 text-primary-glow" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium truncate">{selected.name}</div>
-            <div className="text-xs text-muted-foreground">{formatFileSize(selected.size)} - validated ZIP</div>
-          </div>
-          <Button
-            variant="ghost" size="icon" type="button"
-            aria-label="Remove selected ZIP"
-            onClick={() => { setSelected(null); if (inputRef.current) inputRef.current.value = ''; }}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-          <Button variant="default" onClick={() => selected && onFile(selected)} disabled={disabled}>
-            Analyze repository
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

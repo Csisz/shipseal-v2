@@ -4,7 +4,6 @@ import { Landing } from '@/components/agentready/Landing';
 import { UploadDropzone } from '@/components/agentready/UploadDropzone';
 import { ScanProgress } from '@/components/agentready/ScanProgress';
 import { IntelligenceReveal } from '@/components/agentready/IntelligenceReveal';
-import { ProjectIntakeForm } from '@/components/agentready/ProjectIntakeForm';
 import { SurfaceState } from '@/components/agentready/SurfaceState';
 import { buildSampleReport } from '@/lib/readiness';
 import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
@@ -13,17 +12,13 @@ import type { AgentOperatingModeId, ReadinessReport, ScanHistoryItem } from '@/l
 import { toast } from '@/hooks/use-toast';
 import { useRepoScan } from '@/hooks/useRepoScan';
 import type { ProjectIntake } from '@/lib/intake';
-import { createDefaultProjectIntake, hasMeaningfulProjectContext } from '@/lib/intake';
+import { createDefaultProjectIntake } from '@/lib/intake';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
 import { Button } from '@/components/ui/button';
-import { PackageCards } from '@/components/agentready/PackageCards';
-import { FULL_PACKAGE_ID, getShipSealPackage, resolveSelectedPackages, type ShipSealPackageId } from '@/lib/packages';
-import { AGENT_OPERATING_MODES, DEFAULT_AGENT_OPERATING_MODE, selectionUsesAgentDevelopment } from '@/lib/agentOperatingMode';
+import { DEFAULT_AGENT_OPERATING_MODE } from '@/lib/agentOperatingMode';
 import { getGitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
-import { ChevronDown, FileText, FolderArchive, Sparkles } from 'lucide-react';
-import { resolveDeliveryPackFocus } from '@/lib/deliveryPack';
 import type { RepositoryVerificationBaseline, WorkspaceStoryChapterId } from '@/lib/workspace';
 import { validateRepositoryIntelligenceVerificationBaseline, type RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
 import { getScan } from '@/lib/persistence';
@@ -125,7 +120,6 @@ const Index = () => {
   const [sampleReport, setSampleReport] = useState<ReadinessReport | null>(null);
   const [history, setHistory] = useState<ScanHistoryItem[]>([]);
   const [pendingSource, setPendingSource] = useState<PendingSource | null>(null);
-  const [pendingIntake, setPendingIntake] = useState<ProjectIntake>(() => createDefaultProjectIntake());
   const [selectedPackages, setSelectedPackages] = useState<string[]>([]);
   const [agentOperatingMode, setAgentOperatingMode] = useState<AgentOperatingModeId>(DEFAULT_AGENT_OPERATING_MODE);
   const [submittedIntake, setSubmittedIntake] = useState<ProjectIntake | undefined>();
@@ -141,6 +135,7 @@ const Index = () => {
   const [verificationBaseline, setVerificationBaseline] = useState<RepositoryVerificationBaseline | null>(null);
   const savedReportKey = useRef<string | null>(null);
   const lastError = useRef<string | null>(null);
+  const scanStartInFlight = useRef(false);
   const scanSectionRef = useRef<HTMLDivElement>(null);
 
   const activeReport = sampleReport || scan.report;
@@ -186,6 +181,12 @@ const Index = () => {
     if (!isScanning) return;
     scrollWindowToTop('auto');
   }, [isScanning]);
+
+  useEffect(() => {
+    if (scan.status === 'failed' || scan.status === 'cancelled' || scan.status === 'idle') {
+      scanStartInFlight.current = false;
+    }
+  }, [scan.status]);
 
   const prepareSampleRepositoryIntelligenceReview = useCallback(async () => {
     const { buildRepositoryIntelligenceArtifactReview } = await import('@/lib/repositoryIntelligence/repositoryIntelligenceReview');
@@ -290,6 +291,7 @@ const Index = () => {
     const key = `${scan.report.repoName}-${scan.report.scannedAt}`;
     if (savedReportKey.current === key) return;
     savedReportKey.current = key;
+    setIntelligenceReveal({ key, visible: true });
     setHistory(saveScanHistory(scan.report));
     queueMicrotask(() => scrollWindowToTop('smooth'));
   }, [scan.report]);
@@ -329,11 +331,8 @@ const Index = () => {
     scanSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, []);
 
-  const togglePackage = useCallback((id: string) => {
-    setSelectedPackages([id]);
-  }, []);
-
   const handleNavAnchor = useCallback((href: string) => {
+    scanStartInFlight.current = false;
     scan.resetScan();
     setSampleReport(null);
     setPendingSource(null);
@@ -353,6 +352,7 @@ const Index = () => {
   }, [scan]);
 
   const handleHome = useCallback(() => {
+    scanStartInFlight.current = false;
     scan.resetScan();
     setSampleReport(null);
     setPendingSource(null);
@@ -366,42 +366,50 @@ const Index = () => {
     window.setTimeout(() => scrollWindowToTop('smooth'), 0);
   }, [scan]);
 
-  const handleFile = useCallback((file: File) => {
+  const beginScanForSource = useCallback((source: PendingSource) => {
+    if (scanStartInFlight.current) return;
+    scanStartInFlight.current = true;
+
     setSampleReport(null);
     setIntelligenceReveal(null);
     savedReportKey.current = null;
     lastError.current = null;
+    setPendingSource(source);
+    setSubmittedIntake(createDefaultProjectIntake(source.projectName));
+    setSubmittedIntakeSkipped(true);
+
+    if (source.type === 'zip') {
+      void scan.startScan(source.file);
+    } else if (source.type === 'github-app') {
+      void scan.startGitHubAppScan({
+        installationId: source.connection.installationId || '',
+        owner: source.connection.owner || '',
+        repo: source.connection.repo || '',
+        ref: source.branch || source.connection.defaultBranch,
+      });
+    } else {
+      void scan.startGitHubScan(source.url, source.branch);
+    }
+  }, [scan]);
+
+  const handleFile = useCallback((file: File) => {
     const projectName = file.name.replace(/\.zip$/i, '') || 'repository';
-    setPendingSource({ type: 'zip', file, projectName });
-    setPendingIntake(createDefaultProjectIntake(projectName));
-    setSubmittedIntake(undefined);
-    setSubmittedIntakeSkipped(false);
-  }, []);
+    beginScanForSource({ type: 'zip', file, projectName });
+  }, [beginScanForSource]);
 
   const handleGitHubImport = useCallback((url: string, branch?: string) => {
-    setSampleReport(null);
-    setIntelligenceReveal(null);
-    savedReportKey.current = null;
-    lastError.current = null;
     const projectName = githubProjectName(url);
-    setPendingSource({ type: 'github', url, branch, projectName });
-    setPendingIntake(createDefaultProjectIntake(projectName));
-    setSubmittedIntake(undefined);
-    setSubmittedIntakeSkipped(false);
-  }, []);
+    beginScanForSource({ type: 'github', url, branch, projectName });
+  }, [beginScanForSource]);
 
   const handleGitHubAppRepository = useCallback((repository: GitHubAppRepository) => {
-    setSampleReport(null);
-    setIntelligenceReveal(null);
-    savedReportKey.current = null;
-    lastError.current = null;
     const connection = createConnectedGitHubConnection({
       owner: repository.owner,
       repo: repository.name,
       defaultBranch: repository.defaultBranch,
       installationId: githubInstallationId,
     });
-    setPendingSource({
+    beginScanForSource({
       type: 'github-app',
       url: `https://github.com/${repository.fullName}`,
       branch: repository.defaultBranch,
@@ -409,10 +417,7 @@ const Index = () => {
       connection,
       isPrivate: repository.private,
     });
-    setPendingIntake(createDefaultProjectIntake(repository.name));
-    setSubmittedIntake(undefined);
-    setSubmittedIntakeSkipped(false);
-  }, [githubInstallationId]);
+  }, [beginScanForSource, githubInstallationId]);
 
   const handleGitHubConnect = useCallback(() => {
     const config = getGitHubAppClientConfig();
@@ -444,33 +449,12 @@ const Index = () => {
     loadRepositories(installationId);
   }, [loadRepositories]);
 
-  const startPendingScan = useCallback(() => {
-    if (!pendingSource) return;
-    const hasProjectContext = hasMeaningfulProjectContext(pendingIntake, pendingSource.projectName);
-    const intake = hasProjectContext ? pendingIntake : createDefaultProjectIntake(pendingSource.projectName);
-
-    setSubmittedIntake(intake);
-    setSubmittedIntakeSkipped(!hasProjectContext);
-    setSampleReport(null);
-    setIntelligenceReveal(null);
-    savedReportKey.current = null;
-    lastError.current = null;
-
-    if (pendingSource.type === 'zip') {
-      void scan.startScan(pendingSource.file);
-    } else if (pendingSource.type === 'github-app') {
-      void scan.startGitHubAppScan({
-        installationId: pendingSource.connection.installationId || '',
-        owner: pendingSource.connection.owner || '',
-        repo: pendingSource.connection.repo || '',
-        ref: pendingSource.connection.defaultBranch,
-      });
-    } else {
-      void scan.startGitHubScan(pendingSource.url, pendingSource.branch);
-    }
-  }, [pendingIntake, pendingSource, scan]);
+  const retryPendingScan = useCallback(() => {
+    if (pendingSource) beginScanForSource(pendingSource);
+  }, [beginScanForSource, pendingSource]);
 
   const handleSample = useCallback(() => {
+    scanStartInFlight.current = false;
     scan.resetScan();
     setPendingSource(null);
     setSelectedPackages([]);
@@ -487,6 +471,7 @@ const Index = () => {
   }, [scan]);
 
   const reset = useCallback(() => {
+    scanStartInFlight.current = false;
     scan.resetScan();
     setSampleReport(null);
     setPendingSource(null);
@@ -594,52 +579,32 @@ const Index = () => {
                       ? 'The repository was not changed. You can restart when ready.'
                       : 'ShipSeal could not finish this source. Retry it or choose another source.'}
                     action={pendingSource
-                      ? <Button type="button" size="sm" onClick={startPendingScan}>Retry scan</Button>
+                      ? <Button type="button" size="sm" onClick={retryPendingScan}>Retry scan</Button>
                       : undefined}
-                    fallback={<Button type="button" size="sm" variant="outline" onClick={() => { scan.resetScan(); setPendingSource(null); }}>Choose another source</Button>}
+                    fallback={<Button type="button" size="sm" variant="outline" onClick={() => { scanStartInFlight.current = false; scan.resetScan(); setPendingSource(null); }}>Choose another source</Button>}
                     details={scan.status === 'failed' ? scan.error : undefined}
                     className="mb-4"
                   />
                 )}
-                {pendingSource ? (
-                  <ProjectContextStep
-                    sourceType={pendingSource.type === 'zip' ? 'ZIP upload' : pendingSource.type === 'github-app' ? 'Connected GitHub repository' : 'Public GitHub repository'}
-                    sourceLabel={pendingSource.type === 'zip' ? pendingSource.file.name : pendingSource.url}
-                    intake={pendingIntake}
-                    onChange={setPendingIntake}
-                    selectedPackages={selectedPackages}
-                    agentOperatingMode={agentOperatingMode}
-                    onAgentOperatingModeChange={setAgentOperatingMode}
-                    onTogglePackage={togglePackage}
-                    onBack={() => setPendingSource(null)}
-                    onContinue={startPendingScan}
-                  />
-                ) : (
-                  <>
-                    <div className="mb-5">
-                      <FlowSteps activeStep={1} />
-                    </div>
-                    <UploadDropzone
-                      onFile={handleFile}
-                      onGitHubImport={handleGitHubImport}
-                      githubInstallationId={githubInstallationId}
-                      repositoryListStatus={repositoryListStatus}
-                      repositories={githubRepositories}
-                      githubInstallations={githubInstallations}
-                      repositoryListMessage={repositoryListMessage || (githubSetupAction ? `GitHub setup action: ${githubSetupAction}` : '')}
-                      onGitHubAppRepositorySelect={handleGitHubAppRepository}
-                      onGitHubConnect={handleGitHubConnect}
-                      onGitHubInstall={handleGitHubInstall}
-                      onGitHubDisconnect={handleGitHubDisconnect}
-                      onGitHubRepositoryRetry={handleGitHubRepositoryRetry}
-                      onGitHubInstallationSelect={handleGitHubInstallationSelect}
-                      onSampleReport={handleSample}
-                    />
-                    <p className="mt-3 text-center text-xs text-muted-foreground">
-                      Tip: leave out <span className="font-mono text-foreground/80">node_modules</span>, <span className="font-mono text-foreground/80">dist</span> and <span className="font-mono text-foreground/80">build</span> folders for the fastest scan.
-                    </p>
-                  </>
-                )}
+                <UploadDropzone
+                  onFile={handleFile}
+                  onGitHubImport={handleGitHubImport}
+                  githubInstallationId={githubInstallationId}
+                  repositoryListStatus={repositoryListStatus}
+                  repositories={githubRepositories}
+                  githubInstallations={githubInstallations}
+                  repositoryListMessage={repositoryListMessage || (githubSetupAction ? `GitHub setup action: ${githubSetupAction}` : '')}
+                  onGitHubAppRepositorySelect={handleGitHubAppRepository}
+                  onGitHubConnect={handleGitHubConnect}
+                  onGitHubInstall={handleGitHubInstall}
+                  onGitHubDisconnect={handleGitHubDisconnect}
+                  onGitHubRepositoryRetry={handleGitHubRepositoryRetry}
+                  onGitHubInstallationSelect={handleGitHubInstallationSelect}
+                  onSampleReport={handleSample}
+                />
+                <p className="mt-3 text-center text-xs text-muted-foreground">
+                  Tip: leave out <span className="font-mono text-foreground/80">node_modules</span>, <span className="font-mono text-foreground/80">dist</span> and <span className="font-mono text-foreground/80">build</span> folders for the fastest scan.
+                </p>
               </div>
             }
           />
@@ -656,302 +621,6 @@ function githubProjectName(url: string) {
   } catch {
     return 'repository';
   }
-}
-
-function ProjectContextStep({
-  sourceType,
-  sourceLabel,
-  intake,
-  onChange,
-  selectedPackages,
-  agentOperatingMode,
-  onAgentOperatingModeChange,
-  onTogglePackage,
-  onBack,
-  onContinue,
-}: {
-  sourceType: string;
-  sourceLabel: string;
-  intake: ProjectIntake;
-  onChange: (value: ProjectIntake) => void;
-  selectedPackages: string[];
-  agentOperatingMode: AgentOperatingModeId;
-  onAgentOperatingModeChange: (mode: AgentOperatingModeId) => void;
-  onTogglePackage: (id: string) => void;
-  onBack: () => void;
-  onContinue: () => void;
-}) {
-  const effectivePackages = resolveSelectedPackages(selectedPackages);
-  const selectedGoal = getShipSealPackage(effectivePackages[0]);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-
-  return (
-    <div className="space-y-6">
-      <FlowSteps activeStep={2} />
-
-      <div className="glass rounded-2xl p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Project Source</div>
-            <div className="mt-2 text-sm text-muted-foreground">{sourceType}</div>
-            <div className="mt-1 break-all font-medium text-foreground/90">{sourceLabel}</div>
-          </div>
-          <Button type="button" variant="outline" onClick={onBack} className="border-border/60 sm:shrink-0">
-            Change project
-          </Button>
-        </div>
-      </div>
-
-      <div className="glass rounded-2xl p-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="max-w-2xl">
-            <div className="text-xs font-mono uppercase tracking-wider text-primary-glow">Ready to scan</div>
-            <h2 className="mt-1 font-display text-2xl font-semibold">Understand this repository</h2>
-            <p className="mt-2 text-sm text-muted-foreground">One scan forms the repository workspace. Product directions emerge after ShipSeal understands the current system.</p>
-          </div>
-          <div className="shrink-0 rounded-full border border-primary/35 bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary-glow">Full workspace by default</div>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-border/60 bg-secondary/15">
-          <button
-            type="button"
-            onClick={() => setAdvancedOpen(open => !open)}
-            aria-expanded={advancedOpen}
-            className="flex min-h-12 w-full items-center justify-between gap-3 px-5 py-4 text-left text-sm font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
-          >
-            <span><span className="block text-foreground">Advanced options</span><span className="mt-0.5 block text-xs font-normal">Delivery focus and optional project context</span></span>
-            <ChevronDown className={`h-4 w-4 shrink-0 transition-transform motion-reduce:transition-none ${advancedOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
-          </button>
-          {advancedOpen && (
-            <div className="space-y-5 border-t border-border/50 p-5">
-              <section aria-labelledby="delivery-focus-heading" className="rounded-2xl border border-border/50 bg-background/20 p-4">
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <div><div className="text-[10px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Optional delivery preference</div><h3 id="delivery-focus-heading" className="mt-1 font-semibold">Focus the generated package</h3></div>
-                  {selectedGoal && <span className="w-fit rounded-full border border-primary/35 bg-primary/10 px-2.5 py-1 text-[10px] font-medium text-primary-glow">{selectedGoal.id === FULL_PACKAGE_ID ? 'Full Workspace Analysis' : selectedGoal.title}</span>}
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">This changes delivery emphasis, not what ShipSeal can understand or which Future Path you can compose later.</p>
-                <div className="mt-4"><PackageCards variant="select" selected={effectivePackages} onToggle={onTogglePackage} /></div>
-              </section>
-              {selectionUsesAgentDevelopment(effectivePackages) && (
-                <AgentOperatingModeSelector value={agentOperatingMode} onChange={onAgentOperatingModeChange} compact />
-              )}
-              <ProjectIntakeForm value={intake} onChange={onChange} />
-              <OutputPreview selectedPackages={effectivePackages} />
-              <div className="rounded-xl border border-border/60 bg-background/25 px-4 py-3 text-sm text-muted-foreground">
-                These preferences improve Delivery Outputs. They are optional for the first scan.
-              </div>
-            </div>
-          )}
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-3 justify-end">
-        <Button type="button" variant="ghost" onClick={onBack}>Back</Button>
-        <Button type="button" className="bg-gradient-primary border-0 shadow-glow hover:opacity-90" onClick={onContinue}>
-          Scan project
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function AgentOperatingModeSelector({
-  value,
-  onChange,
-  compact = false,
-}: {
-  value: AgentOperatingModeId;
-  onChange: (mode: AgentOperatingModeId) => void;
-  compact?: boolean;
-}) {
-  return (
-    <div className={compact ? 'rounded-2xl border border-border/60 bg-background/25 p-5' : 'glass rounded-2xl p-6'}>
-      <div className="max-w-3xl">
-        <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-primary-glow">Agent Cost Optimizer</div>
-        <h3 className="mt-2 font-display text-xl font-semibold">Choose how AI agents should spend attention</h3>
-        <p className="mt-2 text-sm text-muted-foreground">
-          ShipSeal uses this to tune AGENTS.md, CLAUDE.md, and AGENT_COST_OPTIMIZATION.md for safer or leaner agent work.
-        </p>
-      </div>
-      <div className="mt-5 grid gap-3 md:grid-cols-3">
-        {AGENT_OPERATING_MODES.map(mode => (
-          <button
-            key={mode.id}
-            type="button"
-            aria-pressed={value === mode.id}
-            title={`${mode.label}: ${mode.expectedTokenUsage}. ${mode.confidence}.`}
-            onClick={() => onChange(mode.id)}
-            className={`rounded-xl border p-4 text-left transition-all ${
-              value === mode.id
-                ? 'border-primary/60 bg-primary/10 shadow-glow'
-                : 'border-border/60 bg-secondary/25 hover:border-primary/35 hover:bg-secondary/45'
-            }`}
-          >
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-semibold">{mode.label}</span>
-              {mode.id === DEFAULT_AGENT_OPERATING_MODE && (
-                <span className="rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] text-success">
-                  Default
-                </span>
-              )}
-            </div>
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              <span className="rounded-full border border-accent/40 bg-accent/10 px-2 py-0.5 text-[10px] text-accent">
-                {mode.expectedTokenUsage}
-              </span>
-              <span className="rounded-full border border-border/70 bg-background/25 px-2 py-0.5 text-[10px] text-muted-foreground">
-                {mode.confidence}
-              </span>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{mode.summary}</p>
-            <div className="mt-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Best for</div>
-            <div className="mt-1 flex flex-wrap gap-1.5">
-              {mode.bestFor.slice(0, 3).map(item => (
-                <span key={item} className="rounded border border-border/60 bg-background/25 px-1.5 py-0.5 text-[10px] text-foreground/80">
-                  {item}
-                </span>
-              ))}
-            </div>
-          </button>
-        ))}
-      </div>
-      <p className="mt-4 text-xs text-muted-foreground">
-        ShipSeal helps AI coding agents avoid unnecessary context usage and excessive verification cycles. No fixed savings are promised.
-      </p>
-    </div>
-  );
-}
-
-function FlowSteps({ activeStep }: { activeStep: number }) {
-  const steps = [
-    'Source',
-    'Scan',
-  ];
-
-  return (
-    <ol className="flex flex-wrap items-center gap-2 text-xs" aria-label="Scan setup progress">
-      {steps.map((step, index) => (
-        <li
-          key={step}
-          aria-current={index + 1 === activeStep ? 'step' : undefined}
-          className={`inline-flex min-h-9 items-center gap-2 rounded-full border px-3 ${
-            index + 1 === activeStep
-              ? 'border-primary/50 bg-primary/10 font-medium text-foreground'
-              : index + 1 < activeStep
-                ? 'border-success/35 bg-success/5 text-foreground'
-                : 'border-border/55 bg-secondary/15 text-muted-foreground'
-          }`}
-        >
-          <span className="font-mono">{index + 1}</span>
-          <span>{step}</span>
-          <span className="sr-only">{index + 1 === activeStep ? 'current step' : index + 1 < activeStep ? 'completed' : 'not started'}</span>
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-const OUTPUT_CATEGORIES = [
-  {
-    id: 'client-handoff',
-    title: 'Client handoff',
-    description: 'Report, executive summary and next steps.',
-    goalIds: ['client-handoff', 'launch-readiness', 'sales-present', 'full-package'],
-  },
-  {
-    id: 'agent-pack',
-    title: 'AI agent development pack',
-    description: 'Agent rules, repo context and safe edit prompts.',
-    goalIds: ['agent-readiness', 'rescue-refactor', 'full-package'],
-  },
-  {
-    id: 'safety',
-    title: 'Safety and data risk notes',
-    description: 'Secrets, data handling, auth and tool-boundary notes.',
-    goalIds: ['safety-risk', 'launch-readiness', 'mcp-readiness', 'full-package'],
-  },
-  {
-    id: 'testing',
-    title: 'Test and red-team pack',
-    description: 'Eval tests, prompt-injection checks and QA prompts.',
-    goalIds: ['testing-red-team', 'launch-readiness', 'safety-risk', 'full-package'],
-  },
-  {
-    id: 'mcp',
-    title: 'MCP readiness',
-    description: 'Server recommendations, allowlist and governance notes.',
-    goalIds: ['mcp-readiness', 'safety-risk', 'full-package'],
-  },
-  {
-    id: 'ai-act',
-    title: 'AI Act / transparency readiness',
-    description: 'Transparency notice draft and legal review questions.',
-    goalIds: ['ai-act-transparency', 'full-package'],
-  },
-  {
-    id: 'roadmap',
-    title: 'Improvement roadmap',
-    description: 'Prioritized fixes and cleanup suggestions.',
-    goalIds: ['rescue-refactor', 'client-handoff', 'launch-readiness', 'sales-present', 'full-package'],
-  },
-] satisfies Array<{
-  id: string;
-  title: string;
-  description: string;
-  goalIds: ShipSealPackageId[];
-}>;
-
-function OutputPreview({ selectedPackages }: { selectedPackages: string[] }) {
-  const effectiveSelection = selectedPackages.includes(FULL_PACKAGE_ID) ? [FULL_PACKAGE_ID] : selectedPackages;
-  const activeIds = new Set(effectiveSelection);
-  const focus = resolveDeliveryPackFocus(effectiveSelection);
-  const filePaths = focus.generatedPaths;
-
-  return (
-    <div className="glass rounded-2xl p-6">
-      <div className="mb-5 flex items-start gap-3">
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary/45">
-          <FolderArchive className="h-4 w-4 text-primary-glow" />
-        </span>
-        <div>
-          <h3 className="font-display text-xl font-semibold">What ShipSeal will prepare</h3>
-          <p className="mt-1 text-sm text-muted-foreground">Grouped preview first. Exact files stay tucked away until you want them.</p>
-        </div>
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-3">
-        {OUTPUT_CATEGORIES.map(category => {
-          const active = category.goalIds.some(id => activeIds.has(id));
-          return (
-            <div
-              key={category.id}
-              className={`rounded-xl border px-4 py-3 ${active ? 'border-primary/45 bg-primary/10' : 'border-border/60 bg-secondary/20'}`}
-            >
-              <div className="flex items-center gap-2">
-                {active ? <Sparkles className="h-3.5 w-3.5 text-primary-glow" /> : <FileText className="h-3.5 w-3.5 text-muted-foreground" />}
-                <div className="text-sm font-medium">{category.title}</div>
-              </div>
-              <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{category.description}</p>
-            </div>
-          );
-        })}
-      </div>
-
-      <details className="group mt-5 rounded-xl border border-border/60 bg-secondary/15">
-        <summary className="flex cursor-pointer select-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors [&::-webkit-details-marker]:hidden">
-          <span>View generated file list ({filePaths.length})</span>
-          <ChevronDown className="h-4 w-4 shrink-0 transition-transform group-open:rotate-180" />
-        </summary>
-        <div className="grid gap-2 border-t border-border/50 px-4 py-4 sm:grid-cols-2">
-          {filePaths.map(path => (
-            <div key={path} className="rounded-lg border border-border/50 bg-background/30 px-3 py-2 font-mono text-[11px] text-foreground/80">
-              {path}
-            </div>
-          ))}
-        </div>
-      </details>
-    </div>
-  );
 }
 
 export default Index;

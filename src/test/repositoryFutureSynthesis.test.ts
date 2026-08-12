@@ -15,7 +15,9 @@ import {
   rankRepositoryFutureSupportingCandidates,
   removeRepositoryFutureSupportingGoal,
   replaceRepositoryFuturePrimary,
+  restoreRepositoryFutureAlternative,
   requestRepositoryFutureDependencyExclusion,
+  saveRepositoryFutureAlternative,
   synthesizeRepositoryFutureDraft,
   type RepositoryFutureCandidateDependencyHint,
   type RepositoryFutureDependencyDefinition,
@@ -168,8 +170,8 @@ function goalId(graph: RepositoryFutureGraph, candidateId: string) {
   return goal.id;
 }
 
-function selection(graph: RepositoryFutureGraph, primaryGoalIds: string[], supportingGoalIds: string[] = []) {
-  return { sourceGraphFingerprint: graph.fingerprint, primaryGoalIds, supportingGoalIds };
+function selection(graph: RepositoryFutureGraph, primaryGoalIds: string[], supportingGoalIds: string[] = [], savedGoalIds: string[] = []) {
+  return { sourceGraphFingerprint: graph.fingerprint, primaryGoalIds, supportingGoalIds, savedGoalIds };
 }
 
 function expectDraft(result: ReturnType<typeof synthesizeRepositoryFutureDraft>) {
@@ -421,6 +423,52 @@ describe('Omega 18.5c Repository Future synthesis', () => {
     expect(draft.savedAlternatives.some(item => item.candidateId === primary.id)).toBe(false);
     expect(draft.excludedCandidates.find(item => item.candidateId === incompatible.id)?.reasons).toContain('conflicts-with-primary');
     expect(draft.excludedCandidates.find(item => item.candidateId === exploratory.id)?.reasons).toContain('exploratory');
+  });
+
+  it('saves and restores alternatives explicitly in the authoritative immutable draft', () => {
+    const primary = candidate('primary');
+    const alternative = candidate('alternative');
+    const graph = graphFixture([alternative, primary]);
+    const primaryId = goalId(graph, primary.id);
+    const alternativeId = goalId(graph, alternative.id);
+    const graphBefore = structuredClone(graph);
+    const initial = expectDraft(synthesizeRepositoryFutureDraft(graph, selection(graph, [primaryId])));
+    const initialBefore = structuredClone(initial);
+
+    expect(initial.savedGoalIds).toEqual([]);
+    expect(initial.savedAlternatives.find(item => item.goalId === alternativeId)?.savedForLater).toBe(false);
+
+    const saved = expectDraft(saveRepositoryFutureAlternative(graph, initial, alternativeId));
+    expect(saved.savedGoalIds).toEqual([alternativeId]);
+    expect(saved.savedAlternatives.find(item => item.goalId === alternativeId)?.savedForLater).toBe(true);
+    expect(saved.savedAlternatives.find(item => item.goalId === alternativeId)?.exclusionReasons).toContain('saved-for-later');
+    expect(saved.fingerprint).not.toBe(initial.fingerprint);
+    expect(graph).toEqual(graphBefore);
+    expect(initial).toEqual(initialBefore);
+
+    const restored = expectDraft(restoreRepositoryFutureAlternative(graph, saved, alternativeId));
+    expect(restored.savedGoalIds).toEqual([]);
+    expect(restored.savedAlternatives.find(item => item.goalId === alternativeId)?.savedForLater).toBe(false);
+    expect(restored.fingerprint).toBe(initial.fingerprint);
+    expect(saveRepositoryFutureAlternative(graph, initial, primaryId)).toMatchObject({ ok: false, code: 'invalid-selection' });
+    expect(restoreRepositoryFutureAlternative(graph, initial, alternativeId)).toMatchObject({ ok: false, code: 'invalid-selection' });
+  });
+
+  it('removes a saved marker when that Future becomes active and preserves other saved goals', () => {
+    const values = ['primary', 'support', 'parked'].map(key => candidate(key));
+    const graph = graphFixture(values);
+    const [primaryId, supportId, parkedId] = values.map(value => goalId(graph, value.id));
+    const base = expectDraft(synthesizeRepositoryFutureDraft(graph, selection(graph, [primaryId], [], [supportId, parkedId])));
+    const supported = expectDraft(addRepositoryFutureSupportingGoal(graph, base, supportId));
+
+    expect(supported.savedGoalIds).toEqual([parkedId]);
+    expect(supported.supportingGoals.map(goal => goal.goalId)).toEqual([supportId]);
+
+    const replaced = replaceRepositoryFuturePrimary(graph, supported, parkedId);
+    expect(replaced.result.ok).toBe(true);
+    if (!replaced.result.ok) return;
+    expect(replaced.result.draft.primaryGoal.goalId).toBe(parkedId);
+    expect(replaced.result.draft.savedGoalIds).toEqual([]);
   });
 
   it('keeps draft identity stable across selection permutations and changes it for material selections or graph evidence', () => {

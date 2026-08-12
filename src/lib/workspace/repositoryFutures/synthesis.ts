@@ -56,6 +56,7 @@ export function synthesizeRepositoryFutureDraft(
   const primaryGoalId = selection.primaryGoalIds[0];
   const supportingGoalIds = sortedUnique(selection.supportingGoalIds);
   const selectedGoalIds = [primaryGoalId, ...supportingGoalIds];
+  const savedGoalIds = sortedUnique(selection.savedGoalIds || []).filter(goalId => !selectedGoalIds.includes(goalId));
   const closure = buildDependencyClosure(graph, selectedGoalIds, index);
   if (closure.issues.length) return failure(graph, failureCode(closure.issues), closure.issues);
 
@@ -83,7 +84,7 @@ export function synthesizeRepositoryFutureDraft(
   const artifacts = selectedNodes(graph, selectedCandidates, 'artifact');
   const gates = selectedNodes(graph, selectedCandidates, 'gate');
   const humanReviewRequirements = buildHumanReviewRequirements(selectedGoalIds, selectedCandidates, closure.dependencies, artifacts, gates, conflicts);
-  const savedAlternatives = buildSavedAlternatives(graph, selectedGoalIds, compatibilityMatrix, index);
+  const savedAlternatives = buildSavedAlternatives(graph, selectedGoalIds, compatibilityMatrix, index, new Set(savedGoalIds));
   const excludedCandidates = buildExcludedCandidates(graph, selectedGoalIds, compatibilityMatrix, index);
   const tradeOffs = buildTradeOffs(selectedGoalIds, selectedCandidates, closure.dependencies, artifacts, gates, conflicts);
   const limitations = sortedUnique([
@@ -101,6 +102,7 @@ export function synthesizeRepositoryFutureDraft(
     sourceRepository: graph.repository,
     primaryGoal,
     supportingGoals,
+    savedGoalIds,
     dependencies: closure.dependencies,
     dependencyExecutionOrder: closure.executionOrder,
     executionOrder,
@@ -136,6 +138,7 @@ export function replaceRepositoryFuturePrimary(
     sourceGraphFingerprint: graph.fingerprint,
     primaryGoalIds: [newPrimaryGoalId],
     supportingGoalIds: [],
+    savedGoalIds: draft.savedGoalIds.filter(goalId => goalId !== newPrimaryGoalId),
   };
   const baseResult = synthesizeRepositoryFutureDraft(graph, baseSelection);
   if (!baseResult.ok) return { result: baseResult, removedGoalIds: [] };
@@ -162,6 +165,7 @@ export function addRepositoryFutureSupportingGoal(
     sourceGraphFingerprint: graph.fingerprint,
     primaryGoalIds: [draft.primaryGoal.goalId],
     supportingGoalIds: [...draft.supportingGoals.map(goal => goal.goalId), supportingGoalId],
+    savedGoalIds: draft.savedGoalIds.filter(goalId => goalId !== supportingGoalId),
   });
 }
 
@@ -184,6 +188,53 @@ export function removeRepositoryFutureSupportingGoal(
     sourceGraphFingerprint: graph.fingerprint,
     primaryGoalIds: [draft.primaryGoal.goalId],
     supportingGoalIds: draft.supportingGoals.map(goal => goal.goalId).filter(goalId => goalId !== supportingGoalId),
+    savedGoalIds: draft.savedGoalIds,
+  });
+}
+
+export function saveRepositoryFutureAlternative(
+  graph: RepositoryFutureGraph,
+  draft: RepositoryFutureDraft,
+  goalId: string,
+): RepositoryFutureSynthesisResult {
+  if (draft.primaryGoal.goalId === goalId || draft.supportingGoals.some(goal => goal.goalId === goalId)) {
+    return failure(graph, 'invalid-selection', [{
+      code: 'invalid-selection',
+      goalIds: [goalId],
+      conflictIds: [],
+      dependencyIds: [],
+      reason: 'An active Future goal cannot be saved for later.',
+      recovery: 'Remove or replace the active goal before saving it.',
+    }]);
+  }
+  return synthesizeRepositoryFutureDraft(graph, {
+    sourceGraphFingerprint: graph.fingerprint,
+    primaryGoalIds: [draft.primaryGoal.goalId],
+    supportingGoalIds: draft.supportingGoals.map(goal => goal.goalId),
+    savedGoalIds: [...draft.savedGoalIds, goalId],
+  });
+}
+
+export function restoreRepositoryFutureAlternative(
+  graph: RepositoryFutureGraph,
+  draft: RepositoryFutureDraft,
+  goalId: string,
+): RepositoryFutureSynthesisResult {
+  if (!draft.savedGoalIds.includes(goalId)) {
+    return failure(graph, 'invalid-selection', [{
+      code: 'invalid-selection',
+      goalIds: [goalId],
+      conflictIds: [],
+      dependencyIds: [],
+      reason: 'Future goal is not explicitly saved for later.',
+      recovery: 'Choose a currently saved Future goal.',
+    }]);
+  }
+  return synthesizeRepositoryFutureDraft(graph, {
+    sourceGraphFingerprint: graph.fingerprint,
+    primaryGoalIds: [draft.primaryGoal.goalId],
+    supportingGoalIds: draft.supportingGoals.map(goal => goal.goalId),
+    savedGoalIds: draft.savedGoalIds.filter(savedGoalId => savedGoalId !== goalId),
   });
 }
 
@@ -304,6 +355,17 @@ function validateSelection(
     reason: 'Primary and supporting selections must be distinct.',
     recovery: 'Remove duplicate goal selections.',
   });
+  for (const savedGoalId of sortedUnique(selection.savedGoalIds || [])) {
+    if (!index.candidateByGoalId.has(savedGoalId)) issues.push(unknownGoalIssue(savedGoalId));
+    if (allGoalIds.includes(savedGoalId)) issues.push({
+      code: 'duplicate-selection',
+      goalIds: [savedGoalId],
+      conflictIds: [],
+      dependencyIds: [],
+      reason: 'An active Future goal cannot also be saved for later.',
+      recovery: 'Keep the goal active or save it, but not both.',
+    });
+  }
   for (const goalId of sortedUnique(allGoalIds)) {
     const candidate = index.candidateByGoalId.get(goalId);
     if (!candidate) {
@@ -523,6 +585,7 @@ function buildSavedAlternatives(
   selectedGoalIds: string[],
   compatibilityMatrix: RepositoryFutureDraft['compatibilityMatrix'],
   index: RepositoryFutureGraphIndex,
+  explicitlySavedGoalIds: Set<string>,
 ) {
   const selected = new Set(selectedGoalIds);
   return compatibilityMatrix.flatMap(compatibility => {
@@ -530,7 +593,8 @@ function buildSavedAlternatives(
     const candidate = index.candidateByGoalId.get(compatibility.goalId);
     if (!candidate) return [];
     const supportLimit = compatibility.reasons.some(reason => /already has two supporting goals/i.test(reason));
-    const viable = compatibility.state === 'compatible'
+    const viable = explicitlySavedGoalIds.has(compatibility.goalId)
+      || compatibility.state === 'compatible'
       || compatibility.state === 'compatible-with-review'
       || candidate.eligibility === 'exploratory'
       || (supportLimit && candidate.eligibility === 'eligible');
@@ -547,11 +611,15 @@ function buildSavedAlternatives(
       compatibility: compatibility.state,
       compatibilityReasons: [...compatibility.reasons],
       conflictIds: [...compatibility.conflictIds],
-      exclusionReasons: exclusionReasons(candidate, compatibility),
+      exclusionReasons: explicitlySavedGoalIds.has(compatibility.goalId)
+        ? [...exclusionReasons(candidate, compatibility), 'saved-for-later']
+        : exclusionReasons(candidate, compatibility),
+      savedForLater: explicitlySavedGoalIds.has(compatibility.goalId),
       limitations: sortedUnique([...candidate.limitations, ...candidate.unavailableInformation]),
     };
     return [saved];
   }).sort((left, right) => {
+    if (left.savedForLater !== right.savedForLater) return left.savedForLater ? -1 : 1;
     const rankDifference = savedRank(left) - savedRank(right);
     if (rankDifference) return rankDifference;
     const leftCandidate = index.candidateByGoalId.get(left.goalId);

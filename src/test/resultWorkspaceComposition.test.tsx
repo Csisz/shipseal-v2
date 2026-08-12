@@ -61,6 +61,20 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
   ),
 }));
 
+const selectorMockState = vi.hoisted(() => ({
+  view: 'universe' as 'universe' | 'futures',
+}));
+
+vi.mock('@/components/agentready/result-dashboard/PostScanViewSelector', async () => {
+  const React = await import('react');
+  return {
+    PostScanViewSelector: ({ onSelect }: { onSelect: (view: 'universe' | 'futures') => void }) => {
+      React.useEffect(() => onSelect(selectorMockState.view), [onSelect]);
+      return null;
+    },
+  };
+});
+
 vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
   default: ({ model, selectedNodeId, rotationPaused, reducedMotion, routeNodeIds = [], visibleNodeIds, visibleEdgeIds, cameraState, animateIn, onSelectNode, onSceneSettled, focusRequest }: {
     model: { summary: { representedFileNodeCount: number; edgeCount: number }; nodes: { id: string; label: string; position: { x: number; y: number; z: number } }[] };
@@ -204,6 +218,7 @@ function optimizationDashboardReportWithFiles(files: string[], repoName = 'optim
 
 describe('Result Workspace composition', () => {
   beforeEach(() => {
+    selectorMockState.view = 'universe';
     setViewportWidth(1024);
     globalThis.IntersectionObserver = class ImmediateIntersectionObserver implements IntersectionObserver {
       readonly root = null;
@@ -382,7 +397,7 @@ describe('Result Workspace composition', () => {
     expect(await screen.findByText(/Secondary repository improvements/i)).toBeInTheDocument();
   });
 
-  it('prepares product directions in the workspace and initializes one Universe when Future Pathways opens', async () => {
+  it('prepares product directions inside the dedicated Futures stage without mounting Universe', async () => {
     globalThis.IntersectionObserver = class DeferredIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = '240px 0px';
@@ -395,6 +410,7 @@ describe('Result Workspace composition', () => {
     } as unknown as typeof IntersectionObserver;
 
     const prepareRepositoryProductIntelligence = vi.fn(async () => undefined);
+    selectorMockState.view = 'futures';
     render(<ResultDashboard
       report={buildSampleReport()}
       history={[]}
@@ -404,22 +420,14 @@ describe('Result Workspace composition', () => {
       prepareRepositoryProductIntelligence={prepareRepositoryProductIntelligence}
     />);
 
-    expect(await screen.findByTestId('repository-universe-deferred')).toBeInTheDocument();
+    expect(await screen.findByTestId('repository-futures-workspace')).toBeInTheDocument();
+    expect(screen.getByTestId('repository-futures-stage')).toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
-    expect(screen.getByRole('navigation', { name: /Result chapters/i })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: /Prepare delivery/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('repository-universe-workspace-stage')).not.toBeInTheDocument();
     await waitFor(() => expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1));
-    switchResultChapter('Improve');
-    expect(await screen.findByTestId('future-neural-field', {}, { timeout: 10000 })).toBeInTheDocument();
-    await screen.findByRole('img', { name: /Repository Universe 3D graph/i }, { timeout: 10000 });
-    expect(new Set(universeMockState.models).size).toBe(1);
-
-    switchResultChapter('Deliver');
-    const deliverHeading = await screen.findByRole('heading', { name: /Prepare delivery/i }, { timeout: 10000 });
-    expect(deliverHeading).toBeVisible();
-    switchResultChapter('Understand');
-    expect(deliverHeading).not.toBeVisible();
-    expect(new Set(universeMockState.models).size).toBe(1);
+    expect(await screen.findByTestId('future-pathways-hero-stage')).toBeInTheDocument();
+    expect(screen.queryByTestId('future-neural-field')).not.toBeInTheDocument();
+    expect(universeMockState.models).toHaveLength(0);
     expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1);
   });
 
@@ -435,6 +443,7 @@ describe('Result Workspace composition', () => {
       takeRecords() { return []; }
     } as unknown as typeof IntersectionObserver;
 
+    selectorMockState.view = 'futures';
     render(<ResultDashboard
       report={buildSampleReport()}
       history={[]}
@@ -444,13 +453,11 @@ describe('Result Workspace composition', () => {
       prepareRepositoryProductIntelligence={vi.fn(async () => undefined)}
     />);
 
-    expect(await screen.findByTestId('repository-universe-deferred')).toBeInTheDocument();
-    switchResultChapter('Improve');
     expect((await screen.findAllByText('Analysing product opportunities')).length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Quick Path/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /Deep Configuration/i })).toBeEnabled();
-    expect(screen.getByTestId('future-neural-field')).toBeInTheDocument();
-    expect(screen.getByTestId('repository-universe-canvas')).toBeInTheDocument();
+    expect(screen.getByTestId('repository-futures-stage')).toBeInTheDocument();
+    expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
   });
 
   it('opens with a simplified repository-specific entry and routes the primary action to Repository Intelligence review', async () => {
@@ -501,33 +508,11 @@ describe('Result Workspace composition', () => {
     await waitFor(() => expect(prepareRepositoryIntelligenceReview).toHaveBeenCalledTimes(1), { timeout: 10000 });
     await waitFor(() => expect(document.activeElement).toHaveAttribute('id', 'repository-intelligence-review'), { timeout: 10000 });
     expect(screen.getByRole('heading', { name: /Preparing repository-specific artifact review/i })).toBeInTheDocument();
-    const futureField = screen.getByTestId('future-neural-field');
-    const pathControls = screen.getByTestId('future-path-controls');
-    const pathwaysStage = screen.getByTestId('future-pathways-hero-stage');
-    expect(futureField).toHaveAttribute('data-future-direction', 'left-to-right');
-    expect(futureField.querySelector('[data-future-zone="current"]')).toBeInTheDocument();
-    expect(within(futureField).getAllByRole('button', { name: /Activate to choose as primary/i }).length).toBeGreaterThan(0);
-    expect(futureField.querySelectorAll('[data-future-node="goal"]').length).toBeGreaterThan(0);
-    expect(pathwaysStage).not.toContainElement(universe);
-    expect(pathwaysStage.compareDocumentPosition(stage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(within(pathwaysStage).queryByLabelText(/Search repository atlas or universe/i)).not.toBeInTheDocument();
-    const impactMode = screen.getByRole('group', { name: 'Repository future impact mode' });
-    expect(within(impactMode).getByRole('button', { name: 'Current repository' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(impactMode).getByRole('button', { name: 'With this path' })).toBeDisabled();
-    expect(screen.queryByTestId('future-context-inspector')).not.toBeInTheDocument();
-    fireEvent.click(within(pathControls).getAllByRole('button', { name: 'Details' })[0]);
-    expect(await screen.findByTestId('future-context-inspector')).toBeInTheDocument();
-    fireEvent.click(within(screen.getByTestId('future-context-inspector')).getByRole('button', { name: 'Close details' }));
-    await waitFor(() => expect(screen.queryByTestId('future-context-inspector')).not.toBeInTheDocument());
-    fireEvent.click(within(futureField).getAllByRole('button', { name: /Activate to choose as primary/i })[0]);
-    expect(screen.getByTestId('future-selected-path-summary')).toHaveTextContent(/0\/2 supports.*automatic/);
-    expect(within(impactMode).getByRole('button', { name: 'Current repository' })).toHaveAttribute('aria-pressed', 'true');
-    expect(within(impactMode).getByRole('button', { name: 'With this path' })).toBeEnabled();
-    fireEvent.click(within(impactMode).getByRole('button', { name: 'With this path' }));
-    expect(within(impactMode).getByRole('button', { name: 'With this path' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getAllByText('Proposed').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { name: 'Other improvements' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Review optimization plan/i }).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('repository-universe-workspace-stage')).toContainElement(universe);
+    expect(screen.queryByTestId('repository-futures-workspace')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('future-pathways-hero-stage')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('future-neural-field')).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Repository future impact mode' })).not.toBeInTheDocument();
     expect(screen.getByText(/Optimization and Repository Intelligence/i)).toBeInTheDocument();
     expect(screen.queryByTestId('improve-supporting-content')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Review ShipSeal improvements/i })).not.toBeInTheDocument();

@@ -11,6 +11,9 @@ export interface RepositoryFutureStageCandidate {
   capabilityId: string;
   confidence: string;
   compatibility: string;
+  compatibilityReasons?: string[];
+  eligibleAsPrimary?: boolean;
+  savedForLater?: boolean;
   humanReviewRequired: boolean;
   evidenceCount: number;
   mappedEvidenceCount: number;
@@ -59,12 +62,15 @@ export interface RepositoryFutureStageOverlay {
   tracePinned?: boolean;
   supportCount: number;
   productIntelligenceState: 'analysing' | 'enhanced' | 'deterministic-fallback' | 'unavailable';
+  notice?: string;
   onModeChange: (mode: RepositoryFuturePathwaysMode) => void;
   onCandidateFocus: (goalId: string) => void;
   onCandidateSelect: (goalId: string) => void;
   onCandidateAddSupport: (goalId: string) => void;
   onCandidateRemoveSupport: (goalId: string) => void;
   onCandidateReplaceSupport: (addedGoalId: string, removedGoalId: string) => void;
+  onCandidateSave: (goalId: string) => void;
+  onCandidateRestore: (goalId: string) => void;
   onDependencyFocus: (dependencyId: string) => void;
   onTracePreview?: (id?: string) => void;
   onTracePin?: (id: string) => void;
