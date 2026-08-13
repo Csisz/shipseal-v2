@@ -15,6 +15,7 @@ function overlay(values: Partial<RepositoryFutureStageOverlay> = {}): Repository
       title: 'Guided repository futures',
       fit: 'Strong fit',
       role: 'primary',
+      futureDepth: 3,
       origin: 'Deterministic evidence',
       capabilityId: 'capability:futures',
       capabilityTitle: 'Future planning',
@@ -73,6 +74,15 @@ function overlay(values: Partial<RepositoryFutureStageOverlay> = {}): Repository
   };
 }
 
+function cameraState() {
+  const stage = screen.getByTestId('repository-futures-neural-canvas');
+  return {
+    x: Number(stage.getAttribute('data-camera-x')),
+    y: Number(stage.getAttribute('data-camera-y')),
+    zoom: Number(stage.getAttribute('data-camera-zoom')),
+  };
+}
+
 describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
   it('renders an accessible real-data topology with role grammar, selected route, and inspector', () => {
     const value = overlay();
@@ -94,6 +104,18 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(value.onTraceClear).toHaveBeenCalled();
   });
 
+  it('renders one resolved role label for a duplicated semantic candidate id', () => {
+    const base = overlay().candidates[0];
+    const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({
+      candidates: [{ ...base, role: 'candidate' }, { ...base, role: 'primary' }],
+      dependencies: [],
+    })} />);
+
+    expect(container.querySelectorAll('[data-neural-node="goal"]')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /Primary future goal: Guided repository futures/i })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /Candidate future goal: Guided repository futures/i })).not.toBeInTheDocument();
+  });
+
   it('supports buttons, wheel, keyboard, fit and pointer-drag camera controls', () => {
     render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
     const stage = screen.getByRole('application', { name: /Neural Repository Futures canvas/i });
@@ -112,8 +134,109 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(stage).toHaveClass('cursor-grabbing');
     fireEvent.pointerMove(stage, { pointerId: 1, clientX: 140, clientY: 130 });
     fireEvent.pointerUp(stage, { pointerId: 1, clientX: 140, clientY: 130 });
-    fireEvent.click(screen.getByRole('button', { name: 'Fit neural map' }));
-    expect(stage).toHaveAttribute('data-camera-lod', 'medium');
+    fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
+    expect(Number(stage.getAttribute('data-camera-zoom'))).toBeGreaterThanOrEqual(0.44);
+  });
+
+  it('keeps camera X, Y, and zoom unchanged when a Future remains comfortably visible beside the inspector', () => {
+    const value = overlay({
+      candidates: [{
+        ...overlay().candidates[1],
+        goalId: 'goal:visible',
+        title: 'Comfortably visible future',
+        futureDepth: 1,
+      }],
+      dependencies: [],
+      draftFingerprint: undefined,
+      supportCount: 0,
+      phase: 'possibility',
+    });
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    for (let index = 0; index < 7; index += 1) fireEvent.keyDown(stage, { key: 'ArrowRight' });
+    const before = cameraState();
+
+    fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Comfortably visible future/i }));
+
+    expect(screen.getByTestId('neural-futures-inspector')).toBeInTheDocument();
+    expect(cameraState()).toEqual(before);
+  });
+
+  it('minimally reveals an offscreen selected Future while preserving zoom', () => {
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to current repository' }));
+    const before = cameraState();
+
+    fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
+    const after = cameraState();
+
+    expect(after.x).not.toBe(before.x);
+    expect(after.zoom).toBe(before.zoom);
+  });
+
+  it('keeps the assisted camera position when the inspector closes', () => {
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to current repository' }));
+    fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
+    const revealed = cameraState();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close neural inspector' }));
+
+    expect(cameraState()).toEqual(revealed);
+  });
+
+  it('exposes accessible explicit navigation and disables plan fitting when no Primary exists', () => {
+    const noPlan = overlay({
+      phase: 'possibility',
+      draftFingerprint: undefined,
+      candidates: [{ ...overlay().candidates[1], role: 'candidate' }],
+      dependencies: [],
+    });
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={noPlan} />);
+
+    expect(screen.getByRole('button', { name: 'Zoom out' })).toHaveAttribute('title', 'Zoom out');
+    expect(screen.getByRole('button', { name: 'Zoom in' })).toHaveAttribute('title', 'Zoom in');
+    expect(screen.getByRole('button', { name: 'Fit all futures' })).toHaveAttribute('title', 'Fit all futures');
+    expect(screen.getByRole('button', { name: 'Back to current repository' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Fit selected plan' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Fit selected plan' })).toHaveAttribute('title', expect.stringMatching(/Choose a primary/i));
+  });
+
+  it('fits the selected plan explicitly and returns directly to the current repository', () => {
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    for (let index = 0; index < 8; index += 1) fireEvent.keyDown(stage, { key: 'ArrowLeft' });
+    const displaced = cameraState();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fit selected plan' }));
+    expect(cameraState()).not.toEqual(displaced);
+    fireEvent.click(screen.getByRole('button', { name: 'Back to current repository' }));
+    const origin = cameraState();
+
+    expect(150 * origin.zoom + origin.x).toBeCloseTo(348, 0);
+    expect(origin.zoom).toBeCloseTo(0.9, 2);
+  });
+
+  it('preserves camera through role, support, save, and restore presentation mutations', () => {
+    const base = overlay();
+    const { rerender } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={base} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    fireEvent.keyDown(stage, { key: 'ArrowRight' });
+    fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
+    const before = cameraState();
+    const mutate = (role: 'primary' | 'supporting' | 'saved' | 'candidate') => overlay({
+      candidates: base.candidates.map(candidate => candidate.goalId === 'goal:alternative' ? { ...candidate, role } : candidate),
+      supportCount: role === 'supporting' ? 1 : 0,
+    });
+
+    rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={mutate('primary')} />);
+    expect(cameraState()).toEqual(before);
+    rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={mutate('supporting')} />);
+    expect(cameraState()).toEqual(before);
+    rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={mutate('saved')} />);
+    expect(cameraState()).toEqual(before);
+    rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={mutate('candidate')} />);
+    expect(cameraState()).toEqual(before);
   });
 
   it('clears pinned focus from Escape and empty-field click', () => {
@@ -124,11 +247,15 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
 
     fireEvent.click(goal);
     expect(screen.getByTestId('neural-futures-inspector')).toBeInTheDocument();
+    const beforeEscape = cameraState();
     fireEvent.keyDown(stage, { key: 'Escape' });
     expect(screen.queryByTestId('neural-futures-inspector')).not.toBeInTheDocument();
+    expect(cameraState()).toEqual(beforeEscape);
     fireEvent.click(goal);
+    const beforeEmptyClick = cameraState();
     fireEvent.click(stage);
     expect(screen.queryByTestId('neural-futures-inspector')).not.toBeInTheDocument();
+    expect(cameraState()).toEqual(beforeEmptyClick);
     expect(value.onTraceClear).toHaveBeenCalledTimes(2);
   });
 
@@ -147,11 +274,41 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
 
     for (let index = 0; index < 3; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
     expect(stage).toHaveAttribute('data-camera-lod', 'far');
-    expect(alternative).toHaveAttribute('data-label-detail', 'anchor');
+    expect(alternative).toHaveAttribute('data-label-detail', 'title');
+    expect(primary).toHaveAttribute('data-label-detail', 'title');
+    expect(screen.getByRole('button', { name: /Current repository: shipseal/i })).toHaveAttribute('data-label-detail', 'near');
     for (let index = 0; index < 7; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     expect(stage).toHaveAttribute('data-camera-lod', 'near');
     expect(alternative).toHaveAttribute('data-label-detail', 'near');
     expect(alternative).toHaveTextContent('1 evidence signals');
+  });
+
+  it('keeps selected supports and a focused minor node identifiable at overview zoom', () => {
+    const base = overlay();
+    const minor = {
+      ...base.candidates[1],
+      goalId: 'goal:minor',
+      title: 'Minor future direction',
+      futureDepth: 2 as const,
+    };
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({
+      candidates: [base.candidates[0], { ...base.candidates[1], role: 'supporting' }, minor, {
+        ...minor,
+        goalId: 'goal:other',
+        title: 'Other direction',
+      }],
+      supportCount: 1,
+    })} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    for (let index = 0; index < 4; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    const support = screen.getByRole('button', { name: /Supporting future goal: Repository evidence assistant/i });
+    const minorNode = screen.getByRole('button', { name: /Candidate future goal: Other direction/i });
+
+    expect(stage).toHaveAttribute('data-camera-lod', 'far');
+    expect(support).toHaveAttribute('data-label-detail', 'title');
+    expect(minorNode).toHaveAttribute('data-label-detail', 'anchor');
+    fireEvent.click(minorNode);
+    expect(minorNode).toHaveAttribute('data-label-detail', 'title');
   });
 
   it('keeps the current grounded topology visible under a tiny integrated analysis state', () => {
@@ -199,6 +356,8 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(container.querySelectorAll('[data-future-edge]').length).toBeGreaterThan(0);
     expect(container.querySelector('.future-canvas-node-reveal')).not.toBeInTheDocument();
     expect(container.querySelector('animate')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
+    expect(screen.getByTestId('repository-futures-camera')).not.toHaveClass('transition-transform');
     unmount();
     window.matchMedia = original;
   });

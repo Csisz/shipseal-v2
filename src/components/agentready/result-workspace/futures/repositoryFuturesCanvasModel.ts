@@ -14,6 +14,13 @@ export type RepositoryFuturesCanvasNode = {
   x: number;
   y: number;
   depth: 0 | 1 | 2 | 3;
+  canonicalPosition?: {
+    candidateId: string;
+    futureDepth: 1 | 2 | 3;
+    lane: number;
+    x: number;
+    y: number;
+  };
   candidate?: RepositoryFutureStageCandidate;
   dependency?: RepositoryFutureStageOverlay['dependencies'][number];
 };
@@ -35,12 +42,14 @@ export interface RepositoryFuturesCanvasModel {
   world: { width: number; height: number };
 }
 
-const roleOrder: Record<RepositoryFutureStageCandidate['role'], number> = {
+// Used only to resolve malformed duplicate presentation records. Role priority
+// must never participate in canonical placement or ordinary node ordering.
+const resolvedRoleOrder: Record<RepositoryFutureStageCandidate['role'], number> = {
   primary: 0,
   supporting: 1,
-  candidate: 2,
-  saved: 3,
-  blocked: 4,
+  saved: 2,
+  blocked: 3,
+  candidate: 4,
 };
 
 function stableHash(value: string) {
@@ -52,16 +61,34 @@ function stableHash(value: string) {
   return hash >>> 0;
 }
 
-function goalDepth(candidate: RepositoryFutureStageCandidate): 1 | 2 | 3 {
-  if (candidate.role === 'primary') return 3;
-  if (candidate.role === 'supporting' || candidate.role === 'saved') return 2;
-  if (candidate.role === 'blocked') return 1;
-  return (1 + (stableHash(candidate.goalId) % 3)) as 1 | 2 | 3;
+export function repositoryFutureDepth(candidate: Pick<RepositoryFutureStageCandidate, 'goalId' | 'futureDepth'>): 1 | 2 | 3 {
+  return candidate.futureDepth || (1 + (stableHash(candidate.goalId) % 3)) as 1 | 2 | 3;
 }
 
-function lane(index: number, count: number) {
-  if (count <= 1) return FUTURES_CANVAS_WORLD.height / 2;
-  return 126 + (index / (count - 1)) * 568;
+export function repositoryFutureCanonicalPosition(
+  candidate: Pick<RepositoryFutureStageCandidate, 'goalId' | 'futureDepth'>,
+) {
+  const futureDepth = repositoryFutureDepth(candidate);
+  const identityHash = stableHash(candidate.goalId);
+  const lane = identityHash % 7;
+  return {
+    candidateId: candidate.goalId,
+    futureDepth,
+    lane,
+    x: 650 + (futureDepth - 1) * 250 + ((stableHash(`${candidate.goalId}:depth`) % 41) - 20),
+    y: 126 + lane * (568 / 6) + ((stableHash(`${candidate.goalId}:lane`) % 25) - 12),
+  };
+}
+
+function uniqueCandidates(candidates: RepositoryFutureStageCandidate[]) {
+  const byGoalId = new Map<string, RepositoryFutureStageCandidate>();
+  candidates.forEach(candidate => {
+    const existing = byGoalId.get(candidate.goalId);
+    if (!existing || resolvedRoleOrder[candidate.role] < resolvedRoleOrder[existing.role]) {
+      byGoalId.set(candidate.goalId, candidate);
+    }
+  });
+  return [...byGoalId.values()].sort((left, right) => left.goalId.localeCompare(right.goalId));
 }
 
 /**
@@ -86,19 +113,21 @@ export function buildRepositoryFuturesCanvasModel(
   const edges: RepositoryFuturesCanvasEdge[] = [];
   // The overlay already contains repository-grounded fallback candidates. Keep
   // that real topology visible while enhanced Product Intelligence is forming.
-  const candidates = overlay.candidates.slice().sort((left, right) => roleOrder[left.role] - roleOrder[right.role] || left.goalId.localeCompare(right.goalId));
+  const candidates = uniqueCandidates(overlay.candidates);
 
-  candidates.forEach((candidate, index) => {
-    const depth = goalDepth(candidate);
+  candidates.forEach(candidate => {
+    const canonicalPosition = repositoryFutureCanonicalPosition(candidate);
+    const depth = canonicalPosition.futureDepth;
     const selected = candidate.role === 'primary' || candidate.role === 'supporting';
     nodes.push({
       id: candidate.goalId,
       kind: 'goal',
       role: candidate.role,
       title: candidate.title,
-      x: 540 + depth * 250 + ((stableHash(candidate.goalId) % 41) - 20),
-      y: candidate.role === 'primary' ? FUTURES_CANVAS_WORLD.height / 2 : lane(index, candidates.length),
+      x: canonicalPosition.x,
+      y: canonicalPosition.y,
       depth,
+      canonicalPosition,
       candidate,
     });
     // Candidate evidence/mappings are the real grounding for this repository edge.
@@ -115,47 +144,77 @@ export function buildRepositoryFuturesCanvasModel(
   });
 
   const goalIds = new Set(candidates.map(candidate => candidate.goalId));
-  overlay.dependencies
-    .slice()
-    .sort((left, right) => left.executionOrder - right.executionOrder || left.id.localeCompare(right.id))
-    .forEach((dependency, index, dependencies) => {
-      const relatedGoalIds = dependency.dependentGoalIds.filter(goalId => goalIds.has(goalId));
-      if (!relatedGoalIds.length) return;
-      const span = Math.max(1, dependencies.length - 1);
-      nodes.push({
-        id: dependency.id,
-        kind: 'dependency',
-        role: dependency.state === 'satisfied' ? 'satisfied' : 'required',
-        title: dependency.title,
-        x: 690 + (index / span) * 260,
-        y: 330 + (index % 2) * 160,
-        depth: 2,
-        dependency,
-      });
-      relatedGoalIds.forEach(goalId => edges.push({
-        id: `requirement:${dependency.id}:${goalId}`,
-        kind: 'requirement',
-        sourceId: dependency.id,
-        targetId: goalId,
-        goalIds: [goalId],
-        selected: true,
-      }));
+  const goalNodes = new Map(nodes.filter(node => node.kind === 'goal').map(node => [node.id, node]));
+  const dependencies = [...new Map(overlay.dependencies.map(dependency => [dependency.id, dependency])).values()]
+    .sort((left, right) => left.executionOrder - right.executionOrder || left.id.localeCompare(right.id));
+  dependencies.forEach((dependency, index) => {
+    const relatedGoalIds = [...new Set(dependency.dependentGoalIds.filter(goalId => goalIds.has(goalId)))];
+    if (!relatedGoalIds.length) return;
+    const relatedGoals = relatedGoalIds.flatMap(goalId => {
+      const goal = goalNodes.get(goalId);
+      return goal ? [goal] : [];
     });
+    const earliestDependentX = Math.min(...relatedGoals.map(goal => goal.x));
+    const dependentLaneCenter = relatedGoals.reduce((total, goal) => total + goal.y, 0) / relatedGoals.length;
+    const prerequisiteStartX = 350;
+    const prerequisiteEndX = Math.max(prerequisiteStartX, earliestDependentX - 150);
+    const progress = (index + 1) / (dependencies.length + 1);
+    const dependencyX = prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) * progress;
+    const dependencyY = Math.max(110, Math.min(710,
+      dependentLaneCenter + ((stableHash(`${dependency.id}:prerequisite-lane`) % 81) - 40),
+    ));
+    const earliestDepth = Math.min(...relatedGoals.map(goal => goal.depth as 1 | 2 | 3));
+    nodes.push({
+      id: dependency.id,
+      kind: 'dependency',
+      role: dependency.state === 'satisfied' ? 'satisfied' : 'required',
+      title: dependency.title,
+      x: dependencyX,
+      y: dependencyY,
+      depth: Math.max(1, earliestDepth - 1) as 1 | 2,
+      dependency,
+    });
+    relatedGoalIds.forEach(goalId => edges.push({
+      id: `requirement:${dependency.id}:${goalId}`,
+      kind: 'requirement',
+      sourceId: dependency.id,
+      targetId: goalId,
+      goalIds: [goalId],
+      selected: true,
+    }));
+  });
 
   const primary = candidates.find(candidate => candidate.role === 'primary');
   if (primary) {
-    candidates.filter(candidate => candidate.role === 'supporting').forEach(candidate => edges.push({
-      id: `selected-path:${candidate.goalId}:${primary.goalId}`,
-      kind: 'selected-path',
-      sourceId: candidate.goalId,
-      targetId: primary.goalId,
-      goalIds: [candidate.goalId, primary.goalId],
-      selected: true,
-    }));
+    candidates.filter(candidate => candidate.role === 'supporting').forEach(candidate => {
+      const supportNode = goalNodes.get(candidate.goalId);
+      const primaryNode = goalNodes.get(primary.goalId);
+      if (!supportNode || !primaryNode) return;
+      const [sourceId, targetId] = supportNode.x <= primaryNode.x
+        ? [candidate.goalId, primary.goalId]
+        : [primary.goalId, candidate.goalId];
+      edges.push({
+        id: `selected-path:${candidate.goalId}:${primary.goalId}`,
+        kind: 'selected-path',
+        sourceId,
+        targetId,
+        goalIds: [candidate.goalId, primary.goalId],
+        selected: true,
+      });
+    });
   }
 
   const orientedNodes = orientation === 'vertical'
-    ? nodes.map(node => ({ ...node, x: node.y, y: node.x }))
+    ? nodes.map(node => ({
+      ...node,
+      x: node.y,
+      y: node.x,
+      canonicalPosition: node.canonicalPosition ? {
+        ...node.canonicalPosition,
+        x: node.canonicalPosition.y,
+        y: node.canonicalPosition.x,
+      } : undefined,
+    }))
     : nodes;
   return {
     nodes: orientedNodes,
@@ -192,6 +251,18 @@ export function repositoryFuturesTrace(model: RepositoryFuturesCanvasModel, node
   model.edges.filter(edge => edge.kind === 'selected-path' && edge.goalIds.some(goalId => relatedGoalIds.has(goalId))).forEach(addEdge);
   model.edges.filter(edge => edge.kind === 'grounding' && relatedGoalIds.has(edge.targetId)).forEach(addEdge);
   return { nodeIds, edgeIds };
+}
+
+export function repositoryFuturesSelectedPlanNodes(model: RepositoryFuturesCanvasModel) {
+  const selectedGoalIds = new Set(model.nodes
+    .filter(node => node.kind === 'goal' && (node.role === 'primary' || node.role === 'supporting'))
+    .map(node => node.id));
+  const selectedDependencyIds = new Set(model.edges
+    .filter(edge => edge.kind === 'requirement' && edge.goalIds.some(goalId => selectedGoalIds.has(goalId)))
+    .map(edge => edge.sourceId));
+  return model.nodes.filter(node => node.kind === 'repository'
+    || selectedGoalIds.has(node.id)
+    || selectedDependencyIds.has(node.id));
 }
 
 export function repositoryFuturesEdgePath(

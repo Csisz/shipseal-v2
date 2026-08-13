@@ -1,18 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Bookmark, Check, Focus, GitBranch, LockKeyhole, Minus, Plus, Route, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RepositoryFutureStageOverlay } from './futurePathwaysPresentation';
 import {
   buildRepositoryFuturesCanvasModel,
   repositoryFuturesEdgePath,
+  repositoryFuturesSelectedPlanNodes,
   repositoryFuturesTrace,
   type RepositoryFuturesCanvasNode,
 } from './repositoryFuturesCanvasModel';
 import {
+  constrainRepositoryFuturesCamera,
+  fitRepositoryFuturesBoundsCamera,
   fitRepositoryFuturesCamera,
-  focusRepositoryFuturesCamera,
+  frameRepositoryFuturesOrigin,
   panRepositoryFuturesCamera,
+  repositoryFuturesBounds,
   repositoryFuturesLod,
+  repositoryFuturesSafeInsets,
+  repositoryFuturesSafeViewport,
+  revealRepositoryFuturesTarget,
   zoomRepositoryFuturesCamera,
   type RepositoryFuturesCamera,
 } from './repositoryFuturesCamera';
@@ -31,6 +38,12 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const dragRef = useRef<{ x: number; y: number }>();
   const pinchRef = useRef<{ distance: number; camera: RepositoryFuturesCamera }>();
+  const inspectorRef = useRef<HTMLElement | null>(null);
+  const cameraRef = useRef<RepositoryFuturesCamera>();
+  const cameraTransitionTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const initialFramingRef = useRef(false);
+  const orientationRef = useRef<'horizontal' | 'vertical'>();
+  const revealedPinnedIdRef = useRef<string>();
   const mobile = useIsMobile();
   const reducedMotion = useReducedMotion();
   const model = useMemo(() => buildRepositoryFuturesCanvasModel(repositoryName, overlay, mobile ? 'vertical' : 'horizontal'), [mobile, overlay, repositoryName]);
@@ -39,37 +52,142 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   const [hoveredId, setHoveredId] = useState<string>();
   const [pinnedId, setPinnedId] = useState<string>();
   const [dragging, setDragging] = useState(false);
-  const worldWidth = model.world.width;
-  const worldHeight = model.world.height;
+  const [cameraTransitioning, setCameraTransitioning] = useState(false);
+  cameraRef.current = camera;
   const activeId = pinnedId || hoveredId || overlay.activeTraceId;
   const activeNode = activeId ? nodeById.get(activeId) : undefined;
   const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
   const trace = useMemo(() => repositoryFuturesTrace(model, activeId), [activeId, model]);
   const lod = repositoryFuturesLod(camera.zoom);
+  const overviewGoalIds = useMemo(() => new Set(overlay.candidates.slice(0, 3).map(candidate => candidate.goalId)), [overlay.candidates]);
+  const meaningfulBounds = useMemo(() => repositoryFuturesBounds(model.nodes.map(nodeCameraTarget))!, [model.nodes]);
+  const selectedPlanNodes = useMemo(() => repositoryFuturesSelectedPlanNodes(model), [model]);
+  const selectedPlanBounds = useMemo(() => repositoryFuturesBounds(selectedPlanNodes.map(nodeCameraTarget)), [selectedPlanNodes]);
+  const initialFramingBounds = useMemo(() => {
+    const preferredIds = new Set([
+      ...selectedPlanNodes.map(node => node.id),
+      ...overlay.candidates.slice(0, 4).map(candidate => candidate.goalId),
+    ]);
+    const preferredNodes = model.nodes.filter(node => node.kind === 'repository' || preferredIds.has(node.id));
+    return repositoryFuturesBounds(preferredNodes.map(nodeCameraTarget)) || meaningfulBounds;
+  }, [meaningfulBounds, model.nodes, overlay.candidates, selectedPlanNodes]);
+  const meaningfulBoundsRef = useRef(meaningfulBounds);
+  const initialFramingBoundsRef = useRef(initialFramingBounds);
+  const pinnedIdRef = useRef(pinnedId);
+  meaningfulBoundsRef.current = meaningfulBounds;
+  initialFramingBoundsRef.current = initialFramingBounds;
+  pinnedIdRef.current = pinnedId;
 
-  const fit = useCallback(() => {
+  const getViewport = useCallback(() => {
     const bounds = stageRef.current?.getBoundingClientRect();
-    const viewport = bounds && bounds.width > 0 && bounds.height > 0
+    return bounds && bounds.width > 0 && bounds.height > 0
       ? { width: bounds.width, height: bounds.height }
       : DEFAULT_VIEWPORT;
-    setCamera(fitRepositoryFuturesCamera(viewport, { width: worldWidth, height: worldHeight }));
-  }, [worldHeight, worldWidth]);
+  }, []);
 
-  useEffect(() => {
-    fit();
-    if (!stageRef.current || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(fit);
+  const getInsets = useCallback((includeInspector = Boolean(pinnedId)) => {
+    const viewport = getViewport();
+    const inspectorBounds = includeInspector ? inspectorRef.current?.getBoundingClientRect() : undefined;
+    return repositoryFuturesSafeInsets(viewport, inspectorBounds ? {
+      width: inspectorBounds.width,
+      height: inspectorBounds.height,
+    } : includeInspector ? { width: 0, height: 0 } : undefined);
+  }, [getViewport, pinnedId]);
+
+  const applyCamera = useCallback((next: RepositoryFuturesCamera, animate = false) => {
+    if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
+    setCameraTransitioning(animate && !reducedMotion);
+    setCamera(next);
+    if (animate && !reducedMotion) {
+      cameraTransitionTimerRef.current = setTimeout(() => setCameraTransitioning(false), 220);
+    }
+  }, [reducedMotion]);
+
+  const constrainCamera = useCallback((next: RepositoryFuturesCamera, includeInspector = Boolean(pinnedId)) => (
+    constrainRepositoryFuturesCamera(next, getViewport(), meaningfulBounds, getInsets(includeInspector))
+  ), [getInsets, getViewport, meaningfulBounds, pinnedId]);
+
+  const fitAll = useCallback(() => {
+    applyCamera(fitRepositoryFuturesBoundsCamera(getViewport(), meaningfulBounds, getInsets(), 52), true);
+  }, [applyCamera, getInsets, getViewport, meaningfulBounds]);
+
+  const fitPlan = useCallback(() => {
+    if (!primary || !selectedPlanBounds) return;
+    applyCamera(fitRepositoryFuturesBoundsCamera(getViewport(), selectedPlanBounds, getInsets(), 58), true);
+  }, [applyCamera, getInsets, getViewport, primary, selectedPlanBounds]);
+
+  const backToRepository = useCallback(() => {
+    const root = model.nodes.find(node => node.kind === 'repository');
+    if (!root) return;
+    applyCamera(constrainCamera(frameRepositoryFuturesOrigin(
+      getViewport(),
+      root,
+      model.orientation,
+      getInsets(),
+    )), true);
+  }, [applyCamera, constrainCamera, getInsets, getViewport, model.nodes, model.orientation]);
+
+  useLayoutEffect(() => {
+    const orientationChanged = orientationRef.current !== model.orientation;
+    orientationRef.current = model.orientation;
+    if (!initialFramingRef.current || orientationChanged) {
+      const viewport = getViewport();
+      applyCamera(fitRepositoryFuturesBoundsCamera(viewport, initialFramingBoundsRef.current, repositoryFuturesSafeInsets(viewport), 54, 1.02));
+      initialFramingRef.current = true;
+    }
+  }, [applyCamera, getViewport, model.orientation]);
+
+  useLayoutEffect(() => {
+    if (!stageRef.current || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(() => {
+      if (!initialFramingRef.current) return;
+      const viewport = getViewport();
+      const inspectorBounds = pinnedIdRef.current ? inspectorRef.current?.getBoundingClientRect() : undefined;
+      const insets = repositoryFuturesSafeInsets(viewport, inspectorBounds ? {
+        width: inspectorBounds.width,
+        height: inspectorBounds.height,
+      } : pinnedIdRef.current ? { width: 0, height: 0 } : undefined);
+      setCamera(current => constrainRepositoryFuturesCamera(current, viewport, meaningfulBoundsRef.current, insets));
+    });
     observer.observe(stageRef.current);
     return () => observer.disconnect();
-  }, [fit]);
+  }, [getViewport]);
+
+  useEffect(() => () => {
+    if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
+  }, []);
 
   useEffect(() => {
-    if (pinnedId && !nodeById.has(pinnedId)) setPinnedId(undefined);
+    if (pinnedId && !nodeById.has(pinnedId)) {
+      setPinnedId(undefined);
+      revealedPinnedIdRef.current = undefined;
+    }
   }, [nodeById, pinnedId]);
+
+  useLayoutEffect(() => {
+    if (!pinnedId) {
+      revealedPinnedIdRef.current = undefined;
+      return;
+    }
+    if (revealedPinnedIdRef.current === pinnedId) return;
+    revealedPinnedIdRef.current = pinnedId;
+    const node = nodeById.get(pinnedId);
+    if (!node || !cameraRef.current) return;
+    const viewport = getViewport();
+    const insets = getInsets(true);
+    const revealed = revealRepositoryFuturesTarget(
+      cameraRef.current,
+      repositoryFuturesSafeViewport(viewport, insets),
+      nodeCameraTarget(node),
+    );
+    const bounded = constrainRepositoryFuturesCamera(revealed, viewport, meaningfulBounds, insets);
+    if (bounded.x !== cameraRef.current.x || bounded.y !== cameraRef.current.y) applyCamera(bounded, true);
+  }, [applyCamera, getInsets, getViewport, meaningfulBounds, nodeById, pinnedId]);
 
   const clearFocus = useCallback(() => {
     setHoveredId(undefined);
     setPinnedId(undefined);
+    revealedPinnedIdRef.current = undefined;
     overlay.onTraceClear?.();
   }, [overlay]);
 
@@ -84,27 +202,28 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
     if (node.kind === 'goal') overlay.onCandidateFocus(node.id);
     if (node.kind === 'dependency') overlay.onDependencyFocus(node.id);
     overlay.onTracePin?.(node.id);
-    const bounds = stageRef.current?.getBoundingClientRect();
-    const viewport = bounds && bounds.width > 0 && bounds.height > 0
-      ? { width: bounds.width, height: bounds.height }
-      : DEFAULT_VIEWPORT;
-    setCamera(current => focusRepositoryFuturesCamera(current, viewport, node));
   };
 
+  const zoomAt = useCallback((factor: number, anchor: { x: number; y: number }) => {
+    setCameraTransitioning(false);
+    setCamera(current => constrainCamera(zoomRepositoryFuturesCamera(current, current.zoom * factor, anchor)));
+  }, [constrainCamera]);
+
   const zoomAtCenter = useCallback((factor: number) => {
-    const bounds = stageRef.current?.getBoundingClientRect();
-    const anchor = bounds && bounds.width > 0
-      ? { x: bounds.width / 2, y: bounds.height / 2 }
-      : { x: DEFAULT_VIEWPORT.width / 2, y: DEFAULT_VIEWPORT.height / 2 };
-    setCamera(current => zoomRepositoryFuturesCamera(current, current.zoom * factor, anchor));
-  }, []);
+    const viewport = getViewport();
+    const safe = repositoryFuturesSafeViewport(viewport, getInsets());
+    zoomAt(factor, { x: safe.left + safe.width / 2, y: safe.top + safe.height / 2 });
+  }, [getInsets, getViewport, zoomAt]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if ((event.target as Element).closest('[data-neural-node], [data-camera-control], [data-futures-mode-owner], [data-neural-inspector]')) return;
-    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const clientX = Number.isFinite(event.clientX) ? event.clientX : 0;
+    const clientY = Number.isFinite(event.clientY) ? event.clientY : 0;
+    pointersRef.current.set(event.pointerId, { x: clientX, y: clientY });
+    setCameraTransitioning(false);
     setDragging(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    dragRef.current = { x: event.clientX, y: event.clientY };
+    dragRef.current = { x: clientX, y: clientY };
     if (pointersRef.current.size === 2) {
       const [left, right] = [...pointersRef.current.values()];
       pinchRef.current = { distance: Math.hypot(right.x - left.x, right.y - left.y), camera };
@@ -113,7 +232,9 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!pointersRef.current.has(event.pointerId)) return;
-    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const clientX = Number.isFinite(event.clientX) ? event.clientX : dragRef.current?.x || 0;
+    const clientY = Number.isFinite(event.clientY) ? event.clientY : dragRef.current?.y || 0;
+    pointersRef.current.set(event.pointerId, { x: clientX, y: clientY });
     if (pointersRef.current.size === 2 && pinchRef.current) {
       const [left, right] = [...pointersRef.current.values()];
       const distance = Math.max(1, Math.hypot(right.x - left.x, right.y - left.y));
@@ -122,14 +243,14 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         x: (left.x + right.x) / 2 - (bounds?.left || 0),
         y: (left.y + right.y) / 2 - (bounds?.top || 0),
       };
-      setCamera(zoomRepositoryFuturesCamera(pinchRef.current.camera, pinchRef.current.camera.zoom * (distance / pinchRef.current.distance), anchor));
+      setCamera(constrainCamera(zoomRepositoryFuturesCamera(pinchRef.current.camera, pinchRef.current.camera.zoom * (distance / pinchRef.current.distance), anchor)));
       return;
     }
     if (!dragRef.current) return;
-    const deltaX = event.clientX - dragRef.current.x;
-    const deltaY = event.clientY - dragRef.current.y;
-    dragRef.current = { x: event.clientX, y: event.clientY };
-    setCamera(current => panRepositoryFuturesCamera(current, deltaX, deltaY));
+    const deltaX = clientX - dragRef.current.x;
+    const deltaY = clientY - dragRef.current.y;
+    dragRef.current = { x: clientX, y: clientY };
+    setCamera(current => constrainCamera(panRepositoryFuturesCamera(current, deltaX, deltaY)));
   };
 
   const handlePointerEnd = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -141,14 +262,15 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
     const pan = 36;
-    if (event.key === 'ArrowLeft') setCamera(current => panRepositoryFuturesCamera(current, pan, 0));
-    else if (event.key === 'ArrowRight') setCamera(current => panRepositoryFuturesCamera(current, -pan, 0));
-    else if (event.key === 'ArrowUp') setCamera(current => panRepositoryFuturesCamera(current, 0, pan));
-    else if (event.key === 'ArrowDown') setCamera(current => panRepositoryFuturesCamera(current, 0, -pan));
+    if (event.key === 'ArrowLeft') setCamera(current => constrainCamera(panRepositoryFuturesCamera(current, pan, 0)));
+    else if (event.key === 'ArrowRight') setCamera(current => constrainCamera(panRepositoryFuturesCamera(current, -pan, 0)));
+    else if (event.key === 'ArrowUp') setCamera(current => constrainCamera(panRepositoryFuturesCamera(current, 0, pan)));
+    else if (event.key === 'ArrowDown') setCamera(current => constrainCamera(panRepositoryFuturesCamera(current, 0, -pan)));
     else if (event.key === '+' || event.key === '=') zoomAtCenter(1.16);
     else if (event.key === '-') zoomAtCenter(1 / 1.16);
-    else if (event.key === '0' || event.key.toLowerCase() === 'f') fit();
+    else if (event.key === '0' || event.key.toLowerCase() === 'f') fitAll();
     else if (event.key === 'Escape') clearFocus();
     else return;
     event.preventDefault();
@@ -164,8 +286,10 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         ref={stageRef}
         role="application"
         tabIndex={0}
-        aria-label="Neural Repository Futures canvas. Use arrow keys to pan, plus and minus to zoom, F to fit, and Escape to clear focus."
+        aria-label="Neural Repository Futures canvas. Use arrow keys to pan, plus and minus to zoom, F or zero to fit all futures, and Escape to clear focus."
         data-testid="repository-futures-neural-canvas"
+        data-camera-x={camera.x.toFixed(2)}
+        data-camera-y={camera.y.toFixed(2)}
         data-camera-zoom={camera.zoom.toFixed(3)}
         data-camera-lod={lod}
         data-future-orientation={model.orientation}
@@ -179,10 +303,11 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         onWheel={event => {
           event.preventDefault();
           const bounds = event.currentTarget.getBoundingClientRect();
-          setCamera(current => zoomRepositoryFuturesCamera(current, current.zoom * Math.exp(-event.deltaY * 0.0015), {
+          setCameraTransitioning(false);
+          setCamera(current => constrainCamera(zoomRepositoryFuturesCamera(current, current.zoom * Math.exp(-event.deltaY * 0.0015), {
             x: event.clientX - bounds.left,
             y: event.clientY - bounds.top,
-          }));
+          })));
         }}
         onKeyDown={handleKeyDown}
         onClick={event => {
@@ -199,10 +324,12 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
             </button>
           ))}
         </div>
-        <div data-camera-control className="absolute left-3 top-14 z-30 flex items-center gap-0.5 rounded-full border border-border/35 bg-background/[0.68] p-0.5 backdrop-blur-md md:left-5 md:top-[4.35rem]">
-          <CameraButton label="Zoom in" onClick={() => zoomAtCenter(1.16)}><Plus /></CameraButton>
+        <div data-camera-control className="absolute left-3 top-14 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-0.5 rounded-full border border-border/35 bg-background/[0.72] p-0.5 backdrop-blur-md md:left-5 md:top-[4.35rem]">
           <CameraButton label="Zoom out" onClick={() => zoomAtCenter(1 / 1.16)}><Minus /></CameraButton>
-          <CameraButton label="Fit neural map" onClick={fit}><Focus /></CameraButton>
+          <CameraButton label="Zoom in" onClick={() => zoomAtCenter(1.16)}><Plus /></CameraButton>
+          <CameraButton label="Fit all futures" onClick={fitAll}><Focus /></CameraButton>
+          <CameraButton label="Fit selected plan" onClick={fitPlan} disabled={!primary} disabledDescription="Choose a primary Future before fitting the selected plan."><Route /></CameraButton>
+          <CameraButton label="Back to current repository" onClick={backToRepository}><GitBranch /></CameraButton>
           {activeId && <CameraButton label="Clear focused route" onClick={clearFocus}><X /></CameraButton>}
         </div>
         <div aria-label="Live Future Plan summary" data-plan-status={primary ? 'composed' : 'empty'} className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-8.5rem)] border-l border-primary/30 bg-background/[0.55] px-3 py-1.5 text-right text-[10px] text-muted-foreground backdrop-blur-md md:right-5 md:top-5 md:max-w-md">
@@ -216,13 +343,13 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
 
         <div
           data-testid="repository-futures-camera"
-          className="absolute left-0 top-0"
+          className={`absolute left-0 top-0 ${cameraTransitioning ? 'transition-transform duration-200 ease-out motion-reduce:transition-none' : ''}`}
           style={{
             width: model.world.width,
             height: model.world.height,
             transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.zoom})`,
             transformOrigin: '0 0',
-            willChange: 'transform',
+            willChange: cameraTransitioning || dragging ? 'transform' : undefined,
           }}
         >
           <svg aria-hidden="true" viewBox={`0 0 ${model.world.width} ${model.world.height}`} className="absolute inset-0 h-full w-full overflow-visible">
@@ -276,7 +403,13 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
           {model.nodes.map(node => {
             const traced = !activeId || trace.nodeIds.has(node.id);
             const selected = node.role === 'primary' || node.role === 'supporting';
-            const showTitle = lod !== 'far' || node.kind === 'repository' || selected || pinnedId === node.id;
+            const overviewDependency = node.kind === 'dependency' && (node.dependency?.dependentCount || 0) > 1;
+            const showTitle = lod !== 'far'
+              || node.kind === 'repository'
+              || selected
+              || activeId === node.id
+              || overviewGoalIds.has(node.id)
+              || overviewDependency;
             const showMetadata = lod === 'near' || node.kind === 'repository';
             return (
               <button
@@ -308,20 +441,20 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         </div>
 
         {activeNode && (
-          <NeuralInspector node={activeNode} overlay={overlay} onClose={clearFocus} />
+          <NeuralInspector inspectorRef={inspectorRef} node={activeNode} overlay={overlay} onClose={clearFocus} />
         )}
         {overlay.notice && <div role="status" aria-live="polite" className="pointer-events-none absolute bottom-3 left-3 z-30 max-w-sm rounded-xl border border-primary/20 bg-background/85 px-3 py-2 text-xs text-foreground shadow-sm backdrop-blur-md md:bottom-5 md:left-5">{overlay.notice}</div>}
       </div>
-      <p className="mt-2 px-2 text-[10px] text-muted-foreground">Drag to pan · wheel or pinch to zoom · select a node to inspect · F fits the map</p>
+      <p className="mt-2 px-2 text-[10px] text-muted-foreground">Current → Future · drag to pan · wheel or pinch to zoom · select a node to inspect · 0 or F fits all</p>
     </section>
   );
 }
 
-function CameraButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactElement<{ className?: string }> }) {
-  return <button type="button" aria-label={label} onClick={event => { event.stopPropagation(); onClick(); }} className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{children && <span className="[&>svg]:h-4 [&>svg]:w-4">{children}</span>}</button>;
+function CameraButton({ label, onClick, children, disabled = false, disabledDescription }: { label: string; onClick: () => void; children: React.ReactElement<{ className?: string }>; disabled?: boolean; disabledDescription?: string }) {
+  return <button type="button" aria-label={label} title={disabled ? disabledDescription : label} disabled={disabled} onClick={event => { event.stopPropagation(); onClick(); }} className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-muted-foreground">{children && <span className="[&>svg]:h-4 [&>svg]:w-4">{children}</span>}</button>;
 }
 
-function NeuralInspector({ node, overlay, onClose }: { node: RepositoryFuturesCanvasNode; overlay: RepositoryFutureStageOverlay; onClose: () => void }) {
+function NeuralInspector({ inspectorRef, node, overlay, onClose }: { inspectorRef: React.RefObject<HTMLElement>; node: RepositoryFuturesCanvasNode; overlay: RepositoryFutureStageOverlay; onClose: () => void }) {
   const candidate = node.candidate;
   const dependency = node.dependency;
   const [replacementOpen, setReplacementOpen] = useState(false);
@@ -341,7 +474,7 @@ function NeuralInspector({ node, overlay, onClose }: { node: RepositoryFuturesCa
     if (action.id === 'replace-support') setReplacementOpen(true);
   };
   return (
-    <aside data-neural-inspector data-testid="neural-futures-inspector" aria-label="Neural Futures inspector" className="absolute inset-x-3 bottom-3 z-40 max-h-[52%] overflow-y-auto rounded-t-[1.35rem] border border-primary/20 bg-background/[0.92] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl md:inset-x-auto md:bottom-5 md:right-5 md:max-h-[calc(100%-7rem)] md:w-72 md:rounded-[1.15rem] lg:w-80">
+    <aside ref={inspectorRef} data-neural-inspector data-testid="neural-futures-inspector" aria-label="Neural Futures inspector" className="absolute inset-x-3 bottom-3 z-40 max-h-[52%] overflow-y-auto rounded-t-[1.35rem] border border-primary/20 bg-background/[0.92] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl md:inset-x-auto md:bottom-5 md:right-5 md:max-h-[calc(100%-7rem)] md:w-72 md:rounded-[1.15rem] lg:w-80">
       <div className="flex items-start justify-between gap-3">
         <div><div className="font-mono text-[9px] uppercase tracking-[0.16em] text-primary">{nodeRoleLabel(node)}</div><h4 className="mt-1 font-display text-lg font-semibold leading-tight">{node.title}</h4></div>
         <button type="button" aria-label="Close neural inspector" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="h-4 w-4" /></button>
@@ -430,6 +563,15 @@ function nodeWidth(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return nodeWidths.repository;
   if (node.kind === 'dependency') return nodeWidths.dependency;
   return nodeWidths[node.role as keyof typeof nodeWidths] || nodeWidths.candidate;
+}
+
+function nodeCameraTarget(node: RepositoryFuturesCanvasNode) {
+  return {
+    x: node.x,
+    y: node.y,
+    width: nodeWidth(node),
+    height: node.kind === 'repository' ? 88 : node.kind === 'dependency' ? 64 : 112,
+  };
 }
 
 function nodeGeometry(node: RepositoryFuturesCanvasNode) {

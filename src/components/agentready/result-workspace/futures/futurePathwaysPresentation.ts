@@ -25,6 +25,8 @@ export interface RepositoryFutureStageCandidate {
   limitations?: string[];
   candidateClass?: 'product-opportunity' | 'repository-improvement';
   opportunityOrigin?: 'evidence-backed' | 'strategic' | 'exploratory';
+  /** Stable semantic horizon supplied by the graph adapter, never by plan role. */
+  futureDepth?: 1 | 2 | 3;
   userValue?: string;
   whyItFits?: string;
   targetUsers?: string[];

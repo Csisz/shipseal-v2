@@ -302,6 +302,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         limitations: candidate.limitations,
         candidateClass: candidate.candidateClass,
         opportunityOrigin: candidate.productOpportunityOrigin,
+        futureDepth: candidateFutureDepth(candidate),
         userValue: candidate.userValue,
         whyItFits: candidate.whyItFits,
         targetUsers: candidate.targetUsers,
@@ -687,6 +688,25 @@ function candidateOriginLabel(candidate: RepositoryFutureNormalizedCandidate) {
   if (candidate.productOpportunityOrigin === 'strategic') return 'Strategic Product Opportunity';
   if (candidate.productOpportunityOrigin === 'exploratory') return 'Exploratory Product Opportunity';
   return originLabel(candidate.origin);
+}
+
+function candidateFutureDepth(candidate: RepositoryFutureNormalizedCandidate): 1 | 2 | 3 {
+  if (candidate.changeWeight === 'small') return 1;
+  if (candidate.changeWeight === 'moderate') return 2;
+  if (candidate.changeWeight === 'broad') return 3;
+  if (candidate.impactBreadth === 'focused') return 1;
+  if (candidate.impactBreadth === 'workflow') return 2;
+  if (candidate.impactBreadth === 'cross-product') return 3;
+  return (1 + (stableFutureHash(candidate.id) % 3)) as 1 | 2 | 3;
+}
+
+function stableFutureHash(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
 }
 
 function humanize(value: string) {

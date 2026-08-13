@@ -2,18 +2,33 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRepositoryFuturesCanvasModel,
   repositoryFuturesEdgePath,
+  repositoryFuturesSelectedPlanNodes,
   repositoryFuturesTrace,
 } from '@/components/agentready/result-workspace/futures/repositoryFuturesCanvasModel';
 import {
+  FUTURES_CAMERA_LIMITS,
+  constrainRepositoryFuturesCamera,
+  fitRepositoryFuturesBoundsCamera,
   fitRepositoryFuturesCamera,
   focusRepositoryFuturesCamera,
+  frameRepositoryFuturesOrigin,
   panRepositoryFuturesCamera,
+  repositoryFuturesBounds,
+  repositoryFuturesCameraLayout,
   repositoryFuturesLod,
+  repositoryFuturesSafeInsets,
+  repositoryFuturesSafeViewport,
+  revealRepositoryFuturesTarget,
   zoomRepositoryFuturesCamera,
 } from '@/components/agentready/result-workspace/futures/repositoryFuturesCamera';
 import type { RepositoryFutureStageOverlay } from '@/components/agentready/result-workspace/futures/futurePathwaysPresentation';
 
-function candidate(goalId: string, role: RepositoryFutureStageOverlay['candidates'][number]['role'], evidenceCount = 2) {
+function candidate(
+  goalId: string,
+  role: RepositoryFutureStageOverlay['candidates'][number]['role'],
+  evidenceCount = 2,
+  futureDepth?: 1 | 2 | 3,
+) {
   return {
     goalId,
     title: `Goal ${goalId}`,
@@ -27,7 +42,14 @@ function candidate(goalId: string, role: RepositoryFutureStageOverlay['candidate
     evidenceCount,
     mappedEvidenceCount: evidenceCount,
     universeNodeIds: evidenceCount ? [`universe:${goalId}`] : [],
+    futureDepth,
   };
+}
+
+function goalPosition(model: ReturnType<typeof buildRepositoryFuturesCanvasModel>, goalId: string) {
+  const node = model.nodes.find(item => item.id === goalId && item.kind === 'goal');
+  expect(node).toBeDefined();
+  return { x: node!.x, y: node!.y, depth: node!.depth, canonicalPosition: node!.canonicalPosition };
 }
 
 const dependency = {
@@ -43,9 +65,9 @@ const dependency = {
 describe('Omega 18.5-V4 repository futures canvas model', () => {
   it('places a current root and real future entities deterministically across explicit horizons', () => {
     const candidates = [
-      candidate('goal:support', 'supporting'),
+      candidate('goal:support', 'supporting', 2, 2),
       candidate('goal:unmapped', 'candidate', 0),
-      candidate('goal:primary', 'primary'),
+      candidate('goal:primary', 'primary', 2, 3),
     ];
     const first = buildRepositoryFuturesCanvasModel('shipseal', {
       candidates,
@@ -64,6 +86,132 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(first.nodes.find(node => node.id === 'goal:primary')).toMatchObject({ role: 'primary', depth: 3 });
     expect(first.nodes.find(node => node.id === 'goal:support')).toMatchObject({ role: 'supporting', depth: 2 });
     expect(first.nodes.find(node => node.id === 'dependency:test')).toMatchObject({ kind: 'dependency', role: 'required' });
+  });
+
+  it('keeps canonical candidate coordinates stable across primary, support, saved, restore, and replacement mutations', () => {
+    const baseCandidates = [
+      candidate('goal:a', 'candidate', 2, 1),
+      candidate('goal:b', 'candidate', 2, 2),
+      candidate('goal:c', 'candidate', 2, 3),
+    ];
+    const build = (candidates: typeof baseCandidates) => buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates,
+      dependencies: [],
+      productIntelligenceState: 'enhanced',
+    });
+    const initial = build(baseCandidates);
+    const primary = build(baseCandidates.map(item => item.goalId === 'goal:b' ? { ...item, role: 'primary' as const } : item));
+    const supporting = build(baseCandidates.map(item => item.goalId === 'goal:b' ? { ...item, role: 'supporting' as const } : item));
+    const saved = build(baseCandidates.map(item => item.goalId === 'goal:b' ? { ...item, role: 'saved' as const } : item));
+    const restored = build(baseCandidates);
+    const replacedPrimary = build(baseCandidates.map(item => ({
+      ...item,
+      role: item.goalId === 'goal:c' ? 'primary' as const : 'candidate' as const,
+    })));
+
+    expect(goalPosition(primary, 'goal:b')).toEqual(goalPosition(initial, 'goal:b'));
+    expect(goalPosition(supporting, 'goal:b')).toEqual(goalPosition(initial, 'goal:b'));
+    expect(goalPosition(saved, 'goal:b')).toEqual(goalPosition(initial, 'goal:b'));
+    expect(goalPosition(restored, 'goal:b')).toEqual(goalPosition(initial, 'goal:b'));
+    expect(goalPosition(replacedPrimary, 'goal:a')).toEqual(goalPosition(initial, 'goal:a'));
+    expect(goalPosition(replacedPrimary, 'goal:b')).toEqual(goalPosition(initial, 'goal:b'));
+  });
+
+  it('does not reposition unrelated candidates when supports change, input order changes, or a new candidate appears', () => {
+    const base = [
+      candidate('goal:a', 'primary', 2, 1),
+      candidate('goal:b', 'candidate', 2, 2),
+      candidate('goal:c', 'candidate', 2, 3),
+    ];
+    const build = (candidates: typeof base) => buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates,
+      dependencies: [],
+      productIntelligenceState: 'enhanced',
+    });
+    const initial = build(base);
+    const withSupport = build(base.map(item => item.goalId === 'goal:b' ? { ...item, role: 'supporting' as const } : item));
+    const withoutSupport = build(base);
+    const reordered = build(base.slice().reverse());
+    const expanded = build([...base, candidate('goal:unrelated', 'candidate', 2, 2)]);
+
+    for (const goalId of ['goal:a', 'goal:b', 'goal:c']) {
+      expect(goalPosition(withSupport, goalId)).toEqual(goalPosition(initial, goalId));
+      expect(goalPosition(withoutSupport, goalId)).toEqual(goalPosition(initial, goalId));
+      expect(goalPosition(reordered, goalId)).toEqual(goalPosition(initial, goalId));
+      expect(goalPosition(expanded, goalId)).toEqual(goalPosition(initial, goalId));
+    }
+  });
+
+  it('keeps later semantic depths forward on desktop and mobile regardless of role', () => {
+    const candidates = [
+      candidate('goal:near', 'primary', 2, 1),
+      candidate('goal:next', 'saved', 2, 2),
+      candidate('goal:later', 'blocked', 2, 3),
+    ];
+    const input = { candidates, dependencies: [], productIntelligenceState: 'enhanced' as const };
+    const desktop = buildRepositoryFuturesCanvasModel('shipseal', input, 'horizontal');
+    const mobile = buildRepositoryFuturesCanvasModel('shipseal', input, 'vertical');
+
+    expect(goalPosition(desktop, 'goal:near').x).toBeLessThan(goalPosition(desktop, 'goal:next').x);
+    expect(goalPosition(desktop, 'goal:next').x).toBeLessThan(goalPosition(desktop, 'goal:later').x);
+    expect(goalPosition(mobile, 'goal:near').y).toBeLessThan(goalPosition(mobile, 'goal:next').y);
+    expect(goalPosition(mobile, 'goal:next').y).toBeLessThan(goalPosition(mobile, 'goal:later').y);
+  });
+
+  it('places each shared prerequisite once and before every dependent goal on both axes', () => {
+    const shared = {
+      ...dependency,
+      dependentGoalIds: ['goal:near', 'goal:later'],
+    };
+    const input = {
+      candidates: [
+        candidate('goal:near', 'primary', 2, 1),
+        candidate('goal:later', 'supporting', 2, 3),
+      ],
+      dependencies: [shared, { ...shared }],
+      productIntelligenceState: 'enhanced' as const,
+    };
+    const desktop = buildRepositoryFuturesCanvasModel('shipseal', input, 'horizontal');
+    const mobile = buildRepositoryFuturesCanvasModel('shipseal', input, 'vertical');
+    const desktopDependency = desktop.nodes.filter(node => node.id === shared.id);
+    const mobileDependency = mobile.nodes.filter(node => node.id === shared.id);
+
+    expect(desktopDependency).toHaveLength(1);
+    expect(mobileDependency).toHaveLength(1);
+    for (const goalId of shared.dependentGoalIds) {
+      expect(desktopDependency[0].x).toBeLessThan(goalPosition(desktop, goalId).x);
+      expect(mobileDependency[0].y).toBeLessThan(goalPosition(mobile, goalId).y);
+    }
+    expect(desktop.edges.filter(edge => edge.kind === 'requirement')).toHaveLength(2);
+  });
+
+  it('resolves duplicate candidate records to one visual node and one current role', () => {
+    const duplicated = candidate('goal:duplicate', 'candidate', 2, 2);
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: [duplicated, { ...duplicated, role: 'saved' }, { ...duplicated, role: 'primary' }],
+      dependencies: [],
+      productIntelligenceState: 'enhanced',
+    });
+    const rendered = model.nodes.filter(node => node.kind === 'goal' && node.id === duplicated.goalId);
+
+    expect(rendered).toHaveLength(1);
+    expect(rendered[0].role).toBe('primary');
+  });
+
+  it('draws the selected corridor over canonical nodes in forward spatial order', () => {
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: [candidate('goal:primary', 'primary', 2, 1), candidate('goal:support', 'supporting', 2, 3)],
+      dependencies: [],
+      productIntelligenceState: 'enhanced',
+    });
+    const edge = model.edges.find(item => item.kind === 'selected-path')!;
+    const source = model.nodes.find(node => node.id === edge.sourceId)!;
+    const target = model.nodes.find(node => node.id === edge.targetId)!;
+
+    expect(source.x).toBeLessThanOrEqual(target.x);
+    expect([source.canonicalPosition, target.canonicalPosition]).not.toContain(undefined);
+    expect(goalPosition(model, 'goal:primary').canonicalPosition?.candidateId).toBe('goal:primary');
+    expect(goalPosition(model, 'goal:support').canonicalPosition?.candidateId).toBe('goal:support');
   });
 
   it('draws only grounded and domain-present relationships and exposes curved trace routes', () => {
@@ -126,10 +274,10 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
   });
 });
 
-describe('Omega 18.5-V4 repository futures camera', () => {
-  it('fits, pans and zooms around the requested anchor within bounded levels of detail', () => {
+describe('Omega 18.5-V7.2 repository futures camera', () => {
+  it('fits, pans and zooms around the requested anchor within useful bounded levels of detail', () => {
     const fit = fitRepositoryFuturesCamera({ width: 1200, height: 680 }, { width: 1480, height: 820 });
-    expect(fit.zoom).toBeGreaterThanOrEqual(0.2);
+    expect(fit.zoom).toBeGreaterThanOrEqual(FUTURES_CAMERA_LIMITS.minimum);
     expect(repositoryFuturesLod(fit.zoom)).toBe('medium');
     expect(panRepositoryFuturesCamera(fit, 12, -8)).toEqual({ ...fit, x: fit.x + 12, y: fit.y - 8 });
 
@@ -137,19 +285,107 @@ describe('Omega 18.5-V4 repository futures camera', () => {
     const zoomed = zoomRepositoryFuturesCamera(fit, 1.2, anchor);
     expect(zoomed.zoom).toBe(1.2);
     expect((anchor.x - fit.x) / fit.zoom).toBeCloseTo((anchor.x - zoomed.x) / zoomed.zoom);
+    expect(zoomRepositoryFuturesCamera(fit, 0.01, anchor).zoom).toBe(FUTURES_CAMERA_LIMITS.minimum);
+    expect(zoomRepositoryFuturesCamera(fit, 10, anchor).zoom).toBe(FUTURES_CAMERA_LIMITS.maximum);
     expect(repositoryFuturesLod(0.5)).toBe('far');
     expect(repositoryFuturesLod(0.9)).toBe('medium');
     expect(repositoryFuturesLod(1.2)).toBe('near');
   });
 
-  it('centers a focused world target without changing domain or layout state', () => {
-    const focused = focusRepositoryFuturesCamera(
-      { x: 0, y: 0, zoom: 0.6 },
-      { width: 800, height: 600 },
-      { x: 1200, y: 400 },
-    );
-    expect(focused.zoom).toBe(1.05);
-    expect(1200 * focused.zoom + focused.x).toBeCloseTo(400);
-    expect(400 * focused.zoom + focused.y).toBeCloseTo(300);
+  it('uses responsive safe insets for desktop, tablet, and mobile inspector occlusion', () => {
+    const desktop = repositoryFuturesSafeInsets({ width: 1200, height: 700 }, { width: 320, height: 420 });
+    const tablet = repositoryFuturesSafeInsets({ width: 900, height: 700 }, { width: 288, height: 420 });
+    const mobile = repositoryFuturesSafeInsets({ width: 390, height: 700 }, { width: 360, height: 300 });
+
+    expect(repositoryFuturesCameraLayout({ width: 1200, height: 700 })).toBe('desktop');
+    expect(repositoryFuturesCameraLayout({ width: 900, height: 700 })).toBe('tablet');
+    expect(repositoryFuturesCameraLayout({ width: 390, height: 700 })).toBe('mobile');
+    expect(desktop.right).toBe(368);
+    expect(tablet.right).toBe(328);
+    expect(tablet.right).not.toBe(desktop.right);
+    expect(mobile.bottom).toBe(370);
+    expect(mobile.right).toBe(18);
+  });
+
+  it('leaves a comfortably visible target completely unchanged', () => {
+    const camera = { x: 20, y: 10, zoom: 0.8 };
+    const viewport = repositoryFuturesSafeViewport({ width: 1000, height: 700 }, { top: 80, right: 300, bottom: 20, left: 60 });
+    const revealed = revealRepositoryFuturesTarget(camera, viewport, { x: 500, y: 350, width: 200, height: 100 });
+    expect(revealed).toBe(camera);
+    expect(revealed).toEqual({ x: 20, y: 10, zoom: 0.8 });
+  });
+
+  it('minimally reveals offscreen or inspector-covered targets without changing zoom', () => {
+    const camera = { x: 0, y: 0, zoom: 0.8 };
+    const viewport = { width: 1200, height: 700 };
+    const insets = repositoryFuturesSafeInsets(viewport, { width: 320, height: 500 });
+    const safe = repositoryFuturesSafeViewport(viewport, insets);
+    const covered = revealRepositoryFuturesTarget(camera, safe, { x: 1050, y: 360, width: 220, height: 100 });
+    const offscreen = focusRepositoryFuturesCamera(camera, viewport, { x: 1800, y: 360 }, insets);
+
+    expect(covered.x).toBeLessThan(camera.x);
+    expect(covered.y).toBe(camera.y);
+    expect(covered.zoom).toBe(camera.zoom);
+    expect(offscreen.x).toBeLessThan(camera.x);
+    expect(offscreen.zoom).toBe(camera.zoom);
+  });
+
+  it('fits meaningful bounds inside the safe viewport with breathing room', () => {
+    const viewport = { width: 1200, height: 700 };
+    const insets = repositoryFuturesSafeInsets(viewport, { width: 320, height: 480 });
+    const safe = repositoryFuturesSafeViewport(viewport, insets);
+    const bounds = { minX: 100, minY: 100, maxX: 1000, maxY: 650 };
+    const camera = fitRepositoryFuturesBoundsCamera(viewport, bounds, insets, 40);
+
+    expect(bounds.minX * camera.zoom + camera.x).toBeGreaterThanOrEqual(safe.left + 39);
+    expect(bounds.maxX * camera.zoom + camera.x).toBeLessThanOrEqual(safe.right - 39);
+    expect(bounds.minY * camera.zoom + camera.y).toBeGreaterThanOrEqual(safe.top + 39);
+    expect(bounds.maxY * camera.zoom + camera.y).toBeLessThanOrEqual(safe.bottom - 39);
+  });
+
+  it('returns exactly the root, selected goals, and their automatic dependencies for plan framing', () => {
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: [
+        candidate('goal:primary', 'primary', 2, 2),
+        candidate('goal:support', 'supporting', 2, 3),
+        candidate('goal:alternative', 'candidate', 2, 1),
+        candidate('goal:saved', 'saved', 2, 3),
+      ],
+      dependencies: [dependency],
+      productIntelligenceState: 'enhanced',
+    });
+    const nodes = repositoryFuturesSelectedPlanNodes(model);
+    const ids = nodes.map(node => node.id);
+    const bounds = repositoryFuturesBounds(nodes);
+
+    expect(ids).toEqual(expect.arrayContaining(['repository:shipseal', 'goal:primary', 'goal:support', 'dependency:test']));
+    expect(ids).not.toContain('goal:alternative');
+    expect(ids).not.toContain('goal:saved');
+    expect(bounds).toBeDefined();
+  });
+
+  it('frames the repository origin at a useful orientation point', () => {
+    const viewport = { width: 1200, height: 700 };
+    const insets = repositoryFuturesSafeInsets(viewport);
+    const safe = repositoryFuturesSafeViewport(viewport, insets);
+    const camera = frameRepositoryFuturesOrigin(viewport, { x: 150, y: 410 }, 'horizontal', insets);
+
+    expect(150 * camera.zoom + camera.x).toBeCloseTo(safe.left + safe.width * 0.25);
+    expect(410 * camera.zoom + camera.y).toBeCloseTo(safe.top + safe.height / 2);
+    expect(camera.zoom).toBe(0.9);
+  });
+
+  it('prevents total graph loss while retaining bounded overscroll', () => {
+    const viewport = { width: 1200, height: 700 };
+    const bounds = { minX: 45, minY: 70, maxX: 1260, maxY: 750 };
+    const leftExtreme = constrainRepositoryFuturesCamera({ x: -10000, y: -10000, zoom: 0.8 }, viewport, bounds);
+    const rightExtreme = constrainRepositoryFuturesCamera({ x: 10000, y: 10000, zoom: 0.8 }, viewport, bounds);
+
+    expect(leftExtreme.x).toBeGreaterThan(-10000);
+    expect(leftExtreme.y).toBeGreaterThan(-10000);
+    expect(rightExtreme.x).toBeLessThan(10000);
+    expect(rightExtreme.y).toBeLessThan(10000);
+    expect(leftExtreme.x).toBeLessThan(0);
+    expect(rightExtreme.x).toBeGreaterThan(0);
   });
 });
