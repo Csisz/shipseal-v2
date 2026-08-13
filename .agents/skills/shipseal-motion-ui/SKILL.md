@@ -2,7 +2,7 @@
 
 name: shipseal-motion-ui
 description: Use for ShipSeal UI/UX, animated interfaces, repository visualizations, loading experiences, neural graphs, Future Pathways, transitions, motion design, and other visual interaction work. Apply ShipSeal's product-specific visual language and motion principles. Do not use for backend-only or unrelated infrastructure work.
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+---
 
 # ShipSeal Motion UI
 

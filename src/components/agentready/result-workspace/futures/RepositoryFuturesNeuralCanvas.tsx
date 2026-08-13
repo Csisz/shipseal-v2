@@ -31,7 +31,7 @@ interface RepositoryFuturesNeuralCanvasProps {
 }
 
 const DEFAULT_VIEWPORT = { width: 1200, height: 680 };
-const nodeWidths = { repository: 188, candidate: 184, primary: 210, supporting: 192, saved: 176, blocked: 176, dependency: 164 } as const;
+const nodeWidths = { repository: 184, candidate: 166, primary: 192, supporting: 178, saved: 156, blocked: 158, dependency: 150 } as const;
 
 export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: RepositoryFuturesNeuralCanvasProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -143,9 +143,12 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
 
   useLayoutEffect(() => {
     if (!stageRef.current || typeof ResizeObserver === 'undefined') return undefined;
+    let previousViewport = getViewport();
     const observer = new ResizeObserver(() => {
       if (!initialFramingRef.current) return;
       const viewport = getViewport();
+      if (Math.abs(viewport.width - previousViewport.width) < 0.5 && Math.abs(viewport.height - previousViewport.height) < 0.5) return;
+      previousViewport = viewport;
       const inspectorBounds = pinnedIdRef.current ? inspectorRef.current?.getBoundingClientRect() : undefined;
       const insets = repositoryFuturesSafeInsets(viewport, inspectorBounds ? {
         width: inspectorBounds.width,
@@ -179,11 +182,32 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
     if (!node || !cameraRef.current) return;
     const viewport = getViewport();
     const insets = getInsets(true);
+    const target = nodeCameraTarget(node);
+    const projected = {
+      left: target.x * cameraRef.current.zoom + cameraRef.current.x - target.width * cameraRef.current.zoom / 2,
+      right: target.x * cameraRef.current.zoom + cameraRef.current.x + target.width * cameraRef.current.zoom / 2,
+      top: target.y * cameraRef.current.zoom + cameraRef.current.y - target.height * cameraRef.current.zoom / 2,
+      bottom: target.y * cameraRef.current.zoom + cameraRef.current.y + target.height * cameraRef.current.zoom / 2,
+    };
+    const stageBounds = stageRef.current?.getBoundingClientRect();
+    const inspectorBounds = inspectorRef.current?.getBoundingClientRect();
+    const inspector = stageBounds && inspectorBounds ? {
+      left: inspectorBounds.left - stageBounds.left,
+      right: inspectorBounds.right - stageBounds.left,
+      top: inspectorBounds.top - stageBounds.top,
+      bottom: inspectorBounds.bottom - stageBounds.top,
+    } : undefined;
+    const onscreen = projected.left >= 12 && projected.right <= viewport.width - 12
+      && projected.top >= 12 && projected.bottom <= viewport.height - 12;
+    const inspectorOverlap = inspector && projected.right > inspector.left - 8 && projected.left < inspector.right + 8
+      && projected.bottom > inspector.top - 8 && projected.top < inspector.bottom + 8;
+    if (onscreen && !inspectorOverlap) return;
     const revealed = revealRepositoryFuturesTarget(
       cameraRef.current,
       repositoryFuturesSafeViewport(viewport, insets),
-      nodeCameraTarget(node),
+      target,
     );
+    if (revealed === cameraRef.current) return;
     const bounded = constrainRepositoryFuturesCamera(revealed, viewport, meaningfulBounds, insets);
     if (bounded.x !== cameraRef.current.x || bounded.y !== cameraRef.current.y) applyCamera(bounded, true);
   }, [applyCamera, getInsets, getViewport, meaningfulBounds, nodeById, pinnedId]);
@@ -319,18 +343,18 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         onClick={event => {
           if (!(event.target as Element).closest('[data-neural-node], [data-camera-control], [data-futures-mode-owner], [data-neural-inspector]')) clearFocus();
         }}
-        className={`futures-neural-stage relative h-[min(76svh,860px)] min-h-[620px] overflow-hidden rounded-[1rem] border border-primary/15 outline-none [touch-action:none] focus-visible:ring-2 focus-visible:ring-ring md:min-h-[700px] ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`futures-neural-stage relative h-[calc(100svh-220px)] min-h-[590px] max-h-[820px] overflow-hidden rounded-[1rem] border border-primary/15 outline-none [touch-action:none] focus-visible:ring-2 focus-visible:ring-ring md:h-[calc(100svh-270px)] md:min-h-[520px] ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
         <div aria-hidden="true" className="futures-neural-mesh pointer-events-none absolute inset-0 opacity-[0.2]" />
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,hsl(var(--futures-field-bg)/0.44)_100%)]" />
-        <div data-futures-mode-owner role="group" aria-label="Future Pathways mode" className="absolute left-3 top-3 z-30 inline-flex rounded-full border border-border/40 bg-background/[0.72] p-0.5 backdrop-blur-md md:left-5 md:top-5">
+        <div data-futures-mode-owner role="group" aria-label="Future Pathways mode" className="absolute left-3 top-3 z-30 inline-flex rounded-full border border-border/40 bg-background/[0.72] p-0.5 shadow-sm backdrop-blur-md md:left-5 md:top-5">
           {(['quick', 'deep'] as const).map(value => (
             <button key={value} type="button" aria-label={value === 'quick' ? 'Quick Path' : 'Deep Configuration'} aria-pressed={overlay.mode === value} onClick={event => { event.stopPropagation(); overlay.onModeChange(value); }} className={`min-h-9 rounded-full px-3 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${overlay.mode === value ? 'bg-primary/15 text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
               {value === 'quick' ? 'Quick' : 'Deep'}
             </button>
           ))}
         </div>
-        <div data-camera-control className="absolute left-3 top-14 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-0.5 rounded-full border border-border/35 bg-background/[0.72] p-0.5 backdrop-blur-md md:left-5 md:top-[4.35rem]">
+        <div data-camera-control className="absolute bottom-3 left-3 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-0.5 rounded-full border border-border/35 bg-background/[0.72] p-0.5 shadow-sm backdrop-blur-md md:bottom-5 md:left-5">
           <CameraButton label="Zoom out" onClick={() => zoomAtCenter(1 / 1.16)}><Minus /></CameraButton>
           <CameraButton label="Zoom in" onClick={() => zoomAtCenter(1.16)}><Plus /></CameraButton>
           <CameraButton label="Fit all futures" onClick={fitAll}><Focus /></CameraButton>
@@ -338,7 +362,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
           <CameraButton label="Back to current repository" onClick={backToRepository}><GitBranch /></CameraButton>
           {activeId && <CameraButton label="Clear focused route" onClick={clearFocus}><X /></CameraButton>}
         </div>
-        <div aria-label="Live Future Plan summary" data-plan-status={primary ? 'composed' : 'empty'} className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-8.5rem)] border-l border-primary/30 bg-background/[0.55] px-3 py-1.5 text-right text-[10px] text-muted-foreground backdrop-blur-md md:right-5 md:top-5 md:max-w-md">
+        <div aria-label="Live Future Plan summary" data-plan-status={primary ? 'composed' : 'empty'} className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-8.5rem)] rounded-lg border border-primary/15 bg-background/[0.62] px-3 py-2 text-right text-[10px] text-muted-foreground shadow-sm backdrop-blur-md md:right-5 md:top-5 md:max-w-md">
           {primary ? <>
             <span className="block truncate font-medium text-foreground"><span className="font-mono text-[9px] uppercase tracking-[0.12em] text-primary">Primary</span> · {primary.title}</span>
             <span className="mt-1 block font-mono uppercase tracking-[0.1em]">Supports {overlay.supportCount}/2 · Requirements {overlay.dependencies.length} automatic</span>
@@ -373,9 +397,9 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
             <g data-field-layer="structured-rows" aria-hidden="true">
               {model.streamRows.filter(row => row.occupied > 0).map(row => model.orientation === 'horizontal' ? (
                 <g key={row.index} data-stream-row={row.index}>
-                  <rect x="360" y={row.position - 36} width={model.world.width - 420} height="72" rx="36" fill="url(#future-lane-field)" />
-                  <line x1="386" x2={model.world.width - 82} y1={row.position} y2={row.position} stroke="hsl(var(--futures-structure))" strokeWidth="0.8" strokeDasharray="1 15" opacity="0.28" />
-                  <text x="372" y={row.position - 45} fill="hsl(var(--muted-foreground))" fontSize="9" letterSpacing="1.35" opacity="0.55">{row.label.toUpperCase()}</text>
+                  <rect x="332" y={row.position - 31} width={model.world.width - 386} height="62" rx="31" fill="url(#future-lane-field)" />
+                  <path d={`M 350 ${row.position} C 620 ${row.position - 4}, 950 ${row.position + 4}, ${model.world.width - 70} ${row.position}`} fill="none" stroke="hsl(var(--futures-structure))" strokeWidth="0.8" strokeDasharray="1 17" opacity="0.3" />
+                  <text x="350" y={row.position - 39} fill="hsl(var(--muted-foreground))" fontSize="8.5" letterSpacing="1.45" opacity="0.58">{row.label.toUpperCase()}</text>
                 </g>
               ) : (
                 <g key={row.index} data-stream-row={row.index}>
@@ -386,8 +410,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
             </g>
             <g data-field-layer="prerequisite-rail" aria-hidden="true">
               {model.orientation === 'horizontal' ? <>
-                <rect x="285" y={model.prerequisiteBand.position} width={model.world.width - 350} height={model.world.height - model.prerequisiteBand.position - 16} rx="34" fill="hsl(var(--futures-requirement) / 0.035)" stroke="hsl(var(--futures-requirement) / 0.16)" strokeDasharray="2 12" />
-                <text x="312" y={model.prerequisiteBand.position + 24} fill="hsl(var(--futures-requirement))" fontSize="9" letterSpacing="1.45" opacity="0.62">PREREQUISITE LAYER · {model.prerequisiteBand.label.toUpperCase()}</text>
+                <rect x="285" y={model.prerequisiteBand.position} width={model.world.width - 350} height={model.world.height - model.prerequisiteBand.position - 16} rx="34" fill="hsl(var(--futures-requirement) / 0.03)" stroke="hsl(var(--futures-requirement) / 0.19)" strokeDasharray="2 12" />
+                <text x="312" y={model.prerequisiteBand.position + 24} fill="hsl(var(--futures-requirement))" fontSize="9" letterSpacing="1.45" opacity="0.7">PREREQUISITE RAIL · REQUIRED TO ENABLE A FUTURE</text>
               </> : <>
                 <rect x={model.prerequisiteBand.position} y="285" width={model.world.width - model.prerequisiteBand.position - 16} height={model.world.height - 350} rx="34" fill="hsl(var(--futures-requirement) / 0.035)" stroke="hsl(var(--futures-requirement) / 0.16)" strokeDasharray="2 12" />
                 <text x={model.prerequisiteBand.position + 22} y="312" fill="hsl(var(--futures-requirement))" fontSize="9" letterSpacing="1.45" opacity="0.62" transform={`rotate(90 ${model.prerequisiteBand.position + 22} 312)`}>PREREQUISITES</text>
@@ -418,8 +442,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                   data-field-object-halo={node.kind}
                   cx={node.x}
                   cy={node.y}
-                  rx={node.role === 'primary' ? 96 : node.kind === 'repository' ? 82 : prerequisite ? 62 : 70}
-                  ry={node.role === 'primary' ? 54 : prerequisite ? 34 : 42}
+                  rx={node.role === 'primary' ? 80 : node.kind === 'repository' ? 72 : prerequisite ? 54 : 58}
+                  ry={node.role === 'primary' ? 42 : prerequisite ? 26 : 30}
                   fill={selected ? 'hsl(var(--futures-selected))' : prerequisite ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-atmosphere))'}
                   opacity={selected ? 0.075 : prerequisite ? 0.055 : 0.035}
                 />;
@@ -427,8 +451,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
             </g>
             {model.edges.map(edge => {
               const traced = !activeId || trace.edgeIds.has(edge.id);
-              const baseOpacity = lod === 'far' ? 0.3 : lod === 'near' ? 0.58 : 0.46;
-              const opacity = traced ? edge.selected ? 0.92 : baseOpacity : 0.14;
+              const baseOpacity = lod === 'far' ? 0.38 : lod === 'near' ? 0.66 : 0.54;
+              const opacity = traced ? edge.selected ? 0.94 : baseOpacity : 0.22;
               const path = repositoryFuturesEdgePath(edge, nodeById, model.orientation);
               return (
                 <g key={`${edge.id}:${overlay.draftFingerprint || 'possibility'}`} data-relationship-emphasis={edge.selected ? 'selected' : 'supporting'}>
@@ -441,8 +465,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                     d={path}
                     fill="none"
                     stroke={edge.selected ? 'hsl(var(--futures-selected))' : edge.kind === 'requirement' ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-structure))'}
-                    strokeWidth={edge.selected ? 10 : edge.kind === 'requirement' ? 6 : 4}
-                    opacity={traced ? edge.selected ? 0.12 : 0.045 : 0.025}
+                    strokeWidth={edge.selected ? 8 : edge.kind === 'requirement' ? 5 : 3}
+                    opacity={traced ? edge.selected ? 0.12 : 0.055 : 0.035}
                     strokeLinecap="round"
                     className="transition-opacity duration-150 motion-reduce:transition-none"
                   />
@@ -455,7 +479,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                     d={path}
                     fill="none"
                     stroke={edge.selected ? 'url(#future-route)' : edge.kind === 'requirement' ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-structure))'}
-                    strokeWidth={edge.selected ? 3.2 : edge.kind === 'requirement' ? 1.8 : 1.4}
+                    strokeWidth={edge.selected ? 2.7 : edge.kind === 'requirement' ? 1.7 : 1.25}
                     strokeDasharray={edge.selected && overlay.draftFingerprint && !reducedMotion ? '1' : edge.kind === 'grounding' && !edge.selected ? '4 7' : undefined}
                     opacity={opacity}
                     pathLength="1"
@@ -504,13 +528,13 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 onMouseLeave={() => { setHoveredId(undefined); if (!pinnedId) overlay.onTracePreview?.(undefined); }}
                 onFocus={() => { setHoveredId(node.id); overlay.onTracePreview?.(node.id); }}
                 onBlur={() => { setHoveredId(undefined); if (!pinnedId) overlay.onTracePreview?.(undefined); }}
-                className={`future-field-node absolute -translate-x-1/2 -translate-y-1/2 border text-left outline-none transition-[opacity,border-color,box-shadow,transform] duration-150 focus-visible:ring-4 focus-visible:ring-ring/70 motion-reduce:transition-none ${reducedMotion ? '' : 'future-canvas-node-reveal'} ${nodeGeometry(node)} ${nodeClass(node, pinnedId === node.id)} ${showTitle ? `${mobile ? 'min-h-24' : node.role === 'primary' ? 'min-h-[4.4rem]' : 'min-h-[3.65rem]'} px-3.5 py-2.5` : `${mobile ? 'h-16' : 'h-6'} min-h-0 rounded-full p-0`} ${traced ? '' : 'opacity-[0.3]'}`}
-                style={{ left: node.x, top: node.y, width: showTitle ? nodeWidth(node) : mobile ? 64 : 24, animationDelay: reducedMotion ? undefined : `${node.depth * 65}ms` }}
+                className={`future-field-node absolute -translate-x-1/2 -translate-y-1/2 text-left outline-none transition-[opacity,border-color,box-shadow,transform] duration-150 focus-visible:ring-4 focus-visible:ring-ring/70 motion-reduce:transition-none ${reducedMotion ? '' : 'future-canvas-node-reveal'} ${nodeGeometry(node)} ${nodeClass(node, pinnedId === node.id)} ${showTitle ? `${mobile ? 'min-h-[6.25rem] px-2' : `${node.role === 'primary' ? 'min-h-[3.9rem]' : 'min-h-[3.2rem]'} px-3`} py-2` : `${mobile ? 'h-14' : 'h-5'} min-h-0 rounded-full p-0`} ${traced ? '' : 'opacity-[0.44]'}`}
+                style={{ left: node.x, top: node.y, width: showTitle ? mobile ? mobileNodeWidth(node) : nodeWidth(node) : mobile ? 56 : 24, animationDelay: reducedMotion ? undefined : `${node.depth * 65}ms` }}
               >
                 {showTitle ? <>
-                  <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.14em] opacity-75">{nodeIcon(node)}{nodeRoleLabel(node)}</span>
-                  <span className="mt-1.5 block text-sm font-semibold leading-snug">{node.title}</span>
-                  {showMetadata && <span className="mt-1 block text-[10px] opacity-65">{nodeMetadata(node)}</span>}
+                  <span className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.16em] opacity-75">{nodeIcon(node)}{nodeRoleLabel(node)}</span>
+                  <span className="mt-1 block text-[13px] font-semibold leading-[1.25]">{node.title}</span>
+                  {showMetadata && <span className="mt-1 block text-[9px] opacity-65">{nodeMetadata(node)}</span>}
                 </> : <span aria-hidden="true" className="block h-full w-full rounded-full bg-current opacity-75" />}
               </button>
             );
@@ -520,7 +544,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         {activeNode && (
           <NeuralInspector inspectorRef={inspectorRef} node={activeNode} overlay={overlay} onClose={clearFocus} />
         )}
-        {overlay.notice && <div role="status" aria-live="polite" className="pointer-events-none absolute bottom-3 left-3 z-30 max-w-sm rounded-xl border border-primary/20 bg-background/85 px-3 py-2 text-xs text-foreground shadow-sm backdrop-blur-md md:bottom-5 md:left-5">{overlay.notice}</div>}
+        {overlay.notice && <div role="status" aria-live="polite" className="pointer-events-none absolute left-3 top-24 z-30 max-w-[calc(100%-1.5rem)] rounded-xl border border-primary/20 bg-background/85 px-3 py-2 text-xs text-foreground shadow-sm backdrop-blur-md md:bottom-20 md:left-5 md:top-auto md:max-w-sm">{overlay.notice}</div>}
       </div>
       <p className="mt-2 px-2 text-[10px] text-muted-foreground">
         {mobile
@@ -555,7 +579,7 @@ function NeuralInspector({ inspectorRef, node, overlay, onClose }: { inspectorRe
     if (action.id === 'replace-support') setReplacementOpen(true);
   };
   return (
-    <aside ref={inspectorRef} data-neural-inspector data-testid="neural-futures-inspector" aria-label="Neural Futures inspector" className="absolute inset-x-3 bottom-3 z-40 max-h-[52%] overflow-y-auto rounded-t-[1.35rem] border border-primary/20 bg-background/[0.92] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl md:inset-x-auto md:bottom-5 md:right-5 md:max-h-[calc(100%-7rem)] md:w-72 md:rounded-[1.15rem] lg:w-80">
+    <aside ref={inspectorRef} data-neural-inspector data-testid="neural-futures-inspector" aria-label="Neural Futures inspector" className="absolute inset-x-3 bottom-3 z-40 max-h-[52%] overflow-y-auto rounded-t-[1.35rem] border border-primary/20 bg-background/[0.94] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl md:inset-x-auto md:bottom-5 md:right-5 md:max-h-[calc(100%-6.5rem)] md:w-72 md:rounded-[1.15rem] lg:w-[19rem]">
       <div className="flex items-start justify-between gap-3">
         <div><div className="font-mono text-[9px] uppercase tracking-[0.16em] text-primary">{nodeRoleLabel(node)}</div><h4 className="mt-1 font-display text-lg font-semibold leading-tight">{node.title}</h4></div>
         <button type="button" aria-label="Close neural inspector" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="h-4 w-4" /></button>
@@ -646,6 +670,15 @@ function nodeWidth(node: RepositoryFuturesCanvasNode) {
   return nodeWidths[node.role as keyof typeof nodeWidths] || nodeWidths.candidate;
 }
 
+function mobileNodeWidth(node: RepositoryFuturesCanvasNode) {
+  if (node.kind === 'repository') return 150;
+  if (node.kind === 'dependency') return 112;
+  if (node.role === 'primary') return 100;
+  if (node.role === 'supporting') return 96;
+  if (node.role === 'saved' || node.role === 'blocked') return 82;
+  return 90;
+}
+
 function nodeCameraTarget(node: RepositoryFuturesCanvasNode) {
   return {
     x: node.x,
@@ -656,27 +689,27 @@ function nodeCameraTarget(node: RepositoryFuturesCanvasNode) {
 }
 
 function nodeGeometry(node: RepositoryFuturesCanvasNode) {
-  if (node.kind === 'repository') return 'rounded-[1.25rem]';
-  if (node.kind === 'dependency') return 'rounded-full';
-  if (node.role === 'primary') return 'rounded-[1.1rem] border-2';
-  if (node.role === 'saved' || node.role === 'blocked') return 'rounded-[1rem]';
-  return 'rounded-[1.15rem]';
+  if (node.kind === 'repository') return 'rounded-full border';
+  if (node.kind === 'dependency') return 'rounded-full border';
+  if (node.role === 'primary') return 'rounded-full border-2';
+  if (node.role === 'saved' || node.role === 'blocked') return 'rounded-full border';
+  return 'rounded-full border';
 }
 
 function nodeClass(node: RepositoryFuturesCanvasNode, pinned: boolean) {
-  if (node.kind === 'repository') return 'border-foreground/25 bg-foreground/[0.075] text-foreground shadow-[0_0_30px_hsl(var(--foreground)/0.065)]';
+  if (node.kind === 'repository') return 'border-foreground/38 bg-foreground/[0.055] text-foreground ring-1 ring-inset ring-foreground/10 shadow-[0_0_32px_hsl(var(--foreground)/0.08)]';
   if (node.kind === 'dependency') return node.role === 'satisfied'
-    ? 'border-success/40 bg-success/[0.08] text-foreground'
-    : 'border-accent/42 bg-accent/[0.08] text-foreground';
-  if (node.role === 'primary') return 'border-primary/75 bg-primary/[0.16] text-foreground ring-1 ring-primary/25 shadow-[0_0_30px_hsl(var(--primary)/0.18)]';
-  if (node.role === 'supporting') return 'border-accent/55 bg-accent/[0.1] text-foreground shadow-[0_0_20px_hsl(var(--accent)/0.1)]';
+    ? 'border-success/48 bg-success/[0.065] text-foreground ring-1 ring-inset ring-success/15'
+    : 'border-accent/48 bg-accent/[0.065] text-foreground ring-1 ring-inset ring-accent/12';
+  if (node.role === 'primary') return 'border-primary/85 bg-primary/[0.11] text-foreground ring-2 ring-primary/18 shadow-[0_0_28px_hsl(var(--primary)/0.2)]';
+  if (node.role === 'supporting') return 'border-accent/65 bg-accent/[0.075] text-foreground ring-1 ring-accent/14 shadow-[0_0_18px_hsl(var(--accent)/0.1)]';
   if (node.role === 'saved') return 'border-border/50 bg-background/[0.58] text-muted-foreground ring-1 ring-inset ring-border/25';
   if (node.role === 'blocked') return 'border-dashed border-muted-foreground/40 bg-background/40 text-muted-foreground';
   if (node.candidate?.compatibility === 'compatible-with-review') return 'border-dashed border-warning/45 bg-warning/[0.045] text-foreground';
   if (node.candidate && ['blocked', 'incompatible'].includes(node.candidate.compatibility)) return 'border-dashed border-muted-foreground/40 bg-background/40 text-muted-foreground';
   return pinned
-    ? 'border-primary/70 bg-primary/[0.12] text-foreground shadow-[0_0_24px_hsl(var(--primary)/0.14)]'
-    : 'border-primary/30 bg-background/[0.68] text-foreground hover:border-primary/60 hover:bg-primary/[0.07]';
+    ? 'border-primary/72 bg-primary/[0.09] text-foreground ring-1 ring-primary/18 shadow-[0_0_22px_hsl(var(--primary)/0.13)]'
+    : 'border-primary/38 bg-background/[0.52] text-foreground hover:border-primary/66 hover:bg-primary/[0.055]';
 }
 
 function useReducedMotion() {

@@ -123,9 +123,9 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(ambientEdges).toHaveLength(semanticEdges.length);
     expect([...semanticEdges].every(edge => edge.hasAttribute('data-future-edge-id'))).toBe(true);
     expect(selectedEdge).toHaveAttribute('data-trace-state', 'related');
-    expect(selectedEdge).toHaveAttribute('opacity', '0.92');
+    expect(selectedEdge).toHaveAttribute('opacity', '0.94');
     expect(broaderEdge).toHaveAttribute('data-trace-state', 'dimmed');
-    expect(broaderEdge).toHaveAttribute('opacity', '0.14');
+    expect(broaderEdge).toHaveAttribute('opacity', '0.22');
     expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveAttribute('data-neural-role', 'primary');
     expect(screen.getByRole('button', { name: /Required dependency/i })).toHaveAttribute('data-neural-role', 'required');
   });
@@ -353,7 +353,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
 
     await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'vertical'));
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveClass('min-h-24');
+    expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveClass('min-h-[6.25rem]');
     expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '860px', height: '1480px' });
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });

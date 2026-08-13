@@ -35,7 +35,7 @@ export default function RepositoryFuturesWorkspace({
       aria-labelledby="repository-futures-heading"
       data-testid="repository-futures-workspace"
       data-futures-environment="cinematic-field"
-      className="relative left-1/2 w-screen -translate-x-1/2 overflow-hidden bg-workspace pb-10"
+      className="relative w-full overflow-hidden bg-workspace pb-10"
     >
       <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_72%_0%,hsl(var(--primary)/0.1),transparent_44%),radial-gradient(circle_at_18%_8%,hsl(var(--accent)/0.055),transparent_38%)]" />
       <div className="relative mx-auto w-full max-w-[1680px] px-3 pb-4 pt-3 sm:px-5 md:px-7 md:pt-5">

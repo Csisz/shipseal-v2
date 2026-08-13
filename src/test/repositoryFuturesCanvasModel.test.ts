@@ -114,6 +114,42 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(goals.every(node => node.canonicalPosition?.candidateId === node.id)).toBe(true);
   });
 
+  it('separates repository-improvement streams by semantic family without changing canonical depth', () => {
+    const foundations = [
+      { ...candidate('goal:docs', 'candidate', 2, 2), title: 'Create a documentation index', candidateClass: 'repository-improvement' as const },
+      { ...candidate('goal:route', 'candidate', 2, 2), title: 'Create a task router', candidateClass: 'repository-improvement' as const },
+      { ...candidate('goal:deploy', 'candidate', 2, 2), title: 'Document deployment flow', candidateClass: 'repository-improvement' as const },
+      { ...candidate('goal:security', 'candidate', 2, 2), title: 'Add security and data handling review anchor', candidateClass: 'repository-improvement' as const },
+    ];
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: foundations,
+      dependencies: [],
+      productIntelligenceState: 'enhanced',
+    });
+    const goals = foundations.map(item => model.nodes.find(node => node.id === item.goalId)!);
+
+    expect(new Set(goals.map(node => node.presentationRow?.index)).size).toBe(4);
+    expect(goals.every(node => node.depth === 2 && node.canonicalPosition?.futureDepth === 2)).toBe(true);
+    expect(goals.every(node => node.x >= 870 && node.x <= 920)).toBe(true);
+  });
+
+  it('places synthesized unclassified previews away from their workflow goal', () => {
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: [
+        { ...candidate('goal:router', 'primary', 2, 2), title: 'Create a task router' },
+        { ...candidate('goal:preview', 'candidate', 2, 2), title: 'Preview task routing map' },
+      ],
+      dependencies: [],
+      productIntelligenceState: 'enhanced',
+    });
+    const router = model.nodes.find(node => node.id === 'goal:router')!;
+    const preview = model.nodes.find(node => node.id === 'goal:preview')!;
+
+    expect(router.presentationRow?.index).toBe(4);
+    expect(preview.presentationRow?.index).toBe(2);
+    expect(router.depth).toBe(preview.depth);
+  });
+
   it('keeps canonical candidate coordinates stable across primary, support, saved, restore, and replacement mutations', () => {
     const baseCandidates = [
       candidate('goal:a', 'candidate', 2, 1),
@@ -293,7 +329,11 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(vertical.orientation).toBe('vertical');
     expect(vertical.world).toEqual({ width: horizontal.world.height, height: horizontal.world.width });
     horizontal.nodes.forEach(node => {
-      expect(vertical.nodes.find(item => item.id === node.id)).toMatchObject({ x: node.y, y: node.x });
+      const verticalNode = vertical.nodes.find(item => item.id === node.id)!;
+      expect(verticalNode.y).toBe(node.x);
+      if (!node.presentationRow) expect(verticalNode.x).toBe(node.y);
+      if (node.canonicalPosition) expect(verticalNode.canonicalPosition).toMatchObject({ x: node.canonicalPosition.y, y: node.canonicalPosition.x });
+      else expect(verticalNode.canonicalPosition).toBeUndefined();
     });
     expect(vertical.edges).toEqual(horizontal.edges);
     expect(repositoryFuturesEdgePath(vertical.edges[0], new Map(vertical.nodes.map(node => [node.id, node])), 'vertical')).toContain(' C ');

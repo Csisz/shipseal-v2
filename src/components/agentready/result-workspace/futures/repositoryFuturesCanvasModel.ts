@@ -71,13 +71,33 @@ function stableHash(value: string) {
 }
 
 const structuredRows = [
-  { label: 'Strategic opportunities', position: 115 },
-  { label: 'Evidence-backed opportunities', position: 215 },
-  { label: 'Product directions', position: 315 },
-  { label: 'Repository foundations', position: 415 },
-  { label: 'Repository hardening', position: 515 },
-  { label: 'Exploratory directions', position: 615 },
+  { label: 'Strategic opportunities', position: 95 },
+  { label: 'Evidence-backed opportunities', position: 160 },
+  { label: 'Product & preview directions', position: 225 },
+  { label: 'Knowledge systems', position: 290 },
+  { label: 'Agent workflows', position: 365 },
+  { label: 'Delivery systems', position: 440 },
+  { label: 'Safety & governance', position: 515 },
+  { label: 'Exploratory directions', position: 590 },
 ] as const;
+
+const verticalStreamPosition = (index: number) => 40 + index * 95;
+
+function repositoryFoundationRow(candidate: RepositoryFutureStageCandidate) {
+  const title = candidate.title.toLowerCase();
+  const signal = `${title} ${candidate.capabilityTitle || ''} ${candidate.capabilityId}`.toLowerCase();
+  if (/\b(security|privacy|data|critical|risk|auth|compliance|policy)\b/.test(title)) return 6;
+  if (/\b(deploy|deployment|release|rollback|handoff|delivery)\b/.test(title)) return 5;
+  if (/\b(preview|interface|visual|map|experience)\b/.test(title)) return 2;
+  if (/\b(documentation|docs?|readme|knowledge|index|memory)\b/.test(title)) return 3;
+  if (/\b(route|routing|workflow|command|agent|instruction|test|verification)\b/.test(title)) return 4;
+  if (/\b(security|privacy|data|critical|risk|auth|compliance|policy)\b/.test(signal)) return 6;
+  if (/\b(deploy|deployment|release|rollback|handoff|delivery)\b/.test(signal)) return 5;
+  if (/\b(preview|interface|visual|map|experience)\b/.test(signal)) return 2;
+  if (/\b(documentation|docs?|readme|knowledge|index|memory|context)\b/.test(signal)) return 3;
+  if (/\b(route|routing|workflow|command|agent|instruction|test|verification)\b/.test(signal)) return 4;
+  return 3 + (stableHash(`${candidate.goalId}:foundation-row`) % 4);
+}
 
 function repositoryFuturePresentationRow(candidate: RepositoryFutureStageCandidate) {
   let stream: RepositoryFuturesPresentationStream;
@@ -90,16 +110,16 @@ function repositoryFuturePresentationRow(candidate: RepositoryFutureStageCandida
     index = 1;
   } else if (candidate.candidateClass === 'product-opportunity' && candidate.opportunityOrigin === 'exploratory') {
     stream = 'exploratory';
-    index = 5;
+    index = 7;
   } else if (candidate.candidateClass === 'product-opportunity') {
     stream = 'product';
     index = 2;
   } else if (candidate.candidateClass === 'repository-improvement') {
     stream = 'foundation';
-    index = 3 + (stableHash(`${candidate.goalId}:foundation-row`) % 2);
+    index = repositoryFoundationRow(candidate);
   } else {
     stream = 'general';
-    index = stableHash(`${candidate.goalId}:structured-row`) % structuredRows.length;
+    index = repositoryFoundationRow(candidate);
   }
   return {
     index,
@@ -165,7 +185,7 @@ export function buildRepositoryFuturesCanvasModel(
     role: 'current',
     title: repositoryName,
     x: 150,
-    y: 365,
+    y: 350,
     depth: 0,
   }];
   const edges: RepositoryFuturesCanvasEdge[] = [];
@@ -227,7 +247,7 @@ export function buildRepositoryFuturesCanvasModel(
     const dependencyX = prerequisiteColumns <= 1
       ? prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) / 2
       : prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) * (column / (prerequisiteColumns - 1));
-    const dependencyY = 700 + (index % prerequisiteRows) * 55;
+    const dependencyY = 690 + (index % prerequisiteRows) * 55;
     const earliestDepth = Math.min(...relatedGoals.map(goal => goal.depth as 1 | 2 | 3));
     nodes.push({
       id: dependency.id,
@@ -272,7 +292,7 @@ export function buildRepositoryFuturesCanvasModel(
   const orientedNodes = orientation === 'vertical'
     ? nodes.map(node => ({
       ...node,
-      x: node.y,
+      x: node.presentationRow ? verticalStreamPosition(node.presentationRow.index) : node.y,
       y: node.x,
       canonicalPosition: node.canonicalPosition ? {
         ...node.canonicalPosition,
@@ -299,10 +319,10 @@ export function buildRepositoryFuturesCanvasModel(
     streamRows: structuredRows.map((row, index) => ({
       index,
       label: row.label,
-      position: row.position,
+      position: orientation === 'vertical' ? verticalStreamPosition(index) : row.position,
       occupied: nodes.filter(node => node.presentationRow?.index === index).length,
     })),
-    prerequisiteBand: { label: 'Enabling conditions', position: 665 },
+    prerequisiteBand: { label: 'Enabling conditions', position: 650 },
     orientation,
     world: orientation === 'vertical'
       ? { width: FUTURES_CANVAS_WORLD.height, height: FUTURES_CANVAS_WORLD.width }
