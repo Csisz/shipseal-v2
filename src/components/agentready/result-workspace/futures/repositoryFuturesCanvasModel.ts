@@ -3,8 +3,9 @@ import type {
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
 
-export const FUTURES_CANVAS_WORLD = { width: 1480, height: 820 } as const;
+export const FUTURES_CANVAS_WORLD = { width: 1480, height: 860 } as const;
 export type RepositoryFuturesCanvasOrientation = 'horizontal' | 'vertical';
+export type RepositoryFuturesPresentationStream = 'strategic' | 'evidence' | 'product' | 'foundation' | 'exploratory' | 'general';
 
 export type RepositoryFuturesCanvasNode = {
   id: string;
@@ -20,6 +21,11 @@ export type RepositoryFuturesCanvasNode = {
     lane: number;
     x: number;
     y: number;
+  };
+  presentationRow?: {
+    index: number;
+    label: string;
+    stream: RepositoryFuturesPresentationStream;
   };
   candidate?: RepositoryFutureStageCandidate;
   dependency?: RepositoryFutureStageOverlay['dependencies'][number];
@@ -38,6 +44,9 @@ export interface RepositoryFuturesCanvasModel {
   nodes: RepositoryFuturesCanvasNode[];
   edges: RepositoryFuturesCanvasEdge[];
   horizons: Array<{ depth: 1 | 2 | 3; label: string; position: number }>;
+  progressionBands: Array<{ id: 'current' | 'now' | 'next' | 'later' | 'future'; label: string; position: number }>;
+  streamRows: Array<{ index: number; label: string; position: number; occupied: number }>;
+  prerequisiteBand: { label: string; position: number };
   orientation: RepositoryFuturesCanvasOrientation;
   world: { width: number; height: number };
 }
@@ -59,6 +68,55 @@ function stableHash(value: string) {
     hash = Math.imul(hash, 16777619);
   }
   return hash >>> 0;
+}
+
+const structuredRows = [
+  { label: 'Strategic opportunities', position: 115 },
+  { label: 'Evidence-backed opportunities', position: 215 },
+  { label: 'Product directions', position: 315 },
+  { label: 'Repository foundations', position: 415 },
+  { label: 'Repository hardening', position: 515 },
+  { label: 'Exploratory directions', position: 615 },
+] as const;
+
+function repositoryFuturePresentationRow(candidate: RepositoryFutureStageCandidate) {
+  let stream: RepositoryFuturesPresentationStream;
+  let index: number;
+  if (candidate.candidateClass === 'product-opportunity' && candidate.opportunityOrigin === 'strategic') {
+    stream = 'strategic';
+    index = 0;
+  } else if (candidate.candidateClass === 'product-opportunity' && candidate.opportunityOrigin === 'evidence-backed') {
+    stream = 'evidence';
+    index = 1;
+  } else if (candidate.candidateClass === 'product-opportunity' && candidate.opportunityOrigin === 'exploratory') {
+    stream = 'exploratory';
+    index = 5;
+  } else if (candidate.candidateClass === 'product-opportunity') {
+    stream = 'product';
+    index = 2;
+  } else if (candidate.candidateClass === 'repository-improvement') {
+    stream = 'foundation';
+    index = 3 + (stableHash(`${candidate.goalId}:foundation-row`) % 2);
+  } else {
+    stream = 'general';
+    index = stableHash(`${candidate.goalId}:structured-row`) % structuredRows.length;
+  }
+  return {
+    index,
+    label: structuredRows[index].label,
+    stream,
+    y: structuredRows[index].position,
+  };
+}
+
+function repositoryFutureStructuredPosition(candidate: RepositoryFutureStageCandidate) {
+  const depth = repositoryFutureDepth(candidate);
+  const row = repositoryFuturePresentationRow(candidate);
+  return {
+    x: 610 + (depth - 1) * 290 + ((stableHash(`${candidate.goalId}:structured-depth`) % 37) - 18),
+    y: row.y,
+    row,
+  };
 }
 
 export function repositoryFutureDepth(candidate: Pick<RepositoryFutureStageCandidate, 'goalId' | 'futureDepth'>): 1 | 2 | 3 {
@@ -107,7 +165,7 @@ export function buildRepositoryFuturesCanvasModel(
     role: 'current',
     title: repositoryName,
     x: 150,
-    y: FUTURES_CANVAS_WORLD.height / 2,
+    y: 365,
     depth: 0,
   }];
   const edges: RepositoryFuturesCanvasEdge[] = [];
@@ -117,6 +175,7 @@ export function buildRepositoryFuturesCanvasModel(
 
   candidates.forEach(candidate => {
     const canonicalPosition = repositoryFutureCanonicalPosition(candidate);
+    const structuredPosition = repositoryFutureStructuredPosition(candidate);
     const depth = canonicalPosition.futureDepth;
     const selected = candidate.role === 'primary' || candidate.role === 'supporting';
     nodes.push({
@@ -124,10 +183,15 @@ export function buildRepositoryFuturesCanvasModel(
       kind: 'goal',
       role: candidate.role,
       title: candidate.title,
-      x: canonicalPosition.x,
-      y: canonicalPosition.y,
+      x: structuredPosition.x,
+      y: structuredPosition.y,
       depth,
       canonicalPosition,
+      presentationRow: {
+        index: structuredPosition.row.index,
+        label: structuredPosition.row.label,
+        stream: structuredPosition.row.stream,
+      },
       candidate,
     });
     // Candidate evidence/mappings are the real grounding for this repository edge.
@@ -155,14 +219,15 @@ export function buildRepositoryFuturesCanvasModel(
       return goal ? [goal] : [];
     });
     const earliestDependentX = Math.min(...relatedGoals.map(goal => goal.x));
-    const dependentLaneCenter = relatedGoals.reduce((total, goal) => total + goal.y, 0) / relatedGoals.length;
-    const prerequisiteStartX = 350;
-    const prerequisiteEndX = Math.max(prerequisiteStartX, earliestDependentX - 150);
-    const progress = (index + 1) / (dependencies.length + 1);
-    const dependencyX = prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) * progress;
-    const dependencyY = Math.max(110, Math.min(710,
-      dependentLaneCenter + ((stableHash(`${dependency.id}:prerequisite-lane`) % 81) - 40),
-    ));
+    const prerequisiteStartX = 340;
+    const prerequisiteEndX = Math.max(prerequisiteStartX, earliestDependentX - 125);
+    const prerequisiteRows = 3;
+    const prerequisiteColumns = Math.ceil(dependencies.length / prerequisiteRows);
+    const column = Math.floor(index / prerequisiteRows);
+    const dependencyX = prerequisiteColumns <= 1
+      ? prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) / 2
+      : prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) * (column / (prerequisiteColumns - 1));
+    const dependencyY = 700 + (index % prerequisiteRows) * 55;
     const earliestDepth = Math.min(...relatedGoals.map(goal => goal.depth as 1 | 2 | 3));
     nodes.push({
       id: dependency.id,
@@ -220,10 +285,24 @@ export function buildRepositoryFuturesCanvasModel(
     nodes: orientedNodes,
     edges,
     horizons: [
-      { depth: 1, label: 'Near horizon', position: 650 },
-      { depth: 2, label: 'Middle horizon', position: 900 },
-      { depth: 3, label: 'Far horizon', position: 1150 },
+      { depth: 1, label: 'Next', position: 610 },
+      { depth: 2, label: 'Later', position: 900 },
+      { depth: 3, label: 'Future', position: 1190 },
     ],
+    progressionBands: [
+      { id: 'current', label: 'Current', position: 150 },
+      { id: 'now', label: 'Now', position: 385 },
+      { id: 'next', label: 'Next', position: 610 },
+      { id: 'later', label: 'Later', position: 900 },
+      { id: 'future', label: 'Future', position: 1190 },
+    ],
+    streamRows: structuredRows.map((row, index) => ({
+      index,
+      label: row.label,
+      position: row.position,
+      occupied: nodes.filter(node => node.presentationRow?.index === index).length,
+    })),
+    prerequisiteBand: { label: 'Enabling conditions', position: 665 },
     orientation,
     world: orientation === 'vertical'
       ? { width: FUTURES_CANVAS_WORLD.height, height: FUTURES_CANVAS_WORLD.width }
@@ -276,11 +355,19 @@ export function repositoryFuturesEdgePath(
   const bend = ((stableHash(edge.id) % 81) - 40) * 0.52;
   if (orientation === 'vertical') {
     const distance = target.y - source.y;
+    if (edge.kind === 'requirement') {
+      const crossDistance = target.x - source.x;
+      return `M ${source.x} ${source.y} C ${source.x} ${source.y + distance * 0.3}, ${target.x + crossDistance * 0.12} ${target.y - distance * 0.28}, ${target.x} ${target.y}`;
+    }
     const fieldSweep = Math.sign(target.x - source.x || bend || 1)
       * Math.min(104, 22 + Math.abs(target.x - source.x) * 0.2);
     return `M ${source.x} ${source.y} C ${source.x + bend + fieldSweep} ${source.y + distance * 0.34}, ${target.x - bend - fieldSweep * 0.48} ${target.y - distance * 0.3}, ${target.x} ${target.y}`;
   }
   const distance = target.x - source.x;
+  if (edge.kind === 'requirement') {
+    const crossDistance = target.y - source.y;
+    return `M ${source.x} ${source.y} C ${source.x + distance * 0.3} ${source.y}, ${target.x - distance * 0.28} ${target.y + crossDistance * 0.12}, ${target.x} ${target.y}`;
+  }
   const fieldSweep = Math.sign(target.y - source.y || bend || 1)
     * Math.min(104, 22 + Math.abs(target.y - source.y) * 0.2);
   return `M ${source.x} ${source.y} C ${source.x + distance * 0.34} ${source.y + bend + fieldSweep}, ${target.x - distance * 0.3} ${target.y - bend - fieldSweep * 0.48}, ${target.x} ${target.y}`;

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Bookmark, Check, Focus, GitBranch, LockKeyhole, Minus, Move, Plus, RotateCcw, Route, X } from 'lucide-react';
+import { AlertTriangle, Bookmark, Check, Focus, GitBranch, LockKeyhole, Minus, Plus, Route, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RepositoryFutureStageOverlay } from './futurePathwaysPresentation';
 import {
@@ -24,16 +24,6 @@ import {
   type RepositoryFuturesCamera,
 } from './repositoryFuturesCamera';
 import { resolveRepositoryFutureNodeActions, type RepositoryFutureNodeAction } from './repositoryFutureNodeActions';
-import {
-  applyRepositoryFuturesNodeOffsets,
-  constrainRepositoryFuturesNodeOffset,
-  readRepositoryFuturesArrangement,
-  reconcileRepositoryFuturesNodeOffsets,
-  repositoryFuturesArrangementStorageKey,
-  repositoryFuturesOffsetsEqual,
-  writeRepositoryFuturesArrangement,
-  type RepositoryFuturesNodeOffset,
-} from './repositoryFuturesArrangement';
 
 interface RepositoryFuturesNeuralCanvasProps {
   repositoryName: string;
@@ -41,109 +31,56 @@ interface RepositoryFuturesNeuralCanvasProps {
 }
 
 const DEFAULT_VIEWPORT = { width: 1200, height: 680 };
-const nodeWidths = { repository: 210, candidate: 202, primary: 232, supporting: 208, saved: 194, blocked: 194, dependency: 174 } as const;
-const fieldLanePositions = Array.from({ length: 7 }, (_, lane) => 126 + lane * (568 / 6));
+const nodeWidths = { repository: 188, candidate: 184, primary: 210, supporting: 192, saved: 176, blocked: 176, dependency: 164 } as const;
 
 export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: RepositoryFuturesNeuralCanvasProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   const dragRef = useRef<{ x: number; y: number }>();
-  const arrangeDragRef = useRef<{
-    pointerId: number;
-    nodeId: string;
-    startClientX: number;
-    startClientY: number;
-    startOffset: RepositoryFuturesNodeOffset;
-    moved: boolean;
-  }>();
-  const suppressNodeClickRef = useRef(false);
   const pinchRef = useRef<{ distance: number; camera: RepositoryFuturesCamera }>();
   const inspectorRef = useRef<HTMLElement | null>(null);
   const cameraRef = useRef<RepositoryFuturesCamera>();
   const cameraTransitionTimerRef = useRef<ReturnType<typeof setTimeout>>();
-  const arrangementPersistTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const initialFramingRef = useRef(false);
   const orientationRef = useRef<'horizontal' | 'vertical'>();
   const revealedPinnedIdRef = useRef<string>();
   const mobile = useIsMobile();
   const reducedMotion = useReducedMotion();
-  const canonicalModel = useMemo(() => buildRepositoryFuturesCanvasModel(repositoryName, overlay, 'horizontal'), [overlay, repositoryName]);
   const model = useMemo(() => mobile
     ? buildRepositoryFuturesCanvasModel(repositoryName, overlay, 'vertical')
-    : canonicalModel, [canonicalModel, mobile, overlay, repositoryName]);
-  const arrangementStorageKey = useMemo(() => repositoryFuturesArrangementStorageKey(repositoryName, overlay.graphFingerprint), [overlay.graphFingerprint, repositoryName]);
-  const [nodeOffsets, setNodeOffsets] = useState(() => readRepositoryFuturesArrangement(arrangementStorageKey));
-  const nodeOffsetsRef = useRef(nodeOffsets);
-  const [arrangeMode, setArrangeMode] = useState(false);
-  const [arrangingNodeId, setArrangingNodeId] = useState<string>();
-  const [arrangeSelectionId, setArrangeSelectionId] = useState<string>();
-  const arrangedNodes = useMemo(() => applyRepositoryFuturesNodeOffsets(model, nodeOffsets), [model, nodeOffsets]);
-  const canonicalNodeById = useMemo(() => new Map(model.nodes.map(node => [node.id, node])), [model.nodes]);
-  const nodeById = useMemo(() => new Map(arrangedNodes.map(node => [node.id, node])), [arrangedNodes]);
+    : buildRepositoryFuturesCanvasModel(repositoryName, overlay, 'horizontal'), [mobile, overlay, repositoryName]);
+  const nodeById = useMemo(() => new Map(model.nodes.map(node => [node.id, node])), [model.nodes]);
   const [camera, setCamera] = useState(() => fitRepositoryFuturesCamera(DEFAULT_VIEWPORT, model.world));
   const [hoveredId, setHoveredId] = useState<string>();
   const [pinnedId, setPinnedId] = useState<string>();
   const [dragging, setDragging] = useState(false);
   const [cameraTransitioning, setCameraTransitioning] = useState(false);
   cameraRef.current = camera;
-  const activeId = arrangingNodeId || pinnedId || hoveredId || overlay.activeTraceId;
+  const activeId = pinnedId || hoveredId || overlay.activeTraceId;
   const inspectionId = pinnedId || hoveredId || overlay.activeTraceId;
   const activeNode = inspectionId ? nodeById.get(inspectionId) : undefined;
-  const arrangingCanonicalNode = arrangingNodeId ? canonicalNodeById.get(arrangingNodeId) : undefined;
-  const arrangingRenderedNode = arrangingNodeId ? nodeById.get(arrangingNodeId) : undefined;
   const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
   const trace = useMemo(() => repositoryFuturesTrace(model, activeId), [activeId, model]);
   const lod = repositoryFuturesLod(camera.zoom);
   const overviewGoalIds = useMemo(() => new Set(overlay.candidates.slice(0, 3).map(candidate => candidate.goalId)), [overlay.candidates]);
-  const meaningfulBounds = useMemo(() => repositoryFuturesBounds(arrangedNodes.map(nodeCameraTarget))!, [arrangedNodes]);
+  const meaningfulBounds = useMemo(() => repositoryFuturesBounds(model.nodes.map(nodeCameraTarget))!, [model.nodes]);
   const selectedPlanNodeIds = useMemo(() => new Set(repositoryFuturesSelectedPlanNodes(model).map(node => node.id)), [model]);
-  const selectedPlanNodes = useMemo(() => arrangedNodes.filter(node => selectedPlanNodeIds.has(node.id)), [arrangedNodes, selectedPlanNodeIds]);
+  const selectedPlanNodes = useMemo(() => model.nodes.filter(node => selectedPlanNodeIds.has(node.id)), [model.nodes, selectedPlanNodeIds]);
   const selectedPlanBounds = useMemo(() => repositoryFuturesBounds(selectedPlanNodes.map(nodeCameraTarget)), [selectedPlanNodes]);
   const initialFramingBounds = useMemo(() => {
     const preferredIds = new Set([
       ...selectedPlanNodes.map(node => node.id),
       ...overlay.candidates.slice(0, 4).map(candidate => candidate.goalId),
     ]);
-    const preferredNodes = arrangedNodes.filter(node => node.kind === 'repository' || preferredIds.has(node.id));
+    const preferredNodes = model.nodes.filter(node => node.kind === 'repository' || preferredIds.has(node.id));
     return repositoryFuturesBounds(preferredNodes.map(nodeCameraTarget)) || meaningfulBounds;
-  }, [arrangedNodes, meaningfulBounds, overlay.candidates, selectedPlanNodes]);
+  }, [meaningfulBounds, model.nodes, overlay.candidates, selectedPlanNodes]);
   const meaningfulBoundsRef = useRef(meaningfulBounds);
   const initialFramingBoundsRef = useRef(initialFramingBounds);
   const pinnedIdRef = useRef(pinnedId);
-  const arrangementStorageKeyRef = useRef(arrangementStorageKey);
   meaningfulBoundsRef.current = meaningfulBounds;
   initialFramingBoundsRef.current = initialFramingBounds;
   pinnedIdRef.current = pinnedId;
-  nodeOffsetsRef.current = nodeOffsets;
-
-  useEffect(() => {
-    if (arrangementStorageKeyRef.current === arrangementStorageKey) return;
-    arrangementStorageKeyRef.current = arrangementStorageKey;
-    setNodeOffsets(readRepositoryFuturesArrangement(arrangementStorageKey));
-    setArrangeMode(false);
-    setArrangingNodeId(undefined);
-    setArrangeSelectionId(undefined);
-  }, [arrangementStorageKey]);
-
-  useEffect(() => {
-    setNodeOffsets(current => {
-      const reconciled = reconcileRepositoryFuturesNodeOffsets(canonicalModel, current);
-      return repositoryFuturesOffsetsEqual(current, reconciled) ? current : reconciled;
-    });
-    if (arrangeSelectionId && !canonicalModel.nodes.some(node => node.id === arrangeSelectionId)) {
-      setArrangeSelectionId(undefined);
-    }
-  }, [arrangeSelectionId, canonicalModel]);
-
-  useEffect(() => {
-    if (arrangementPersistTimerRef.current) clearTimeout(arrangementPersistTimerRef.current);
-    arrangementPersistTimerRef.current = setTimeout(() => {
-      writeRepositoryFuturesArrangement(arrangementStorageKey, nodeOffsetsRef.current);
-    }, 160);
-    return () => {
-      if (arrangementPersistTimerRef.current) clearTimeout(arrangementPersistTimerRef.current);
-    };
-  }, [arrangementStorageKey, nodeOffsets]);
 
   const getViewport = useCallback(() => {
     const bounds = stageRef.current?.getBoundingClientRect();
@@ -222,8 +159,6 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
 
   useEffect(() => () => {
     if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
-    if (arrangementPersistTimerRef.current) clearTimeout(arrangementPersistTimerRef.current);
-    writeRepositoryFuturesArrangement(arrangementStorageKeyRef.current, nodeOffsetsRef.current);
   }, []);
 
   useEffect(() => {
@@ -284,69 +219,6 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
     zoomAt(factor, { x: safe.left + safe.width / 2, y: safe.top + safe.height / 2 });
   }, [getInsets, getViewport, zoomAt]);
 
-  const resetSelectedNodePosition = useCallback(() => {
-    const nodeId = arrangeSelectionId || pinnedId;
-    if (!nodeId) return;
-    setNodeOffsets(current => {
-      if (!current[nodeId]) return current;
-      const next = { ...current };
-      delete next[nodeId];
-      return next;
-    });
-  }, [arrangeSelectionId, pinnedId]);
-
-  const resetAllNodePositions = useCallback(() => {
-    setNodeOffsets({});
-  }, []);
-
-  const handleNodePointerDown = (event: React.PointerEvent<HTMLButtonElement>, node: RepositoryFuturesCanvasNode) => {
-    if (!arrangeMode || mobile || node.kind === 'repository') return;
-    event.stopPropagation();
-    const clientX = Number.isFinite(event.clientX) ? event.clientX : 0;
-    const clientY = Number.isFinite(event.clientY) ? event.clientY : 0;
-    arrangeDragRef.current = {
-      pointerId: event.pointerId,
-      nodeId: node.id,
-      startClientX: clientX,
-      startClientY: clientY,
-      startOffset: nodeOffsets[node.id] || { x: 0, y: 0 },
-      moved: false,
-    };
-    suppressNodeClickRef.current = false;
-    setArrangeSelectionId(node.id);
-    setArrangingNodeId(node.id);
-    setCameraTransitioning(false);
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-  };
-
-  const handleNodePointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
-    const drag = arrangeDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    event.stopPropagation();
-    const clientX = Number.isFinite(event.clientX) ? event.clientX : drag.startClientX;
-    const clientY = Number.isFinite(event.clientY) ? event.clientY : drag.startClientY;
-    const zoom = cameraRef.current?.zoom || 1;
-    const deltaX = (clientX - drag.startClientX) / zoom;
-    const deltaY = (clientY - drag.startClientY) / zoom;
-    if (Math.abs(deltaX) > 3 || Math.abs(deltaY) > 3) drag.moved = true;
-    const nextOffset = constrainRepositoryFuturesNodeOffset(canonicalModel, drag.nodeId, {
-      x: drag.startOffset.x + deltaX,
-      y: drag.startOffset.y + deltaY,
-    });
-    setNodeOffsets(current => ({ ...current, [drag.nodeId]: nextOffset }));
-  };
-
-  const handleNodePointerEnd = (event: React.PointerEvent<HTMLButtonElement>) => {
-    const drag = arrangeDragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    event.stopPropagation();
-    suppressNodeClickRef.current = drag.moved;
-    arrangeDragRef.current = undefined;
-    setArrangingNodeId(undefined);
-    writeRepositoryFuturesArrangement(arrangementStorageKeyRef.current, nodeOffsetsRef.current);
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-  };
-
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if ((event.target as Element).closest('[data-neural-node], [data-camera-control], [data-futures-mode-owner], [data-neural-inspector]')) return;
     const clientX = Number.isFinite(event.clientX) ? event.clientX : 0;
@@ -403,11 +275,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
     else if (event.key === '+' || event.key === '=') zoomAtCenter(1.16);
     else if (event.key === '-') zoomAtCenter(1 / 1.16);
     else if (event.key === '0' || event.key.toLowerCase() === 'f') fitAll();
-    else if (event.key === 'Escape' && arrangeMode) {
-      setArrangeMode(false);
-      setArrangingNodeId(undefined);
-      arrangeDragRef.current = undefined;
-    } else if (event.key === 'Escape') clearFocus();
+    else if (event.key === 'Escape') clearFocus();
     else return;
     event.preventDefault();
   };
@@ -422,7 +290,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         ref={stageRef}
         role="application"
         tabIndex={0}
-        aria-label="Neural Repository Futures canvas. Use arrow keys to pan, plus and minus to zoom, F or zero to fit all futures, and Escape to clear focus or leave Arrange Mode."
+        aria-label="Neural Repository Futures canvas. Use arrow keys to pan, plus and minus to zoom, F or zero to fit all futures, and Escape to clear focus."
         data-testid="repository-futures-neural-canvas"
         data-camera-x={camera.x.toFixed(2)}
         data-camera-y={camera.y.toFixed(2)}
@@ -432,9 +300,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         data-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-reveal-motion={reducedMotion ? 'static' : 'topology-one-shot'}
         data-product-intelligence-state={overlay.productIntelligenceState}
-        data-field-density="layered-neural"
-        data-arrange-mode={arrangeMode ? 'active' : 'inactive'}
-        data-arranged-node-count={Object.keys(nodeOffsets).length}
+        data-field-density="structured-neural"
+        data-layout-strategy="ordered-stream-bands"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -469,33 +336,6 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
           <CameraButton label="Fit all futures" onClick={fitAll}><Focus /></CameraButton>
           <CameraButton label="Fit selected plan" onClick={fitPlan} disabled={!primary} disabledDescription="Choose a primary Future before fitting the selected plan."><Route /></CameraButton>
           <CameraButton label="Back to current repository" onClick={backToRepository}><GitBranch /></CameraButton>
-          <button
-            type="button"
-            data-arrange-toggle
-            aria-label={mobile ? 'Arrange Mode unavailable on mobile' : arrangeMode ? 'Done arranging nodes' : 'Arrange nodes'}
-            aria-pressed={arrangeMode}
-            title={mobile ? 'Arrange Mode is available on tablet and desktop. Mobile keeps touch navigation conflict-free.' : arrangeMode ? 'Done arranging nodes' : 'Arrange nodes within their semantic bounds'}
-            disabled={mobile}
-            onClick={event => { event.stopPropagation(); setArrangeMode(current => !current); }}
-            className={`flex h-10 items-center gap-1.5 rounded-full px-2.5 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-35 ${arrangeMode ? 'bg-primary/15 text-foreground shadow-sm' : 'text-muted-foreground hover:bg-primary/10 hover:text-foreground'}`}
-          >
-            {arrangeMode ? <Check className="h-4 w-4" aria-hidden="true" /> : <Move className="h-4 w-4" aria-hidden="true" />}
-            <span className="hidden md:inline">{arrangeMode ? 'Done' : 'Arrange'}</span>
-          </button>
-          {arrangeMode && <>
-            <CameraButton
-              label="Reset selected node position"
-              onClick={resetSelectedNodePosition}
-              disabled={!nodeOffsets[arrangeSelectionId || pinnedId || '']}
-              disabledDescription="Select or arrange a moved node before resetting its position."
-            ><RotateCcw /></CameraButton>
-            <CameraButton
-              label="Reset all arranged positions"
-              onClick={resetAllNodePositions}
-              disabled={!Object.keys(nodeOffsets).length}
-              disabledDescription="No arranged node positions to reset."
-            ><RotateCcw /></CameraButton>
-          </>}
           {activeId && <CameraButton label="Clear focused route" onClick={clearFocus}><X /></CameraButton>}
         </div>
         <div aria-label="Live Future Plan summary" data-plan-status={primary ? 'composed' : 'empty'} className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-8.5rem)] border-l border-primary/30 bg-background/[0.55] px-3 py-1.5 text-right text-[10px] text-muted-foreground backdrop-blur-md md:right-5 md:top-5 md:max-w-md">
@@ -530,41 +370,47 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 <stop offset="1" stopColor="hsl(var(--futures-requirement))" stopOpacity="0" />
               </linearGradient>
             </defs>
-            <g data-field-layer="lane-envelopes" aria-hidden="true">
-              {fieldLanePositions.map(position => model.orientation === 'horizontal' ? (
-                <rect key={position} x="300" y={position - 34} width={model.world.width - 360} height="68" rx="34" fill="url(#future-lane-field)" />
+            <g data-field-layer="structured-rows" aria-hidden="true">
+              {model.streamRows.filter(row => row.occupied > 0).map(row => model.orientation === 'horizontal' ? (
+                <g key={row.index} data-stream-row={row.index}>
+                  <rect x="360" y={row.position - 36} width={model.world.width - 420} height="72" rx="36" fill="url(#future-lane-field)" />
+                  <line x1="386" x2={model.world.width - 82} y1={row.position} y2={row.position} stroke="hsl(var(--futures-structure))" strokeWidth="0.8" strokeDasharray="1 15" opacity="0.28" />
+                  <text x="372" y={row.position - 45} fill="hsl(var(--muted-foreground))" fontSize="9" letterSpacing="1.35" opacity="0.55">{row.label.toUpperCase()}</text>
+                </g>
               ) : (
-                <rect key={position} x={position - 34} y="300" width="68" height={model.world.height - 360} rx="34" fill="url(#future-lane-field)" />
+                <g key={row.index} data-stream-row={row.index}>
+                  <rect x={row.position - 36} y="360" width="72" height={model.world.height - 420} rx="36" fill="url(#future-lane-field)" />
+                  <line x1={row.position} x2={row.position} y1="386" y2={model.world.height - 82} stroke="hsl(var(--futures-structure))" strokeWidth="0.8" strokeDasharray="1 15" opacity="0.28" />
+                </g>
               ))}
             </g>
-            {model.horizons.map(horizon => (
-              <g key={horizon.depth} opacity="0.28">
-                {model.orientation === 'horizontal' ? <>
-                  <line x1={horizon.position} x2={horizon.position} y1="70" y2={model.world.height - 70} stroke="hsl(var(--futures-structure))" strokeDasharray="2 18" />
-                  <text x={horizon.position + 12} y="92" fill="hsl(var(--muted-foreground))" fontSize="10" letterSpacing="1.5">{horizon.label.toUpperCase()}</text>
-                </> : <>
-                  <line x1="70" x2={model.world.width - 70} y1={horizon.position} y2={horizon.position} stroke="hsl(var(--futures-structure))" strokeDasharray="2 18" />
-                  <text x="82" y={horizon.position + 22} fill="hsl(var(--muted-foreground))" fontSize="10" letterSpacing="1.5">{horizon.label.toUpperCase()}</text>
-                </>}
-              </g>
-            ))}
-            {arrangingCanonicalNode && arrangingRenderedNode && (
-              <g data-arrange-anchor-cue aria-hidden="true">
-                <line
-                  x1={arrangingCanonicalNode.x}
-                  y1={arrangingCanonicalNode.y}
-                  x2={arrangingRenderedNode.x}
-                  y2={arrangingRenderedNode.y}
-                  stroke="hsl(var(--futures-selected))"
-                  strokeWidth="1.25"
-                  strokeDasharray="3 7"
-                  opacity="0.34"
-                />
-                <circle cx={arrangingCanonicalNode.x} cy={arrangingCanonicalNode.y} r="7" fill="none" stroke="hsl(var(--futures-selected))" strokeWidth="1.25" opacity="0.42" />
-              </g>
-            )}
+            <g data-field-layer="prerequisite-rail" aria-hidden="true">
+              {model.orientation === 'horizontal' ? <>
+                <rect x="285" y={model.prerequisiteBand.position} width={model.world.width - 350} height={model.world.height - model.prerequisiteBand.position - 16} rx="34" fill="hsl(var(--futures-requirement) / 0.035)" stroke="hsl(var(--futures-requirement) / 0.16)" strokeDasharray="2 12" />
+                <text x="312" y={model.prerequisiteBand.position + 24} fill="hsl(var(--futures-requirement))" fontSize="9" letterSpacing="1.45" opacity="0.62">PREREQUISITE LAYER · {model.prerequisiteBand.label.toUpperCase()}</text>
+              </> : <>
+                <rect x={model.prerequisiteBand.position} y="285" width={model.world.width - model.prerequisiteBand.position - 16} height={model.world.height - 350} rx="34" fill="hsl(var(--futures-requirement) / 0.035)" stroke="hsl(var(--futures-requirement) / 0.16)" strokeDasharray="2 12" />
+                <text x={model.prerequisiteBand.position + 22} y="312" fill="hsl(var(--futures-requirement))" fontSize="9" letterSpacing="1.45" opacity="0.62" transform={`rotate(90 ${model.prerequisiteBand.position + 22} 312)`}>PREREQUISITES</text>
+              </>}
+            </g>
+            <g data-field-layer="progression-bands" aria-hidden="true">
+              {model.progressionBands.map(band => (
+                <g key={band.id} data-future-band={band.id} opacity={band.id === 'now' ? 0.46 : 0.3}>
+                  {model.orientation === 'horizontal' ? <>
+                    <line x1={band.position} x2={band.position} y1="58" y2={model.prerequisiteBand.position - 18} stroke="hsl(var(--futures-structure))" strokeDasharray={band.id === 'now' ? '1 11' : '2 18'} />
+                    <text x={band.position + 10} y="78" fill="hsl(var(--muted-foreground))" fontSize="9" letterSpacing="1.6">{band.label.toUpperCase()}</text>
+                  </> : <>
+                    <line x1="58" x2={model.prerequisiteBand.position - 18} y1={band.position} y2={band.position} stroke="hsl(var(--futures-structure))" strokeDasharray={band.id === 'now' ? '1 11' : '2 18'} />
+                    <text x="72" y={band.position + 18} fill="hsl(var(--muted-foreground))" fontSize="9" letterSpacing="1.6">{band.label.toUpperCase()}</text>
+                  </>}
+                </g>
+              ))}
+              {model.streamRows.filter(row => row.occupied > 0).map(row => model.orientation === 'horizontal'
+                ? <circle key={row.index} data-now-anchor cx="385" cy={row.position} r="4" fill="hsl(var(--futures-selected))" opacity="0.36" />
+                : <circle key={row.index} data-now-anchor cx={row.position} cy="385" r="4" fill="hsl(var(--futures-selected))" opacity="0.36" />)}
+            </g>
             <g data-field-layer="node-halos" aria-hidden="true">
-              {arrangedNodes.map(node => {
+              {model.nodes.map(node => {
                 const selected = node.role === 'primary' || node.role === 'supporting';
                 const prerequisite = node.kind === 'dependency';
                 return <ellipse
@@ -626,13 +472,9 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
             })}
           </svg>
 
-          {arrangedNodes.map(node => {
+          {model.nodes.map(node => {
             const traced = !activeId || trace.nodeIds.has(node.id);
             const selected = node.role === 'primary' || node.role === 'supporting';
-            const draggable = arrangeMode && !mobile && node.kind !== 'repository';
-            const arranging = arrangingNodeId === node.id;
-            const offset = nodeOffsets[node.id] || { x: 0, y: 0 };
-            const canonicalNode = canonicalNodeById.get(node.id) || node;
             const overviewDependency = node.kind === 'dependency' && (node.dependency?.dependentCount || 0) > 1;
             const showTitle = lod !== 'far'
               || node.kind === 'repository'
@@ -648,39 +490,22 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 data-neural-node={node.kind}
                 data-neural-role={node.role}
                 data-future-depth={node.depth}
+                data-presentation-row={node.presentationRow?.index}
+                data-presentation-stream={node.presentationRow?.stream}
                 data-trace-state={traced ? 'related' : 'dimmed'}
                 data-label-detail={showMetadata ? 'near' : showTitle ? 'title' : 'anchor'}
-                data-arrange-draggable={draggable ? 'true' : 'false'}
-                data-arranging={arranging ? 'true' : 'false'}
-                data-arranged={nodeOffsets[node.id] ? 'true' : 'false'}
-                data-canonical-x={canonicalNode.x.toFixed(2)}
-                data-canonical-y={canonicalNode.y.toFixed(2)}
-                data-arranged-x={node.x.toFixed(2)}
-                data-arranged-y={node.y.toFixed(2)}
-                data-offset-x={offset.x.toFixed(2)}
-                data-offset-y={offset.y.toFixed(2)}
                 aria-pressed={pinnedId === node.id}
-                aria-grabbed={arranging}
                 aria-label={nodeAriaLabel(node)}
-                onPointerDown={event => handleNodePointerDown(event, node)}
-                onPointerMove={handleNodePointerMove}
-                onPointerUp={handleNodePointerEnd}
-                onPointerCancel={handleNodePointerEnd}
                 onClick={event => {
                   event.stopPropagation();
-                  if (suppressNodeClickRef.current) {
-                    suppressNodeClickRef.current = false;
-                    return;
-                  }
-                  if (arrangeMode) setArrangeSelectionId(node.id);
                   inspectNode(node);
                 }}
                 onMouseEnter={() => { setHoveredId(node.id); overlay.onTracePreview?.(node.id); }}
                 onMouseLeave={() => { setHoveredId(undefined); if (!pinnedId) overlay.onTracePreview?.(undefined); }}
                 onFocus={() => { setHoveredId(node.id); overlay.onTracePreview?.(node.id); }}
                 onBlur={() => { setHoveredId(undefined); if (!pinnedId) overlay.onTracePreview?.(undefined); }}
-                className={`future-field-node absolute -translate-x-1/2 -translate-y-1/2 border text-left outline-none transition-[opacity,border-color,box-shadow,transform] duration-150 focus-visible:ring-4 focus-visible:ring-ring/70 motion-reduce:transition-none ${reducedMotion ? '' : 'future-canvas-node-reveal'} ${nodeGeometry(node)} ${nodeClass(node, pinnedId === node.id)} ${showTitle ? `${mobile ? 'min-h-28' : node.role === 'primary' ? 'min-h-[4.75rem]' : 'min-h-16'} px-4 py-3` : `${mobile ? 'h-20' : 'h-7'} min-h-0 rounded-full p-0`} ${traced ? '' : 'opacity-[0.38]'} ${arranging ? 'z-20 scale-[1.025] cursor-grabbing ring-2 ring-primary/65 shadow-[0_18px_42px_-16px_hsl(var(--futures-selected)/0.5)]' : draggable ? 'cursor-move' : node.kind === 'repository' && arrangeMode ? 'cursor-not-allowed' : ''}`}
-                style={{ left: node.x, top: node.y, width: showTitle ? nodeWidth(node) : mobile ? 80 : 28, animationDelay: reducedMotion ? undefined : `${node.depth * 65}ms`, willChange: arranging ? 'left, top, transform' : undefined }}
+                className={`future-field-node absolute -translate-x-1/2 -translate-y-1/2 border text-left outline-none transition-[opacity,border-color,box-shadow,transform] duration-150 focus-visible:ring-4 focus-visible:ring-ring/70 motion-reduce:transition-none ${reducedMotion ? '' : 'future-canvas-node-reveal'} ${nodeGeometry(node)} ${nodeClass(node, pinnedId === node.id)} ${showTitle ? `${mobile ? 'min-h-24' : node.role === 'primary' ? 'min-h-[4.4rem]' : 'min-h-[3.65rem]'} px-3.5 py-2.5` : `${mobile ? 'h-16' : 'h-6'} min-h-0 rounded-full p-0`} ${traced ? '' : 'opacity-[0.3]'}`}
+                style={{ left: node.x, top: node.y, width: showTitle ? nodeWidth(node) : mobile ? 64 : 24, animationDelay: reducedMotion ? undefined : `${node.depth * 65}ms` }}
               >
                 {showTitle ? <>
                   <span className="flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.14em] opacity-75">{nodeIcon(node)}{nodeRoleLabel(node)}</span>
@@ -698,11 +523,9 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         {overlay.notice && <div role="status" aria-live="polite" className="pointer-events-none absolute bottom-3 left-3 z-30 max-w-sm rounded-xl border border-primary/20 bg-background/85 px-3 py-2 text-xs text-foreground shadow-sm backdrop-blur-md md:bottom-5 md:left-5">{overlay.notice}</div>}
       </div>
       <p className="mt-2 px-2 text-[10px] text-muted-foreground">
-        {arrangeMode
-          ? 'Arrange Mode · drag nodes within their semantic bounds · drag empty space to pan · Escape finishes arranging'
-          : mobile
-            ? 'Current → Future · drag to pan · pinch to zoom · Arrange Mode is available on larger screens'
-            : 'Current → Future · drag to pan · wheel or pinch to zoom · select a node to inspect · 0 or F fits all'}
+        {mobile
+          ? 'Current → Future · drag to pan · pinch to zoom · select a node to inspect'
+          : 'Current → Now → Next → Later → Future · drag to pan · wheel or pinch to zoom · select a node to inspect · 0 or F fits all'}
       </p>
     </section>
   );

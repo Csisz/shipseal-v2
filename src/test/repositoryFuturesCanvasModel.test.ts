@@ -22,11 +22,6 @@ import {
   zoomRepositoryFuturesCamera,
 } from '@/components/agentready/result-workspace/futures/repositoryFuturesCamera';
 import type { RepositoryFutureStageOverlay } from '@/components/agentready/result-workspace/futures/futurePathwaysPresentation';
-import {
-  applyRepositoryFuturesNodeOffsets,
-  constrainRepositoryFuturesNodeOffset,
-  reconcileRepositoryFuturesNodeOffsets,
-} from '@/components/agentready/result-workspace/futures/repositoryFuturesArrangement';
 
 function candidate(
   goalId: string,
@@ -91,6 +86,32 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(first.nodes.find(node => node.id === 'goal:primary')).toMatchObject({ role: 'primary', depth: 3 });
     expect(first.nodes.find(node => node.id === 'goal:support')).toMatchObject({ role: 'supporting', depth: 2 });
     expect(first.nodes.find(node => node.id === 'dependency:test')).toMatchObject({ kind: 'dependency', role: 'required' });
+  });
+
+  it('composes stable future streams into ordered rows and isolates prerequisites below the destination field', () => {
+    const candidates = [
+      { ...candidate('goal:strategic', 'primary', 2, 1), candidateClass: 'product-opportunity' as const, opportunityOrigin: 'strategic' as const },
+      { ...candidate('goal:evidence', 'supporting', 2, 2), candidateClass: 'product-opportunity' as const, opportunityOrigin: 'evidence-backed' as const },
+      { ...candidate('goal:foundation', 'candidate', 2, 3), candidateClass: 'repository-improvement' as const },
+      { ...candidate('goal:explore', 'candidate', 2, 3), candidateClass: 'product-opportunity' as const, opportunityOrigin: 'exploratory' as const },
+    ];
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates,
+      dependencies: [{ ...dependency, dependentGoalIds: ['goal:strategic', 'goal:evidence'] }],
+      productIntelligenceState: 'enhanced',
+    });
+    const goals = model.nodes.filter(node => node.kind === 'goal');
+    const requirement = model.nodes.find(node => node.kind === 'dependency')!;
+
+    expect(model.progressionBands.map(band => band.id)).toEqual(['current', 'now', 'next', 'later', 'future']);
+    expect(model.streamRows.filter(row => row.occupied > 0).length).toBeGreaterThanOrEqual(3);
+    expect(goals.every(node => node.presentationRow && node.y === model.streamRows[node.presentationRow.index].position)).toBe(true);
+    expect(goals.find(node => node.id === 'goal:strategic')?.presentationRow?.stream).toBe('strategic');
+    expect(goals.find(node => node.id === 'goal:evidence')?.presentationRow?.stream).toBe('evidence');
+    expect(goals.find(node => node.id === 'goal:foundation')?.presentationRow?.stream).toBe('foundation');
+    expect(requirement.y).toBeGreaterThan(model.prerequisiteBand.position);
+    expect(requirement.x).toBeLessThan(Math.min(...goals.filter(node => ['goal:strategic', 'goal:evidence'].includes(node.id)).map(node => node.x)));
+    expect(goals.every(node => node.canonicalPosition?.candidateId === node.id)).toBe(true);
   });
 
   it('keeps canonical candidate coordinates stable across primary, support, saved, restore, and replacement mutations', () => {
@@ -392,72 +413,5 @@ describe('Omega 18.5-V7.2 repository futures camera', () => {
     expect(rightExtreme.y).toBeLessThan(10000);
     expect(leftExtreme.x).toBeLessThan(0);
     expect(rightExtreme.x).toBeGreaterThan(0);
-  });
-});
-
-describe('Omega 18.5-V8.2 bounded Futures arrangement', () => {
-  const buildArrangementModel = () => buildRepositoryFuturesCanvasModel('shipseal', {
-    candidates: [
-      candidate('goal:near', 'candidate', 2, 1),
-      candidate('goal:primary', 'primary', 2, 3),
-    ],
-    dependencies: [{ ...dependency, dependentGoalIds: ['goal:primary'], dependentCount: 1 }],
-    productIntelligenceState: 'enhanced',
-  });
-
-  it('keeps canonical coordinates immutable while applying bounded visual Future offsets', () => {
-    const model = buildArrangementModel();
-    const canonical = goalPosition(model, 'goal:primary');
-    const offset = constrainRepositoryFuturesNodeOffset(model, 'goal:primary', { x: 900, y: -900 });
-    const arranged = applyRepositoryFuturesNodeOffsets(model, { 'goal:primary': offset });
-    const arrangedPrimary = arranged.find(node => node.id === 'goal:primary')!;
-
-    expect(offset).toEqual({ x: 72, y: expect.any(Number) });
-    expect(Math.abs(offset.y)).toBeLessThanOrEqual(118);
-    expect(arrangedPrimary.x).toBe(canonical.x + offset.x);
-    expect(arrangedPrimary.y).toBe(canonical.y + offset.y);
-    expect(goalPosition(model, 'goal:primary')).toEqual(canonical);
-    expect(arrangedPrimary.role).toBe('primary');
-    expect(arrangedPrimary.depth).toBe(3);
-  });
-
-  it('keeps dependencies in prerequisite territory and the repository root fixed', () => {
-    const model = buildArrangementModel();
-    const dependencyNode = model.nodes.find(node => node.id === dependency.id)!;
-    const primaryNode = model.nodes.find(node => node.id === 'goal:primary')!;
-    const offset = constrainRepositoryFuturesNodeOffset(model, dependency.id, { x: 900, y: 900 });
-    const rootOffset = constrainRepositoryFuturesNodeOffset(model, 'repository:shipseal', { x: 900, y: 900 });
-    const arranged = applyRepositoryFuturesNodeOffsets(model, {
-      [dependency.id]: offset,
-      'repository:shipseal': { x: 900, y: 900 },
-    });
-    const arrangedDependency = arranged.find(node => node.id === dependency.id)!;
-    const arrangedRoot = arranged.find(node => node.id === 'repository:shipseal')!;
-
-    expect(arrangedDependency.x).toBeLessThanOrEqual(primaryNode.x - 96);
-    expect(arrangedDependency.x).toBeGreaterThanOrEqual(260);
-    expect(Math.abs(arrangedDependency.y - dependencyNode.y)).toBeLessThanOrEqual(96);
-    expect(arrangedRoot).toMatchObject(model.nodes.find(node => node.id === 'repository:shipseal')!);
-    expect(rootOffset).toEqual({ x: 0, y: 0 });
-  });
-
-  it('drops removed-node overrides and reorients retained presentation offsets on mobile', () => {
-    const horizontal = buildArrangementModel();
-    const reconciled = reconcileRepositoryFuturesNodeOffsets(horizontal, {
-      'goal:near': { x: 40, y: -60 },
-      'goal:removed': { x: 20, y: 20 },
-      'repository:shipseal': { x: 20, y: 20 },
-    });
-    const vertical = buildRepositoryFuturesCanvasModel('shipseal', {
-      candidates: horizontal.nodes.filter(node => node.candidate).map(node => node.candidate!),
-      dependencies: [dependency],
-      productIntelligenceState: 'enhanced',
-    }, 'vertical');
-    const canonicalVertical = vertical.nodes.find(node => node.id === 'goal:near')!;
-    const arrangedVertical = applyRepositoryFuturesNodeOffsets(vertical, reconciled).find(node => node.id === 'goal:near')!;
-
-    expect(reconciled).toEqual({ 'goal:near': { x: 40, y: -60 } });
-    expect(arrangedVertical.x).toBe(canonicalVertical.x - 60);
-    expect(arrangedVertical.y).toBe(canonicalVertical.y + 40);
   });
 });
