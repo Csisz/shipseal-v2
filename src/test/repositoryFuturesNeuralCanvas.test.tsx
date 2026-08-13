@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RepositoryFuturesNeuralCanvas } from '@/components/agentready/result-workspace/futures/RepositoryFuturesNeuralCanvas';
 import type { RepositoryFutureStageOverlay } from '@/components/agentready/result-workspace/futures/futurePathwaysPresentation';
 
@@ -83,6 +83,21 @@ function cameraState() {
   };
 }
 
+function dragNode(node: HTMLElement, from: { x: number; y: number }, to: { x: number; y: number }, pointerId = 31) {
+  const dispatch = (type: string, point: { x: number; y: number }) => {
+    const event = new MouseEvent(type, { bubbles: true, clientX: point.x, clientY: point.y });
+    Object.defineProperty(event, 'pointerId', { value: pointerId });
+    fireEvent(node, event);
+  };
+  dispatch('pointerdown', from);
+  dispatch('pointermove', to);
+  dispatch('pointerup', to);
+}
+
+afterEach(() => {
+  window.sessionStorage.clear();
+});
+
 describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
   it('renders an accessible real-data topology with role grammar, selected route, and inspector', () => {
     const value = overlay();
@@ -102,6 +117,28 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(goal).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Close neural inspector' }));
     expect(value.onTraceClear).toHaveBeenCalled();
+  });
+
+  it('layers only real relationships into a broader neural field while the selected route remains dominant', () => {
+    const value = overlay({ activeTraceId: 'goal:future' });
+    const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    const ambientEdges = container.querySelectorAll('[data-edge-layer="ambient"]');
+    const semanticEdges = container.querySelectorAll('[data-edge-layer="semantic"]');
+    const selectedEdge = container.querySelector('[data-edge-layer="semantic"][data-selected-route="true"]');
+    const broaderEdge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:alternative"]');
+
+    expect(stage).toHaveAttribute('data-field-density', 'layered-neural');
+    expect(container.querySelector('[data-field-layer="lane-envelopes"]')).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-field-object-halo]')).toHaveLength(4);
+    expect(ambientEdges).toHaveLength(semanticEdges.length);
+    expect([...semanticEdges].every(edge => edge.hasAttribute('data-future-edge-id'))).toBe(true);
+    expect(selectedEdge).toHaveAttribute('data-trace-state', 'related');
+    expect(selectedEdge).toHaveAttribute('opacity', '0.92');
+    expect(broaderEdge).toHaveAttribute('data-trace-state', 'dimmed');
+    expect(broaderEdge).toHaveAttribute('opacity', '0.14');
+    expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveAttribute('data-neural-role', 'primary');
+    expect(screen.getByRole('button', { name: /Required dependency/i })).toHaveAttribute('data-neural-role', 'required');
   });
 
   it('renders one resolved role label for a duplicated semantic candidate id', () => {
@@ -136,6 +173,143 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     fireEvent.pointerUp(stage, { pointerId: 1, clientX: 140, clientY: 130 });
     fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
     expect(Number(stage.getAttribute('data-camera-zoom'))).toBeGreaterThanOrEqual(0.44);
+  });
+
+  it('enables bounded Future dragging only in Arrange Mode and reroutes real edges live without moving the camera', () => {
+    const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    const future = screen.getByRole('button', { name: /Primary future goal/i });
+    const root = screen.getByRole('button', { name: /^Current repository:/i });
+    const cameraBefore = cameraState();
+    const canonicalX = Number(future.getAttribute('data-canonical-x'));
+    const canonicalY = Number(future.getAttribute('data-canonical-y'));
+    const edge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:future"]')!;
+    const pathBefore = edge.getAttribute('d');
+
+    expect(stage).toHaveAttribute('data-arrange-mode', 'inactive');
+    expect(future).toHaveAttribute('data-arrange-draggable', 'false');
+    dragNode(future, { x: 200, y: 200 }, { x: 260, y: 250 }, 20);
+    expect(Number(future.getAttribute('data-arranged-x'))).toBe(canonicalX);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Arrange nodes' }));
+    expect(stage).toHaveAttribute('data-arrange-mode', 'active');
+    expect(future).toHaveAttribute('data-arrange-draggable', 'true');
+    expect(root).toHaveAttribute('data-arrange-draggable', 'false');
+
+    const moveEvent = new MouseEvent('pointerdown', { bubbles: true, clientX: 200, clientY: 200 });
+    Object.defineProperty(moveEvent, 'pointerId', { value: 21 });
+    fireEvent(future, moveEvent);
+    const draggingEvent = new MouseEvent('pointermove', { bubbles: true, clientX: 700, clientY: 700 });
+    Object.defineProperty(draggingEvent, 'pointerId', { value: 21 });
+    fireEvent(future, draggingEvent);
+    expect(container.querySelector('[data-arrange-anchor-cue]')).toBeInTheDocument();
+    expect(edge.getAttribute('d')).not.toBe(pathBefore);
+    const endEvent = new MouseEvent('pointerup', { bubbles: true, clientX: 700, clientY: 700 });
+    Object.defineProperty(endEvent, 'pointerId', { value: 21 });
+    fireEvent(future, endEvent);
+
+    expect(Number(future.getAttribute('data-offset-x'))).toBe(72);
+    expect(Math.abs(Number(future.getAttribute('data-offset-y')))).toBeLessThanOrEqual(118);
+    expect(Number(future.getAttribute('data-arranged-x'))).toBe(canonicalX + 72);
+    expect(Number(future.getAttribute('data-arranged-y'))).not.toBe(canonicalY);
+    expect(future).toHaveAttribute('data-neural-role', 'primary');
+    expect(future).toHaveAttribute('data-future-depth', '3');
+    expect(cameraState()).toEqual(cameraBefore);
+    expect(container.querySelector('[data-arrange-anchor-cue]')).not.toBeInTheDocument();
+
+    fireEvent.keyDown(stage, { key: 'Escape' });
+    expect(stage).toHaveAttribute('data-arrange-mode', 'inactive');
+    expect(future).toHaveAttribute('data-offset-x', '72.00');
+    fireEvent.click(screen.getByRole('button', { name: 'Arrange nodes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Reset selected node position' }));
+    expect(future).toHaveAttribute('data-offset-x', '0.00');
+    expect(future).toHaveAttribute('data-offset-y', '0.00');
+  });
+
+  it('keeps inspection and graph-native composition actions usable while arranging', () => {
+    const value = overlay();
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Arrange nodes' }));
+    fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
+
+    const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
+    fireEvent.click(within(inspector).getByRole('button', { name: /Replace primary/i }));
+    expect(value.onCandidateSelect).toHaveBeenCalledWith('goal:alternative');
+    expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-arrange-mode', 'active');
+  });
+
+  it('keeps dependency dragging prerequisite-bounded, fixes the root, and resets all arranged positions', () => {
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Arrange nodes' }));
+    const dependencyNode = screen.getByRole('button', { name: /Required dependency/i });
+    const primary = screen.getByRole('button', { name: /Primary future goal/i });
+    const root = screen.getByRole('button', { name: /^Current repository:/i });
+    const rootPosition = {
+      x: root.getAttribute('data-arranged-x'),
+      y: root.getAttribute('data-arranged-y'),
+    };
+
+    dragNode(dependencyNode, { x: 180, y: 220 }, { x: 1000, y: 900 }, 22);
+    expect(Number(dependencyNode.getAttribute('data-arranged-x'))).toBeLessThanOrEqual(Number(primary.getAttribute('data-canonical-x')) - 96);
+    expect(Math.abs(Number(dependencyNode.getAttribute('data-offset-y')))).toBeLessThanOrEqual(96);
+
+    dragNode(root, { x: 100, y: 100 }, { x: 800, y: 700 }, 23);
+    expect(root).toHaveAttribute('data-offset-x', '0.00');
+    expect(root).toHaveAttribute('data-arranged-x', rootPosition.x);
+    expect(root).toHaveAttribute('data-arranged-y', rootPosition.y);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset all arranged positions' }));
+    expect(dependencyNode).toHaveAttribute('data-offset-x', '0.00');
+    expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-arranged-node-count', '0');
+  });
+
+  it('preserves arranged positions through role changes and session remounts, then prunes removed nodes', async () => {
+    const base = overlay();
+    const { rerender, unmount } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={base} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Arrange nodes' }));
+    const alternative = screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i });
+    dragNode(alternative, { x: 220, y: 240 }, { x: 280, y: 300 }, 24);
+    const retainedOffset = alternative.getAttribute('data-offset-y');
+
+    rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({
+      candidates: [base.candidates[0], { ...base.candidates[1], role: 'supporting' }],
+      supportCount: 1,
+    })} />);
+    expect(screen.getByRole('button', { name: /Supporting future goal: Repository evidence assistant/i })).toHaveAttribute('data-offset-y', retainedOffset);
+
+    unmount();
+    const remounted = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={base} />);
+    expect(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i })).toHaveAttribute('data-offset-y', retainedOffset);
+
+    remounted.rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({ candidates: [base.candidates[0]] })} />);
+    await waitFor(() => expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-arranged-node-count', '0'));
+    expect(screen.queryByRole('button', { name: /Repository evidence assistant/i })).not.toBeInTheDocument();
+  });
+
+  it('frames arranged positions explicitly and keeps offsets when returning to the repository origin', () => {
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Arrange nodes' }));
+    const primary = screen.getByRole('button', { name: /Primary future goal/i });
+    dragNode(primary, { x: 220, y: 240 }, { x: 500, y: 500 }, 25);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fit selected plan' }));
+    const arrangedPlanCamera = cameraState();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset selected node position' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fit selected plan' }));
+    expect(cameraState()).not.toEqual(arrangedPlanCamera);
+
+    dragNode(primary, { x: 220, y: 240 }, { x: 500, y: 500 }, 26);
+    fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
+    const arrangedAllCamera = cameraState();
+    fireEvent.click(screen.getByRole('button', { name: 'Reset selected node position' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
+    expect(cameraState()).not.toEqual(arrangedAllCamera);
+
+    dragNode(primary, { x: 220, y: 240 }, { x: 500, y: 500 }, 27);
+    const offsetBeforeOrigin = primary.getAttribute('data-offset-x');
+    fireEvent.click(screen.getByRole('button', { name: 'Back to current repository' }));
+    expect(primary).toHaveAttribute('data-offset-x', offsetBeforeOrigin);
+    expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-arranged-node-count', '1');
   });
 
   it('keeps camera X, Y, and zoom unchanged when a Future remains comfortably visible beside the inspector', () => {
@@ -326,6 +500,8 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const stage = screen.getByTestId('repository-futures-neural-canvas');
 
     await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'vertical'));
+    expect(screen.getByRole('button', { name: 'Arrange Mode unavailable on mobile' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Arrange Mode unavailable on mobile' })).toHaveAttribute('title', expect.stringContaining('tablet and desktop'));
     expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveClass('min-h-28');
     expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '820px', height: '1480px' });
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));

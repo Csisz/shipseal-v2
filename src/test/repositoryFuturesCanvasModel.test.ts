@@ -22,6 +22,11 @@ import {
   zoomRepositoryFuturesCamera,
 } from '@/components/agentready/result-workspace/futures/repositoryFuturesCamera';
 import type { RepositoryFutureStageOverlay } from '@/components/agentready/result-workspace/futures/futurePathwaysPresentation';
+import {
+  applyRepositoryFuturesNodeOffsets,
+  constrainRepositoryFuturesNodeOffset,
+  reconcileRepositoryFuturesNodeOffsets,
+} from '@/components/agentready/result-workspace/futures/repositoryFuturesArrangement';
 
 function candidate(
   goalId: string,
@@ -387,5 +392,72 @@ describe('Omega 18.5-V7.2 repository futures camera', () => {
     expect(rightExtreme.y).toBeLessThan(10000);
     expect(leftExtreme.x).toBeLessThan(0);
     expect(rightExtreme.x).toBeGreaterThan(0);
+  });
+});
+
+describe('Omega 18.5-V8.2 bounded Futures arrangement', () => {
+  const buildArrangementModel = () => buildRepositoryFuturesCanvasModel('shipseal', {
+    candidates: [
+      candidate('goal:near', 'candidate', 2, 1),
+      candidate('goal:primary', 'primary', 2, 3),
+    ],
+    dependencies: [{ ...dependency, dependentGoalIds: ['goal:primary'], dependentCount: 1 }],
+    productIntelligenceState: 'enhanced',
+  });
+
+  it('keeps canonical coordinates immutable while applying bounded visual Future offsets', () => {
+    const model = buildArrangementModel();
+    const canonical = goalPosition(model, 'goal:primary');
+    const offset = constrainRepositoryFuturesNodeOffset(model, 'goal:primary', { x: 900, y: -900 });
+    const arranged = applyRepositoryFuturesNodeOffsets(model, { 'goal:primary': offset });
+    const arrangedPrimary = arranged.find(node => node.id === 'goal:primary')!;
+
+    expect(offset).toEqual({ x: 72, y: expect.any(Number) });
+    expect(Math.abs(offset.y)).toBeLessThanOrEqual(118);
+    expect(arrangedPrimary.x).toBe(canonical.x + offset.x);
+    expect(arrangedPrimary.y).toBe(canonical.y + offset.y);
+    expect(goalPosition(model, 'goal:primary')).toEqual(canonical);
+    expect(arrangedPrimary.role).toBe('primary');
+    expect(arrangedPrimary.depth).toBe(3);
+  });
+
+  it('keeps dependencies in prerequisite territory and the repository root fixed', () => {
+    const model = buildArrangementModel();
+    const dependencyNode = model.nodes.find(node => node.id === dependency.id)!;
+    const primaryNode = model.nodes.find(node => node.id === 'goal:primary')!;
+    const offset = constrainRepositoryFuturesNodeOffset(model, dependency.id, { x: 900, y: 900 });
+    const rootOffset = constrainRepositoryFuturesNodeOffset(model, 'repository:shipseal', { x: 900, y: 900 });
+    const arranged = applyRepositoryFuturesNodeOffsets(model, {
+      [dependency.id]: offset,
+      'repository:shipseal': { x: 900, y: 900 },
+    });
+    const arrangedDependency = arranged.find(node => node.id === dependency.id)!;
+    const arrangedRoot = arranged.find(node => node.id === 'repository:shipseal')!;
+
+    expect(arrangedDependency.x).toBeLessThanOrEqual(primaryNode.x - 96);
+    expect(arrangedDependency.x).toBeGreaterThanOrEqual(260);
+    expect(Math.abs(arrangedDependency.y - dependencyNode.y)).toBeLessThanOrEqual(96);
+    expect(arrangedRoot).toMatchObject(model.nodes.find(node => node.id === 'repository:shipseal')!);
+    expect(rootOffset).toEqual({ x: 0, y: 0 });
+  });
+
+  it('drops removed-node overrides and reorients retained presentation offsets on mobile', () => {
+    const horizontal = buildArrangementModel();
+    const reconciled = reconcileRepositoryFuturesNodeOffsets(horizontal, {
+      'goal:near': { x: 40, y: -60 },
+      'goal:removed': { x: 20, y: 20 },
+      'repository:shipseal': { x: 20, y: 20 },
+    });
+    const vertical = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: horizontal.nodes.filter(node => node.candidate).map(node => node.candidate!),
+      dependencies: [dependency],
+      productIntelligenceState: 'enhanced',
+    }, 'vertical');
+    const canonicalVertical = vertical.nodes.find(node => node.id === 'goal:near')!;
+    const arrangedVertical = applyRepositoryFuturesNodeOffsets(vertical, reconciled).find(node => node.id === 'goal:near')!;
+
+    expect(reconciled).toEqual({ 'goal:near': { x: 40, y: -60 } });
+    expect(arrangedVertical.x).toBe(canonicalVertical.x - 60);
+    expect(arrangedVertical.y).toBe(canonicalVertical.y + 40);
   });
 });

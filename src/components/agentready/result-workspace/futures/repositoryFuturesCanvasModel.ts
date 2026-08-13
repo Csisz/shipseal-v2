@@ -273,11 +273,15 @@ export function repositoryFuturesEdgePath(
   const source = nodes.get(edge.sourceId);
   const target = nodes.get(edge.targetId);
   if (!source || !target) return '';
-  const bend = ((stableHash(edge.id) % 81) - 40) * 0.45;
+  const bend = ((stableHash(edge.id) % 81) - 40) * 0.52;
   if (orientation === 'vertical') {
     const distance = target.y - source.y;
-    return `M ${source.x} ${source.y} C ${source.x + bend} ${source.y + distance * 0.38}, ${target.x - bend} ${target.y - distance * 0.32}, ${target.x} ${target.y}`;
+    const fieldSweep = Math.sign(target.x - source.x || bend || 1)
+      * Math.min(104, 22 + Math.abs(target.x - source.x) * 0.2);
+    return `M ${source.x} ${source.y} C ${source.x + bend + fieldSweep} ${source.y + distance * 0.34}, ${target.x - bend - fieldSweep * 0.48} ${target.y - distance * 0.3}, ${target.x} ${target.y}`;
   }
   const distance = target.x - source.x;
-  return `M ${source.x} ${source.y} C ${source.x + distance * 0.38} ${source.y + bend}, ${target.x - distance * 0.32} ${target.y - bend}, ${target.x} ${target.y}`;
+  const fieldSweep = Math.sign(target.y - source.y || bend || 1)
+    * Math.min(104, 22 + Math.abs(target.y - source.y) * 0.2);
+  return `M ${source.x} ${source.y} C ${source.x + distance * 0.34} ${source.y + bend + fieldSweep}, ${target.x - distance * 0.3} ${target.y - bend - fieldSweep * 0.48}, ${target.x} ${target.y}`;
 }

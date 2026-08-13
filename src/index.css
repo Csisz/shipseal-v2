@@ -142,6 +142,9 @@
     --futures-structure: 216 24% 60%;
     --futures-selected: 252 68% 48%;
     --futures-requirement: 190 68% 34%;
+    --futures-atmosphere: 252 62% 56%;
+    --futures-node-surface: 42 48% 99%;
+    --futures-node-border: 216 28% 55%;
     --graph-background: 206 25% 89%;
     --graph-fog: 204 20% 92%;
     --graph-starfield: 210 28% 45%;
@@ -259,6 +262,9 @@
     --futures-structure: 220 18% 34%;
     --futures-selected: 258 82% 70%;
     --futures-requirement: 190 78% 58%;
+    --futures-atmosphere: 258 74% 64%;
+    --futures-node-surface: 228 38% 7%;
+    --futures-node-border: 220 22% 42%;
     --graph-background: 230 76% 1.5%;
     --graph-fog: 228 70% 2%;
     --graph-starfield: 205 90% 88%;
@@ -473,6 +479,63 @@
 
 .future-canvas-edge-reveal {
   animation: futures-edge-reveal 420ms ease-out 1 backwards;
+}
+
+.futures-neural-stage {
+  background:
+    radial-gradient(ellipse at 12% 52%, hsl(var(--futures-selected) / 0.12), transparent 27%),
+    radial-gradient(ellipse at 48% 18%, hsl(var(--futures-atmosphere) / 0.07), transparent 31%),
+    radial-gradient(ellipse at 76% 42%, hsl(var(--futures-requirement) / 0.09), transparent 40%),
+    radial-gradient(ellipse at 58% 92%, hsl(var(--futures-selected) / 0.055), transparent 34%),
+    linear-gradient(118deg, hsl(var(--futures-field-bg)), hsl(var(--futures-field-surface) / 0.8));
+}
+
+.futures-neural-mesh {
+  background-image:
+    linear-gradient(115deg, hsl(var(--futures-structure) / 0.14) 1px, transparent 1px),
+    linear-gradient(25deg, hsl(var(--futures-structure) / 0.09) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse at center, black 16%, transparent 82%);
+}
+
+.future-field-node {
+  isolation: isolate;
+  background-image: linear-gradient(145deg, hsl(var(--futures-node-surface) / 0.82), hsl(var(--futures-field-surface) / 0.42));
+  backdrop-filter: blur(10px);
+}
+
+.future-field-node::before {
+  content: '';
+  position: absolute;
+  inset: -13px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at center, hsl(var(--futures-atmosphere) / 0.16), transparent 68%);
+  opacity: 0.48;
+  pointer-events: none;
+}
+
+.future-field-node::after {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  z-index: -1;
+  border-radius: inherit;
+  border-top: 1px solid hsl(var(--futures-node-border) / 0.24);
+  pointer-events: none;
+}
+
+.future-field-node[data-neural-role='primary']::before {
+  inset: -22px;
+  background: radial-gradient(ellipse at center, hsl(var(--futures-selected) / 0.3), transparent 68%);
+  opacity: 0.8;
+}
+
+.future-field-node[data-neural-role='supporting']::before,
+.future-field-node[data-neural-role='required']::before,
+.future-field-node[data-neural-role='satisfied']::before {
+  background: radial-gradient(ellipse at center, hsl(var(--futures-requirement) / 0.22), transparent 70%);
+  opacity: 0.66;
 }
 
 .futures-surface-enter {

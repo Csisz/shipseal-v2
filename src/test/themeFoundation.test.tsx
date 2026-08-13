@@ -118,4 +118,14 @@ describe('ShipSeal semantic theme foundation', () => {
     expect(html).toContain('prefers-color-scheme: dark');
     expect(html).toContain('root.classList.toggle("dark", dark)');
   });
+
+  it('keeps the enriched Futures field explicitly integrated with both light and dark semantic tokens', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/index.css'), 'utf8');
+
+    expect(css.match(/--futures-atmosphere:/g)).toHaveLength(2);
+    expect(css.match(/--futures-node-surface:/g)).toHaveLength(2);
+    expect(css.match(/--futures-node-border:/g)).toHaveLength(2);
+    expect(css).toContain('.futures-neural-stage');
+    expect(css).toContain('.future-field-node');
+  });
 });
