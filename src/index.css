@@ -481,6 +481,26 @@
   animation: futures-edge-reveal 420ms ease-out 1 backwards;
 }
 
+.future-canvas-edge-ambient {
+  transition: opacity 200ms ease, stroke 320ms ease, stroke-width 320ms ease;
+}
+
+.future-canvas-edge-semantic {
+  transition: opacity 200ms ease, stroke 320ms ease, stroke-width 320ms ease, filter 200ms ease;
+}
+
+.future-canvas-edge-semantic[data-hover-trace='real-relationship'] {
+  filter: drop-shadow(0 0 2px hsl(var(--futures-selected) / 0.24));
+}
+
+@keyframes future-hover-card-enter {
+  from { opacity: 0; }
+}
+
+.future-neural-hover-card {
+  animation: future-hover-card-enter 180ms ease-out 1 both;
+}
+
 .futures-neural-stage {
   background:
     radial-gradient(ellipse at 9% 43%, hsl(var(--futures-selected) / 0.12), transparent 24%),
@@ -645,6 +665,15 @@
   opacity: 0.68;
 }
 
+@keyframes futures-primary-alive {
+  0%, 100% { opacity: 0.62; }
+  50% { opacity: 0.7; }
+}
+
+.future-field-node[data-primary-alive='subtle-halo']::before {
+  animation: futures-primary-alive 6.4s ease-in-out infinite;
+}
+
 .future-field-node[data-neural-role='supporting']::before,
 .future-field-node[data-neural-role='required']::before,
 .future-field-node[data-neural-role='satisfied']::before {
@@ -679,8 +708,16 @@
 @media (prefers-reduced-motion: reduce) {
   .future-canvas-node-reveal,
   .future-canvas-edge-reveal,
-  .futures-surface-enter {
+  .futures-surface-enter,
+  .future-neural-hover-card,
+  .future-field-node[data-primary-alive]::before {
     animation: none !important;
+  }
+
+  .future-canvas-edge-ambient,
+  .future-canvas-edge-semantic,
+  .future-field-node {
+    transition: none !important;
   }
 }
 

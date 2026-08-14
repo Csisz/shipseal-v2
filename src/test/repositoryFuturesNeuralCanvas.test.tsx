@@ -306,6 +306,14 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     fireEvent.mouseLeave(alternative);
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 
+    fireEvent.click(primary);
+    fireEvent.mouseEnter(alternative);
+    expect(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).toHaveTextContent('Guided repository futures');
+    expect(document.querySelector('[data-future-edge-id="grounding:goal:alternative"]')).toHaveAttribute('data-hover-trace', 'real-relationship');
+    expect(document.querySelector('[data-future-edge-id="requirement:dependency:review:goal:future"]')).not.toHaveAttribute('data-hover-trace');
+    fireEvent.mouseLeave(alternative);
+    fireEvent.click(screen.getByRole('button', { name: 'Close neural inspector' }));
+
     for (let index = 0; index < 3; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
     expect(stage).toHaveAttribute('data-camera-lod', 'far');
     expect(alternative).toHaveAttribute('data-label-detail', 'title');
@@ -315,6 +323,72 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(stage).toHaveAttribute('data-camera-lod', 'near');
     expect(alternative).toHaveAttribute('data-label-detail', 'near');
     expect(alternative).toHaveTextContent('1 evidence signals');
+  });
+
+  it('keeps first-level Futures readable while progressively quieting selected deeper generations at overview', () => {
+    const value = overlay({
+      projections: [{
+        id: 'evolution:guided-next',
+        goalId: 'goal:future',
+        kind: 'evolution',
+        title: 'Adaptive guidance layer',
+        sourceId: 'goal:future',
+        order: 0,
+        humanReviewRequired: false,
+        generation: 2,
+        summary: 'Guidance adapts to repository signals.',
+      }, {
+        id: 'evolution:guided-later',
+        goalId: 'goal:future',
+        kind: 'evolution',
+        title: 'Repository coaching network',
+        sourceId: 'evolution:guided-next',
+        order: 1,
+        humanReviewRequired: false,
+        generation: 3,
+        summary: 'Coaching connects related repository decisions.',
+      }],
+    });
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    const primary = screen.getByRole('button', { name: /Primary future goal: Guided repository futures/i });
+    const next = screen.getByRole('button', { name: /Next product evolution: Adaptive guidance layer/i });
+    const later = screen.getByRole('button', { name: /Later product possibility: Repository coaching network/i });
+
+    for (let index = 0; index < 4; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    expect(stage).toHaveAttribute('data-camera-lod', 'far');
+    expect(primary).toHaveAttribute('data-label-detail', 'title');
+    expect(primary).toHaveTextContent('Guided repository futures');
+    expect(next).toHaveAttribute('data-label-detail', 'compact');
+    expect(next).toHaveTextContent('Adaptive guidance layer');
+    expect(later).toHaveAttribute('data-label-detail', 'anchor');
+    expect(later).not.toHaveTextContent('Repository coaching network');
+    expect(later).toHaveAccessibleName(/Repository coaching network/i);
+
+    fireEvent.mouseEnter(later);
+    expect(later).toHaveAttribute('data-label-detail', 'title');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Repository coaching network');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Coaching connects related repository decisions.');
+    fireEvent.mouseLeave(later);
+    expect(later).toHaveAttribute('data-label-detail', 'anchor');
+  });
+
+  it('transitions selected corridors on stable real edge elements without replaying path animation', () => {
+    const base = overlay();
+    const { container, rerender } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={base} />);
+    const edge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:future"]');
+
+    expect(edge).toHaveAttribute('data-selected-route', 'true');
+    expect(edge).toHaveAttribute('data-corridor-transition', 'semantic-emphasis');
+    expect(container.querySelector('animate')).not.toBeInTheDocument();
+
+    rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({
+      candidates: base.candidates.map(candidate => candidate.goalId === 'goal:future' ? { ...candidate, role: 'candidate' } : candidate),
+      draftFingerprint: 'draft:changed',
+    })} />);
+    const updatedEdge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:future"]');
+    expect(updatedEdge).toBe(edge);
+    expect(updatedEdge).not.toHaveAttribute('data-selected-route');
   });
 
   it('keeps selected supports and a focused minor node identifiable at overview zoom', () => {
@@ -369,6 +443,9 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(within(inspector).getByRole('button', { name: /Replace primary/i })).toBeInTheDocument();
     expect(within(inspector).getByRole('button', { name: /Add as support/i })).toBeInTheDocument();
 
+    fireEvent.mouseEnter(screen.getByRole('button', { name: /Primary future goal/i }));
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
     unmount();
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
   });
@@ -388,6 +465,8 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const { container, unmount } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
     expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-reduced-motion', 'true');
     expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-reveal-motion', 'static');
+    expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-corridor-motion', 'static');
+    expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveAttribute('data-primary-alive', 'static');
     expect(container.querySelectorAll('[data-future-edge]').length).toBeGreaterThan(0);
     expect(container.querySelector('.future-canvas-node-reveal')).not.toBeInTheDocument();
     expect(container.querySelector('animate')).not.toBeInTheDocument();
