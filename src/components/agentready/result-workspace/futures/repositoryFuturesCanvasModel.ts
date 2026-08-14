@@ -3,7 +3,7 @@ import type {
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
 
-export const FUTURES_CANVAS_WORLD = { width: 1820, height: 1080 } as const;
+export const FUTURES_CANVAS_WORLD = { width: 1820, height: 1040 } as const;
 export type RepositoryFuturesCanvasOrientation = 'horizontal' | 'vertical';
 export type RepositoryFuturesPresentationStream = 'strategic' | 'evidence' | 'product' | 'foundation' | 'exploratory' | 'general';
 
@@ -50,7 +50,6 @@ export interface RepositoryFuturesCanvasModel {
   horizons: Array<{ depth: 1 | 2 | 3; label: string; position: number }>;
   progressionBands: Array<{ id: 'current' | 'now' | 'next' | 'later' | 'future'; label: string; position: number }>;
   streamRows: Array<{ index: number; label: string; position: number; occupied: number }>;
-  prerequisiteBand: { label: string; position: number };
   orientation: RepositoryFuturesCanvasOrientation;
   world: { width: number; height: number };
 }
@@ -75,15 +74,23 @@ function stableHash(value: string) {
 }
 
 const structuredRows = [
-  { label: 'Strategic opportunities', position: 100 },
-  { label: 'Evidence-backed opportunities', position: 220 },
-  { label: 'Product & preview directions', position: 340 },
-  { label: 'Knowledge systems', position: 460 },
-  { label: 'Agent workflows', position: 580 },
-  { label: 'Delivery systems', position: 700 },
-  { label: 'Safety & governance', position: 820 },
-  { label: 'Exploratory directions', position: 940 },
+  { label: 'Strategic opportunities', position: 130 },
+  { label: 'Evidence-backed opportunities', position: 230 },
+  { label: 'Product & preview directions', position: 330 },
+  { label: 'Knowledge systems', position: 430 },
+  { label: 'Agent workflows', position: 530 },
+  { label: 'Delivery systems', position: 630 },
+  { label: 'Safety & governance', position: 730 },
+  { label: 'Exploratory directions', position: 830 },
 ] as const;
+
+const lattice = {
+  repository: 150,
+  direction: 500,
+  next: 850,
+  later: 1200,
+  outcome: 1550,
+} as const;
 
 const verticalStreamPosition = (index: number) => 40 + index * 95;
 
@@ -188,7 +195,7 @@ export function buildRepositoryFuturesCanvasModel(
     kind: 'repository',
     role: 'current',
     title: repositoryName,
-    x: 150,
+    x: lattice.repository,
     y: 520,
     depth: 0,
   }];
@@ -202,7 +209,10 @@ export function buildRepositoryFuturesCanvasModel(
   const occupiedVisualRows = new Set<number>();
   const visualRowByGoalId = new Map<string, number>();
   candidates.forEach(candidate => {
-    const preferredRow = repositoryFuturePresentationRow(candidate).index;
+    const semanticRow = repositoryFuturePresentationRow(candidate).index;
+    // The exploratory stream starts beside the sixth lane instead of jumping
+    // to a detached floor; additional routes can still occupy lanes 7 and 8.
+    const preferredRow = semanticRow === 7 ? 5 : semanticRow;
     const visualRow = [...structuredRows.keys()]
       .filter(index => !occupiedVisualRows.has(index))
       .sort((left, right) => Math.abs(left - preferredRow) - Math.abs(right - preferredRow) || left - right)[0]
@@ -222,7 +232,7 @@ export function buildRepositoryFuturesCanvasModel(
       kind: 'goal',
       role: candidate.role,
       title: candidate.title,
-      x: 430 + ((stableHash(`${candidate.goalId}:direction`) % 25) - 12),
+      x: lattice.direction,
       y: structuredRows[visualRowIndex].position,
       depth,
       canonicalPosition,
@@ -246,6 +256,12 @@ export function buildRepositoryFuturesCanvasModel(
     }
   });
 
+  const goalNodesForCentering = nodes.filter(node => node.kind === 'goal');
+  if (goalNodesForCentering.length) {
+    const goalYs = goalNodesForCentering.map(node => node.y);
+    nodes[0].y = (Math.min(...goalYs) + Math.max(...goalYs)) / 2;
+  }
+
   const goalNodeById = new Map(nodes.filter(node => node.kind === 'goal').map(node => [node.id, node]));
   const projectionNodeById = new Map<string, RepositoryFuturesCanvasNode>(goalNodeById);
   const projections = overlay.projections || [];
@@ -259,10 +275,14 @@ export function buildRepositoryFuturesCanvasModel(
       const sourceNode = projectionNodeById.get(projection.sourceId) || goal;
       const siblings = projections.filter(item => item.goalId === projection.goalId && item.kind === projection.kind && item.sourceId === projection.sourceId);
       const siblingIndex = Math.max(0, siblings.findIndex(item => item.id === projection.id));
-      const siblingOffset = (siblingIndex - (siblings.length - 1) / 2) * (projection.kind === 'evolution' ? 30 : 34);
-      const x = projection.kind === 'evolution'
-        ? projection.generation === 3 ? 1160 : 790
-        : projection.kind === 'capability' ? 790 : 1480;
+      const siblingRank = siblingIndex - (siblings.length - 1) / 2;
+      const siblingOffset = siblingRank * (projection.kind === 'evolution' ? 24 : 34);
+      const generationTwoSpread = projection.kind === 'evolution' && projection.generation !== 3 && siblings.length > 1
+        ? siblingIndex * 160
+        : 0;
+      const x = (projection.kind === 'evolution'
+        ? projection.generation === 3 ? lattice.later : lattice.next
+        : projection.kind === 'capability' ? lattice.next : lattice.outcome) + generationTwoSpread;
       const y = projection.kind === 'evolution' ? sourceNode.y + siblingOffset : goal.y + siblingOffset;
       const node: RepositoryFuturesCanvasNode = {
         id: projection.id,
@@ -294,24 +314,34 @@ export function buildRepositoryFuturesCanvasModel(
   const goalNodes = new Map(nodes.filter(node => node.kind === 'goal').map(node => [node.id, node]));
   const dependencies = [...new Map(overlay.dependencies.map(dependency => [dependency.id, dependency])).values()]
     .sort((left, right) => left.executionOrder - right.executionOrder || left.id.localeCompare(right.id));
-  dependencies.forEach((dependency, index) => {
+  const placedDependencies: Array<{ x: number; y: number }> = [];
+  dependencies.forEach(dependency => {
     const relatedGoalIds = [...new Set(dependency.dependentGoalIds.filter(goalId => goalIds.has(goalId)))];
     if (!relatedGoalIds.length) return;
     const relatedGoals = relatedGoalIds.flatMap(goalId => {
       const goal = goalNodes.get(goalId);
       return goal ? [goal] : [];
     });
-    const dependencyX = relatedGoals.reduce((sum, goal) => sum + goal.x, 0) / relatedGoals.length + 165;
-    const dependencyY = relatedGoals.reduce((sum, goal) => sum + goal.y, 0) / relatedGoals.length
-      + ((index % 3) - 1) * 38;
+    const routeX = relatedGoals.reduce((sum, goal) => sum + goal.x, 0) / relatedGoals.length;
+    const routeY = relatedGoals.reduce((sum, goal) => sum + goal.y, 0) / relatedGoals.length;
+    const placementOptions = [
+      { x: routeX + 110, y: routeY - 22 },
+      { x: routeX + 210, y: routeY + 22 },
+      { x: routeX + 110, y: routeY + 34 },
+      { x: routeX + 210, y: routeY - 34 },
+    ];
+    const placement = placementOptions.find(option => placedDependencies.every(existing => (
+      Math.abs(existing.x - option.x) >= 96 || Math.abs(existing.y - option.y) >= 76
+    ))) || placementOptions[placedDependencies.length % placementOptions.length];
+    placedDependencies.push(placement);
     const earliestDepth = Math.min(...relatedGoals.map(goal => goal.depth as 1 | 2 | 3));
     nodes.push({
       id: dependency.id,
       kind: 'dependency',
       role: dependency.state === 'satisfied' ? 'satisfied' : 'required',
       title: dependency.title,
-      x: dependencyX,
-      y: dependencyY,
+      x: placement.x,
+      y: placement.y,
       depth: Math.max(1, earliestDepth - 1) as 1 | 2,
       dependency,
     });
@@ -369,16 +399,16 @@ export function buildRepositoryFuturesCanvasModel(
     nodes: orientedNodes,
     edges,
     horizons: [
-      { depth: 1, label: 'Direction', position: 430 },
-      { depth: 2, label: 'Next evolution', position: 790 },
-      { depth: 3, label: 'Later possibility', position: 1160 },
+      { depth: 1, label: 'Direction', position: lattice.direction },
+      { depth: 2, label: 'Next evolution', position: lattice.next },
+      { depth: 3, label: 'Later possibility', position: lattice.later },
     ],
     progressionBands: [
-      { id: 'current', label: 'Current', position: 150 },
-      { id: 'now', label: 'Directions', position: 430 },
-      { id: 'next', label: 'Next evolutions', position: 790 },
-      { id: 'later', label: 'Later possibilities', position: 1160 },
-      { id: 'future', label: 'Outcome horizon', position: 1540 },
+      { id: 'current', label: 'Current', position: lattice.repository },
+      { id: 'now', label: 'Directions', position: lattice.direction },
+      { id: 'next', label: 'Next evolutions', position: lattice.next },
+      { id: 'later', label: 'Later possibilities', position: lattice.later },
+      { id: 'future', label: 'Outcome horizon', position: lattice.outcome },
     ],
     streamRows: structuredRows.map((row, index) => ({
       index,
@@ -386,7 +416,6 @@ export function buildRepositoryFuturesCanvasModel(
       position: orientation === 'vertical' ? verticalStreamPosition(index) : row.position,
       occupied: nodes.filter(node => node.presentationRow?.index === index).length,
     })),
-    prerequisiteBand: { label: 'Route enablers', position: 1040 },
     orientation,
     world: orientation === 'vertical'
       ? { width: FUTURES_CANVAS_WORLD.height, height: FUTURES_CANVAS_WORLD.width }

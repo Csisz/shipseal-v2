@@ -78,6 +78,8 @@ function productIntelligence() {
       opportunity('op:team-review', 'Collaborative Future Review'),
       opportunity('op:impact-story', 'Product Impact Stories'),
       opportunity('op:adaptive-planning', 'Adaptive Product Planning'),
+      opportunity('op:safety-coach', 'Safety Readiness Coach', 'evidence-backed'),
+      opportunity('op:ecosystem-hub', 'Repository Ecosystem Hub', 'exploratory'),
     ],
     evidenceReferences: evidence,
     knownPaths: new Set(['README.md', 'src/App.tsx']),
@@ -114,7 +116,8 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     expect(configure).toHaveAttribute('data-secondary-surface', 'configure-path');
     expect(configure).not.toHaveAttribute('open');
     expect(container.querySelectorAll('[data-futures-mode-owner]')).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: 'Make primary' })).toHaveLength(4);
+    expect(overlay()?.candidates).toHaveLength(6);
+    expect(screen.getAllByRole('button', { name: 'Make primary' })).toHaveLength(5);
     expect(overlay()?.candidates.filter(candidate => candidate.role === 'primary')).toHaveLength(0);
     expect(screen.queryByRole('complementary', { name: 'Future Pathways inspector' })).not.toBeInTheDocument();
     expect(container.textContent).not.toContain('evidence:readme');
@@ -175,6 +178,26 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     fireEvent.click(replacementButtons[0]);
     await waitFor(() => expect(overlay()?.draftFingerprint).not.toBe(before));
     expect(overlay()?.supportCount).toBe(2);
+  });
+
+  it('keeps the same broad first-generation roster through primary and support selection', async () => {
+    const { overlay } = await renderPathways();
+    const initialIds = overlay()!.candidates.map(candidate => candidate.goalId);
+    expect(initialIds).toHaveLength(6);
+
+    chooseFirstPrimary();
+    await waitFor(() => expect(overlay()?.candidates.some(candidate => candidate.role === 'primary')).toBe(true));
+    expect(overlay()!.candidates.map(candidate => candidate.goalId)).toEqual(initialIds);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add supporting opportunity' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add support' })[0]);
+    await waitFor(() => expect(overlay()?.supportCount).toBe(1));
+    expect(overlay()!.candidates.map(candidate => candidate.goalId)).toEqual(initialIds);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add supporting opportunity' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add support' })[0]);
+    await waitFor(() => expect(overlay()?.supportCount).toBe(2));
+    expect(overlay()!.candidates.map(candidate => candidate.goalId)).toEqual(initialIds);
   });
 
   it('renders automatic dependency nodes that explain why they cannot be manually removed', async () => {

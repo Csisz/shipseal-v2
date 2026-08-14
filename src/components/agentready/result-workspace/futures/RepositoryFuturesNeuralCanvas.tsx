@@ -31,7 +31,7 @@ interface RepositoryFuturesNeuralCanvasProps {
 }
 
 const DEFAULT_VIEWPORT = { width: 1200, height: 680 };
-const nodeWidths = { repository: 184, candidate: 166, primary: 192, supporting: 178, saved: 156, blocked: 158, dependency: 104, evolution: 146, capability: 118, artifact: 108 } as const;
+const nodeWidths = { repository: 184, candidate: 166, primary: 192, supporting: 178, saved: 156, blocked: 158, dependency: 96, evolution: 146, capability: 118, artifact: 108 } as const;
 
 export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: RepositoryFuturesNeuralCanvasProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -354,7 +354,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         data-reveal-motion={reducedMotion ? 'static' : 'topology-one-shot'}
         data-product-intelligence-state={overlay.productIntelligenceState}
         data-field-density="deep-layered-neural"
-        data-layout-strategy="grounded-direction-product-evolution-route-enabler-layers"
+        data-layout-strategy="stable-grounded-lattice-with-inline-route-enablers"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -366,7 +366,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         onClick={event => {
           if (!(event.target as Element).closest('[data-neural-node], [data-camera-control], [data-futures-mode-owner], [data-neural-inspector]')) clearFocus();
         }}
-        className={`futures-neural-stage relative h-[calc(100svh-220px)] min-h-[590px] max-h-[820px] select-none overflow-hidden overscroll-contain rounded-[1rem] border border-primary/15 outline-none [touch-action:none] focus-visible:ring-2 focus-visible:ring-ring md:h-[calc(100svh-270px)] md:min-h-[520px] ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        className={`futures-neural-stage relative h-[calc(100svh-220px)] min-h-[590px] max-h-[820px] select-none overflow-hidden overscroll-contain rounded-[1rem] border border-primary/15 outline-none [touch-action:none] focus-visible:ring-2 focus-visible:ring-ring md:min-h-[600px] ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
         <div aria-hidden="true" className="futures-neural-mesh pointer-events-none absolute inset-0 opacity-[0.2]" />
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,hsl(var(--futures-field-bg)/0.44)_100%)]" />
@@ -456,8 +456,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                   data-field-object-halo={node.kind}
                   cx={node.x}
                   cy={node.y}
-                  rx={node.role === 'primary' ? 80 : node.kind === 'repository' ? 72 : prerequisite ? 54 : 58}
-                  ry={node.role === 'primary' ? 42 : prerequisite ? 26 : 30}
+                  rx={node.role === 'primary' ? 80 : node.kind === 'repository' ? 72 : prerequisite ? 38 : 58}
+                  ry={node.role === 'primary' ? 42 : prerequisite ? 20 : 30}
                   fill={selected ? 'hsl(var(--futures-selected))' : prerequisite ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-atmosphere))'}
                   opacity={selected ? 0.075 : prerequisite ? 0.055 : 0.035}
                 />;
@@ -521,7 +521,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
               || selected
               || activeId === node.id
               || overviewGoalIds.has(node.id)
-              || overviewDependency;
+              || overviewDependency
+              || node.kind === 'dependency';
             const showMetadata = lod === 'near' || node.kind === 'repository';
             return (
               <button
@@ -545,11 +546,17 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 onFocus={() => { setHoveredId(node.id); overlay.onTracePreview?.(node.id); }}
                 onBlur={() => { setHoveredId(undefined); if (!pinnedId) overlay.onTracePreview?.(undefined); }}
                 className={`future-field-node absolute -translate-x-1/2 -translate-y-1/2 text-left outline-none transition-[opacity,border-color,box-shadow,transform] duration-150 focus-visible:ring-4 focus-visible:ring-ring/70 motion-reduce:transition-none ${reducedMotion ? '' : 'future-canvas-node-reveal'} ${nodeGeometry(node)} ${nodeClass(node, pinnedId === node.id)} ${nodeSizeClass(node, mobile, showTitle)} ${traced ? '' : 'opacity-[0.44]'}`}
-                style={{ left: node.x, top: node.y, width: showTitle ? mobile ? mobileNodeWidth(node) : nodeWidth(node) : mobile ? 56 : 24, animationDelay: reducedMotion ? undefined : `${node.depth * 65}ms` }}
+                style={{
+                  left: node.x,
+                  top: node.y,
+                  width: showTitle ? mobile ? mobileNodeWidth(node) : nodeWidth(node) : mobile ? 32 : 24,
+                  animationDelay: reducedMotion ? undefined : `${node.depth * 65}ms`,
+                  transitionDuration: reducedMotion ? '0ms' : undefined,
+                }}
               >
                 {showTitle ? <>
-                  <span className="flex items-center gap-1.5 font-mono text-[8px] uppercase tracking-[0.16em] opacity-75">{nodeIcon(node)}{nodeRoleLabel(node)}</span>
-                  <span className="mt-1 block text-[13px] font-semibold leading-[1.25]">{node.title}</span>
+                  <span className={`flex items-center gap-1.5 font-mono uppercase tracking-[0.16em] opacity-75 ${node.kind === 'dependency' ? 'text-[7px]' : 'text-[8px]'}`}>{nodeIcon(node)}{nodeRoleLabel(node)}</span>
+                  <span className={`mt-1 block font-semibold ${node.kind === 'dependency' ? 'text-[10px] leading-[1.18]' : 'text-[13px] leading-[1.25]'}`}>{node.title}</span>
                   {showMetadata && <span className="mt-1 block text-[9px] opacity-65">{nodeMetadata(node)}</span>}
                 </> : <span aria-hidden="true" className="block h-full w-full rounded-full bg-current opacity-75" />}
               </button>
@@ -760,7 +767,7 @@ function nodeCameraTarget(node: RepositoryFuturesCanvasNode) {
     x: node.x,
     y: node.y,
     width: nodeWidth(node),
-    height: node.kind === 'repository' ? 88 : node.kind === 'dependency' ? 54 : node.kind === 'goal' ? 112 : node.kind === 'evolution' ? 82 : 72,
+    height: node.kind === 'repository' ? 88 : node.kind === 'dependency' ? 42 : node.kind === 'goal' ? 112 : node.kind === 'evolution' ? 82 : 72,
   };
 }
 
@@ -777,8 +784,8 @@ function nodeGeometry(node: RepositoryFuturesCanvasNode) {
 function nodeClass(node: RepositoryFuturesCanvasNode, pinned: boolean) {
   if (node.kind === 'repository') return 'border-foreground/38 bg-foreground/[0.055] text-foreground ring-1 ring-inset ring-foreground/10 shadow-[0_0_32px_hsl(var(--foreground)/0.08)]';
   if (node.kind === 'dependency') return node.role === 'satisfied'
-    ? 'border-success/48 bg-success/[0.065] text-foreground ring-1 ring-inset ring-success/15'
-    : 'border-accent/48 bg-accent/[0.065] text-foreground ring-1 ring-inset ring-accent/12';
+    ? 'border-success/36 bg-success/[0.045] text-foreground/85 ring-1 ring-inset ring-success/10'
+    : 'border-accent/34 bg-accent/[0.04] text-foreground/82 ring-1 ring-inset ring-accent/9';
   if (node.kind === 'evolution') return node.selected
     ? 'border-primary/48 bg-primary/[0.07] text-foreground ring-1 ring-primary/14 shadow-[0_0_16px_hsl(var(--primary)/0.1)]'
     : 'border-primary/26 bg-background/[0.5] text-foreground/90 hover:border-primary/52 hover:bg-primary/[0.05]';
@@ -800,11 +807,12 @@ function nodeClass(node: RepositoryFuturesCanvasNode, pinned: boolean) {
 }
 
 function nodeSizeClass(node: RepositoryFuturesCanvasNode, mobile: boolean, showTitle: boolean) {
-  if (!showTitle) return `${mobile ? 'h-12' : 'h-5'} min-h-0 rounded-full p-0`;
+  if (!showTitle) return `${mobile ? 'h-7' : 'h-5'} min-h-0 rounded-full p-0`;
   if (mobile && (node.kind === 'evolution' || node.kind === 'capability' || node.kind === 'artifact')) return 'min-h-[4.5rem] px-2 py-2';
   if (mobile) return 'min-h-[6.25rem] px-2 py-2';
   if (node.kind === 'evolution') return 'min-h-[3.35rem] px-2.5 py-1.5';
   if (node.kind === 'capability' || node.kind === 'artifact') return 'min-h-[2.8rem] px-2.5 py-1.5';
+  if (node.kind === 'dependency') return 'min-h-[2.35rem] px-2 py-1';
   return `${node.role === 'primary' ? 'min-h-[3.9rem]' : 'min-h-[3.2rem]'} px-3 py-2`;
 }
 

@@ -242,26 +242,16 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     const recommendedIds = visibleProductIds.length
       ? visibleProductIds
       : quickPath.primaryRecommendations.candidates.slice(0, 8).map(item => item.goalId);
-    const primaryIsProduct = draft ? goalById.get(draft.primaryGoal.goalId)?.candidateClass === 'product-opportunity' : false;
-    const compatibleIds = draft ? [...goalById.entries()]
-      .filter(([goalId, candidate]) => !selectedGoalIds.has(goalId)
-        && !savedGoalIds.has(goalId)
-        && ['compatible', 'compatible-with-review'].includes(compatibilityFor(goalId))
-        && (!primaryIsProduct || candidate.candidateClass === 'product-opportunity'))
-      .sort(([, left], [, right]) => compareRepositoryFutureCandidates(left, right))
-      .slice(0, 8)
-      .map(([goalId]) => goalId) : [];
-    const constrainedIds = draft ? [...goalById.keys()]
-      .filter(goalId => !selectedGoalIds.has(goalId)
-        && !savedGoalIds.has(goalId)
-        && ['blocked', 'incompatible'].includes(compatibilityFor(goalId)))
-      .sort()
-      .slice(0, 2) : [];
-    const displayIds = (draft
-      ? [draft.primaryGoal.goalId, ...draft.supportingGoals.map(goal => goal.goalId), ...compatibleIds, ...draft.savedGoalIds, ...constrainedIds]
-      : recommendedIds);
-    // Keep one stable eight-lane first generation. Selected nodes retain first
-    // priority, while replacements rotate into the remaining visible lanes.
+    // Selection changes emphasis and compatibility inside one persistent field;
+    // it must never rebuild the first generation as a different set of routes.
+    const selectedOutsideOverviewIds = draft
+      ? [draft.primaryGoal.goalId, ...draft.supportingGoals.map(goal => goal.goalId), ...draft.savedGoalIds]
+        .filter(goalId => !recommendedIds.includes(goalId))
+      : [];
+    const displayIds = [...recommendedIds, ...selectedOutsideOverviewIds];
+    // Eight product directions form the stable desktop overview. A goal reached
+    // from a secondary inspection surface is appended without removing that
+    // context, so selection can never look like a replacement trio.
     return [...new Set(displayIds)].slice(0, 8).flatMap(goalId => {
       const candidate = goalById.get(goalId);
       if (!candidate) return [];

@@ -117,6 +117,38 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(goals.every(node => node.canonicalPosition?.candidateId === node.id)).toBe(true);
   });
 
+  it('regularizes six grounded directions around a left-centered repository without a detached prerequisite band', () => {
+    const candidates = [
+      { ...candidate('goal:a', 'candidate', 2, 1), candidateClass: 'product-opportunity' as const, opportunityOrigin: 'strategic' as const },
+      { ...candidate('goal:b', 'candidate', 2, 1), candidateClass: 'product-opportunity' as const, opportunityOrigin: 'strategic' as const },
+      { ...candidate('goal:c', 'candidate', 2, 2), candidateClass: 'product-opportunity' as const, opportunityOrigin: 'evidence-backed' as const },
+      { ...candidate('goal:d', 'candidate', 2, 2), candidateClass: 'product-opportunity' as const, opportunityOrigin: 'evidence-backed' as const },
+      { ...candidate('goal:e', 'candidate', 2, 2), candidateClass: 'product-opportunity' as const, opportunityOrigin: 'evidence-backed' as const },
+      { ...candidate('goal:f', 'candidate', 2, 3), candidateClass: 'product-opportunity' as const, opportunityOrigin: 'exploratory' as const },
+    ];
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates,
+      dependencies: [{ ...dependency, dependentGoalIds: ['goal:c'] }],
+      productIntelligenceState: 'enhanced',
+    });
+    const repository = model.nodes.find(node => node.kind === 'repository')!;
+    const goals = model.nodes.filter(node => node.kind === 'goal').sort((left, right) => left.y - right.y);
+    const gaps = goals.slice(1).map((node, index) => node.y - goals[index].y);
+    const enabler = model.nodes.find(node => node.kind === 'dependency')!;
+
+    expect(goals).toHaveLength(6);
+    expect(new Set(goals.map(node => node.x))).toEqual(new Set([500]));
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(2);
+    expect(gaps.every(gap => gap === 100)).toBe(true);
+    expect(repository.x).toBeLessThan(goals[0].x);
+    expect(repository.y).toBe((goals[0].y + goals.at(-1)!.y) / 2);
+    expect(enabler.x).toBeGreaterThan(goals[0].x);
+    expect(enabler.y).toBeGreaterThanOrEqual(goals[0].y);
+    expect(enabler.y).toBeLessThanOrEqual(goals.at(-1)!.y);
+    expect('prerequisiteBand' in model).toBe(false);
+    expect(model.progressionBands.slice(0, 4).map(band => band.position)).toEqual([150, 500, 850, 1200]);
+  });
+
   it('separates repository-improvement streams by semantic family without changing canonical depth', () => {
     const foundations = [
       { ...candidate('goal:docs', 'candidate', 2, 2), title: 'Create a documentation index', candidateClass: 'repository-improvement' as const },
@@ -133,7 +165,7 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
 
     expect(new Set(goals.map(node => node.presentationRow?.index)).size).toBe(4);
     expect(goals.every(node => node.depth === 2 && node.canonicalPosition?.futureDepth === 2)).toBe(true);
-    expect(goals.every(node => node.x >= 418 && node.x <= 442)).toBe(true);
+    expect(goals.every(node => node.x === 500)).toBe(true);
   });
 
   it('places second- and third-generation product evolutions after each grounded first-level direction', () => {
@@ -441,7 +473,8 @@ describe('Omega 18.5-V7.2 repository futures camera', () => {
     expect(desktop.right).toBe(368);
     expect(tablet.right).toBe(328);
     expect(tablet.right).not.toBe(desktop.right);
-    expect(mobile.bottom).toBe(370);
+    expect(mobile.bottom).toBe(430);
+    expect(repositoryFuturesSafeInsets({ width: 390, height: 700 }).bottom).toBe(82);
     expect(mobile.right).toBe(18);
   });
 

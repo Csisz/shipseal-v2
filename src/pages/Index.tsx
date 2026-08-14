@@ -43,6 +43,9 @@ const PostScanOverviewQa = import.meta.env.DEV
 const PostScanChaptersQa = import.meta.env.DEV
   ? lazy(() => import('@/dev/PostScanChaptersQa'))
   : null;
+const RepositoryFuturesLayoutQa = import.meta.env.DEV
+  ? lazy(() => import('@/dev/RepositoryFuturesLayoutQa'))
+  : null;
 const GITHUB_INSTALLATION_STORAGE_KEY = 'shipseal.githubInstallationId';
 
 function scrollWindowToTop(behavior: ScrollBehavior) {
@@ -615,6 +618,10 @@ const Index = () => {
 
   if (PostScanChaptersQa && new URLSearchParams(window.location.search).get('omega17Qa') === 'chapters') {
     return <Suspense fallback={<div className="min-h-screen bg-background p-8 text-muted-foreground">Loading chapter fixture...</div>}><PostScanChaptersQa /></Suspense>;
+  }
+
+  if (RepositoryFuturesLayoutQa && new URLSearchParams(window.location.search).get('omega18Qa') === 'futures-layout') {
+    return <Suspense fallback={<div className="min-h-screen bg-background p-8 text-muted-foreground">Loading Futures layout fixture...</div>}><RepositoryFuturesLayoutQa /></Suspense>;
   }
 
   return (

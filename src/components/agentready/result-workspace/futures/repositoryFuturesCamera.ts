@@ -36,7 +36,7 @@ export const FUTURES_CAMERA_LIMITS = { minimum: 0.44, maximum: 1.45 } as const;
 
 const EMPTY_INSETS: RepositoryFuturesCameraInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const SAFE_VIEWPORT_CONSTANTS = {
-  mobile: { top: 104, right: 18, bottom: 22, left: 18, inspectorGap: 18, fallbackInspectorHeight: 330 },
+  mobile: { top: 104, right: 18, bottom: 82, left: 18, inspectorGap: 18, fallbackInspectorHeight: 330 },
   tablet: { top: 108, right: 20, bottom: 22, left: 64, inspectorGap: 20, fallbackInspectorWidth: 288 },
   desktop: { top: 108, right: 24, bottom: 24, left: 72, inspectorGap: 24, fallbackInspectorWidth: 320 },
 } as const;
