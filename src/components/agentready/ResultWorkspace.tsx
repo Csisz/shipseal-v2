@@ -58,7 +58,6 @@ interface Props {
   repositoryProductIntelligenceStatus?: RepositoryIntelligenceProviderStatus;
   repositoryProductIntelligence?: RepositoryProductIntelligenceResult | null;
   prepareRepositoryIntelligenceEnhancement?: () => Promise<void>;
-  prepareRepositoryProductIntelligence?: () => Promise<void>;
   agentOperatingMode?: AgentOperatingModeId;
   githubConnection?: GitHubConnectionState;
   verificationBaseline?: RepositoryVerificationBaseline | null;
@@ -93,7 +92,6 @@ export function ResultWorkspace({
   repositoryProductIntelligenceStatus,
   repositoryProductIntelligence,
   prepareRepositoryIntelligenceEnhancement,
-  prepareRepositoryProductIntelligence,
   agentOperatingMode,
   githubConnection,
   verificationBaseline,
@@ -122,7 +120,6 @@ export function ResultWorkspace({
   const [packagePrepared, setPackagePrepared] = useState(false);
   const [prCreated, setPrCreated] = useState(false);
   const [workspaceReportIdentity, setWorkspaceReportIdentity] = useState(reportIdentity);
-  const productIntelligenceRequestRef = useRef('');
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
@@ -150,14 +147,6 @@ export function ResultWorkspace({
     setPackagePrepared(false);
     setPrCreated(false);
   }, [initialIntake, intakeSkipped, reportIdentity, workspaceReportIdentity]);
-
-  useEffect(() => {
-    if (!prepareRepositoryProductIntelligence || repositoryProductIntelligence?.opportunities.length) return;
-    if (repositoryProductIntelligenceStatus && repositoryProductIntelligenceStatus.state !== 'deterministic') return;
-    if (productIntelligenceRequestRef.current === reportIdentity) return;
-    productIntelligenceRequestRef.current = reportIdentity;
-    void prepareRepositoryProductIntelligence().catch(() => undefined);
-  }, [prepareRepositoryProductIntelligence, reportIdentity, repositoryProductIntelligence, repositoryProductIntelligenceStatus]);
 
   useEffect(() => {
     if (!activeStoryChapter || effectiveStoryChapterId === activeStoryChapter.id) return;
@@ -226,18 +215,19 @@ export function ResultWorkspace({
     packagePrepared: packagePrepared || prCreated,
     verificationResult,
   });
-  const futuresPending = Boolean(prepareRepositoryProductIntelligence)
-    && !repositoryProductIntelligence?.opportunities.length
-    && (!repositoryProductIntelligenceStatus || ['deterministic', 'preparing'].includes(repositoryProductIntelligenceStatus.state));
+  const selectorReady = !repositoryProductIntelligenceStatus
+    || repositoryProductIntelligenceStatus.state === 'enhanced' && Boolean(repositoryProductIntelligence?.opportunities.length);
 
-  if (!effectiveEntryView && futuresPending) {
+  if (!effectiveEntryView && !selectorReady) {
+    const terminalFailure = ['fallback', 'cancelled'].includes(repositoryProductIntelligenceStatus.state);
     return (
       <RepositoryFormation
         repositoryName={report.repoName}
         sourceLabel="Repository scan"
-        stage="projecting"
+        stage="directions"
         title="Forming future pathways"
         action={repositoryProductIntelligenceStatus?.message || 'Connecting repository evidence to grounded future directions.'}
+        failure={terminalFailure ? { message: repositoryProductIntelligenceStatus.message } : undefined}
         fullScreen
       />
     );

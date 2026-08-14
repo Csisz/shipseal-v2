@@ -44,6 +44,20 @@ vi.mock('@/components/agentready/ResultDashboard', () => ({
   ),
 }));
 
+vi.mock('@/lib/workspace', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/workspace')>();
+  return { ...actual, buildRepositoryUniverseModel: vi.fn(() => ({ fingerprint: 'fixture-universe' })) };
+});
+
+vi.mock('@/components/agentready/result-workspace/futures/repositoryFuturePathwaysGraph', () => ({
+  buildRepositoryFuturePathwaysGraph: vi.fn(() => ({
+    candidates: [{ id: 'fixture-direction', alignment: 'product-opportunity', eligibility: 'eligible' }],
+    nodes: [{ id: 'fixture-goal', kind: 'future-goal', candidateId: 'fixture-direction' }],
+  })),
+}));
+
+vi.mock('@/components/agentready/result-workspace/futures/RepositoryFuturesWorkspace', () => ({ default: () => null }));
+
 vi.mock('@/hooks/useRepoScan', async () => {
   const React = await import('react');
   const { buildSampleReport } = await import('@/lib/readiness');
@@ -65,6 +79,12 @@ vi.mock('@/hooks/useRepoScan', async () => {
         }
         return Promise.resolve(null);
       };
+      const repositoryProductIntelligence = React.useMemo(() => state.status === 'completed'
+        ? { fingerprint: 'fixture-product', opportunities: [{ id: 'fixture-opportunity' }] }
+        : null, [state.status]);
+      const repositoryIntelligenceReview = React.useMemo(() => state.status === 'completed'
+        ? { artifactSet: {}, review: {} }
+        : null, [state.status]);
       return {
         selectedFile: null,
         ...state,
@@ -78,11 +98,13 @@ vi.mock('@/hooks/useRepoScan', async () => {
         activeScanSourceLabel: 'Test source',
         discoveredFileCount: 0,
         analyzedFileCount: 0,
-        repositoryProductIntelligence: null,
         repositoryProductIntelligenceStatus: {
-          state: state.status === 'completed' ? 'fallback' : 'deterministic',
-          message: state.status === 'completed' ? 'Grounded fallback ready.' : 'Product intelligence has not started.',
+          state: state.status === 'completed' ? 'enhanced' : 'deterministic',
+          message: state.status === 'completed' ? 'Validated Product Intelligence ready.' : 'Product intelligence has not started.',
+          providerId: state.status === 'completed' ? 'fixture-provider' : undefined,
         },
+        repositoryIntelligenceReview,
+        repositoryProductIntelligence,
         prepareRepositoryProductIntelligence: vi.fn(async () => null),
         startScan: (file: File) => { scanMocks.startScan(file); return begin(); },
         startGitHubScan: (url: string, branch?: string) => { scanMocks.startGitHubScan(url, branch); return begin(); },
@@ -192,7 +214,7 @@ describe('ShipSeal direct scan entry', () => {
 
     expect(scanMocks.startGitHubAppScan).toHaveBeenCalledTimes(1);
     expect(scanMocks.startGitHubAppScan).toHaveBeenCalledWith({ installationId: '12345', owner: 'Csisz', repo: 'shipseal', ref: 'main' });
-    expect(await screen.findByRole('heading', { name: /Your repository intelligence is ready/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Your workspace is ready/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Skip to workspace/i })).not.toBeInTheDocument();
     expect(await screen.findByText('Project: shipseal')).toBeInTheDocument();
     expect(screen.getByText('Intake skipped: true')).toBeInTheDocument();
@@ -216,12 +238,12 @@ describe('ShipSeal direct scan entry', () => {
     expect(screen.getByText(/Forming repository intelligence/i)).toBeInTheDocument();
   });
 
-  it('keeps the sample project flow scan-free', () => {
+  it('keeps the sample project flow scan-free', async () => {
     render(<MemoryRouter><Index /></MemoryRouter>);
 
     fireEvent.click(screen.getByRole('button', { name: /Try sample project/i }));
 
-    expect(screen.getByRole('heading', { name: /Your repository intelligence is ready/i })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Your workspace is ready/i })).toBeInTheDocument();
     expect(scanMocks.startScan).not.toHaveBeenCalled();
     expect(scanMocks.startGitHubScan).not.toHaveBeenCalled();
     expect(scanMocks.startGitHubAppScan).not.toHaveBeenCalled();

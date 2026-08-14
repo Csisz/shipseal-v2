@@ -68,7 +68,7 @@ describe('Intelligence Reveal', () => {
       const report = buildSampleReport();
       const { rerender } = render(<IntelligenceReveal report={report} futuresReady={false} statusMessage="Grounding future directions." onComplete={onComplete} />);
 
-      expect(screen.getByRole('heading', { name: /Forming future pathways/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Forming repository intelligence/i })).toBeInTheDocument();
       expect(screen.getByText('sample-nextjs-app')).toBeInTheDocument();
       expect(screen.getByText('Grounding future directions.')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /Skip to workspace/i })).not.toBeInTheDocument();
@@ -80,7 +80,7 @@ describe('Intelligence Reveal', () => {
       expect(onComplete).not.toHaveBeenCalled();
 
       rerender(<IntelligenceReveal report={report} futuresReady onComplete={onComplete} />);
-      expect(screen.getByRole('heading', { name: /repository intelligence is ready/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /workspace is ready/i })).toBeInTheDocument();
 
       act(() => {
         vi.advanceTimersByTime(719);

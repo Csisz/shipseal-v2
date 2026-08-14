@@ -409,7 +409,6 @@ describe('Result Workspace composition', () => {
       takeRecords() { return []; }
     } as unknown as typeof IntersectionObserver;
 
-    const prepareRepositoryProductIntelligence = vi.fn(async () => undefined);
     selectorMockState.view = 'futures';
     render(<ResultDashboard
       report={buildSampleReport()}
@@ -417,18 +416,15 @@ describe('Result Workspace composition', () => {
       onReset={vi.fn()}
       onClearHistory={vi.fn()}
       repositoryProductIntelligenceStatus={{ state: 'deterministic', message: 'Repository evidence is ready.', retryable: false }}
-      prepareRepositoryProductIntelligence={prepareRepositoryProductIntelligence}
     />);
 
-    expect(await screen.findByTestId('repository-formation')).toHaveAttribute('data-formation-stage', 'projecting');
+    expect(await screen.findByTestId('repository-formation')).toHaveAttribute('data-formation-stage', 'directions');
     expect(screen.queryByTestId('repository-futures-workspace')).not.toBeInTheDocument();
     expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-workspace-stage')).not.toBeInTheDocument();
-    await waitFor(() => expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('future-pathways-hero-stage')).not.toBeInTheDocument();
     expect(universeMockState.models).toHaveLength(0);
-    expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1);
   });
 
   it('keeps Product Strategist pending state inside the single formation surface', async () => {
@@ -450,13 +446,30 @@ describe('Result Workspace composition', () => {
       onReset={vi.fn()}
       onClearHistory={vi.fn()}
       repositoryProductIntelligenceStatus={{ state: 'preparing', message: 'Product Strategist is analysing repository evidence.', retryable: false }}
-      prepareRepositoryProductIntelligence={vi.fn(async () => undefined)}
     />);
 
     expect(await screen.findByText('Product Strategist is analysing repository evidence.')).toBeInTheDocument();
     expect(screen.getByTestId('repository-formation')).toHaveAttribute('aria-busy', 'true');
     expect(screen.queryByRole('button', { name: /Quick Path/i })).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-futures-stage')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
+  });
+
+  it('keeps the selector and Futures canvas hidden after a terminal provider failure', async () => {
+    render(<ResultDashboard
+      report={buildSampleReport()}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{
+        state: 'fallback', deepState: 'timed-out', category: 'request_timeout', retryable: true,
+        message: 'Future analysis is taking longer than expected.',
+      }}
+    />);
+
+    expect(await screen.findByText('Future analysis is taking longer than expected.')).toBeInTheDocument();
+    expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('repository-futures-workspace')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
   });
 

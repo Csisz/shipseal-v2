@@ -89,6 +89,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
   const productSingleFlightRef = useRef<import('@/lib/repositoryIntelligence/deepIntelligenceClient').RepositoryIntelligenceEnhancementSingleFlight | null>(null);
   const repositoryIntelligencePreparationRef = useRef<BuildRepositoryIntelligenceArtifactReviewResult | null>(null);
   const repositoryIntelligenceScanInputRef = useRef<RepoScanInput | null>(null);
+  const productReportIdentityRef = useRef('');
+  const productRequestIdentityRef = useRef('');
+  const productRequestPromiseRef = useRef<Promise<void> | null>(null);
+  const productRequestAttemptRef = useRef(0);
   const scanTokenRef = useRef(0);
 
   const resetScan = useCallback(() => {
@@ -98,6 +102,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     abortRef.current = null;
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
+    productReportIdentityRef.current = '';
+    productRequestIdentityRef.current = '';
+    productRequestPromiseRef.current = null;
+    productRequestAttemptRef.current = 0;
     scanTokenRef.current += 1;
     setState(initialState);
   }, []);
@@ -109,6 +117,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     abortRef.current = null;
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
+    productReportIdentityRef.current = '';
+    productRequestIdentityRef.current = '';
+    productRequestPromiseRef.current = null;
+    productRequestAttemptRef.current = 0;
     scanTokenRef.current += 1;
     setState(current => ({
       ...current,
@@ -138,6 +150,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     productAbortRef.current?.abort();
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
+    productReportIdentityRef.current = '';
+    productRequestIdentityRef.current = '';
+    productRequestPromiseRef.current = null;
+    productRequestAttemptRef.current = 0;
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -187,6 +203,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       const verification = verificationPromise ? await verificationPromise : { result: null, error: null };
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
+      productReportIdentityRef.current = repositoryReportIdentity(report);
       setState(current => ({
         ...current,
         status: 'completed',
@@ -228,6 +245,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     productAbortRef.current?.abort();
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
+    productReportIdentityRef.current = '';
+    productRequestIdentityRef.current = '';
+    productRequestPromiseRef.current = null;
+    productRequestAttemptRef.current = 0;
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -299,6 +320,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       const verification = verificationPromise ? await verificationPromise : { result: null, error: null };
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
+      productReportIdentityRef.current = repositoryReportIdentity(report);
       setState(current => ({
         ...current,
         status: 'completed',
@@ -347,6 +369,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     productAbortRef.current?.abort();
     repositoryIntelligencePreparationRef.current = null;
     repositoryIntelligenceScanInputRef.current = null;
+    productReportIdentityRef.current = '';
+    productRequestIdentityRef.current = '';
+    productRequestPromiseRef.current = null;
+    productRequestAttemptRef.current = 0;
     const controller = new AbortController();
     abortRef.current = controller;
 
@@ -405,6 +431,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       const verification = verificationPromise ? await verificationPromise : { result: null, error: null };
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
+      productReportIdentityRef.current = repositoryReportIdentity(report);
       setState(current => ({
         ...current,
         status: 'completed',
@@ -525,10 +552,21 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     });
   }, []);
 
-  const prepareRepositoryProductIntelligence = useCallback(() => {
+  const prepareRepositoryProductIntelligence = useCallback((options: { retry?: boolean } = {}) => {
     const preparation = repositoryIntelligencePreparationRef.current;
     const scanInput = repositoryIntelligenceScanInputRef.current;
-    if (!preparation || !scanInput) return Promise.resolve();
+    const reportIdentity = productReportIdentityRef.current;
+    if (!preparation || !scanInput || !reportIdentity) return Promise.resolve();
+    if (!options.retry && productRequestIdentityRef.current.startsWith(`${reportIdentity}:attempt-`)) {
+      return productRequestPromiseRef.current || Promise.resolve();
+    }
+
+    if (options.retry) {
+      productAbortRef.current?.abort();
+      productRequestAttemptRef.current += 1;
+    }
+    const requestIdentity = `${reportIdentity}:attempt-${productRequestAttemptRef.current}`;
+    productRequestIdentityRef.current = requestIdentity;
     const run = async () => {
       const token = scanTokenRef.current;
       const controller = new AbortController();
@@ -536,6 +574,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       productAbortRef.current = controller;
       setState(current => ({
         ...current,
+        repositoryProductIntelligence: null,
         repositoryProductIntelligenceStatus: {
           state: 'preparing', deepState: 'pending',
           message: 'ShipSeal is understanding the product and exploring its strongest next directions.', retryable: false,
@@ -555,7 +594,18 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           evidenceResult: preparation.evidenceResult,
         });
         const response = await clientModule.requestRepositoryIntelligenceEnhancement(request, { signal: controller.signal });
-        if (scanTokenRef.current !== token || controller.signal.aborted) return;
+        if (scanTokenRef.current !== token || productRequestIdentityRef.current !== requestIdentity) return;
+        if (controller.signal.aborted || response.state === 'fallback' && response.category === 'request_cancelled') {
+          setState(current => ({
+            ...current,
+            repositoryProductIntelligenceStatus: {
+              state: 'cancelled', deepState: 'failed', category: 'request_cancelled', retryable: true,
+              message: 'Future analysis was cancelled. You can retry when you are ready.',
+              diagnostics: response.state === 'fallback' ? response.diagnostics : undefined,
+            },
+          }));
+          return;
+        }
         if (response.state === 'enhanced') {
           if (response.result.productIntelligence?.opportunities.length) {
             setState(current => ({
@@ -579,12 +629,12 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           }
           return;
         }
-        const fallbackStatus: RepositoryIntelligenceProviderStatus = response.category === 'request_cancelled'
-          ? { state: 'cancelled', deepState: response.deepState, message: response.message, retryable: true, category: response.category, diagnostics: response.diagnostics }
+        const fallbackStatus: RepositoryIntelligenceProviderStatus = response.category === 'request_timeout'
+          ? { state: 'fallback', deepState: response.deepState, message: 'Future analysis is taking longer than expected.', retryable: true, category: 'request_timeout', diagnostics: response.diagnostics }
           : { state: 'fallback', deepState: response.deepState, message: response.message, retryable: response.retryable, category: response.category, diagnostics: response.diagnostics };
         setState(current => ({ ...current, repositoryProductIntelligenceStatus: fallbackStatus }));
       } catch {
-        if (scanTokenRef.current !== token) return;
+        if (scanTokenRef.current !== token || productRequestIdentityRef.current !== requestIdentity) return;
         setState(current => ({
           ...current,
           repositoryProductIntelligenceStatus: controller.signal.aborted
@@ -595,10 +645,51 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         if (productAbortRef.current === controller) productAbortRef.current = null;
       }
     };
-    return import('@/lib/repositoryIntelligence/deepIntelligenceClient').then(({ RepositoryIntelligenceEnhancementSingleFlight }) => {
-      productSingleFlightRef.current ||= new RepositoryIntelligenceEnhancementSingleFlight();
-      return productSingleFlightRef.current.run(run);
+    const launch = () => import('@/lib/repositoryIntelligence/deepIntelligenceClient')
+      .then(({ RepositoryIntelligenceEnhancementSingleFlight }) => {
+        productSingleFlightRef.current ||= new RepositoryIntelligenceEnhancementSingleFlight();
+        return productSingleFlightRef.current.run(run);
+      })
+      .catch(() => {
+        if (productRequestIdentityRef.current !== requestIdentity) return;
+        setState(current => ({
+          ...current,
+          repositoryProductIntelligenceStatus: {
+            state: 'fallback', deepState: 'failed', category: 'provider_unavailable', retryable: true,
+            message: 'Future analysis failed. Retry when you are ready.',
+          },
+        }));
+      });
+    const previous = options.retry ? productRequestPromiseRef.current : null;
+    const requestPromise = (previous ? previous.catch(() => undefined).then(launch) : launch()).finally(() => {
+      if (productRequestPromiseRef.current === requestPromise) productRequestPromiseRef.current = null;
     });
+    productRequestPromiseRef.current = requestPromise;
+    return requestPromise;
+  }, []);
+
+  useEffect(() => {
+    if (state.status !== 'completed' || !state.report || !state.repositoryIntelligenceReview) return;
+    if (state.repositoryProductIntelligenceStatus.state !== 'deterministic') return;
+    void prepareRepositoryProductIntelligence().catch(() => undefined);
+  }, [prepareRepositoryProductIntelligence, state.report, state.repositoryIntelligenceReview, state.repositoryProductIntelligenceStatus.state, state.status]);
+
+  const retryRepositoryProductIntelligence = useCallback(
+    () => prepareRepositoryProductIntelligence({ retry: true }),
+    [prepareRepositoryProductIntelligence],
+  );
+
+  const cancelRepositoryProductIntelligence = useCallback(() => {
+    productAbortRef.current?.abort();
+    setState(current => current.repositoryProductIntelligenceStatus.state === 'preparing'
+      ? {
+          ...current,
+          repositoryProductIntelligenceStatus: {
+            state: 'cancelled', deepState: 'failed', category: 'request_cancelled', retryable: true,
+            message: 'Future analysis was cancelled. You can retry when you are ready.',
+          },
+        }
+      : current);
   }, []);
 
   return {
@@ -610,7 +701,13 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     resetScan,
     prepareRepositoryIntelligenceEnhancement,
     prepareRepositoryProductIntelligence,
+    retryRepositoryProductIntelligence,
+    cancelRepositoryProductIntelligence,
   };
+}
+
+function repositoryReportIdentity(report: ReadinessReport) {
+  return `${report.repoName}:${report.scannedAt}`;
 }
 
 async function prepareRepositoryIntelligenceVerification(

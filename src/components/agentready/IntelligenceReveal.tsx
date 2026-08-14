@@ -27,8 +27,8 @@ export function IntelligenceReveal({ report, futuresReady = true, statusMessage,
       <RepositoryFormation
         repositoryName={report.repoName}
         sourceLabel={report.source.sourceType === 'github-app' ? 'Connected GitHub' : report.source.sourceType.startsWith('github') ? 'GitHub repository' : 'Repository scan'}
-        stage={futuresReady ? 'ready' : 'projecting'}
-        title={futuresReady ? 'Your repository intelligence is ready' : 'Forming future pathways'}
+        stage={futuresReady ? 'ready' : 'directions'}
+        title={futuresReady ? 'Your workspace is ready' : 'Forming repository intelligence'}
         action={futuresReady ? 'The grounded perspectives are ready to explore.' : statusMessage || 'Connecting repository evidence to grounded future directions.'}
         fullScreen
       />

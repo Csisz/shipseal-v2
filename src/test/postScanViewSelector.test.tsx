@@ -109,7 +109,7 @@ describe('premium post-scan view selector', () => {
     expect(await screen.findByTestId('futures-experience')).toBeInTheDocument();
   });
 
-  it('hands a sample report from Intelligence Reveal to the selector without exposing the workspace first', () => {
+  it('hands a sample report from the unified ready formation to the selector without exposing the workspace first', () => {
     vi.useFakeTimers();
     const report = reportWithIdentity('2026-08-11T10:02:00.000Z');
 
@@ -122,7 +122,7 @@ describe('premium post-scan view selector', () => {
 
     try {
       render(<SampleRevealHandoff />);
-      expect(screen.getByRole('heading', { name: /repository intelligence is ready/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /your workspace is ready/i })).toBeInTheDocument();
       expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
       act(() => vi.advanceTimersByTime(720));
 

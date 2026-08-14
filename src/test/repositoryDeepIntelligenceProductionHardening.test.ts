@@ -366,7 +366,7 @@ describe('production Deep Intelligence transmission, response and caching', () =
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
-  it('issues at most one Product Strategist request per scan fingerprint even after fallback', async () => {
+  it('does not cache a retryable Product Strategist fallback', async () => {
     const request = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
       version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
@@ -381,7 +381,22 @@ describe('production Deep Intelligence transmission, response and caching', () =
     const first = await requestRepositoryIntelligenceEnhancement(request);
     const second = await requestRepositoryIntelligenceEnhancement(request);
     expect(first).toMatchObject({ state: 'fallback', category: 'request_timeout' });
-    expect(second).toMatchObject({ state: 'fallback', category: 'request_timeout', diagnostics: { cacheUsed: true } });
-    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(second).toMatchObject({ state: 'fallback', category: 'request_timeout' });
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds a browser request even when the fetch implementation never settles', async () => {
+    const request = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const fetcher = vi.fn(() => new Promise<Response>(() => undefined));
+    const result = await requestRepositoryIntelligenceEnhancement(request, {
+      fetcher: fetcher as typeof fetch,
+      timeoutMs: 15,
+    });
+    expect(result).toMatchObject({
+      state: 'fallback',
+      category: 'request_timeout',
+      retryable: true,
+      message: 'Future analysis is taking longer than expected.',
+    });
   });
 });

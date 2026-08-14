@@ -510,6 +510,21 @@
   border-color: hsl(var(--accent) / 0.17);
 }
 
+.repository-formation-ring {
+  stroke: hsl(var(--border) / 0.35);
+  opacity: 0.2;
+  transition: opacity 500ms ease, stroke 500ms ease;
+}
+
+.repository-formation[data-formation-stage='understanding'] .repository-formation-ring-inner,
+.repository-formation[data-formation-stage='directions'] .repository-formation-ring,
+.repository-formation[data-formation-stage='pathways'] .repository-formation-ring,
+.repository-formation[data-formation-stage='workspace'] .repository-formation-ring,
+.repository-formation[data-formation-stage='ready'] .repository-formation-ring {
+  opacity: 0.82;
+  stroke: hsl(var(--primary) / 0.34);
+}
+
 .repository-formation-core {
   box-shadow: 0 0 54px hsl(var(--primary) / 0.15), inset 0 0 28px hsl(var(--primary) / 0.035);
 }
@@ -520,14 +535,32 @@
   stroke-linecap: round;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  animation: repository-formation-path 1.35s cubic-bezier(0.22, 0.8, 0.25, 1) forwards;
+  opacity: 0;
+  transition: stroke-dashoffset 700ms cubic-bezier(0.22, 0.8, 0.25, 1), opacity 500ms ease, stroke 500ms ease;
 }
 
-.repository-formation-arc-b { animation-delay: 90ms; opacity: 0.72; }
-.repository-formation-arc-c { animation-delay: 180ms; opacity: 0.5; }
+.repository-formation[data-formation-stage='directions'] .repository-formation-arc-a,
+.repository-formation[data-formation-stage='pathways'] .repository-formation-arc,
+.repository-formation[data-formation-stage='workspace'] .repository-formation-arc,
+.repository-formation[data-formation-stage='ready'] .repository-formation-arc {
+  stroke-dashoffset: 0;
+  opacity: 0.82;
+}
 
-.repository-formation[data-formation-stage='projecting'] .repository-formation-core {
+.repository-formation[data-formation-stage='pathways'] .repository-formation-arc-b,
+.repository-formation[data-formation-stage='workspace'] .repository-formation-arc-b,
+.repository-formation[data-formation-stage='ready'] .repository-formation-arc-b { opacity: 0.66; }
+
+.repository-formation[data-formation-stage='pathways'] .repository-formation-arc-c,
+.repository-formation[data-formation-stage='workspace'] .repository-formation-arc-c,
+.repository-formation[data-formation-stage='ready'] .repository-formation-arc-c { opacity: 0.48; }
+
+.repository-formation[data-formation-state='active'] .repository-formation-core {
   animation: repository-formation-breathe 2.4s ease-in-out infinite;
+}
+
+.repository-formation-active-dot {
+  animation: repository-formation-active 1.8s ease-in-out infinite;
 }
 
 .repository-formation[data-formation-stage='ready'] .repository-formation-arc {
@@ -544,13 +577,19 @@
   50% { transform: translate(-50%, -50%) scale(1.025); }
 }
 
+@keyframes repository-formation-active {
+  0%, 100% { opacity: 0.58; transform: scale(0.88); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .repository-formation-ring,
   .repository-formation-arc {
-    animation: none;
-    stroke-dashoffset: 0;
+    transition: none;
   }
 
-  .repository-formation[data-formation-stage='projecting'] .repository-formation-core {
+  .repository-formation[data-formation-state='active'] .repository-formation-core,
+  .repository-formation-active-dot {
     animation: none;
   }
 }

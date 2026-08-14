@@ -25,7 +25,9 @@ export function ScanProgress({
 }: Props) {
   const safeProgress = Math.min(100, Math.max(0, Math.round(progress)));
   const current = steps[currentStepIndex] || steps.at(-1) || 'Reading repository evidence';
-  const stage: RepositoryFormationStage = safeProgress < 38 ? 'reading' : safeProgress < 78 ? 'connecting' : 'projecting';
+  const stage: RepositoryFormationStage = /building.*intelligence|preparing workspace/i.test(current)
+    ? 'understanding'
+    : 'reading';
   const countLine = discoveredFileCount == null
     ? current
     : `${analyzedFileCount == null ? 'Reading' : analyzedFileCount.toLocaleString()} of ${discoveredFileCount.toLocaleString()} files understood`;

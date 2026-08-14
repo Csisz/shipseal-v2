@@ -2,8 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import { Nav } from '@/components/agentready/Nav';
 import { Landing } from '@/components/agentready/Landing';
 import { UploadDropzone } from '@/components/agentready/UploadDropzone';
-import { ScanProgress } from '@/components/agentready/ScanProgress';
-import { IntelligenceReveal } from '@/components/agentready/IntelligenceReveal';
+import { RepositoryFormation } from '@/components/agentready/RepositoryFormation';
 import { SurfaceState } from '@/components/agentready/SurfaceState';
 import { buildSampleReport } from '@/lib/readiness';
 import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
@@ -23,6 +22,10 @@ import type { RepositoryVerificationBaseline, WorkspaceStoryChapterId } from '@/
 import { validateRepositoryIntelligenceVerificationBaseline, type RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
 import { getScan } from '@/lib/persistence';
 import { useOptionalAccount } from '@/components/account/accountContext';
+import {
+  resolveRepositoryFormationPhase,
+  type RepositoryFuturePreparationState,
+} from '@/lib/workspace/repositoryFormationPipeline';
 
 type PendingSource =
   | { type: 'zip'; file: File; projectName: string }
@@ -133,10 +136,16 @@ const Index = () => {
   const [intelligenceReveal, setIntelligenceReveal] = useState<{ key: string; visible: boolean } | null>(null);
   const [activeStoryChapterId, setActiveStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
   const [verificationBaseline, setVerificationBaseline] = useState<RepositoryVerificationBaseline | null>(null);
+  const [futurePreparation, setFuturePreparation] = useState<{
+    reportIdentity: string;
+    state: RepositoryFuturePreparationState;
+    error: string | null;
+  }>({ reportIdentity: '', state: 'idle', error: null });
   const savedReportKey = useRef<string | null>(null);
   const lastError = useRef<string | null>(null);
   const scanStartInFlight = useRef(false);
   const scanSectionRef = useRef<HTMLDivElement>(null);
+  const futurePreparationIdentityRef = useRef('');
 
   const activeReport = sampleReport || scan.report;
   const activeGithubConnection = pendingSource?.type === 'github-app' ? pendingSource.connection : undefined;
@@ -148,17 +157,68 @@ const Index = () => {
     intelligenceReveal?.key === activeReportKey &&
     intelligenceReveal.visible
   );
-  const prepareRepositoryProductIntelligence = scan.prepareRepositoryProductIntelligence;
   const productIntelligencePreparationState = scan.repositoryProductIntelligenceStatus?.state;
-  const futuresReady = Boolean(sampleReport)
-    || Boolean(scan.repositoryProductIntelligence?.opportunities.length)
-    || Boolean(productIntelligencePreparationState && ['enhanced', 'fallback', 'cancelled'].includes(productIntelligencePreparationState));
+  const productIntelligenceReady = Boolean(scan.repositoryProductIntelligence?.opportunities.length)
+    && productIntelligencePreparationState === 'enhanced';
 
   useEffect(() => {
-    if (!showIntelligenceReveal || sampleReport || futuresReady) return;
-    if (productIntelligencePreparationState !== 'deterministic' || !prepareRepositoryProductIntelligence) return;
-    void prepareRepositoryProductIntelligence().catch(() => undefined);
-  }, [futuresReady, prepareRepositoryProductIntelligence, productIntelligencePreparationState, sampleReport, showIntelligenceReveal]);
+    if (!activeReport || !activeReportKey) return;
+    if (sampleReport) {
+      futurePreparationIdentityRef.current = `sample:${activeReportKey}`;
+      setFuturePreparation({ reportIdentity: activeReportKey, state: 'ready', error: null });
+      return;
+    }
+    const productIntelligence = scan.repositoryProductIntelligence;
+    if (!productIntelligence?.opportunities.length || productIntelligencePreparationState !== 'enhanced') return;
+    const preparationIdentity = `${activeReportKey}:${productIntelligence.fingerprint}`;
+    if (futurePreparationIdentityRef.current === preparationIdentity) return;
+    futurePreparationIdentityRef.current = preparationIdentity;
+    let active = true;
+    setFuturePreparation({ reportIdentity: activeReportKey, state: 'building', error: null });
+    void (async () => {
+      try {
+        const [{ buildRepositoryUniverseModel }, { buildRepositoryFuturePathwaysGraph }] = await Promise.all([
+          import('@/lib/workspace'),
+          import('@/components/agentready/result-workspace/futures/repositoryFuturePathwaysGraph'),
+        ]);
+        if (!active) return;
+        const universe = buildRepositoryUniverseModel(activeReport);
+        const graph = buildRepositoryFuturePathwaysGraph(activeReport, universe, productIntelligence);
+        const usableProductDirections = graph.candidates.filter(candidate => candidate.alignment === 'product-opportunity' && candidate.eligibility !== 'unsupported');
+        if (!usableProductDirections.length || !graph.nodes.some(node => node.kind === 'future-goal' && node.candidateId)) {
+          throw new Error('Validated Product Intelligence did not produce usable Future pathways.');
+        }
+        setFuturePreparation({ reportIdentity: activeReportKey, state: 'preparing-workspace', error: null });
+        await Promise.all([
+          import('@/components/agentready/ResultDashboard'),
+          import('@/components/agentready/result-workspace/futures/RepositoryFuturesWorkspace'),
+        ]);
+        if (!active) return;
+        setFuturePreparation({ reportIdentity: activeReportKey, state: 'ready', error: null });
+      } catch (error) {
+        if (!active) return;
+        setFuturePreparation({
+          reportIdentity: activeReportKey,
+          state: 'failed',
+          error: error instanceof Error ? error.message : 'Future pathways could not be prepared.',
+        });
+      }
+    })();
+    return () => { active = false; };
+  }, [activeReport, activeReportKey, productIntelligencePreparationState, sampleReport, scan.repositoryProductIntelligence]);
+
+  const activeFuturePreparationState = futurePreparation.reportIdentity === activeReportKey
+    ? futurePreparation.state
+    : 'idle';
+  const formationPhase = resolveRepositoryFormationPhase({
+    scanStatus: scan.status,
+    currentScanStep: scan.currentStep,
+    repositoryIntelligenceReady: Boolean(sampleReport || scan.repositoryIntelligenceReview),
+    productStatus: scan.repositoryProductIntelligenceStatus,
+    productIntelligenceReady: Boolean(sampleReport || productIntelligenceReady),
+    futurePreparationState: activeFuturePreparationState,
+  });
+  const futuresReady = formationPhase === 'ready';
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -316,6 +376,13 @@ const Index = () => {
     setIntelligenceReveal(current => current ? { ...current, visible: false } : current);
     scrollWindowToTop('auto');
   }, []);
+
+  useEffect(() => {
+    if (!showIntelligenceReveal || formationPhase !== 'ready') return undefined;
+    const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+    const timer = window.setTimeout(completeIntelligenceReveal, reducedMotion ? 0 : 720);
+    return () => window.clearTimeout(timer);
+  }, [completeIntelligenceReveal, formationPhase, showIntelligenceReveal]);
 
   const replayIntelligenceReveal = useCallback(() => {
     if (!activeReportKey) return;
@@ -495,6 +562,44 @@ const Index = () => {
     queueMicrotask(() => scrollWindowToTop('smooth'));
   }, [scan]);
 
+  const retryFutureAnalysis = useCallback(() => {
+    futurePreparationIdentityRef.current = '';
+    setFuturePreparation(current => ({ ...current, state: 'idle', error: null }));
+    void scan.retryRepositoryProductIntelligence();
+  }, [scan]);
+
+  const productFailure = !sampleReport && productIntelligencePreparationState && ['fallback', 'cancelled'].includes(productIntelligencePreparationState)
+    ? scan.repositoryProductIntelligenceStatus
+    : null;
+  const formationFailure = productFailure || scan.repositoryIntelligenceReviewError || activeFuturePreparationState === 'failed'
+    ? {
+        message: productFailure?.message || scan.repositoryIntelligenceReviewError || futurePreparation.error || 'Future pathways could not be prepared.',
+        onRetry: productFailure || activeFuturePreparationState === 'failed' ? retryFutureAnalysis : undefined,
+        onReturn: reset,
+      }
+    : undefined;
+  const scanCountLine = scan.discoveredFileCount == null
+    ? scan.currentStep || 'Reading repository'
+    : `${scan.analyzedFileCount == null ? 'Reading' : scan.analyzedFileCount.toLocaleString()} of ${scan.discoveredFileCount.toLocaleString()} files understood`;
+  const formationAction = formationPhase === 'reading'
+    ? scanCountLine
+    : formationPhase === 'understanding'
+      ? scan.status === 'scanning' ? scan.currentStep || 'Building repository intelligence' : 'Turning scan evidence into repository intelligence.'
+      : formationPhase === 'directions'
+        ? scan.repositoryProductIntelligenceStatus.message
+        : formationPhase === 'pathways'
+          ? 'Normalising validated product opportunities into usable pathways.'
+          : formationPhase === 'workspace'
+            ? 'Loading the prepared perspectives and workspace controls.'
+            : 'Project Universe and Repository Futures are ready to explore.';
+  const formationSourceLabel = sampleReport
+    ? 'Sample repository'
+    : activeReport?.source.sourceType === 'github-app'
+      ? 'Connected GitHub'
+      : activeReport?.source.sourceType.startsWith('github')
+        ? 'GitHub repository'
+        : scan.activeScanSourceLabel || 'Repository scan';
+
   const handleClearHistory = useCallback(() => {
     clearScanHistory();
     setHistory([]);
@@ -517,14 +622,20 @@ const Index = () => {
       {!showIntelligenceReveal && <Nav onNavigateAnchor={handleNavAnchor} onHome={handleHome} />}
       {!showIntelligenceReveal && verificationContextMessage && <div role="status" className="container relative z-10 pt-20 md:pt-24"><div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">{verificationContextMessage}</div></div>}
 
-      {showIntelligenceReveal && activeReport ? (
-        <IntelligenceReveal
-          key={activeReportKey || activeReport.scannedAt}
-          report={activeReport}
-          futuresReady={futuresReady}
-          statusMessage={scan.repositoryProductIntelligenceStatus?.message}
-          onComplete={completeIntelligenceReveal}
-        />
+      {isScanning || showIntelligenceReveal ? (
+        <main className="min-h-screen pt-16 md:pt-20">
+          <RepositoryFormation
+            repositoryName={activeReport?.repoName || scan.activeRepositoryLabel || 'Repository'}
+            sourceLabel={formationSourceLabel}
+            stage={formationPhase}
+            title={futuresReady ? 'Your workspace is ready' : 'Forming repository intelligence'}
+            action={formationAction}
+            progress={isScanning ? scan.progress : undefined}
+            onCancel={isScanning ? scan.cancelScan : undefined}
+            failure={formationFailure}
+            fullScreen
+          />
+        </main>
       ) : activeReport ? (
         <main className="pt-16 md:pt-20">
           <Suspense fallback={<div className="container py-24 text-sm text-muted-foreground">Loading report...</div>}>
@@ -537,7 +648,6 @@ const Index = () => {
               repositoryIntelligenceProviderStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus}
               repositoryProductIntelligence={sampleReport ? null : scan.repositoryProductIntelligence}
               prepareRepositoryIntelligenceEnhancement={sampleReport ? undefined : scan.prepareRepositoryIntelligenceEnhancement}
-              prepareRepositoryProductIntelligence={sampleReport ? undefined : scan.prepareRepositoryProductIntelligence}
               repositoryProductIntelligenceStatus={scan.repositoryProductIntelligenceStatus}
               history={history}
               onReset={reset}
@@ -563,22 +673,6 @@ const Index = () => {
               persistenceControl={<Suspense fallback={<div className="text-xs text-muted-foreground">Preparing private save…</div>}><SaveProjectControl report={activeReport} providerStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus} verificationBaseline={sampleReport ? undefined : repositoryIntelligenceVerificationBaseline} verificationResult={sampleReport ? undefined : scan.repositoryIntelligenceVerification} projectId={verificationProjectContext?.projectId} baselineScanId={verificationProjectContext?.baselineScanId} /></Suspense>}
             />
           </Suspense>
-        </main>
-      ) : isScanning ? (
-        <main className="min-h-screen pt-16 pb-6 md:pt-20 md:pb-8">
-          <div className="container">
-            <ScanProgress
-              steps={scan.steps}
-              currentStepIndex={scan.currentStepIndex}
-              progress={scan.progress}
-              warnings={scan.warnings}
-              repositoryLabel={scan.activeRepositoryLabel}
-              sourceLabel={scan.activeScanSourceLabel}
-              discoveredFileCount={scan.discoveredFileCount}
-              analyzedFileCount={scan.analyzedFileCount}
-              onCancel={scan.cancelScan}
-            />
-          </div>
         </main>
       ) : (
         <main>
