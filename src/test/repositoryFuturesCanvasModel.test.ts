@@ -137,16 +137,16 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     const enabler = model.nodes.find(node => node.kind === 'dependency')!;
 
     expect(goals).toHaveLength(6);
-    expect(new Set(goals.map(node => node.x))).toEqual(new Set([500]));
+    expect(new Set(goals.map(node => node.x))).toEqual(new Set([510]));
     expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(2);
-    expect(gaps.every(gap => gap === 100)).toBe(true);
+    expect(gaps.every(gap => gap === 108)).toBe(true);
     expect(repository.x).toBeLessThan(goals[0].x);
     expect(repository.y).toBe((goals[0].y + goals.at(-1)!.y) / 2);
     expect(enabler.x).toBeGreaterThan(goals[0].x);
     expect(enabler.y).toBeGreaterThanOrEqual(goals[0].y);
     expect(enabler.y).toBeLessThanOrEqual(goals.at(-1)!.y);
     expect('prerequisiteBand' in model).toBe(false);
-    expect(model.progressionBands.slice(0, 4).map(band => band.position)).toEqual([150, 500, 850, 1200]);
+    expect(model.progressionBands.slice(0, 4).map(band => band.position)).toEqual([150, 510, 900, 1290]);
   });
 
   it('separates repository-improvement streams by semantic family without changing canonical depth', () => {
@@ -165,7 +165,7 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
 
     expect(new Set(goals.map(node => node.presentationRow?.index)).size).toBe(4);
     expect(goals.every(node => node.depth === 2 && node.canonicalPosition?.futureDepth === 2)).toBe(true);
-    expect(goals.every(node => node.x === 500)).toBe(true);
+    expect(goals.every(node => node.x === 510)).toBe(true);
   });
 
   it('places second- and third-generation product evolutions after each grounded first-level direction', () => {
@@ -214,6 +214,79 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     const mobileSecond = mobile.nodes.filter(node => node.kind === 'evolution' && node.depth === 2);
     expect(new Set(mobileSecond.map(node => node.x)).size).toBe(2);
     expect(new Set(mobileSecond.map(node => node.y)).size).toBe(2);
+  });
+
+  it('allocates terminal possibilities into collision-free columns without losing parent lineage', () => {
+    const direction = {
+      ...candidate('goal:terminal', 'primary', 1, 1),
+      candidateClass: 'product-opportunity' as const,
+      opportunityOrigin: 'strategic' as const,
+    };
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: [direction],
+      projections: [
+        { id: 'evolution:adaptive', goalId: direction.goalId, kind: 'evolution' as const, title: 'Adaptive route', sourceId: direction.goalId, order: 0, humanReviewRequired: false, generation: 2 as const },
+        { id: 'evolution:collaborative', goalId: direction.goalId, kind: 'evolution' as const, title: 'Collaborative route', sourceId: direction.goalId, order: 1, humanReviewRequired: false, generation: 2 as const },
+        { id: 'evolution:orchestration', goalId: direction.goalId, kind: 'evolution' as const, title: 'Product orchestration', sourceId: 'evolution:adaptive', order: 2, humanReviewRequired: false, generation: 3 as const },
+        { id: 'evolution:network', goalId: direction.goalId, kind: 'evolution' as const, title: 'Partner network', sourceId: 'evolution:collaborative', order: 3, humanReviewRequired: false, generation: 3 as const },
+      ],
+      dependencies: [],
+      productIntelligenceState: 'enhanced',
+    });
+    const terminal = model.nodes.filter(node => node.kind === 'evolution' && node.depth === 3);
+
+    expect(terminal).toHaveLength(2);
+    expect(Math.abs(terminal[0].x - terminal[1].x) >= 152 || Math.abs(terminal[0].y - terminal[1].y) >= 88).toBe(true);
+    expect(model.edges).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceId: 'evolution:adaptive', targetId: 'evolution:orchestration' }),
+      expect.objectContaining({ sourceId: 'evolution:collaborative', targetId: 'evolution:network' }),
+    ]));
+
+    const mobile = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: [direction],
+      projections: model.nodes.filter(node => node.kind === 'evolution').map((node, index) => ({
+        id: node.id,
+        goalId: direction.goalId,
+        kind: 'evolution' as const,
+        title: node.title,
+        sourceId: node.depth === 2 ? direction.goalId : index % 2 ? 'evolution:adaptive' : 'evolution:collaborative',
+        order: index,
+        humanReviewRequired: false,
+        generation: node.depth as 2 | 3,
+      })),
+      dependencies: [],
+      productIntelligenceState: 'enhanced',
+    }, 'vertical');
+    const mobileTerminal = mobile.nodes.filter(node => node.kind === 'evolution' && node.depth === 3);
+    expect(Math.abs(mobileTerminal[0].y - mobileTerminal[1].y)).toBeGreaterThanOrEqual(132);
+    expect(mobileTerminal[0].x).toBe(mobileTerminal[1].x);
+  });
+
+  it('places existing enablers upstream and required enablers downstream of their route', () => {
+    const direction = {
+      ...candidate('goal:enablers', 'primary', 2, 1),
+      candidateClass: 'product-opportunity' as const,
+      opportunityOrigin: 'strategic' as const,
+    };
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: [direction],
+      projections: [{ id: 'evolution:next', goalId: direction.goalId, kind: 'evolution' as const, title: 'Next evolution', sourceId: direction.goalId, order: 0, humanReviewRequired: false, generation: 2 as const }],
+      dependencies: [
+        { ...dependency, id: 'dependency:existing', state: 'satisfied', dependentGoalIds: [direction.goalId] },
+        { ...dependency, id: 'dependency:required', state: 'required', dependentGoalIds: [direction.goalId] },
+      ],
+      productIntelligenceState: 'enhanced',
+    });
+    const goal = model.nodes.find(node => node.id === direction.goalId)!;
+    const existing = model.nodes.find(node => node.id === 'dependency:existing')!;
+    const required = model.nodes.find(node => node.id === 'dependency:required')!;
+    const evolution = model.nodes.find(node => node.id === 'evolution:next')!;
+
+    expect(existing.x).toBeLessThan(goal.x);
+    expect(required.x).toBeGreaterThan(goal.x);
+    expect(required.x).toBeLessThan(evolution.x);
+    expect(existing.role).toBe('satisfied');
+    expect(required.role).toBe('required');
   });
 
   it('places synthesized unclassified previews away from their workflow goal', () => {
@@ -434,11 +507,13 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(vertical.world).toEqual({ width: horizontal.world.height, height: horizontal.world.width });
     horizontal.nodes.forEach(node => {
       const verticalNode = vertical.nodes.find(item => item.id === node.id)!;
-      expect(verticalNode.y).toBe(node.x);
       if (!node.presentationRow) expect(verticalNode.x).toBe(node.y);
       if (node.canonicalPosition) expect(verticalNode.canonicalPosition).toMatchObject({ x: node.canonicalPosition.y, y: node.canonicalPosition.x });
       else expect(verticalNode.canonicalPosition).toBeUndefined();
     });
+    const verticalRepository = vertical.nodes.find(node => node.kind === 'repository')!;
+    const verticalGoals = vertical.nodes.filter(node => node.kind === 'goal');
+    expect(verticalRepository.y).toBeLessThan(Math.min(...verticalGoals.map(node => node.y)));
     expect(vertical.edges).toEqual(horizontal.edges);
     expect(repositoryFuturesEdgePath(vertical.edges[0], new Map(vertical.nodes.map(node => [node.id, node])), 'vertical')).toContain(' C ');
   });

@@ -3,7 +3,7 @@ import type {
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
 
-export const FUTURES_CANVAS_WORLD = { width: 1820, height: 1040 } as const;
+export const FUTURES_CANVAS_WORLD = { width: 1840, height: 1040 } as const;
 export type RepositoryFuturesCanvasOrientation = 'horizontal' | 'vertical';
 export type RepositoryFuturesPresentationStream = 'strategic' | 'evidence' | 'product' | 'foundation' | 'exploratory' | 'general';
 
@@ -74,25 +74,44 @@ function stableHash(value: string) {
 }
 
 const structuredRows = [
-  { label: 'Strategic opportunities', position: 130 },
-  { label: 'Evidence-backed opportunities', position: 230 },
-  { label: 'Product & preview directions', position: 330 },
-  { label: 'Knowledge systems', position: 430 },
-  { label: 'Agent workflows', position: 530 },
-  { label: 'Delivery systems', position: 630 },
-  { label: 'Safety & governance', position: 730 },
-  { label: 'Exploratory directions', position: 830 },
+  { label: 'Strategic opportunities', position: 125 },
+  { label: 'Evidence-backed opportunities', position: 233 },
+  { label: 'Product & preview directions', position: 341 },
+  { label: 'Knowledge systems', position: 449 },
+  { label: 'Agent workflows', position: 557 },
+  { label: 'Delivery systems', position: 665 },
+  { label: 'Safety & governance', position: 773 },
+  { label: 'Exploratory directions', position: 881 },
 ] as const;
 
 const lattice = {
   repository: 150,
-  direction: 500,
-  next: 850,
-  later: 1200,
-  outcome: 1550,
+  direction: 510,
+  next: 900,
+  later: 1290,
+  outcome: 1660,
 } as const;
 
-const verticalStreamPosition = (index: number) => 40 + index * 95;
+const TERMINAL_COLUMN_SPACING = 170;
+const TERMINAL_COLLISION_WIDTH = 152;
+const TERMINAL_COLLISION_HEIGHT = 88;
+
+const verticalStreamPosition = (index: number) => 36 + index * 104;
+
+function repositoryFuturesVerticalFlowPosition(node: RepositoryFuturesCanvasNode) {
+  if (node.kind === 'repository') return 195;
+  if (node.kind === 'goal') return 480;
+  if (node.kind === 'dependency') {
+    const anchor = node.role === 'satisfied' ? 345 : 685;
+    const base = node.role === 'satisfied' ? 335 : 620;
+    return base + (node.x - anchor) * 0.45;
+  }
+  if (node.kind === 'evolution' && node.depth === 2) return 790 + (node.x - lattice.next) * 0.5;
+  if (node.kind === 'evolution' && node.depth === 3) return 1010 + (node.x - lattice.later) * 0.47;
+  if (node.kind === 'capability') return 790 + (node.x - lattice.next) * 0.5;
+  if (node.kind === 'artifact') return 1120 + (node.x - lattice.outcome) * 0.42;
+  return node.x;
+}
 
 function repositoryFoundationRow(candidate: RepositoryFutureStageCandidate) {
   const title = candidate.title.toLowerCase();
@@ -264,6 +283,7 @@ export function buildRepositoryFuturesCanvasModel(
 
   const goalNodeById = new Map(nodes.filter(node => node.kind === 'goal').map(node => [node.id, node]));
   const projectionNodeById = new Map<string, RepositoryFuturesCanvasNode>(goalNodeById);
+  const placedTerminalNodes: Array<{ x: number; y: number }> = [];
   const projections = overlay.projections || [];
   projections
     .filter(projection => goalNodeById.has(projection.goalId))
@@ -280,10 +300,26 @@ export function buildRepositoryFuturesCanvasModel(
       const generationTwoSpread = projection.kind === 'evolution' && projection.generation !== 3 && siblings.length > 1
         ? siblingIndex * 160
         : 0;
-      const x = (projection.kind === 'evolution'
+      const baseX = (projection.kind === 'evolution'
         ? projection.generation === 3 ? lattice.later : lattice.next
         : projection.kind === 'capability' ? lattice.next : lattice.outcome) + generationTwoSpread;
-      const y = projection.kind === 'evolution' ? sourceNode.y + siblingOffset : goal.y + siblingOffset;
+      const baseY = projection.kind === 'evolution' ? sourceNode.y + siblingOffset : goal.y + siblingOffset;
+      const terminal = (projection.kind === 'evolution' && projection.generation === 3) || projection.kind === 'artifact';
+      const terminalOptions = terminal
+        ? [0, 1, 2, 3].flatMap(column => [0, -48, 48].map(rowOffset => ({
+          x: baseX + column * TERMINAL_COLUMN_SPACING,
+          y: baseY + rowOffset,
+        })))
+        : [];
+      const terminalPlacement = terminal
+        ? terminalOptions.find(option => placedTerminalNodes.every(existing => (
+          Math.abs(existing.x - option.x) >= TERMINAL_COLLISION_WIDTH
+          || Math.abs(existing.y - option.y) >= TERMINAL_COLLISION_HEIGHT
+        ))) || terminalOptions[terminalOptions.length - 1]
+        : undefined;
+      if (terminalPlacement) placedTerminalNodes.push(terminalPlacement);
+      const x = terminalPlacement?.x ?? baseX;
+      const y = terminalPlacement?.y ?? baseY;
       const node: RepositoryFuturesCanvasNode = {
         id: projection.id,
         kind: projection.kind,
@@ -314,7 +350,10 @@ export function buildRepositoryFuturesCanvasModel(
   const goalNodes = new Map(nodes.filter(node => node.kind === 'goal').map(node => [node.id, node]));
   const dependencies = [...new Map(overlay.dependencies.map(dependency => [dependency.id, dependency])).values()]
     .sort((left, right) => left.executionOrder - right.executionOrder || left.id.localeCompare(right.id));
-  const placedDependencies: Array<{ x: number; y: number }> = [];
+  const placedDependencies: Record<'satisfied' | 'required', Array<{ x: number; y: number }>> = {
+    satisfied: [],
+    required: [],
+  };
   dependencies.forEach(dependency => {
     const relatedGoalIds = [...new Set(dependency.dependentGoalIds.filter(goalId => goalIds.has(goalId)))];
     if (!relatedGoalIds.length) return;
@@ -324,16 +363,26 @@ export function buildRepositoryFuturesCanvasModel(
     });
     const routeX = relatedGoals.reduce((sum, goal) => sum + goal.x, 0) / relatedGoals.length;
     const routeY = relatedGoals.reduce((sum, goal) => sum + goal.y, 0) / relatedGoals.length;
+    const role = dependency.state === 'satisfied' ? 'satisfied' : 'required';
+    // Existing truths sit upstream of the direction they already support.
+    // Required work sits downstream, between the direction and its next
+    // evolution. The separate grammars prevent the two meanings from reading
+    // as an accidental overlay in the same corridor.
+    const xOffset = role === 'satisfied' ? -165 : 175;
+    const fallbackXOffset = role === 'satisfied' ? -245 : 275;
     const placementOptions = [
-      { x: routeX + 110, y: routeY - 22 },
-      { x: routeX + 210, y: routeY + 22 },
-      { x: routeX + 110, y: routeY + 34 },
-      { x: routeX + 210, y: routeY - 34 },
+      { x: routeX + xOffset, y: routeY - 30 },
+      { x: routeX + xOffset, y: routeY + 30 },
+      { x: routeX + fallbackXOffset, y: routeY - 30 },
+      { x: routeX + fallbackXOffset, y: routeY + 30 },
+      { x: routeX + xOffset, y: routeY - 58 },
+      { x: routeX + xOffset, y: routeY + 58 },
     ];
-    const placement = placementOptions.find(option => placedDependencies.every(existing => (
-      Math.abs(existing.x - option.x) >= 96 || Math.abs(existing.y - option.y) >= 76
-    ))) || placementOptions[placedDependencies.length % placementOptions.length];
-    placedDependencies.push(placement);
+    const rolePlacements = placedDependencies[role];
+    const placement = placementOptions.find(option => rolePlacements.every(existing => (
+      Math.abs(existing.x - option.x) >= 108 || Math.abs(existing.y - option.y) >= 78
+    ))) || placementOptions[rolePlacements.length % placementOptions.length];
+    rolePlacements.push(placement);
     const earliestDepth = Math.min(...relatedGoals.map(goal => goal.depth as 1 | 2 | 3));
     nodes.push({
       id: dependency.id,
@@ -343,6 +392,7 @@ export function buildRepositoryFuturesCanvasModel(
       x: placement.x,
       y: placement.y,
       depth: Math.max(1, earliestDepth - 1) as 1 | 2,
+      presentationRow: relatedGoals.length === 1 ? relatedGoals[0].presentationRow : undefined,
       dependency,
     });
     relatedGoalIds.forEach(goalId => edges.push({
@@ -375,18 +425,36 @@ export function buildRepositoryFuturesCanvasModel(
     });
   }
 
+  const terminalIndexById = new Map<string, number>();
+  const terminalGoalIds = new Set(nodes
+    .filter(node => node.kind === 'evolution' && node.depth === 3 && node.parentGoalId)
+    .map(node => node.parentGoalId!));
+  terminalGoalIds.forEach(goalId => {
+    nodes
+      .filter(node => node.kind === 'evolution' && node.depth === 3 && node.parentGoalId === goalId)
+      .sort((left, right) => left.x - right.x || left.y - right.y || left.id.localeCompare(right.id))
+      .forEach((node, index) => terminalIndexById.set(node.id, index));
+  });
   const orientedNodes = orientation === 'vertical'
     ? nodes.map(node => {
       const rowOffset = node.presentationRow
         ? node.y - structuredRows[node.presentationRow.index].position
         : 0;
+      const terminalIndex = terminalIndexById.get(node.id);
+      const terminalEvolution = terminalIndex !== undefined;
       return {
         ...node,
-        x: node.presentationRow ? verticalStreamPosition(node.presentationRow.index) + rowOffset : node.y,
-        // In the top-to-bottom field, evolution siblings need a small flow-axis
-        // stagger as well as their lane offset; otherwise their compact overview
-        // targets stack even though the semantic branch is distinct.
-        y: node.x + (node.kind === 'evolution' ? rowOffset * 4 : 0),
+        x: node.presentationRow
+          ? verticalStreamPosition(node.presentationRow.index) + (terminalEvolution ? 0 : rowOffset)
+          : node.y,
+        // Desktop generations need wide horizontal breathing room; applying that
+        // full rhythm to the narrow top-to-bottom field would put the repository
+        // behind the mode controls at the camera's minimum zoom. This semantic
+        // flow-axis map keeps every generation distinct while fitting the touch
+        // overview without changing the shared V7.2 camera architecture.
+        y: terminalEvolution
+          ? 1000 + terminalIndex * 132
+          : repositoryFuturesVerticalFlowPosition(node) + (node.kind === 'evolution' ? rowOffset * 1.5 : 0),
         canonicalPosition: node.canonicalPosition ? {
           ...node.canonicalPosition,
           x: node.canonicalPosition.y,

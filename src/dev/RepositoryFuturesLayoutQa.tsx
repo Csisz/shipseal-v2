@@ -49,12 +49,15 @@ function opportunity(id: string, title: string, origin: 'evidence-backed' | 'str
     origin,
     inferenceLevel: origin === 'evidence-backed' ? 'evidence-linked' as const : origin === 'strategic' ? 'strategic-inference' as const : 'exploratory-inference' as const,
     strategicRationale: 'Open a continuing product workflow from the repository intelligence already available.',
-    existingCapabilityIds: ['cap:repository-intelligence'],
+    existingCapabilityIds: index % 2 === 0
+      ? ['cap:repository-intelligence', 'cap:guided-review']
+      : ['cap:repository-intelligence'],
     requiredNewCapabilities: [{ title: `${title} enabler`, rationale: `A bounded ${title.toLowerCase()} capability is required before this route can ship.` }],
     futureEvolutions: [
       { id: `${shortId}-adaptive`, generation: 2 as const, title: `${title} guidance`, description: 'Guidance adapts to the repository signals already observed.', userValue: 'Teams receive a more relevant next step.' },
       { id: `${shortId}-collaborative`, generation: 2 as const, title: `${title} collaboration`, description: 'Shared decisions connect this direction to team review.', userValue: 'Teams can coordinate the direction with less manual handoff.' },
       { id: `${shortId}-orchestration`, parentId: `${shortId}-adaptive`, generation: 3 as const, title: `${title} orchestration`, description: 'The adaptive layer opens a broader coordinated product workflow.', userValue: 'Teams can act on repository signals across a longer planning horizon.' },
+      { id: `${shortId}-network`, parentId: `${shortId}-collaborative`, generation: 3 as const, title: `${title} network`, description: 'The collaborative layer opens a connected product ecosystem.', userValue: 'Teams can extend this direction across trusted collaborators.' },
     ],
     optionalSupportingOpportunityIds: [],
     knownConflicts: index === 5 ? ['Requires an explicit integration trust boundary before activation.'] : [],
@@ -76,7 +79,10 @@ const productIntelligence = validateRepositoryProductIntelligence({
     primaryUsers: [insight('Repository teams.', 'inferred')],
     primaryProblem: insight('Teams need to connect evidence to credible product directions.'),
     currentProductLoop: [insight('Read repository evidence.'), insight('Understand the project.'), insight('Choose future pathways.')],
-    existingCapabilities: [{ id: 'cap:repository-intelligence', title: 'Repository intelligence', description: 'The product turns repository evidence into guided decisions.', evidenceIds: ['evidence:readme', 'evidence:app'] }],
+    existingCapabilities: [
+      { id: 'cap:repository-intelligence', title: 'Repository intelligence', description: 'The product turns repository evidence into guided decisions.', evidenceIds: ['evidence:readme', 'evidence:app'] },
+      { id: 'cap:guided-review', title: 'Guided review', description: 'The product already supports evidence-backed review decisions.', evidenceIds: ['evidence:app'] },
+    ],
     constraints: [insight('Imported code is never executed.')],
     businessModelClues: [],
     missingCapabilityAreas: [insight('Teams need deeper product evolution paths.', 'inferred')],

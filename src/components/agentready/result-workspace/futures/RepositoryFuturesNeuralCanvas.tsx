@@ -353,8 +353,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         data-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-reveal-motion={reducedMotion ? 'static' : 'topology-one-shot'}
         data-product-intelligence-state={overlay.productIntelligenceState}
-        data-field-density="deep-layered-neural"
-        data-layout-strategy="stable-grounded-lattice-with-inline-route-enablers"
+        data-field-density="breathable-layered-neural"
+        data-layout-strategy="stable-grounded-lattice-with-role-aware-enablers-and-terminal-collision-allocation"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -516,7 +516,6 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
             const overviewDependency = node.kind === 'dependency' && (node.dependency?.dependentCount || 0) > 1;
             const showTitle = lod !== 'far'
               || node.kind === 'repository'
-              || (node.kind === 'evolution' && node.depth === 2)
               || node.kind === 'capability'
               || selected
               || activeId === node.id
@@ -530,6 +529,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 type="button"
                 data-neural-node={node.kind}
                 data-neural-role={node.role}
+                data-enabler-position={node.kind === 'dependency' ? node.role === 'satisfied' ? 'upstream-existing' : 'downstream-required' : undefined}
                 data-future-depth={node.depth}
                 data-presentation-row={node.presentationRow?.index}
                 data-presentation-stream={node.presentationRow?.stream}
