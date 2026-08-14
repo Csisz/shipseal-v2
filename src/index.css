@@ -604,10 +604,18 @@
 
 .future-field-node {
   isolation: isolate;
+  user-select: none;
+  -webkit-user-select: none;
   background-image:
     radial-gradient(circle at 18% 24%, hsl(var(--futures-atmosphere) / 0.1), transparent 42%),
     linear-gradient(145deg, hsl(var(--futures-node-surface) / 0.68), hsl(var(--futures-field-surface) / 0.2));
   backdrop-filter: blur(7px);
+}
+
+.futures-neural-stage {
+  overscroll-behavior: contain;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .future-field-node::before {

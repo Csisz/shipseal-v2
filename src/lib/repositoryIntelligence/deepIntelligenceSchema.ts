@@ -14,7 +14,7 @@ import {
 export const REPOSITORY_DEEP_INTELLIGENCE_REQUEST_VERSION = 'shipseal.deep-intelligence-request.v1' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION = 'shipseal.deep-intelligence-response.v2' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_RESULT_VERSION = 'shipseal.deep-intelligence-result.v1' as const;
-export const REPOSITORY_DEEP_INTELLIGENCE_PROMPT_CONTRACT_VERSION = 'shipseal.deep-intelligence-contract.v3' as const;
+export const REPOSITORY_DEEP_INTELLIGENCE_PROMPT_CONTRACT_VERSION = 'shipseal.deep-intelligence-contract.v4' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_VALIDATOR_VERSION = 'shipseal.deep-intelligence-validator.v2' as const;
 export const REPOSITORY_DEEP_INTELLIGENCE_RESULT_POLICY_VERSION = 'shipseal.deep-intelligence-result-policy.v2' as const;
 

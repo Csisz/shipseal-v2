@@ -43,6 +43,7 @@ import { Badge } from '@/components/ui/badge';
 import type {
   RepositoryFuturePathwaysMode,
   RepositoryFutureStageOverlay,
+  RepositoryFutureStageProjection,
 } from './futurePathwaysPresentation';
 import { RepositoryFuturePathwaysStage } from './RepositoryFuturePathwaysStage';
 import { RepositoryFuturesNeuralCanvas } from './RepositoryFuturesNeuralCanvas';
@@ -232,10 +233,14 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     const capabilityTitles = new Map(DEFAULT_REPOSITORY_FUTURE_DEPENDENCY_DEFINITIONS.map(definition => [definition.id, definition.title]));
     const recommendedProductIds = quickPath.primaryRecommendations.candidates
       .filter(item => goalById.get(item.goalId)?.candidateClass === 'product-opportunity')
-      .slice(0, 8)
       .map(item => item.goalId);
-    const recommendedIds = recommendedProductIds.length
-      ? recommendedProductIds
+    const remainingProductIds = [...goalById.entries()]
+      .filter(([goalId, candidate]) => candidate.candidateClass === 'product-opportunity' && !recommendedProductIds.includes(goalId))
+      .sort(([, left], [, right]) => compareRepositoryFutureCandidates(left, right))
+      .map(([goalId]) => goalId);
+    const visibleProductIds = [...recommendedProductIds, ...remainingProductIds].slice(0, 8);
+    const recommendedIds = visibleProductIds.length
+      ? visibleProductIds
       : quickPath.primaryRecommendations.candidates.slice(0, 8).map(item => item.goalId);
     const primaryIsProduct = draft ? goalById.get(draft.primaryGoal.goalId)?.candidateClass === 'product-opportunity' : false;
     const compatibleIds = draft ? [...goalById.entries()]
@@ -309,15 +314,31 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         whyItFits: candidate.whyItFits,
         targetUsers: candidate.targetUsers,
         replaceableSupportGoalIds,
+        productEvolutions: candidate.productEvolutions,
       }];
     });
   }, [compatibilityFor, draft, goalById, graph, quickPath.primaryRecommendations.candidates, savedGoalIds, selectedGoalIds]);
   const universeProjection = useMemo(() => draft
     ? buildRepositoryFutureUniverseProjection({ universe, graph, draft })
     : undefined, [draft, graph, universe]);
-  const stageProjections = useMemo(() => stageCandidates.flatMap(candidate => {
+  const stageProjections = useMemo<RepositoryFutureStageProjection[]>(() => stageCandidates.flatMap(candidate => {
+    const evolutionProjectionId = (sourceId: string) => `projection:evolution:${candidate.goalId}:${sourceId}`;
+    const evolutions: RepositoryFutureStageProjection[] = (candidate.productEvolutions || []).map((evolution, index) => ({
+      id: evolutionProjectionId(evolution.sourceId),
+      goalId: candidate.goalId,
+      kind: 'evolution' as const,
+      title: evolution.title,
+      sourceId: evolution.generation === 2
+        ? candidate.goalId
+        : evolutionProjectionId(evolution.parentSourceId || ''),
+      order: index,
+      generation: evolution.generation,
+      summary: evolution.description,
+      userValue: evolution.userValue,
+      humanReviewRequired: candidate.humanReviewRequired,
+    }));
     const capabilityId = `projection:capability:${candidate.goalId}:${candidate.capabilityId}`;
-    const capability = {
+    const capability: RepositoryFutureStageProjection = {
       id: capabilityId,
       goalId: candidate.goalId,
       kind: 'capability' as const,
@@ -326,7 +347,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       order: 0,
       humanReviewRequired: candidate.humanReviewRequired,
     };
-    const artifacts = (candidate.artifactLabels || []).map((title, index) => ({
+    const artifacts: RepositoryFutureStageProjection[] = (candidate.artifactLabels || []).map((title, index) => ({
       id: `projection:artifact:${candidate.goalId}:${stableFutureHash(title)}:${index}`,
       goalId: candidate.goalId,
       kind: 'artifact' as const,
@@ -335,7 +356,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       order: index,
       humanReviewRequired: candidate.humanReviewRequired,
     }));
-    return [capability, ...artifacts];
+    return evolutions.length ? evolutions : [capability, ...artifacts];
   }), [stageCandidates]);
 
   const overlay = useMemo<RepositoryFutureStageOverlay>(() => ({

@@ -4,7 +4,7 @@ import { stableContextFingerprint } from './contextSelection.js';
 export const REPOSITORY_PRODUCT_UNDERSTANDING_VERSION = 'shipseal.repository-product-understanding.v1' as const;
 export const REPOSITORY_PRODUCT_OPPORTUNITY_VERSION = 'shipseal.repository-product-opportunity.v1' as const;
 export const REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION = 'shipseal.repository-product-intelligence-result.v1' as const;
-export const MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES = 5;
+export const MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES = 8;
 
 export const REPOSITORY_PRODUCT_OPPORTUNITY_ORIGINS = ['evidence-backed', 'strategic', 'exploratory'] as const;
 export type RepositoryProductOpportunityOrigin = typeof REPOSITORY_PRODUCT_OPPORTUNITY_ORIGINS[number];
@@ -17,7 +17,8 @@ export type RepositoryProductUnderstandingRejectionReason =
   | 'missing-understanding-evidence'
   | 'unknown-understanding-evidence'
   | 'invalid-existing-capability-evidence'
-  | 'compact-evidence-index-out-of-range';
+  | 'compact-evidence-index-out-of-range'
+  | 'generated-language-mismatch';
 
 export type RepositoryProductOpportunityRejectionReason =
   | 'invalid-shape'
@@ -37,7 +38,9 @@ export type RepositoryProductOpportunityRejectionReason =
   | 'compact-support-target-invalid'
   | 'compact-support-self-reference'
   | 'compact-support-forward-reference'
-  | 'compact-support-reference-duplicate';
+  | 'compact-support-reference-duplicate'
+  | 'generated-language-mismatch'
+  | 'invalid-future-evolution';
 
 export interface RepositoryProductNormalizationDiagnostics {
   understandingRejectionReason?: RepositoryProductUnderstandingRejectionReason;
@@ -111,6 +114,15 @@ const implementationAreaSchema = z.object({
   evidenceIds,
 }).strict();
 
+const futureEvolutionSchema = z.object({
+  id: z.string().trim().min(1).max(160),
+  parentId: z.string().trim().min(1).max(160).optional(),
+  generation: z.union([z.literal(2), z.literal(3)]),
+  title: z.string().trim().min(1).max(120),
+  description: boundedText,
+  userValue: boundedText,
+}).strict();
+
 export const repositoryProductOpportunityProviderSchema = z.object({
   schemaVersion: z.literal(REPOSITORY_PRODUCT_OPPORTUNITY_VERSION),
   id: z.string().trim().min(1).max(160),
@@ -125,6 +137,7 @@ export const repositoryProductOpportunityProviderSchema = z.object({
   strategicRationale: boundedText,
   existingCapabilityIds: z.array(z.string().trim().min(1).max(160)).max(12),
   requiredNewCapabilities: z.array(requiredCapabilitySchema).max(12),
+  futureEvolutions: z.array(futureEvolutionSchema).max(12).optional(),
   optionalSupportingOpportunityIds: z.array(z.string().trim().min(1).max(160)).max(6),
   knownConflicts: z.array(boundedText).max(8),
   expectedImplementationAreas: z.array(implementationAreaSchema).max(12),
@@ -186,6 +199,16 @@ export interface RepositoryProductRequiredCapability {
   satisfiedByExistingCapabilityId?: string;
 }
 
+export interface RepositoryProductFutureEvolution {
+  id: string;
+  sourceId: string;
+  parentSourceId?: string;
+  generation: 2 | 3;
+  title: string;
+  description: string;
+  userValue: string;
+}
+
 export interface RepositoryProductImplementationArea {
   label: string;
   existingPath?: string;
@@ -207,6 +230,7 @@ export interface RepositoryProductOpportunity {
   strategicRationale: string;
   existingCapabilityIds: string[];
   requiredNewCapabilities: RepositoryProductRequiredCapability[];
+  futureEvolutions: RepositoryProductFutureEvolution[];
   optionalSupportingOpportunityIds: string[];
   knownConflicts: string[];
   expectedImplementationAreas: RepositoryProductImplementationArea[];
@@ -261,6 +285,7 @@ export function validateRepositoryProductIntelligence(input: {
   knownLimitations?: readonly string[];
   maximumOpportunities?: number;
   normalizationDiagnostics?: RepositoryProductNormalizationDiagnostics;
+  generatedLocale?: string;
 }): RepositoryProductIntelligenceResult {
   const evidenceById = new Map(input.evidenceReferences.map(item => [item.id, item]));
   const understandingResult = repositoryProductUnderstandingProviderSchema.safeParse(input.rawUnderstanding);
@@ -269,7 +294,7 @@ export function validateRepositoryProductIntelligence(input: {
     ...(!understandingResult.success ? ['Product Understanding was unavailable or rejected; strategic Product Opportunities were not accepted.'] : []),
   ]);
   const understandingValidation = understandingResult.success
-    ? normalizeUnderstanding(understandingResult.data, evidenceById, limitations)
+    ? normalizeUnderstanding(understandingResult.data, evidenceById, limitations, input.generatedLocale)
     : { rejectionReason: 'invalid-understanding-shape' as const };
   const understanding = understandingValidation.understanding;
   const understandingRejectionReason = understanding
@@ -315,6 +340,7 @@ export function validateRepositoryProductIntelligence(input: {
       knownPaths: input.knownPaths,
       knownLimitations: limitations,
       sourceAnalysisFingerprint: input.sourceAnalysisFingerprint,
+      generatedLocale: input.generatedLocale,
     });
     if ('reasonCodes' in validation) {
       rejectedOpportunities.push(validation);
@@ -367,10 +393,14 @@ function normalizeUnderstanding(
   raw: RepositoryProductUnderstandingProviderValue,
   evidenceById: ReadonlyMap<string, RepositoryProductEvidenceReference>,
   knownLimitations: readonly string[],
+  generatedLocale?: string,
 ): { understanding?: RepositoryProductUnderstanding; rejectionReason?: RepositoryProductUnderstandingRejectionReason } {
   const insights = [raw.productSummary, ...raw.primaryUsers, raw.primaryProblem, ...raw.currentProductLoop, ...raw.constraints, ...raw.businessModelClues, ...raw.missingCapabilityAreas];
   const text = [raw.productSummary.statement, ...insights.map(item => item.statement), ...raw.existingCapabilities.flatMap(item => [item.title, item.description]), ...raw.limitations];
   if (text.some(unsafeProductText)) return { rejectionReason: 'unsafe-understanding-text' };
+  if (requiresEnglishGeneratedText(generatedLocale) && text.some(containsCjkScript)) {
+    return { rejectionReason: 'generated-language-mismatch' };
+  }
   const allEvidenceIds = sortedUnique([...insights.flatMap(item => item.evidenceIds), ...raw.existingCapabilities.flatMap(item => item.evidenceIds)]);
   if (raw.existingCapabilities.some(item => item.evidenceIds.length === 0 || item.evidenceIds.some(id => !evidenceById.has(id)))) {
     return { rejectionReason: 'invalid-existing-capability-evidence' };
@@ -427,11 +457,16 @@ function validateOpportunity(raw: RepositoryProductOpportunityProviderValue, ind
   knownPaths: ReadonlySet<string>;
   knownLimitations: readonly string[];
   sourceAnalysisFingerprint: string;
+  generatedLocale?: string;
 }): RepositoryProductOpportunity | RepositoryProductOpportunityRejection {
   const text = [raw.title, raw.opportunityStatement, raw.userValue, raw.whyItFits, raw.strategicRationale, raw.verificationConcept,
     ...raw.targetUsers, ...raw.requiredNewCapabilities.flatMap(item => [item.title, item.rationale]), ...raw.knownConflicts,
-    ...raw.expectedImplementationAreas.map(item => item.label), ...raw.humanReviewRequirements, ...raw.limitations];
+    ...raw.expectedImplementationAreas.map(item => item.label), ...raw.humanReviewRequirements, ...raw.limitations,
+    ...(raw.futureEvolutions || []).flatMap(item => [item.title, item.description, item.userValue])];
   if (text.some(unsafeProductText)) return rejection(raw.id, 'prohibited-output', 'Product Opportunity contained unsafe, secret-like, executable, or prompt-leaking text.');
+  if (requiresEnglishGeneratedText(indexes.generatedLocale) && text.some(containsCjkScript)) {
+    return rejection(raw.id, 'generated-language-mismatch', 'Generated Product Opportunity text did not follow the requested English language contract.');
+  }
   if (raw.evidenceIds.some(id => !indexes.evidenceById.has(id))) return rejection(raw.id, 'unknown-evidence', 'Product Opportunity cited evidence outside the bounded request.');
   if (raw.existingCapabilityIds.some(id => !indexes.capabilityBySourceId.has(id))) return rejection(raw.id, 'unsupported-current-capability', 'Product Opportunity claimed an existing capability that Product Understanding did not validate.');
   if (raw.expectedImplementationAreas.some(area => area.evidenceIds.some(id => !indexes.evidenceById.has(id)))) return rejection(raw.id, 'unknown-evidence', 'Implementation area cited evidence outside the bounded request.');
@@ -454,6 +489,8 @@ function validateOpportunity(raw: RepositoryProductOpportunityProviderValue, ind
       satisfiedByExistingCapabilityId: existing?.id,
     };
   }).sort((left, right) => left.id.localeCompare(right.id));
+  const futureEvolutions = normalizeFutureEvolutions(raw, indexes.sourceAnalysisFingerprint);
+  if (!futureEvolutions) return rejection(raw.id, 'invalid-future-evolution', 'Product evolution generations contained an invalid parent or generation relationship.');
   const provider = providerConfidence(raw.providerConfidence);
   const evidence = confidenceFromEvidence(raw.evidenceIds, indexes.evidenceById);
   const originCap: RepositoryProductConfidence = raw.origin === 'evidence-backed' ? 'high' : raw.origin === 'strategic' ? 'medium' : 'low';
@@ -474,6 +511,7 @@ function validateOpportunity(raw: RepositoryProductOpportunityProviderValue, ind
     strategicRationale: raw.strategicRationale,
     existingCapabilityIds: existingCapabilities.map(item => item.id).sort(),
     requiredNewCapabilities,
+    futureEvolutions,
     optionalSupportingOpportunityIds: [...raw.optionalSupportingOpportunityIds].sort(),
     knownConflicts: sortedUnique(raw.knownConflicts),
     expectedImplementationAreas: raw.expectedImplementationAreas.map(item => ({
@@ -492,6 +530,28 @@ function validateOpportunity(raw: RepositoryProductOpportunityProviderValue, ind
     currentness: 'future' as const,
   };
   return { ...core, fingerprint: stableContextFingerprint(core) };
+}
+
+function normalizeFutureEvolutions(
+  raw: RepositoryProductOpportunityProviderValue,
+  sourceAnalysisFingerprint: string,
+): RepositoryProductFutureEvolution[] | undefined {
+  const source = raw.futureEvolutions || [];
+  if (!source.length) return [];
+  const secondGeneration = source.filter(item => item.generation === 2);
+  if (secondGeneration.length < 2 || secondGeneration.length > 4 || secondGeneration.some(item => item.parentId)) return undefined;
+  const secondIds = new Set(secondGeneration.map(item => item.id));
+  if (source.some(item => item.generation === 3 && (!item.parentId || !secondIds.has(item.parentId)))) return undefined;
+  if (new Set(source.map(item => item.id)).size !== source.length) return undefined;
+  return source.map(item => ({
+    id: stableProductId('product-future-evolution', [sourceAnalysisFingerprint, raw.id, item.id, item.title]),
+    sourceId: item.id,
+    parentSourceId: item.parentId,
+    generation: item.generation,
+    title: item.title,
+    description: item.description,
+    userValue: item.userValue,
+  })).sort((left, right) => left.generation - right.generation || left.sourceId.localeCompare(right.sourceId));
 }
 
 function compareProductOpportunities(left: RepositoryProductOpportunity, right: RepositoryProductOpportunity) {
@@ -542,6 +602,50 @@ function rejection(sourceId: string, code: RepositoryProductOpportunityRejection
 
 function unsafeProductText(value: string) {
   return /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----|\b(?:sk|ghp|github_pat)_[A-Za-z0-9_-]{12,}|\b(?:API[_-]?KEY|ACCESS[_-]?TOKEN|SECRET|PASSWORD)\s*[:=]\s*\S+|\b(?:ignore previous instructions|system prompt|developer message|chain[- ]of[- ]thought)\b|<\/?script\b|```|\b(?:rm\s+-rf|curl\s+\S+\s*\|\s*(?:sh|bash)|powershell\s+-enc|sudo\s+)\b/i.test(value);
+}
+
+const CJK_SCRIPT_RE = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
+
+export function containsCjkScript(value: string) {
+  return CJK_SCRIPT_RE.test(value);
+}
+
+export function requiresEnglishGeneratedText(locale?: string) {
+  return !/^(?:zh|ja|ko)(?:-|$)/i.test(locale?.trim() || 'en');
+}
+
+export function productIntelligenceUsesDisallowedGeneratedScript(value: unknown, locale?: string) {
+  if (!requiresEnglishGeneratedText(locale) || !value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const response = value as { productUnderstanding?: unknown; productOpportunities?: unknown };
+  const parsedUnderstanding = repositoryProductUnderstandingProviderSchema.safeParse(response.productUnderstanding);
+  const understanding = parsedUnderstanding.success ? parsedUnderstanding.data : undefined;
+  const opportunities = (Array.isArray(response.productOpportunities) ? response.productOpportunities : [])
+    .flatMap(item => {
+      const parsed = repositoryProductOpportunityProviderSchema.safeParse(item);
+      return parsed.success ? [parsed.data] : [];
+    });
+  const generatedText = [
+    ...(understanding ? [
+      understanding.productSummary.statement,
+      ...understanding.primaryUsers.map(item => item.statement),
+      understanding.primaryProblem.statement,
+      ...understanding.currentProductLoop.map(item => item.statement),
+      ...understanding.existingCapabilities.flatMap(item => [item.title, item.description]),
+      ...understanding.constraints.map(item => item.statement),
+      ...understanding.businessModelClues.map(item => item.statement),
+      ...understanding.missingCapabilityAreas.map(item => item.statement),
+      ...understanding.limitations,
+    ] : []),
+    ...opportunities.flatMap(item => [
+      item.title, item.opportunityStatement, item.userValue, item.whyItFits, item.strategicRationale,
+      ...item.targetUsers,
+      ...item.requiredNewCapabilities.flatMap(capability => [capability.title, capability.rationale]),
+      ...item.expectedImplementationAreas.map(area => area.label),
+      ...(item.futureEvolutions || []).flatMap(evolution => [evolution.title, evolution.description, evolution.userValue]),
+      ...item.knownConflicts, item.verificationConcept, ...item.humanReviewRequirements, ...item.limitations,
+    ]),
+  ];
+  return generatedText.some(containsCjkScript);
 }
 
 function humanReviewText(value: string) {

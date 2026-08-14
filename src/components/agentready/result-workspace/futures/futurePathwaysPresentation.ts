@@ -31,6 +31,15 @@ export interface RepositoryFutureStageCandidate {
   whyItFits?: string;
   targetUsers?: string[];
   replaceableSupportGoalIds?: string[];
+  productEvolutions?: Array<{
+    id: string;
+    sourceId: string;
+    parentSourceId?: string;
+    generation: 2 | 3;
+    title: string;
+    description: string;
+    userValue: string;
+  }>;
 }
 
 export interface RepositoryFutureStageDependency {
@@ -49,11 +58,14 @@ export interface RepositoryFutureStageDependency {
 export interface RepositoryFutureStageProjection {
   id: string;
   goalId: string;
-  kind: 'capability' | 'artifact';
+  kind: 'evolution' | 'capability' | 'artifact';
   title: string;
   sourceId: string;
   order: number;
   humanReviewRequired: boolean;
+  generation?: 2 | 3;
+  summary?: string;
+  userValue?: string;
 }
 
 export interface RepositoryFutureStageOverlay {

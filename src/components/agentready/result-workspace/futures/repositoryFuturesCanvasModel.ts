@@ -3,13 +3,13 @@ import type {
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
 
-export const FUTURES_CANVAS_WORLD = { width: 1960, height: 960 } as const;
+export const FUTURES_CANVAS_WORLD = { width: 1820, height: 1080 } as const;
 export type RepositoryFuturesCanvasOrientation = 'horizontal' | 'vertical';
 export type RepositoryFuturesPresentationStream = 'strategic' | 'evidence' | 'product' | 'foundation' | 'exploratory' | 'general';
 
 export type RepositoryFuturesCanvasNode = {
   id: string;
-  kind: 'repository' | 'goal' | 'capability' | 'artifact' | 'dependency';
+  kind: 'repository' | 'goal' | 'evolution' | 'capability' | 'artifact' | 'dependency';
   role: 'current' | RepositoryFutureStageCandidate['role'] | 'branch' | 'required' | 'satisfied';
   title: string;
   x: number;
@@ -31,6 +31,8 @@ export type RepositoryFuturesCanvasNode = {
   parentGoalId?: string;
   dependency?: RepositoryFutureStageOverlay['dependencies'][number];
   selected?: boolean;
+  summary?: string;
+  userValue?: string;
 };
 
 export type RepositoryFuturesCanvasEdge = {
@@ -73,14 +75,14 @@ function stableHash(value: string) {
 }
 
 const structuredRows = [
-  { label: 'Strategic opportunities', position: 80 },
-  { label: 'Evidence-backed opportunities', position: 160 },
-  { label: 'Product & preview directions', position: 240 },
-  { label: 'Knowledge systems', position: 320 },
-  { label: 'Agent workflows', position: 400 },
-  { label: 'Delivery systems', position: 480 },
-  { label: 'Safety & governance', position: 560 },
-  { label: 'Exploratory directions', position: 640 },
+  { label: 'Strategic opportunities', position: 100 },
+  { label: 'Evidence-backed opportunities', position: 220 },
+  { label: 'Product & preview directions', position: 340 },
+  { label: 'Knowledge systems', position: 460 },
+  { label: 'Agent workflows', position: 580 },
+  { label: 'Delivery systems', position: 700 },
+  { label: 'Safety & governance', position: 820 },
+  { label: 'Exploratory directions', position: 940 },
 ] as const;
 
 const verticalStreamPosition = (index: number) => 40 + index * 95;
@@ -187,7 +189,7 @@ export function buildRepositoryFuturesCanvasModel(
     role: 'current',
     title: repositoryName,
     x: 150,
-    y: 360,
+    y: 520,
     depth: 0,
   }];
   const edges: RepositoryFuturesCanvasEdge[] = [];
@@ -220,7 +222,7 @@ export function buildRepositoryFuturesCanvasModel(
       kind: 'goal',
       role: candidate.role,
       title: candidate.title,
-      x: 540 + ((stableHash(`${candidate.goalId}:direction`) % 33) - 16),
+      x: 430 + ((stableHash(`${candidate.goalId}:direction`) % 25) - 12),
       y: structuredRows[visualRowIndex].position,
       depth,
       canonicalPosition,
@@ -245,29 +247,39 @@ export function buildRepositoryFuturesCanvasModel(
   });
 
   const goalNodeById = new Map(nodes.filter(node => node.kind === 'goal').map(node => [node.id, node]));
+  const projectionNodeById = new Map<string, RepositoryFuturesCanvasNode>(goalNodeById);
   const projections = overlay.projections || [];
   projections
     .filter(projection => goalNodeById.has(projection.goalId))
-    .sort((left, right) => left.goalId.localeCompare(right.goalId) || left.kind.localeCompare(right.kind) || left.order - right.order)
+    .sort((left, right) => left.goalId.localeCompare(right.goalId)
+      || (left.generation || 4) - (right.generation || 4)
+      || left.order - right.order)
     .forEach(projection => {
       const goal = goalNodeById.get(projection.goalId)!;
-      const artifactOffset = projection.kind === 'artifact'
-        ? (projection.order - ((projections.filter(item => item.goalId === projection.goalId && item.kind === 'artifact').length - 1) / 2)) * 34
-        : 0;
-      const x = projection.kind === 'capability' ? 935 : 1370 + (projection.order % 2) * 70;
-      const y = goal.y + artifactOffset;
-      nodes.push({
+      const sourceNode = projectionNodeById.get(projection.sourceId) || goal;
+      const siblings = projections.filter(item => item.goalId === projection.goalId && item.kind === projection.kind && item.sourceId === projection.sourceId);
+      const siblingIndex = Math.max(0, siblings.findIndex(item => item.id === projection.id));
+      const siblingOffset = (siblingIndex - (siblings.length - 1) / 2) * (projection.kind === 'evolution' ? 30 : 34);
+      const x = projection.kind === 'evolution'
+        ? projection.generation === 3 ? 1160 : 790
+        : projection.kind === 'capability' ? 790 : 1480;
+      const y = projection.kind === 'evolution' ? sourceNode.y + siblingOffset : goal.y + siblingOffset;
+      const node: RepositoryFuturesCanvasNode = {
         id: projection.id,
         kind: projection.kind,
         role: 'branch',
         title: projection.title,
         x,
         y,
-        depth: projection.kind === 'capability' ? 2 : 3,
+        depth: projection.kind === 'evolution' ? projection.generation || 2 : projection.kind === 'capability' ? 2 : 3,
         presentationRow: goal.presentationRow,
         parentGoalId: projection.goalId,
         selected: goal.role === 'primary' || goal.role === 'supporting',
-      });
+        summary: projection.summary,
+        userValue: projection.userValue,
+      };
+      nodes.push(node);
+      projectionNodeById.set(node.id, node);
       edges.push({
         id: `expansion:${projection.sourceId}:${projection.id}`,
         kind: 'expansion',
@@ -289,16 +301,9 @@ export function buildRepositoryFuturesCanvasModel(
       const goal = goalNodes.get(goalId);
       return goal ? [goal] : [];
     });
-    const earliestDependentX = Math.min(...relatedGoals.map(goal => goal.x));
-    const prerequisiteStartX = 340;
-    const prerequisiteEndX = Math.max(prerequisiteStartX, earliestDependentX - 125);
-    const prerequisiteRows = 3;
-    const prerequisiteColumns = Math.ceil(dependencies.length / prerequisiteRows);
-    const column = Math.floor(index / prerequisiteRows);
-    const dependencyX = prerequisiteColumns <= 1
-      ? prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) / 2
-      : prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) * (column / (prerequisiteColumns - 1));
-    const dependencyY = 805 + (index % prerequisiteRows) * 55;
+    const dependencyX = relatedGoals.reduce((sum, goal) => sum + goal.x, 0) / relatedGoals.length + 165;
+    const dependencyY = relatedGoals.reduce((sum, goal) => sum + goal.y, 0) / relatedGoals.length
+      + ((index % 3) - 1) * 38;
     const earliestDepth = Math.min(...relatedGoals.map(goal => goal.depth as 1 | 2 | 3));
     nodes.push({
       id: dependency.id,
@@ -341,31 +346,39 @@ export function buildRepositoryFuturesCanvasModel(
   }
 
   const orientedNodes = orientation === 'vertical'
-    ? nodes.map(node => ({
-      ...node,
-      x: node.presentationRow ? verticalStreamPosition(node.presentationRow.index) : node.y,
-      y: node.x,
-      canonicalPosition: node.canonicalPosition ? {
-        ...node.canonicalPosition,
-        x: node.canonicalPosition.y,
-        y: node.canonicalPosition.x,
-      } : undefined,
-    }))
+    ? nodes.map(node => {
+      const rowOffset = node.presentationRow
+        ? node.y - structuredRows[node.presentationRow.index].position
+        : 0;
+      return {
+        ...node,
+        x: node.presentationRow ? verticalStreamPosition(node.presentationRow.index) + rowOffset : node.y,
+        // In the top-to-bottom field, evolution siblings need a small flow-axis
+        // stagger as well as their lane offset; otherwise their compact overview
+        // targets stack even though the semantic branch is distinct.
+        y: node.x + (node.kind === 'evolution' ? rowOffset * 4 : 0),
+        canonicalPosition: node.canonicalPosition ? {
+          ...node.canonicalPosition,
+          x: node.canonicalPosition.y,
+          y: node.canonicalPosition.x,
+        } : undefined,
+      };
+    })
     : nodes;
   return {
     nodes: orientedNodes,
     edges,
     horizons: [
-      { depth: 1, label: 'Direction', position: 540 },
-      { depth: 2, label: 'Capability', position: 935 },
-      { depth: 3, label: 'Implementation', position: 1370 },
+      { depth: 1, label: 'Direction', position: 430 },
+      { depth: 2, label: 'Next evolution', position: 790 },
+      { depth: 3, label: 'Later possibility', position: 1160 },
     ],
     progressionBands: [
       { id: 'current', label: 'Current', position: 150 },
-      { id: 'now', label: 'Directions', position: 540 },
-      { id: 'next', label: 'Capabilities', position: 935 },
-      { id: 'later', label: 'Implementation', position: 1370 },
-      { id: 'future', label: 'Outcomes', position: 1770 },
+      { id: 'now', label: 'Directions', position: 430 },
+      { id: 'next', label: 'Next evolutions', position: 790 },
+      { id: 'later', label: 'Later possibilities', position: 1160 },
+      { id: 'future', label: 'Outcome horizon', position: 1540 },
     ],
     streamRows: structuredRows.map((row, index) => ({
       index,
@@ -373,7 +386,7 @@ export function buildRepositoryFuturesCanvasModel(
       position: orientation === 'vertical' ? verticalStreamPosition(index) : row.position,
       occupied: nodes.filter(node => node.presentationRow?.index === index).length,
     })),
-    prerequisiteBand: { label: 'Enabling conditions', position: 765 },
+    prerequisiteBand: { label: 'Route enablers', position: 1040 },
     orientation,
     world: orientation === 'vertical'
       ? { width: FUTURES_CANVAS_WORLD.height, height: FUTURES_CANVAS_WORLD.width }

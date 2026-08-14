@@ -37,6 +37,7 @@ import {
   normalizeProductStrategistProviderResponse,
 } from './repositoryProductStrategistResponse.js';
 import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../../src/lib/repositoryIntelligence/productStrategistContext.js';
+import { productIntelligenceUsesDisallowedGeneratedScript } from '../../src/lib/repositoryIntelligence/productIntelligenceSchema.js';
 
 export const PRODUCTION_PROVIDER_POLICY_VERSION = 'shipseal.production-provider-policy.v1' as const;
 export const PRODUCT_STRATEGIST_STRUCTURED_OUTPUT_DECISION = 'strict-json-schema-with-deterministic-normalization' as const;
@@ -361,7 +362,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
       throw new RepositoryDeepIntelligenceProviderError('request_preflight_rejected', validation.message, false, 'request-preflight');
     }
     const providerBody = buildProductionProviderBody(request, config);
-    const serializedProviderBody = JSON.stringify(providerBody);
+    let serializedProviderBody = JSON.stringify(providerBody);
     const providerMeasurement = measureProductionProviderBody(request, config, providerBody);
     const providerDetails = {
       executionProfile: request.executionProfile,
@@ -372,6 +373,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
     } satisfies Partial<ProductionProviderLogEvent>;
     const fetcher = this.options.fetcher || fetch;
     let retryCount = 0;
+    let languageRepairAttempted = false;
     for (;;) {
       if (runOptions?.signal?.aborted) throw new RepositoryDeepIntelligenceProviderError('request_cancelled', 'Deep-intelligence request was cancelled.');
       try {
@@ -404,6 +406,28 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
         }
         const rawText = await readBoundedResponseText(response, config.policy.maximumResponseBytes, runOptions?.signal);
         const parsedEnvelope = parseProviderEnvelope(rawText, contentType);
+        const normalized = request.executionProfile === 'product-strategist'
+          ? normalizeProductStrategistProviderResponse(
+            parsedEnvelope.payload,
+            request,
+            parsedEnvelope.diagnostics.providerModelId || config.model,
+          )
+          : parsedEnvelope.payload;
+        if (request.executionProfile === 'product-strategist'
+          && productIntelligenceUsesDisallowedGeneratedScript(normalized, request.locale)) {
+          if (!languageRepairAttempted) {
+            languageRepairAttempted = true;
+            retryCount += 1;
+            serializedProviderBody = JSON.stringify(buildProductionProviderBody(request, config, { languageRepair: true }));
+            this.log(requestId, 'retry', startedAt, validation.requestBytes, retryCount, 'generated_language_repair', providerDetails);
+            continue;
+          }
+          throw new RepositoryDeepIntelligenceProviderError(
+            'invalid_response',
+            'Product Strategist output did not satisfy the generated-language contract after one repair attempt.',
+            false,
+          );
+        }
         this.log(requestId, 'success', startedAt, validation.requestBytes, retryCount, undefined, {
           repositoryIdentityHash: stableContextFingerprint(request.repository),
           promptVersion: request.promptContractVersion,
@@ -415,13 +439,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
           ...providerDetails,
           ...parsedEnvelope.diagnostics,
         });
-        return request.executionProfile === 'product-strategist'
-          ? normalizeProductStrategistProviderResponse(
-            parsedEnvelope.payload,
-            request,
-            parsedEnvelope.diagnostics.providerModelId || config.model,
-          )
-          : parsedEnvelope.payload;
+        return normalized;
       } catch (error) {
         if (error instanceof RepositoryDeepIntelligenceProviderError) {
           this.log(requestId, 'failure', startedAt, validation.requestBytes, retryCount, error.code, {
@@ -492,9 +510,13 @@ export interface ProductionProviderBodyMeasurement {
   };
 }
 
-export function buildProductionProviderBody(request: RepositoryDeepIntelligenceRequest, config: ProductionProviderConfig) {
+export function buildProductionProviderBody(
+  request: RepositoryDeepIntelligenceRequest,
+  config: ProductionProviderConfig,
+  options: { languageRepair?: boolean } = {},
+) {
   const productStrategist = request.executionProfile === 'product-strategist';
-  const systemPrompt = productStrategist ? productStrategistSystemPrompt(request) : generalSystemPrompt();
+  const systemPrompt = productStrategist ? productStrategistSystemPrompt(request, options.languageRepair) : generalSystemPrompt();
   const providerPayload = productStrategist ? buildProductStrategistProviderPayload(request) : request;
   const body = {
     model: config.model,
@@ -605,11 +627,14 @@ export function measureProductionProviderBody(
   };
 }
 
-function productStrategistSystemPrompt(request: RepositoryDeepIntelligenceRequest) {
+function productStrategistSystemPrompt(request: RepositoryDeepIntelligenceRequest, languageRepair = false) {
   return [
     `Return only the strict ${PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION} JSON object described by response_format; no Markdown, prose outside JSON, or hidden reasoning.`,
-    'You are a focused product strategist. Infer the current product, users, problem, workflow, existing capabilities, constraints, and business clues; then propose three to five meaningful user-facing product capabilities.',
-    'Return three strong opportunities by default. Return a fourth or fifth only when materially distinct and high-value; never add weak filler.',
+    'You are a focused product strategist. Infer the current product, users, problem, workflow, existing capabilities, constraints, and business clues; then propose six to eight materially distinct, evidence-grounded user-facing product directions when the repository supports that breadth.',
+    'Explore feature, workflow, safety, intelligence, collaboration, ecosystem, and personalization opportunity space only where supplied evidence supports it. Never add weak filler.',
+    'For every first-generation direction, return two to four second-generation product evolutions and only grounded third-generation possibilities. Describe what new user value opens next, not implementation tasks or artifact checklists.',
+    'All generated user-facing prose must be English unless the request locale explicitly starts with zh, ja, or ko. Never mix Han, Hiragana, Katakana, or Hangul characters into an English title, description, capability, area, verification, caveat, or evolution. Repository names and paths remain evidence identifiers, not generated prose.',
+    ...(languageRepair ? ['LANGUAGE REPAIR: the previous response violated the English-only generated-text contract. Regenerate the entire response in clear English while preserving evidence indexes and grounded meaning; do not transliterate or delete fragments.'] : []),
     'Evidence arrays contain zero-based indexes into evidenceIndex. Opportunity x contains distinct zero-based indexes into p.caps. Opportunity support contains distinct indexes of earlier opportunities only. Area p contains a zero-based permittedCurrentPaths index or -1 when no current path is claimed.',
     'Keep Product Understanding concise: one short summary, one to three user groups, one problem sentence, three or four short loop steps, bounded capabilities, and only material constraints, clues, gaps, and limitations.',
     'Each opportunity needs a short title and one concise statement each for direction, user value, product fit, and verification. Include only necessary evidence, major new capabilities, implementation areas, conflicts, and caveats.',

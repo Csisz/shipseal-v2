@@ -209,7 +209,7 @@ export async function prepareProductionRepositoryIntelligence(
     ...providerResponseDiagnostics,
   });
   const hasAcceptedExecutionOutput = productStrategistExecution
-    ? acceptedProductOpportunityCount >= 3 && acceptedProductOpportunityCount <= 5
+    ? acceptedProductOpportunityCount >= 3 && acceptedProductOpportunityCount <= 8
     : Boolean(execution.result?.findings.length);
   if (execution.status === 'completed' && hasAcceptedExecutionOutput) {
     const warnings = execution.result.summary.rejectedFindings + execution.result.summary.acceptedWithLimitations
@@ -317,6 +317,7 @@ function validationCategoryForExecution(execution: Awaited<ReturnType<typeof run
   if (execution.error?.code === 'provider_envelope_invalid') return 'provider-envelope-invalid';
   if (execution.error?.code === 'product-understanding-schema-rejected') return 'product-understanding-schema-rejected';
   if (execution.error?.code === 'product-opportunity-schema-rejected') return 'product-opportunity-schema-rejected';
+  if (execution.error?.code === 'invalid_response') return 'response-schema-rejected';
   if (execution.status === 'invalid-response') return 'response-schema-rejected';
   if (execution.status === 'completed' && execution.result?.productIntelligence?.rejectedOpportunities.length) {
     return 'product-opportunity-schema-rejected';

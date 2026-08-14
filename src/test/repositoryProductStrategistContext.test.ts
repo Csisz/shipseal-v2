@@ -165,7 +165,7 @@ describe('focused Product Strategist context', () => {
     expect(measurement.internalAnatomy.safetyInstructionsBytes).toBeGreaterThan(0);
     expect(measurement.internalAnatomy.resultLimitsBytes).toBeGreaterThan(0);
     expect(measurement.anatomy.userMessageBytes).toBeLessThan(productPrepared.budget.requestBytes);
-    expect(measurement.outputTokenCap).toBe(2_500);
+    expect(measurement.outputTokenCap).toBe(4_000);
     expect(projection.context).toHaveLength(productPrepared.budget.selectedFiles);
     expect(projection.coverage).toMatchObject({ productDescription: true, userSurface: true, productWorkflow: true });
     expect(projection.evidenceIndex.length).toBeGreaterThan(0);

@@ -99,6 +99,7 @@ export function validateRepositoryDeepIntelligenceResponse({
       knownPaths,
       knownLimitations: request.knownLimitations,
       normalizationDiagnostics: productNormalizationDiagnostics,
+      generatedLocale: request.locale,
     })
     : undefined;
   const seenProviderIds = new Set<string>();

@@ -42,8 +42,8 @@ export interface ProductStrategistProviderPayload {
     schemaVersion: string;
     compactResponseVersion: typeof PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION;
     returnedCapabilities: string[];
-    opportunityCount: { minimum: 3; maximum: 5 };
-    defaultOpportunityCount: 3;
+    opportunityCount: { minimum: 6; maximum: 8 };
+    defaultOpportunityCount: 6;
     findingsMustBeEmpty: true;
     permittedEvidenceIds: string[];
     permittedCurrentPaths: string[];
@@ -100,7 +100,7 @@ export function buildProductStrategistProviderPayload(request: RepositoryDeepInt
   return {
     schemaVersion: PRODUCT_STRATEGIST_PROVIDER_PAYLOAD_VERSION,
     repository: { name: request.repository.name, ...(request.repository.sourceType ? { sourceType: request.repository.sourceType } : {}) },
-    objective: 'Infer the current user-facing product and propose three to five evidence-grounded next product capabilities.',
+    objective: 'Infer the current user-facing product and propose six to eight evidence-grounded product directions with deeper product evolutions.',
     context,
     evidenceIndex,
     coverage: {
@@ -117,8 +117,8 @@ export function buildProductStrategistProviderPayload(request: RepositoryDeepInt
       schemaVersion: request.responseSchemaVersion,
       compactResponseVersion: PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION,
       returnedCapabilities: [...request.requestedCapabilities],
-      opportunityCount: { minimum: 3, maximum: 5 },
-      defaultOpportunityCount: 3,
+      opportunityCount: { minimum: 6, maximum: 8 },
+      defaultOpportunityCount: 6,
       findingsMustBeEmpty: true,
       permittedEvidenceIds: evidenceIndex.map(item => item.id),
       permittedCurrentPaths: context.map(item => item.path),

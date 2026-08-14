@@ -17,7 +17,7 @@ import {
 } from './repositoryProductStrategistPayload.js';
 
 export { PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION } from './repositoryProductStrategistPayload.js';
-export const PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS = 2_200;
+export const PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS = 3_800;
 
 export const PRODUCT_STRATEGIST_COMPACT_LIMITS = Object.freeze({
   evidenceIndexes: 6,
@@ -55,6 +55,11 @@ export const PRODUCT_STRATEGIST_COMPACT_LIMITS = Object.freeze({
     verificationCharacters: 80,
     caveats: 1,
     caveatCharacters: 40,
+    secondGenerationEvolutions: 4,
+    thirdGenerationEvolutions: 2,
+    evolutionTitleCharacters: 40,
+    evolutionDescriptionCharacters: 72,
+    evolutionUserValueCharacters: 56,
   },
 });
 
@@ -92,6 +97,16 @@ const compactCaveatSchema = z.object({
   r: z.boolean(),
 }).strict();
 
+const compactThirdGenerationEvolutionSchema = z.object({
+  t: compactString(limits.opportunity.evolutionTitleCharacters),
+  s: compactString(limits.opportunity.evolutionDescriptionCharacters),
+  v: compactString(limits.opportunity.evolutionUserValueCharacters),
+}).strict();
+
+const compactSecondGenerationEvolutionSchema = compactThirdGenerationEvolutionSchema.extend({
+  next: z.array(compactThirdGenerationEvolutionSchema).max(limits.opportunity.thirdGenerationEvolutions),
+}).strict();
+
 export const productStrategistCompactOpportunitySchema = z.object({
   t: compactString(limits.opportunity.titleCharacters),
   s: compactString(limits.opportunity.statementCharacters),
@@ -102,6 +117,7 @@ export const productStrategistCompactOpportunitySchema = z.object({
   o: z.enum(['evidence-backed', 'strategic', 'exploratory']),
   x: z.array(z.number().int().min(0)).max(limits.opportunity.existingCapabilities),
   n: z.array(compactString(limits.opportunity.newCapabilityCharacters)).min(1).max(limits.opportunity.newCapabilities),
+  evo: z.array(compactSecondGenerationEvolutionSchema).min(2).max(limits.opportunity.secondGenerationEvolutions).optional(),
   support: z.array(z.number().int().min(0)).max(limits.opportunity.supportingOpportunities),
   conflicts: z.array(compactString(limits.opportunity.conflictCharacters)).max(limits.opportunity.conflicts),
   areas: z.array(compactImplementationAreaSchema).max(limits.opportunity.implementationAreas),
@@ -114,7 +130,7 @@ export const productStrategistCompactOpportunitySchema = z.object({
 
 const compactResponseCollectionSchema = z.object({
   p: z.unknown(),
-  o: z.array(z.unknown()).min(3).max(5),
+  o: z.array(z.unknown()).min(3).max(8),
 }).strict();
 
 const stringJsonSchema = (maxLength: number, description: string) => ({
@@ -169,11 +185,11 @@ export function buildProductStrategistCompactJsonSchema(payload: ProductStrategi
         },
       },
       o: {
-        type: 'array', minItems: 3, maxItems: 5,
-        description: 'Return three strong opportunities by default; add a fourth or fifth only when materially distinct and high-value.',
+        type: 'array', minItems: 6, maxItems: 8,
+        description: 'Return six to eight distinct, evidence-grounded first-generation product directions when the supplied repository evidence supports them.',
         items: {
           type: 'object', additionalProperties: false,
-          required: ['t', 's', 'v', 'f', 'u', 'e', 'o', 'x', 'n', 'support', 'conflicts', 'areas', 'w', 'b', 'verify', 'caveats', 'q'],
+          required: ['t', 's', 'v', 'f', 'u', 'e', 'o', 'x', 'n', 'evo', 'support', 'conflicts', 'areas', 'w', 'b', 'verify', 'caveats', 'q'],
           properties: {
             t: stringJsonSchema(limits.opportunity.titleCharacters, 'Short user-facing opportunity title.'),
             s: stringJsonSchema(limits.opportunity.statementCharacters, 'One concise opportunity statement.'),
@@ -188,6 +204,30 @@ export function buildProductStrategistCompactJsonSchema(payload: ProductStrategi
               items: { type: 'integer', minimum: 0, maximum: limits.understanding.capabilities - 1 },
             },
             n: stringArrayJsonSchema(limits.opportunity.newCapabilities, limits.opportunity.newCapabilityCharacters, 'Major required new capability title.', 1),
+            evo: {
+              type: 'array', minItems: 2, maxItems: limits.opportunity.secondGenerationEvolutions,
+              description: 'Two to four product evolutions that this direction could unlock next. These are user-value futures, not implementation tasks.',
+              items: {
+                type: 'object', additionalProperties: false, required: ['t', 's', 'v', 'next'],
+                properties: {
+                  t: stringJsonSchema(limits.opportunity.evolutionTitleCharacters, 'Short second-generation product future title.'),
+                  s: stringJsonSchema(limits.opportunity.evolutionDescriptionCharacters, 'What becomes possible after the parent direction succeeds.'),
+                  v: stringJsonSchema(limits.opportunity.evolutionUserValueCharacters, 'Concise user value opened by this evolution.'),
+                  next: {
+                    type: 'array', maxItems: limits.opportunity.thirdGenerationEvolutions,
+                    description: 'Optional grounded third-generation product possibilities opened by this evolution.',
+                    items: {
+                      type: 'object', additionalProperties: false, required: ['t', 's', 'v'],
+                      properties: {
+                        t: stringJsonSchema(limits.opportunity.evolutionTitleCharacters, 'Short third-generation product future title.'),
+                        s: stringJsonSchema(limits.opportunity.evolutionDescriptionCharacters, 'A later product possibility grounded in the parent evolution.'),
+                        v: stringJsonSchema(limits.opportunity.evolutionUserValueCharacters, 'Concise later-stage user value.'),
+                      },
+                    },
+                  },
+                },
+              },
+            },
             support: {
               type: 'array', maxItems: limits.opportunity.supportingOpportunities,
               description: 'Distinct indexes of earlier opportunities in o only; no self or forward references.',
@@ -349,6 +389,23 @@ function normalizeOpportunity(
   const inferenceLevel = value.o === 'evidence-backed'
     ? 'evidence-linked' as const
     : value.o === 'strategic' ? 'strategic-inference' as const : 'exploratory-inference' as const;
+  const futureEvolutions = (value.evo || []).flatMap((evolution, evolutionIndex) => {
+    const secondId = `op-${opportunityIndex}-evolution-${evolutionIndex}`;
+    return [{
+      id: secondId,
+      generation: 2 as const,
+      title: evolution.t,
+      description: evolution.s,
+      userValue: evolution.v,
+    }, ...evolution.next.map((next, nextIndex) => ({
+      id: `${secondId}-next-${nextIndex}`,
+      parentId: secondId,
+      generation: 3 as const,
+      title: next.t,
+      description: next.s,
+      userValue: next.v,
+    }))];
+  });
   return {
     schemaVersion: REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
     id: `op-${opportunityIndex}`,
@@ -363,6 +420,7 @@ function normalizeOpportunity(
     strategicRationale: value.f,
     existingCapabilityIds: value.x.map(index => `cap-${index}`),
     requiredNewCapabilities: value.n.map(title => ({ title, rationale: value.f })),
+    futureEvolutions,
     optionalSupportingOpportunityIds: value.support.map(index => `op-${index}`),
     knownConflicts: [...value.conflicts],
     expectedImplementationAreas: value.areas.map(area => {

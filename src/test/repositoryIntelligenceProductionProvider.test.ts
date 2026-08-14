@@ -364,7 +364,7 @@ describe('production Repository Intelligence provider', () => {
     const providerMeasurement = measureProductionProviderBody(focused.request, { ...config, policy: focusedPolicy });
     expect(providerMeasurement.providerRequestBytes).toBeLessThanOrEqual(60_000);
     expect(providerMeasurement.providerInputTokenEstimate).toBeLessThanOrEqual(15_000);
-    expect(providerMeasurement.outputTokenCap).toBe(2_500);
+    expect(providerMeasurement.outputTokenCap).toBe(4_000);
 
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const body = String(init?.body || '');
@@ -399,7 +399,7 @@ describe('production Repository Intelligence provider', () => {
     });
     expect(result.body.state === 'enhanced' && result.body.diagnostics).toMatchObject({
       executionProfile: 'product-strategist',
-      outputTokenCap: 2_500,
+      outputTokenCap: 4_000,
       selectedFileCount: expect.any(Number),
       providerRequestBytes: expect.any(Number),
       providerEstimatedInputTokens: expect.any(Number),
@@ -533,7 +533,7 @@ describe('production Repository Intelligence provider', () => {
       .toBe('compact-evidence-index-out-of-range');
   });
 
-  it('normalizes a compact response deterministically and keeps three to five useful opportunities below the output target', async () => {
+  it('normalizes a compact response deterministically and keeps legacy compact opportunities below the expanded output target', async () => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const canonicalBefore = validCanonicalProductProviderPayload(request);
     const compact = validProductProviderPayload(request);
@@ -613,11 +613,11 @@ describe('production Repository Intelligence provider', () => {
       maximumResponseBytes: maximumBytes,
       maximumResponseEstimatedTokens: maximumTokens,
       targetTokens: PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS,
-      hardCapTokens: 2_500,
+      hardCapTokens: 4_000,
     }));
     expect(maximum.o).toHaveLength(5);
     expect(maximumTokens).toBeLessThanOrEqual(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
-    expect(maximumTokens).toBeLessThan(2_500);
+    expect(maximumTokens).toBeLessThan(4_000);
 
     const result = await prepareProductionRepositoryIntelligence({
       version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
@@ -629,7 +629,7 @@ describe('production Repository Intelligence provider', () => {
     });
     expect(result.body).toMatchObject({
       state: 'enhanced',
-      diagnostics: { outputTokenCap: 2_500 },
+      diagnostics: { outputTokenCap: 4_000 },
       result: { productIntelligence: { understanding: expect.any(Object), opportunities: expect.any(Array) } },
     });
     expect(result.body.state === 'enhanced' && result.body.result.productIntelligence?.opportunities).toHaveLength(5);
@@ -860,6 +860,51 @@ describe('production Repository Intelligence provider', () => {
     });
     expect(result.body.state).toBe('enhanced');
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('repairs a mixed-language Product Strategist response once before accepting English output', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const mixed = validProductProviderPayload(request);
+    mixed.o[0].t = 'Goal-based自动周包规划';
+    const repaired = validProductProviderPayload(request);
+    const bodies: string[] = [];
+    const logs: Array<{ outcome: string; statusCategory?: string }> = [];
+    const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      bodies.push(String(init?.body || ''));
+      return envelope(bodies.length === 1 ? mixed : repaired);
+    });
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: event => logs.push(event) });
+
+    expect(result.body.state).toBe('enhanced');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(bodies[1]).toContain('LANGUAGE REPAIR');
+    expect(logs.filter(event => event.outcome === 'retry')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ statusCategory: 'generated_language_repair' }),
+    ]));
+    expect(logs.filter(event => event.outcome === 'success')).toHaveLength(1);
+  });
+
+  it('falls back safely when the one language repair attempt still contains mixed generated text', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const mixed = validProductProviderPayload(request);
+    mixed.o[0].t = 'Child进度与成就追踪';
+    const fetcher = vi.fn(async () => envelope(mixed));
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: vi.fn() });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.body).toMatchObject({
+      state: 'fallback',
+      category: 'schema_validation_failed',
+      diagnostics: { validationCategory: 'response-schema-rejected' },
+    });
   });
 
   it('coalesces repeated enhancement actions into one in-flight request', async () => {
@@ -1127,9 +1172,9 @@ describe('production Repository Intelligence provider', () => {
       opportunityCount: maximumPayload.o.length,
       responseBytes: maximumResponseBytes,
       estimatedTokens: maximumResponseTokenEstimate,
-      outputTokenCap: 2_500,
+      outputTokenCap: 4_000,
     }));
-    expect(maximumResponseTokenEstimate).toBeLessThanOrEqual(2_500);
+    expect(maximumResponseTokenEstimate).toBeLessThanOrEqual(4_000);
     const maximum = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv,
       fetcher: vi.fn(async () => envelope(maximumPayload)) as unknown as typeof fetch,

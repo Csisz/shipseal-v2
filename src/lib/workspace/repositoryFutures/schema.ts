@@ -102,6 +102,16 @@ export interface RepositoryFutureCandidateDependencyHint {
   limitations: string[];
 }
 
+export interface RepositoryFutureProductEvolution {
+  id: string;
+  sourceId: string;
+  parentSourceId?: string;
+  generation: 2 | 3;
+  title: string;
+  description: string;
+  userValue: string;
+}
+
 export interface RepositoryFutureNormalizedCandidate {
   id: string;
   sourceId: string;
@@ -136,6 +146,7 @@ export interface RepositoryFutureNormalizedCandidate {
   changeWeight?: 'small' | 'moderate' | 'broad';
   impactBreadth?: 'focused' | 'workflow' | 'cross-product';
   productUnderstandingFingerprint?: string;
+  productEvolutions?: RepositoryFutureProductEvolution[];
   eligibility: RepositoryFutureEligibility;
   fit: RepositoryFutureFit;
   contentFingerprint: string;

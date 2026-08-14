@@ -114,10 +114,10 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const broaderEdge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:alternative"]');
 
     expect(stage).toHaveAttribute('data-field-density', 'deep-layered-neural');
-    expect(stage).toHaveAttribute('data-layout-strategy', 'grounded-direction-capability-implementation-layers');
+    expect(stage).toHaveAttribute('data-layout-strategy', 'grounded-direction-product-evolution-route-enabler-layers');
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
     expect(container.querySelector('[data-field-layer="structured-rows"]')).toBeInTheDocument();
-    expect(container.querySelector('[data-field-layer="prerequisite-rail"]')).toBeInTheDocument();
+    expect(container.querySelector('[data-field-layer="prerequisite-rail"]')).not.toBeInTheDocument();
     expect(container.querySelector('[data-field-layer="progression-bands"]')).toBeInTheDocument();
     expect(container.querySelectorAll('[data-field-object-halo]')).toHaveLength(4);
     expect(ambientEdges).toHaveLength(semanticEdges.length);
@@ -188,7 +188,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(cameraState()).toEqual(before);
   });
 
-  it('keeps a Future stable when the complete initial frame already makes it visible', () => {
+  it('keeps zoom and horizontal context while minimally revealing a selected Future beside the inspector', () => {
     render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Back to current repository' }));
     const before = cameraState();
@@ -196,7 +196,9 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const after = cameraState();
 
-    expect(after).toEqual(before);
+    expect(after.x).toBe(before.x);
+    expect(after.zoom).toBe(before.zoom);
+    expect(Math.abs(after.y - before.y)).toBeLessThan(80);
   });
 
   it('keeps the assisted camera position when the inspector closes', () => {
@@ -291,11 +293,17 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const alternative = screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i });
 
     fireEvent.mouseEnter(alternative);
+    const hoverCard = screen.getByRole('tooltip');
+    expect(hoverCard).toHaveTextContent('Repository evidence assistant');
+    expect(hoverCard).toHaveTextContent(/1 evidence/i);
+    expect(hoverCard).toHaveTextContent('Click to inspect');
+    expect(screen.queryByTestId('neural-futures-inspector')).not.toBeInTheDocument();
     expect(alternative).toHaveAttribute('data-trace-state', 'related');
     expect(primary).toHaveAttribute('data-trace-state', 'dimmed');
     expect(document.querySelector('[data-future-edge-id="grounding:goal:alternative"]')).toHaveAttribute('data-trace-state', 'related');
     expect(document.querySelector('[data-future-edge-id="requirement:dependency:review:goal:future"]')).toHaveAttribute('data-trace-state', 'dimmed');
     fireEvent.mouseLeave(alternative);
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
 
     for (let index = 0; index < 3; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
     expect(stage).toHaveAttribute('data-camera-lod', 'far');
@@ -353,7 +361,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'vertical'));
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveClass('min-h-[6.25rem]');
-    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '960px', height: '1960px' });
+    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '1080px', height: '1820px' });
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
     expect(inspector).toHaveClass('inset-x-3');

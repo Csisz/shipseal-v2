@@ -75,6 +75,7 @@ interface CandidateDraft {
   changeWeight?: RepositoryFutureNormalizedCandidate['changeWeight'];
   impactBreadth?: RepositoryFutureNormalizedCandidate['impactBreadth'];
   productUnderstandingFingerprint?: string;
+  productEvolutions?: RepositoryFutureNormalizedCandidate['productEvolutions'];
 }
 
 export function adaptProductOpportunityCandidates(input: {
@@ -153,6 +154,7 @@ export function adaptProductOpportunityCandidates(input: {
       changeWeight: opportunity.changeWeight,
       impactBreadth: opportunity.impactBreadth,
       productUnderstandingFingerprint: input.productIntelligence.understanding?.fingerprint,
+      productEvolutions: opportunity.futureEvolutions.map(evolution => ({ ...evolution })),
     }, input.context);
   });
   return adapterResult(candidates);
@@ -531,6 +533,7 @@ function normalizeCandidate(draft: CandidateDraft, context: RepositoryFutureAdap
     changeWeight: draft.changeWeight,
     impactBreadth: draft.impactBreadth,
     productUnderstandingFingerprint: draft.productUnderstandingFingerprint,
+    productEvolutions: draft.productEvolutions?.map(evolution => ({ ...evolution })),
   };
   const id = repositoryFutureId('future-candidate', {
     sourceId: contentSeed.sourceId,

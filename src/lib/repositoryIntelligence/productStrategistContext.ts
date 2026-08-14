@@ -19,7 +19,7 @@ export const PRODUCT_STRATEGIST_CONTEXT_POLICY = Object.freeze({
   maximumContextBytes: 24_000,
   maximumRequestBytes: 160_000,
   maximumProviderBodyBytes: 60_000,
-  maximumOutputTokens: 2_500,
+  maximumOutputTokens: 4_000,
   timeoutMs: 45_000,
 });
 
