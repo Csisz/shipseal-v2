@@ -46,6 +46,16 @@ export interface RepositoryFutureStageDependency {
   limitations?: string[];
 }
 
+export interface RepositoryFutureStageProjection {
+  id: string;
+  goalId: string;
+  kind: 'capability' | 'artifact';
+  title: string;
+  sourceId: string;
+  order: number;
+  humanReviewRequired: boolean;
+}
+
 export interface RepositoryFutureStageOverlay {
   active: true;
   mode: RepositoryFuturePathwaysMode;
@@ -54,6 +64,7 @@ export interface RepositoryFutureStageOverlay {
   draftFingerprint?: string;
   universeProjection?: RepositoryFutureUniverseProjection;
   candidates: RepositoryFutureStageCandidate[];
+  projections?: RepositoryFutureStageProjection[];
   dependencies: RepositoryFutureStageDependency[];
   artifactCount: number;
   gateCount: number;

@@ -3,14 +3,14 @@ import type {
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
 
-export const FUTURES_CANVAS_WORLD = { width: 1480, height: 860 } as const;
+export const FUTURES_CANVAS_WORLD = { width: 1960, height: 960 } as const;
 export type RepositoryFuturesCanvasOrientation = 'horizontal' | 'vertical';
 export type RepositoryFuturesPresentationStream = 'strategic' | 'evidence' | 'product' | 'foundation' | 'exploratory' | 'general';
 
 export type RepositoryFuturesCanvasNode = {
   id: string;
-  kind: 'repository' | 'goal' | 'dependency';
-  role: 'current' | RepositoryFutureStageCandidate['role'] | 'required' | 'satisfied';
+  kind: 'repository' | 'goal' | 'capability' | 'artifact' | 'dependency';
+  role: 'current' | RepositoryFutureStageCandidate['role'] | 'branch' | 'required' | 'satisfied';
   title: string;
   x: number;
   y: number;
@@ -28,12 +28,14 @@ export type RepositoryFuturesCanvasNode = {
     stream: RepositoryFuturesPresentationStream;
   };
   candidate?: RepositoryFutureStageCandidate;
+  parentGoalId?: string;
   dependency?: RepositoryFutureStageOverlay['dependencies'][number];
+  selected?: boolean;
 };
 
 export type RepositoryFuturesCanvasEdge = {
   id: string;
-  kind: 'grounding' | 'requirement' | 'selected-path';
+  kind: 'grounding' | 'expansion' | 'requirement' | 'selected-path';
   sourceId: string;
   targetId: string;
   goalIds: string[];
@@ -71,14 +73,14 @@ function stableHash(value: string) {
 }
 
 const structuredRows = [
-  { label: 'Strategic opportunities', position: 95 },
+  { label: 'Strategic opportunities', position: 80 },
   { label: 'Evidence-backed opportunities', position: 160 },
-  { label: 'Product & preview directions', position: 225 },
-  { label: 'Knowledge systems', position: 290 },
-  { label: 'Agent workflows', position: 365 },
-  { label: 'Delivery systems', position: 440 },
-  { label: 'Safety & governance', position: 515 },
-  { label: 'Exploratory directions', position: 590 },
+  { label: 'Product & preview directions', position: 240 },
+  { label: 'Knowledge systems', position: 320 },
+  { label: 'Agent workflows', position: 400 },
+  { label: 'Delivery systems', position: 480 },
+  { label: 'Safety & governance', position: 560 },
+  { label: 'Exploratory directions', position: 640 },
 ] as const;
 
 const verticalStreamPosition = (index: number) => 40 + index * 95;
@@ -175,7 +177,7 @@ function uniqueCandidates(candidates: RepositoryFutureStageCandidate[]) {
  */
 export function buildRepositoryFuturesCanvasModel(
   repositoryName: string,
-  overlay: Pick<RepositoryFutureStageOverlay, 'candidates' | 'dependencies' | 'productIntelligenceState'>,
+  overlay: Pick<RepositoryFutureStageOverlay, 'candidates' | 'projections' | 'dependencies' | 'productIntelligenceState'>,
   orientation: RepositoryFuturesCanvasOrientation = 'horizontal',
 ): RepositoryFuturesCanvasModel {
   const repositoryId = `repository:${repositoryName}`;
@@ -185,17 +187,32 @@ export function buildRepositoryFuturesCanvasModel(
     role: 'current',
     title: repositoryName,
     x: 150,
-    y: 350,
+    y: 360,
     depth: 0,
   }];
   const edges: RepositoryFuturesCanvasEdge[] = [];
-  // The overlay already contains repository-grounded fallback candidates. Keep
-  // that real topology visible while enhanced Product Intelligence is forming.
-  const candidates = uniqueCandidates(overlay.candidates);
+  // The interactive topology is gated until the actual response reaches a
+  // terminal state. No deterministic/example nodes leak into the forming UI.
+  const readyCandidates = overlay.productIntelligenceState === 'analysing' ? [] : uniqueCandidates(overlay.candidates);
+  // The phone field keeps six real directions so every lane remains tappable;
+  // the complete eight-direction generation remains available on larger views.
+  const candidates = orientation === 'vertical' ? readyCandidates.slice(0, 6) : readyCandidates;
+  const occupiedVisualRows = new Set<number>();
+  const visualRowByGoalId = new Map<string, number>();
+  candidates.forEach(candidate => {
+    const preferredRow = repositoryFuturePresentationRow(candidate).index;
+    const visualRow = [...structuredRows.keys()]
+      .filter(index => !occupiedVisualRows.has(index))
+      .sort((left, right) => Math.abs(left - preferredRow) - Math.abs(right - preferredRow) || left - right)[0]
+      ?? preferredRow;
+    occupiedVisualRows.add(visualRow);
+    visualRowByGoalId.set(candidate.goalId, visualRow);
+  });
 
   candidates.forEach(candidate => {
     const canonicalPosition = repositoryFutureCanonicalPosition(candidate);
     const structuredPosition = repositoryFutureStructuredPosition(candidate);
+    const visualRowIndex = visualRowByGoalId.get(candidate.goalId) ?? structuredPosition.row.index;
     const depth = canonicalPosition.futureDepth;
     const selected = candidate.role === 'primary' || candidate.role === 'supporting';
     nodes.push({
@@ -203,12 +220,12 @@ export function buildRepositoryFuturesCanvasModel(
       kind: 'goal',
       role: candidate.role,
       title: candidate.title,
-      x: structuredPosition.x,
-      y: structuredPosition.y,
+      x: 540 + ((stableHash(`${candidate.goalId}:direction`) % 33) - 16),
+      y: structuredRows[visualRowIndex].position,
       depth,
       canonicalPosition,
       presentationRow: {
-        index: structuredPosition.row.index,
+        index: visualRowIndex,
         label: structuredPosition.row.label,
         stream: structuredPosition.row.stream,
       },
@@ -226,6 +243,40 @@ export function buildRepositoryFuturesCanvasModel(
       });
     }
   });
+
+  const goalNodeById = new Map(nodes.filter(node => node.kind === 'goal').map(node => [node.id, node]));
+  const projections = overlay.projections || [];
+  projections
+    .filter(projection => goalNodeById.has(projection.goalId))
+    .sort((left, right) => left.goalId.localeCompare(right.goalId) || left.kind.localeCompare(right.kind) || left.order - right.order)
+    .forEach(projection => {
+      const goal = goalNodeById.get(projection.goalId)!;
+      const artifactOffset = projection.kind === 'artifact'
+        ? (projection.order - ((projections.filter(item => item.goalId === projection.goalId && item.kind === 'artifact').length - 1) / 2)) * 34
+        : 0;
+      const x = projection.kind === 'capability' ? 935 : 1370 + (projection.order % 2) * 70;
+      const y = goal.y + artifactOffset;
+      nodes.push({
+        id: projection.id,
+        kind: projection.kind,
+        role: 'branch',
+        title: projection.title,
+        x,
+        y,
+        depth: projection.kind === 'capability' ? 2 : 3,
+        presentationRow: goal.presentationRow,
+        parentGoalId: projection.goalId,
+        selected: goal.role === 'primary' || goal.role === 'supporting',
+      });
+      edges.push({
+        id: `expansion:${projection.sourceId}:${projection.id}`,
+        kind: 'expansion',
+        sourceId: projection.sourceId,
+        targetId: projection.id,
+        goalIds: [projection.goalId],
+        selected: goal.role === 'primary' || goal.role === 'supporting',
+      });
+    });
 
   const goalIds = new Set(candidates.map(candidate => candidate.goalId));
   const goalNodes = new Map(nodes.filter(node => node.kind === 'goal').map(node => [node.id, node]));
@@ -247,7 +298,7 @@ export function buildRepositoryFuturesCanvasModel(
     const dependencyX = prerequisiteColumns <= 1
       ? prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) / 2
       : prerequisiteStartX + (prerequisiteEndX - prerequisiteStartX) * (column / (prerequisiteColumns - 1));
-    const dependencyY = 690 + (index % prerequisiteRows) * 55;
+    const dependencyY = 805 + (index % prerequisiteRows) * 55;
     const earliestDepth = Math.min(...relatedGoals.map(goal => goal.depth as 1 | 2 | 3));
     nodes.push({
       id: dependency.id,
@@ -305,24 +356,24 @@ export function buildRepositoryFuturesCanvasModel(
     nodes: orientedNodes,
     edges,
     horizons: [
-      { depth: 1, label: 'Next', position: 610 },
-      { depth: 2, label: 'Later', position: 900 },
-      { depth: 3, label: 'Future', position: 1190 },
+      { depth: 1, label: 'Direction', position: 540 },
+      { depth: 2, label: 'Capability', position: 935 },
+      { depth: 3, label: 'Implementation', position: 1370 },
     ],
     progressionBands: [
       { id: 'current', label: 'Current', position: 150 },
-      { id: 'now', label: 'Now', position: 385 },
-      { id: 'next', label: 'Next', position: 610 },
-      { id: 'later', label: 'Later', position: 900 },
-      { id: 'future', label: 'Future', position: 1190 },
+      { id: 'now', label: 'Directions', position: 540 },
+      { id: 'next', label: 'Capabilities', position: 935 },
+      { id: 'later', label: 'Implementation', position: 1370 },
+      { id: 'future', label: 'Outcomes', position: 1770 },
     ],
     streamRows: structuredRows.map((row, index) => ({
       index,
-      label: row.label,
+      label: nodes.find(node => node.presentationRow?.index === index)?.presentationRow?.label || row.label,
       position: orientation === 'vertical' ? verticalStreamPosition(index) : row.position,
       occupied: nodes.filter(node => node.presentationRow?.index === index).length,
     })),
-    prerequisiteBand: { label: 'Enabling conditions', position: 650 },
+    prerequisiteBand: { label: 'Enabling conditions', position: 765 },
     orientation,
     world: orientation === 'vertical'
       ? { width: FUTURES_CANVAS_WORLD.height, height: FUTURES_CANVAS_WORLD.width }
@@ -338,6 +389,7 @@ export function repositoryFuturesTrace(model: RepositoryFuturesCanvasModel, node
     edgeIds.add(edge.id);
     nodeIds.add(edge.sourceId);
     nodeIds.add(edge.targetId);
+    edge.goalIds.forEach(goalId => nodeIds.add(goalId));
   };
   model.edges.forEach(edge => {
     if (edge.sourceId === nodeId || edge.targetId === nodeId || edge.goalIds.includes(nodeId)) {
@@ -347,6 +399,7 @@ export function repositoryFuturesTrace(model: RepositoryFuturesCanvasModel, node
   const directlyRelatedDependencyIds = new Set([...nodeIds].filter(id => model.nodes.find(node => node.id === id)?.kind === 'dependency'));
   model.edges.filter(edge => edge.kind === 'requirement' && directlyRelatedDependencyIds.has(edge.sourceId)).forEach(addEdge);
   const relatedGoalIds = new Set([...nodeIds].filter(id => model.nodes.find(node => node.id === id)?.kind === 'goal'));
+  model.edges.filter(edge => edge.kind === 'expansion' && edge.goalIds.some(goalId => relatedGoalIds.has(goalId))).forEach(addEdge);
   model.edges.filter(edge => edge.kind === 'selected-path' && edge.goalIds.some(goalId => relatedGoalIds.has(goalId))).forEach(addEdge);
   model.edges.filter(edge => edge.kind === 'grounding' && relatedGoalIds.has(edge.targetId)).forEach(addEdge);
   return { nodeIds, edgeIds };
@@ -361,6 +414,7 @@ export function repositoryFuturesSelectedPlanNodes(model: RepositoryFuturesCanva
     .map(edge => edge.sourceId));
   return model.nodes.filter(node => node.kind === 'repository'
     || selectedGoalIds.has(node.id)
+    || Boolean(node.parentGoalId && selectedGoalIds.has(node.parentGoalId))
     || selectedDependencyIds.has(node.id));
 }
 

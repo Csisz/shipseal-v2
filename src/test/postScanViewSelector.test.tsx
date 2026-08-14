@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildSampleReport } from '@/lib/readiness';
@@ -110,6 +110,7 @@ describe('premium post-scan view selector', () => {
   });
 
   it('hands a sample report from Intelligence Reveal to the selector without exposing the workspace first', () => {
+    vi.useFakeTimers();
     const report = reportWithIdentity('2026-08-11T10:02:00.000Z');
 
     function SampleRevealHandoff() {
@@ -119,11 +120,16 @@ describe('premium post-scan view selector', () => {
         : <ResultWorkspace report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />;
     }
 
-    render(<SampleRevealHandoff />);
-    expect(screen.getByRole('heading', { name: /Understanding repository structure/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
+    try {
+      render(<SampleRevealHandoff />);
+      expect(screen.getByRole('heading', { name: /repository intelligence is ready/i })).toBeInTheDocument();
+      expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
+      act(() => vi.advanceTimersByTime(720));
 
-    expect(screen.getByTestId('post-scan-view-selector')).toBeInTheDocument();
-    expect(screen.queryByTestId('normal-post-scan-overview')).not.toBeInTheDocument();
+      expect(screen.getByTestId('post-scan-view-selector')).toBeInTheDocument();
+      expect(screen.queryByTestId('normal-post-scan-overview')).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

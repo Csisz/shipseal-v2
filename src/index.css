@@ -489,6 +489,72 @@
     linear-gradient(118deg, hsl(var(--futures-field-bg)), hsl(var(--futures-field-surface) / 0.8));
 }
 
+.repository-formation-atmosphere {
+  background:
+    radial-gradient(circle at 50% 48%, hsl(var(--primary) / 0.14), transparent 28%),
+    radial-gradient(circle at 50% 48%, hsl(var(--accent) / 0.06), transparent 52%),
+    linear-gradient(180deg, hsl(var(--background) / 0.08), transparent 48%, hsl(var(--background) / 0.2));
+}
+
+.repository-formation-bloom::before,
+.repository-formation-bloom::after {
+  position: absolute;
+  inset: 13%;
+  content: '';
+  border: 1px solid hsl(var(--primary) / 0.14);
+  border-radius: 999px;
+}
+
+.repository-formation-bloom::after {
+  inset: 28%;
+  border-color: hsl(var(--accent) / 0.17);
+}
+
+.repository-formation-core {
+  box-shadow: 0 0 54px hsl(var(--primary) / 0.15), inset 0 0 28px hsl(var(--primary) / 0.035);
+}
+
+.repository-formation-arc {
+  stroke: hsl(var(--primary) / 0.48);
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: repository-formation-path 1.35s cubic-bezier(0.22, 0.8, 0.25, 1) forwards;
+}
+
+.repository-formation-arc-b { animation-delay: 90ms; opacity: 0.72; }
+.repository-formation-arc-c { animation-delay: 180ms; opacity: 0.5; }
+
+.repository-formation[data-formation-stage='projecting'] .repository-formation-core {
+  animation: repository-formation-breathe 2.4s ease-in-out infinite;
+}
+
+.repository-formation[data-formation-stage='ready'] .repository-formation-arc {
+  stroke: hsl(var(--success) / 0.48);
+  stroke-dashoffset: 0;
+}
+
+@keyframes repository-formation-path {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes repository-formation-breathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.025); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .repository-formation-arc {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .repository-formation[data-formation-stage='projecting'] .repository-formation-core {
+    animation: none;
+  }
+}
+
 .futures-neural-mesh {
   background-image:
     linear-gradient(90deg, hsl(var(--futures-structure) / 0.075) 1px, transparent 1px),

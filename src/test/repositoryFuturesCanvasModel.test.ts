@@ -130,7 +130,7 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
 
     expect(new Set(goals.map(node => node.presentationRow?.index)).size).toBe(4);
     expect(goals.every(node => node.depth === 2 && node.canonicalPosition?.futureDepth === 2)).toBe(true);
-    expect(goals.every(node => node.x >= 870 && node.x <= 920)).toBe(true);
+    expect(goals.every(node => node.x >= 520 && node.x <= 560)).toBe(true);
   });
 
   it('places synthesized unclassified previews away from their workflow goal', () => {
@@ -214,10 +214,10 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     const desktop = buildRepositoryFuturesCanvasModel('shipseal', input, 'horizontal');
     const mobile = buildRepositoryFuturesCanvasModel('shipseal', input, 'vertical');
 
-    expect(goalPosition(desktop, 'goal:near').x).toBeLessThan(goalPosition(desktop, 'goal:next').x);
-    expect(goalPosition(desktop, 'goal:next').x).toBeLessThan(goalPosition(desktop, 'goal:later').x);
-    expect(goalPosition(mobile, 'goal:near').y).toBeLessThan(goalPosition(mobile, 'goal:next').y);
-    expect(goalPosition(mobile, 'goal:next').y).toBeLessThan(goalPosition(mobile, 'goal:later').y);
+    expect(goalPosition(desktop, 'goal:near').canonicalPosition!.x).toBeLessThan(goalPosition(desktop, 'goal:next').canonicalPosition!.x);
+    expect(goalPosition(desktop, 'goal:next').canonicalPosition!.x).toBeLessThan(goalPosition(desktop, 'goal:later').canonicalPosition!.x);
+    expect(goalPosition(mobile, 'goal:near').canonicalPosition!.y).toBeLessThan(goalPosition(mobile, 'goal:next').canonicalPosition!.y);
+    expect(goalPosition(mobile, 'goal:next').canonicalPosition!.y).toBeLessThan(goalPosition(mobile, 'goal:later').canonicalPosition!.y);
   });
 
   it('places each shared prerequisite once and before every dependent goal on both axes', () => {
@@ -304,17 +304,38 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(primaryTrace.nodeIds.has('goal:support')).toBe(true);
   });
 
-  it('keeps the existing grounded topology visible while enhanced Product Intelligence is analysing', () => {
+  it('keeps all Future topology hidden while Product Intelligence is analysing', () => {
     const model = buildRepositoryFuturesCanvasModel('shipseal', {
       candidates: [candidate('goal:fallback', 'candidate')],
       dependencies: [],
       productIntelligenceState: 'analysing',
     });
-    expect(model.nodes).toHaveLength(2);
+    expect(model.nodes).toHaveLength(1);
     expect(model.nodes[0].kind).toBe('repository');
-    expect(model.nodes[1]).toMatchObject({ id: 'goal:fallback', kind: 'goal' });
-    expect(model.edges).toHaveLength(1);
-    expect(model.edges[0]).toMatchObject({ id: 'grounding:goal:fallback', kind: 'grounding' });
+    expect(model.edges).toHaveLength(0);
+  });
+
+  it('expands grounded goals into real capability and artifact layers without duplicating candidate identities', () => {
+    const goal = candidate('goal:future', 'candidate', 2, 1);
+    const model = buildRepositoryFuturesCanvasModel('shipseal', {
+      candidates: [goal],
+      projections: [
+        { id: 'projection:capability', goalId: goal.goalId, kind: 'capability', title: 'Task routing', sourceId: goal.goalId, order: 0, humanReviewRequired: false },
+        { id: 'projection:artifact:a', goalId: goal.goalId, kind: 'artifact', title: 'docs/TASK_ROUTER.md', sourceId: 'projection:capability', order: 0, humanReviewRequired: false },
+        { id: 'projection:artifact:b', goalId: goal.goalId, kind: 'artifact', title: 'docs/COMMANDS.md', sourceId: 'projection:capability', order: 1, humanReviewRequired: false },
+      ],
+      dependencies: [],
+      productIntelligenceState: 'enhanced',
+    });
+    const capability = model.nodes.find(node => node.kind === 'capability')!;
+    const artifact = model.nodes.find(node => node.kind === 'artifact')!;
+
+    expect(model.nodes.filter(node => node.kind === 'goal')).toHaveLength(1);
+    expect(model.nodes.filter(node => node.kind === 'capability')).toHaveLength(1);
+    expect(model.nodes.filter(node => node.kind === 'artifact')).toHaveLength(2);
+    expect(model.edges.filter(edge => edge.kind === 'expansion')).toHaveLength(3);
+    expect(model.nodes.find(node => node.id === goal.goalId)!.x).toBeLessThan(capability.x);
+    expect(capability.x).toBeLessThan(artifact.x);
   });
 
   it('reorients the same deterministic topology top-to-bottom for the mobile world', () => {

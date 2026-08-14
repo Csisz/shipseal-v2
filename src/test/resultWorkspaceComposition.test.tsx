@@ -397,7 +397,7 @@ describe('Result Workspace composition', () => {
     expect(await screen.findByText(/Secondary repository improvements/i)).toBeInTheDocument();
   });
 
-  it('prepares product directions inside the dedicated Futures stage without mounting Universe', async () => {
+  it('keeps the selector and Futures stage gated while product directions are preparing', async () => {
     globalThis.IntersectionObserver = class DeferredIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = '240px 0px';
@@ -420,18 +420,18 @@ describe('Result Workspace composition', () => {
       prepareRepositoryProductIntelligence={prepareRepositoryProductIntelligence}
     />);
 
-    expect(await screen.findByTestId('repository-futures-workspace')).toBeInTheDocument();
-    expect(screen.getByTestId('repository-futures-stage')).toBeInTheDocument();
+    expect(await screen.findByTestId('repository-formation')).toHaveAttribute('data-formation-stage', 'projecting');
+    expect(screen.queryByTestId('repository-futures-workspace')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-workspace-stage')).not.toBeInTheDocument();
     await waitFor(() => expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1));
-    expect(await screen.findByTestId('future-pathways-hero-stage')).toBeInTheDocument();
-    expect(screen.queryByTestId('future-neural-field')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('future-pathways-hero-stage')).not.toBeInTheDocument();
     expect(universeMockState.models).toHaveLength(0);
     expect(prepareRepositoryProductIntelligence).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps Product Strategist pending state local while the workspace remains interactive', async () => {
+  it('keeps Product Strategist pending state inside the single formation surface', async () => {
     globalThis.IntersectionObserver = class DeferredIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = '240px 0px';
@@ -453,10 +453,10 @@ describe('Result Workspace composition', () => {
       prepareRepositoryProductIntelligence={vi.fn(async () => undefined)}
     />);
 
-    expect((await screen.findAllByText('Analysing product opportunities')).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /Quick Path/i })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /Deep Configuration/i })).toBeEnabled();
-    expect(screen.getByTestId('repository-futures-stage')).toBeInTheDocument();
+    expect(await screen.findByText('Product Strategist is analysing repository evidence.')).toBeInTheDocument();
+    expect(screen.getByTestId('repository-formation')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByRole('button', { name: /Quick Path/i })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('repository-futures-stage')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
   });
 

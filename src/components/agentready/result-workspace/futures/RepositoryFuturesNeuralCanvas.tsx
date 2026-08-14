@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Bookmark, Check, Focus, GitBranch, LockKeyhole, Minus, Plus, Route, X } from 'lucide-react';
+import { AlertTriangle, Bookmark, Boxes, Check, FileOutput, Focus, GitBranch, LockKeyhole, Minus, Plus, Route, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RepositoryFutureStageOverlay } from './futurePathwaysPresentation';
 import {
@@ -31,7 +31,7 @@ interface RepositoryFuturesNeuralCanvasProps {
 }
 
 const DEFAULT_VIEWPORT = { width: 1200, height: 680 };
-const nodeWidths = { repository: 184, candidate: 166, primary: 192, supporting: 178, saved: 156, blocked: 158, dependency: 150 } as const;
+const nodeWidths = { repository: 184, candidate: 166, primary: 192, supporting: 178, saved: 156, blocked: 158, dependency: 150, capability: 142, artifact: 124 } as const;
 
 export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: RepositoryFuturesNeuralCanvasProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -62,19 +62,12 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
   const trace = useMemo(() => repositoryFuturesTrace(model, activeId), [activeId, model]);
   const lod = repositoryFuturesLod(camera.zoom);
-  const overviewGoalIds = useMemo(() => new Set(overlay.candidates.slice(0, 3).map(candidate => candidate.goalId)), [overlay.candidates]);
+  const overviewGoalIds = useMemo(() => new Set(overlay.candidates.slice(0, 8).map(candidate => candidate.goalId)), [overlay.candidates]);
   const meaningfulBounds = useMemo(() => repositoryFuturesBounds(model.nodes.map(nodeCameraTarget))!, [model.nodes]);
   const selectedPlanNodeIds = useMemo(() => new Set(repositoryFuturesSelectedPlanNodes(model).map(node => node.id)), [model]);
   const selectedPlanNodes = useMemo(() => model.nodes.filter(node => selectedPlanNodeIds.has(node.id)), [model.nodes, selectedPlanNodeIds]);
   const selectedPlanBounds = useMemo(() => repositoryFuturesBounds(selectedPlanNodes.map(nodeCameraTarget)), [selectedPlanNodes]);
-  const initialFramingBounds = useMemo(() => {
-    const preferredIds = new Set([
-      ...selectedPlanNodes.map(node => node.id),
-      ...overlay.candidates.slice(0, 4).map(candidate => candidate.goalId),
-    ]);
-    const preferredNodes = model.nodes.filter(node => node.kind === 'repository' || preferredIds.has(node.id));
-    return repositoryFuturesBounds(preferredNodes.map(nodeCameraTarget)) || meaningfulBounds;
-  }, [meaningfulBounds, model.nodes, overlay.candidates, selectedPlanNodes]);
+  const initialFramingBounds = meaningfulBounds;
   const meaningfulBoundsRef = useRef(meaningfulBounds);
   const initialFramingBoundsRef = useRef(initialFramingBounds);
   const pinnedIdRef = useRef(pinnedId);
@@ -228,6 +221,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
       return;
     }
     if (node.kind === 'goal') overlay.onCandidateFocus(node.id);
+    if ((node.kind === 'capability' || node.kind === 'artifact') && node.parentGoalId) overlay.onCandidateFocus(node.parentGoalId);
     if (node.kind === 'dependency') overlay.onDependencyFocus(node.id);
     overlay.onTracePin?.(node.id);
   };
@@ -324,8 +318,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         data-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-reveal-motion={reducedMotion ? 'static' : 'topology-one-shot'}
         data-product-intelligence-state={overlay.productIntelligenceState}
-        data-field-density="structured-neural"
-        data-layout-strategy="ordered-stream-bands"
+        data-field-density="deep-layered-neural"
+        data-layout-strategy="grounded-direction-capability-implementation-layers"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -435,7 +429,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
             </g>
             <g data-field-layer="node-halos" aria-hidden="true">
               {model.nodes.map(node => {
-                const selected = node.role === 'primary' || node.role === 'supporting';
+                const selected = node.role === 'primary' || node.role === 'supporting' || Boolean(node.selected);
                 const prerequisite = node.kind === 'dependency';
                 return <ellipse
                   key={node.id}
@@ -498,10 +492,11 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
 
           {model.nodes.map(node => {
             const traced = !activeId || trace.nodeIds.has(node.id);
-            const selected = node.role === 'primary' || node.role === 'supporting';
+            const selected = node.role === 'primary' || node.role === 'supporting' || Boolean(node.selected);
             const overviewDependency = node.kind === 'dependency' && (node.dependency?.dependentCount || 0) > 1;
             const showTitle = lod !== 'far'
               || node.kind === 'repository'
+              || node.kind === 'capability'
               || selected
               || activeId === node.id
               || overviewGoalIds.has(node.id)
@@ -528,7 +523,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 onMouseLeave={() => { setHoveredId(undefined); if (!pinnedId) overlay.onTracePreview?.(undefined); }}
                 onFocus={() => { setHoveredId(node.id); overlay.onTracePreview?.(node.id); }}
                 onBlur={() => { setHoveredId(undefined); if (!pinnedId) overlay.onTracePreview?.(undefined); }}
-                className={`future-field-node absolute -translate-x-1/2 -translate-y-1/2 text-left outline-none transition-[opacity,border-color,box-shadow,transform] duration-150 focus-visible:ring-4 focus-visible:ring-ring/70 motion-reduce:transition-none ${reducedMotion ? '' : 'future-canvas-node-reveal'} ${nodeGeometry(node)} ${nodeClass(node, pinnedId === node.id)} ${showTitle ? `${mobile ? 'min-h-[6.25rem] px-2' : `${node.role === 'primary' ? 'min-h-[3.9rem]' : 'min-h-[3.2rem]'} px-3`} py-2` : `${mobile ? 'h-14' : 'h-5'} min-h-0 rounded-full p-0`} ${traced ? '' : 'opacity-[0.44]'}`}
+                className={`future-field-node absolute -translate-x-1/2 -translate-y-1/2 text-left outline-none transition-[opacity,border-color,box-shadow,transform] duration-150 focus-visible:ring-4 focus-visible:ring-ring/70 motion-reduce:transition-none ${reducedMotion ? '' : 'future-canvas-node-reveal'} ${nodeGeometry(node)} ${nodeClass(node, pinnedId === node.id)} ${nodeSizeClass(node, mobile, showTitle)} ${traced ? '' : 'opacity-[0.44]'}`}
                 style={{ left: node.x, top: node.y, width: showTitle ? mobile ? mobileNodeWidth(node) : nodeWidth(node) : mobile ? 56 : 24, animationDelay: reducedMotion ? undefined : `${node.depth * 65}ms` }}
               >
                 {showTitle ? <>
@@ -620,6 +615,14 @@ function NeuralInspector({ inspectorRef, node, overlay, onClose }: { inspectorRe
         </div>
         <button type="button" onClick={overlay.onOpenDomControls} className="mt-3 min-h-10 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Configure path precisely</button>
       </>}
+      {(node.kind === 'capability' || node.kind === 'artifact') && <>
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">A grounded {node.kind === 'capability' ? 'capability step' : 'prospective implementation area'} derived from the parent Future direction. It is proposed, not current.</p>
+        <dl className="mt-4 grid grid-cols-2 divide-x divide-border/45 border-y border-border/40 py-2 text-xs">
+          <InspectorFact label="Layer" value={node.kind === 'capability' ? 'Next capability' : 'Implementation'} />
+          <InspectorFact label="Path" value="Grounded projection" />
+        </dl>
+        <button type="button" onClick={overlay.onOpenDomControls} className="mt-3 min-h-10 text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Review parent Future precisely</button>
+      </>}
       {node.kind === 'repository' && <p className="mt-3 text-sm leading-relaxed text-muted-foreground">The scanned repository is the current truth anchor. Every visible future direction is grounded back to available repository evidence.</p>}
     </aside>
   );
@@ -636,12 +639,16 @@ function InspectorDisclosure({ label, children }: { label: string; children: Rea
 function nodeAriaLabel(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return `Current repository: ${node.title}`;
   if (node.kind === 'dependency') return `${node.role === 'satisfied' ? 'Existing' : 'Required'} dependency: ${node.title}`;
+  if (node.kind === 'capability') return `Next capability step: ${node.title}. Grounded in its parent Future direction.`;
+  if (node.kind === 'artifact') return `Prospective implementation step: ${node.title}. Grounded in its parent Future direction.`;
   return `${nodeRoleLabel(node)} goal: ${node.title}. ${node.candidate?.compatibility || 'Compatibility not yet evaluated'}. Proposed, not current.`;
 }
 
 function nodeRoleLabel(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return 'Current repository';
   if (node.kind === 'dependency') return node.role === 'satisfied' ? 'Existing capability' : 'Required capability';
+  if (node.kind === 'capability') return 'Next capability';
+  if (node.kind === 'artifact') return 'Implementation area';
   return node.role === 'primary' ? 'Primary future'
     : node.role === 'supporting' ? 'Supporting future'
       : node.role === 'saved' ? 'Saved future'
@@ -651,6 +658,8 @@ function nodeRoleLabel(node: RepositoryFuturesCanvasNode) {
 
 function nodeMetadata(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return 'Current scanned truth';
+  if (node.kind === 'capability') return 'Grounded next-order step';
+  if (node.kind === 'artifact') return 'Expected artifact family';
   if (node.candidate) return `${node.candidate.fit} · ${node.candidate.evidenceCount} evidence signals`;
   return `${node.dependency?.dependentCount || 0} dependent ${node.dependency?.dependentCount === 1 ? 'goal' : 'goals'}`;
 }
@@ -658,6 +667,8 @@ function nodeMetadata(node: RepositoryFuturesCanvasNode) {
 function nodeIcon(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return <GitBranch className="h-3.5 w-3.5" aria-hidden="true" />;
   if (node.kind === 'dependency') return node.role === 'satisfied' ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (node.kind === 'capability') return <Boxes className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (node.kind === 'artifact') return <FileOutput className="h-3.5 w-3.5" aria-hidden="true" />;
   if (node.role === 'saved') return <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />;
   if (node.candidate && ['blocked', 'incompatible'].includes(node.candidate.compatibility)) return <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />;
   if (node.candidate?.compatibility === 'compatible-with-review') return <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />;
@@ -667,12 +678,16 @@ function nodeIcon(node: RepositoryFuturesCanvasNode) {
 function nodeWidth(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return nodeWidths.repository;
   if (node.kind === 'dependency') return nodeWidths.dependency;
+  if (node.kind === 'capability') return nodeWidths.capability;
+  if (node.kind === 'artifact') return nodeWidths.artifact;
   return nodeWidths[node.role as keyof typeof nodeWidths] || nodeWidths.candidate;
 }
 
 function mobileNodeWidth(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return 150;
   if (node.kind === 'dependency') return 112;
+  if (node.kind === 'capability') return 86;
+  if (node.kind === 'artifact') return 76;
   if (node.role === 'primary') return 100;
   if (node.role === 'supporting') return 96;
   if (node.role === 'saved' || node.role === 'blocked') return 82;
@@ -684,13 +699,15 @@ function nodeCameraTarget(node: RepositoryFuturesCanvasNode) {
     x: node.x,
     y: node.y,
     width: nodeWidth(node),
-    height: node.kind === 'repository' ? 88 : node.kind === 'dependency' ? 64 : 112,
+    height: node.kind === 'repository' ? 88 : node.kind === 'dependency' ? 64 : node.kind === 'goal' ? 112 : 72,
   };
 }
 
 function nodeGeometry(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return 'rounded-full border';
   if (node.kind === 'dependency') return 'rounded-full border';
+  if (node.kind === 'capability') return 'rounded-full border';
+  if (node.kind === 'artifact') return 'rounded-full border';
   if (node.role === 'primary') return 'rounded-full border-2';
   if (node.role === 'saved' || node.role === 'blocked') return 'rounded-full border';
   return 'rounded-full border';
@@ -701,6 +718,12 @@ function nodeClass(node: RepositoryFuturesCanvasNode, pinned: boolean) {
   if (node.kind === 'dependency') return node.role === 'satisfied'
     ? 'border-success/48 bg-success/[0.065] text-foreground ring-1 ring-inset ring-success/15'
     : 'border-accent/48 bg-accent/[0.065] text-foreground ring-1 ring-inset ring-accent/12';
+  if (node.kind === 'capability') return node.selected
+    ? 'border-primary/55 bg-primary/[0.08] text-foreground ring-1 ring-primary/16 shadow-[0_0_18px_hsl(var(--primary)/0.12)]'
+    : 'border-primary/28 bg-background/[0.42] text-foreground/90 hover:border-primary/48';
+  if (node.kind === 'artifact') return node.selected
+    ? 'border-accent/48 bg-accent/[0.065] text-foreground ring-1 ring-accent/12'
+    : 'border-border/40 bg-background/[0.38] text-muted-foreground hover:border-accent/38 hover:text-foreground';
   if (node.role === 'primary') return 'border-primary/85 bg-primary/[0.11] text-foreground ring-2 ring-primary/18 shadow-[0_0_28px_hsl(var(--primary)/0.2)]';
   if (node.role === 'supporting') return 'border-accent/65 bg-accent/[0.075] text-foreground ring-1 ring-accent/14 shadow-[0_0_18px_hsl(var(--accent)/0.1)]';
   if (node.role === 'saved') return 'border-border/50 bg-background/[0.58] text-muted-foreground ring-1 ring-inset ring-border/25';
@@ -710,6 +733,14 @@ function nodeClass(node: RepositoryFuturesCanvasNode, pinned: boolean) {
   return pinned
     ? 'border-primary/72 bg-primary/[0.09] text-foreground ring-1 ring-primary/18 shadow-[0_0_22px_hsl(var(--primary)/0.13)]'
     : 'border-primary/38 bg-background/[0.52] text-foreground hover:border-primary/66 hover:bg-primary/[0.055]';
+}
+
+function nodeSizeClass(node: RepositoryFuturesCanvasNode, mobile: boolean, showTitle: boolean) {
+  if (!showTitle) return `${mobile ? 'h-12' : 'h-5'} min-h-0 rounded-full p-0`;
+  if (mobile && (node.kind === 'capability' || node.kind === 'artifact')) return 'min-h-[4.5rem] px-2 py-2';
+  if (mobile) return 'min-h-[6.25rem] px-2 py-2';
+  if (node.kind === 'capability' || node.kind === 'artifact') return 'min-h-[2.8rem] px-2.5 py-1.5';
+  return `${node.role === 'primary' ? 'min-h-[3.9rem]' : 'min-h-[3.2rem]'} px-3 py-2`;
 }
 
 function useReducedMotion() {

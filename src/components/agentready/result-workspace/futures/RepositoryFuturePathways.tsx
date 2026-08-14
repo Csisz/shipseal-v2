@@ -232,11 +232,11 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     const capabilityTitles = new Map(DEFAULT_REPOSITORY_FUTURE_DEPENDENCY_DEFINITIONS.map(definition => [definition.id, definition.title]));
     const recommendedProductIds = quickPath.primaryRecommendations.candidates
       .filter(item => goalById.get(item.goalId)?.candidateClass === 'product-opportunity')
-      .slice(0, 5)
+      .slice(0, 8)
       .map(item => item.goalId);
     const recommendedIds = recommendedProductIds.length
       ? recommendedProductIds
-      : quickPath.primaryRecommendations.candidates.slice(0, 5).map(item => item.goalId);
+      : quickPath.primaryRecommendations.candidates.slice(0, 8).map(item => item.goalId);
     const primaryIsProduct = draft ? goalById.get(draft.primaryGoal.goalId)?.candidateClass === 'product-opportunity' : false;
     const compatibleIds = draft ? [...goalById.entries()]
       .filter(([goalId, candidate]) => !selectedGoalIds.has(goalId)
@@ -244,7 +244,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         && ['compatible', 'compatible-with-review'].includes(compatibilityFor(goalId))
         && (!primaryIsProduct || candidate.candidateClass === 'product-opportunity'))
       .sort(([, left], [, right]) => compareRepositoryFutureCandidates(left, right))
-      .slice(0, 5)
+      .slice(0, 8)
       .map(([goalId]) => goalId) : [];
     const constrainedIds = draft ? [...goalById.keys()]
       .filter(goalId => !selectedGoalIds.has(goalId)
@@ -252,10 +252,12 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         && ['blocked', 'incompatible'].includes(compatibilityFor(goalId)))
       .sort()
       .slice(0, 2) : [];
-    const displayIds = draft
+    const displayIds = (draft
       ? [draft.primaryGoal.goalId, ...draft.supportingGoals.map(goal => goal.goalId), ...compatibleIds, ...draft.savedGoalIds, ...constrainedIds]
-      : recommendedIds;
-    return [...new Set(displayIds)].flatMap(goalId => {
+      : recommendedIds);
+    // Keep one stable eight-lane first generation. Selected nodes retain first
+    // priority, while replacements rotate into the remaining visible lanes.
+    return [...new Set(displayIds)].slice(0, 8).flatMap(goalId => {
       const candidate = goalById.get(goalId);
       if (!candidate) return [];
       const replaceableSupportGoalIds = draft && !selectedGoalIds.has(goalId) && draft.supportingGoals.length >= 2
@@ -313,6 +315,28 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   const universeProjection = useMemo(() => draft
     ? buildRepositoryFutureUniverseProjection({ universe, graph, draft })
     : undefined, [draft, graph, universe]);
+  const stageProjections = useMemo(() => stageCandidates.flatMap(candidate => {
+    const capabilityId = `projection:capability:${candidate.goalId}:${candidate.capabilityId}`;
+    const capability = {
+      id: capabilityId,
+      goalId: candidate.goalId,
+      kind: 'capability' as const,
+      title: candidate.capabilityTitle || candidate.title,
+      sourceId: candidate.goalId,
+      order: 0,
+      humanReviewRequired: candidate.humanReviewRequired,
+    };
+    const artifacts = (candidate.artifactLabels || []).map((title, index) => ({
+      id: `projection:artifact:${candidate.goalId}:${stableFutureHash(title)}:${index}`,
+      goalId: candidate.goalId,
+      kind: 'artifact' as const,
+      title,
+      sourceId: capabilityId,
+      order: index,
+      humanReviewRequired: candidate.humanReviewRequired,
+    }));
+    return [capability, ...artifacts];
+  }), [stageCandidates]);
 
   const overlay = useMemo<RepositoryFutureStageOverlay>(() => ({
     active: true,
@@ -322,6 +346,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     draftFingerprint: draft?.fingerprint,
     universeProjection,
     candidates: stageCandidates,
+    projections: stageProjections,
     dependencies: (draft?.dependencies || []).map(dependency => ({
       id: dependency.id,
       title: dependency.title,
@@ -359,9 +384,12 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     onTracePreview: setTracePreviewId,
     onTracePin: id => {
       setTracePinnedId(id);
+      const projection = stageProjections.find(item => item.id === id);
       setFocus(stageCandidates.some(candidate => candidate.goalId === id)
         ? { kind: 'goal', id }
-        : { kind: 'dependency', id });
+        : projection
+          ? { kind: 'goal', id: projection.goalId }
+          : { kind: 'dependency', id });
     },
     onTraceClear: () => {
       setTracePreviewId(undefined);
@@ -372,7 +400,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       if (composerRef.current) composerRef.current.open = true;
       composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
-  }), [addSupport, choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, notice, productIntelligenceState, removeSupport, replaceSupportDirect, restoreOption, saveForLater, stageCandidates, tracePinnedId, tracePreviewId, universeProjection]);
+  }), [addSupport, choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, notice, productIntelligenceState, removeSupport, replaceSupportDirect, restoreOption, saveForLater, stageCandidates, stageProjections, tracePinnedId, tracePreviewId, universeProjection]);
 
   useEffect(() => {
     if (focus?.kind !== 'dependency' || !draft || draft.dependencies.some(dependency => dependency.id === focus.id)) return;

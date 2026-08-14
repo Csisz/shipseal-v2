@@ -1,8 +1,8 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IntelligenceReveal } from '@/components/agentready/IntelligenceReveal';
 import { buildReport, buildSampleReport } from '@/lib/readiness';
-import { buildIntelligenceRevealModel, INTELLIGENCE_REVEAL_TOTAL_MS } from '@/lib/workspace/intelligenceReveal';
+import { buildIntelligenceRevealModel } from '@/lib/workspace/intelligenceReveal';
 
 describe('Intelligence Reveal', () => {
   afterEach(() => {
@@ -60,39 +60,35 @@ describe('Intelligence Reveal', () => {
   });
 
 
-  it('reveals evidence before entering the workspace', () => {
+  it('gates the workspace behind one minimal formation surface until Futures are actually ready', () => {
     vi.useFakeTimers();
     const onComplete = vi.fn();
 
     try {
-      render(<IntelligenceReveal report={buildSampleReport()} onComplete={onComplete} />);
+      const report = buildSampleReport();
+      const { rerender } = render(<IntelligenceReveal report={report} futuresReady={false} statusMessage="Grounding future directions." onComplete={onComplete} />);
 
-      expect(screen.getByRole('heading', { name: /Understanding repository structure/i })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Forming future pathways/i })).toBeInTheDocument();
       expect(screen.getByText('sample-nextjs-app')).toBeInTheDocument();
-      expect(screen.getByText(/ZIP upload - Next\.js/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Skip to workspace/i })).toBeInTheDocument();
+      expect(screen.getByText('Grounding future directions.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Skip to workspace/i })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('repository-futures-neural-canvas')).not.toBeInTheDocument();
 
       act(() => {
-        vi.advanceTimersByTime(500);
+        vi.advanceTimersByTime(10_000);
       });
-      expect(screen.getByRole('heading', { name: /Reading repository evidence/i })).toBeInTheDocument();
-      expect(screen.getByText('Documentation')).toBeInTheDocument();
-      expect(screen.getAllByText('Evidence').length).toBeGreaterThan(0);
+      expect(onComplete).not.toHaveBeenCalled();
+
+      rerender(<IntelligenceReveal report={report} futuresReady onComplete={onComplete} />);
+      expect(screen.getByRole('heading', { name: /repository intelligence is ready/i })).toBeInTheDocument();
 
       act(() => {
-        vi.advanceTimersByTime(1000);
+        vi.advanceTimersByTime(719);
       });
-      expect(screen.getByRole('heading', { name: /Connecting repository signals/i })).toBeInTheDocument();
-      expect(screen.getByText(/Documentation becomes the entry point/i)).toBeInTheDocument();
+      expect(onComplete).not.toHaveBeenCalled();
 
       act(() => {
-        vi.advanceTimersByTime(1200);
-      });
-      expect(screen.getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
-      expect(screen.getByText(/Your AI Workspace is ready/i)).toBeInTheDocument();
-
-      act(() => {
-        vi.advanceTimersByTime(INTELLIGENCE_REVEAL_TOTAL_MS);
+        vi.advanceTimersByTime(1);
       });
       expect(onComplete).toHaveBeenCalledTimes(1);
     } finally {
@@ -100,27 +96,7 @@ describe('Intelligence Reveal', () => {
     }
   });
 
-  it('skips to the workspace and cleans up pending timers', () => {
-    vi.useFakeTimers();
-    const onComplete = vi.fn();
-
-    try {
-      render(<IntelligenceReveal report={buildSampleReport()} onComplete={onComplete} />);
-      fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
-
-      expect(onComplete).toHaveBeenCalledTimes(1);
-
-      act(() => {
-        vi.advanceTimersByTime(INTELLIGENCE_REVEAL_TOTAL_MS + 1000);
-      });
-
-      expect(onComplete).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it('respects reduced motion with a short meaning-first reveal', () => {
+  it('respects reduced motion by completing the ready transition immediately', () => {
     vi.useFakeTimers();
     vi.stubGlobal('matchMedia', vi.fn().mockImplementation((query: string) => ({
       matches: query.includes('prefers-reduced-motion'),
@@ -131,12 +107,11 @@ describe('Intelligence Reveal', () => {
     const onComplete = vi.fn();
 
     try {
-      render(<IntelligenceReveal report={buildSampleReport()} onComplete={onComplete} />);
-
-      expect(screen.getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
+      render(<IntelligenceReveal report={buildSampleReport()} futuresReady onComplete={onComplete} />);
+      expect(screen.getByTestId('repository-formation')).toHaveAttribute('data-formation-stage', 'ready');
 
       act(() => {
-        vi.advanceTimersByTime(700);
+        vi.advanceTimersByTime(0);
       });
 
       expect(onComplete).toHaveBeenCalledTimes(1);

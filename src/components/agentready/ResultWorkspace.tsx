@@ -28,6 +28,7 @@ import {
   selectLimitedScanReason,
 } from './result-workspace/model/resultWorkspaceSelectors';
 import { AiWorkspaceHero } from './result-workspace/universe/UniverseWorkspace';
+import { RepositoryFormation } from './RepositoryFormation';
 import { PanelsTopLeft } from 'lucide-react';
 const RepositoryFuturesWorkspace = lazy(() => import('./result-workspace/futures/RepositoryFuturesWorkspace'));
 const ImproveChapter = lazy(() => import('./result-dashboard/chapters/ImproveChapter'));
@@ -225,6 +226,22 @@ export function ResultWorkspace({
     packagePrepared: packagePrepared || prCreated,
     verificationResult,
   });
+  const futuresPending = Boolean(prepareRepositoryProductIntelligence)
+    && !repositoryProductIntelligence?.opportunities.length
+    && (!repositoryProductIntelligenceStatus || ['deterministic', 'preparing'].includes(repositoryProductIntelligenceStatus.state));
+
+  if (!effectiveEntryView && futuresPending) {
+    return (
+      <RepositoryFormation
+        repositoryName={report.repoName}
+        sourceLabel="Repository scan"
+        stage="projecting"
+        title="Forming future pathways"
+        action={repositoryProductIntelligenceStatus?.message || 'Connecting repository evidence to grounded future directions.'}
+        fullScreen
+      />
+    );
+  }
 
   if (!effectiveEntryView) {
     return (

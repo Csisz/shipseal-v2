@@ -78,6 +78,12 @@ vi.mock('@/hooks/useRepoScan', async () => {
         activeScanSourceLabel: 'Test source',
         discoveredFileCount: 0,
         analyzedFileCount: 0,
+        repositoryProductIntelligence: null,
+        repositoryProductIntelligenceStatus: {
+          state: state.status === 'completed' ? 'fallback' : 'deterministic',
+          message: state.status === 'completed' ? 'Grounded fallback ready.' : 'Product intelligence has not started.',
+        },
+        prepareRepositoryProductIntelligence: vi.fn(async () => null),
         startScan: (file: File) => { scanMocks.startScan(file); return begin(); },
         startGitHubScan: (url: string, branch?: string) => { scanMocks.startGitHubScan(url, branch); return begin(); },
         startGitHubAppScan: (source: unknown) => { scanMocks.startGitHubAppScan(source); return begin(); },
@@ -151,7 +157,7 @@ describe('ShipSeal direct scan entry', () => {
 
     expect(scanMocks.startScan).toHaveBeenCalledTimes(1);
     expect(scanMocks.startScan.mock.calls[0][0]).toHaveProperty('name', 'real-repo.zip');
-    expect(screen.getByText(/The workspace is forming/i)).toBeInTheDocument();
+    expect(screen.getByText(/Forming repository intelligence/i)).toBeInTheDocument();
     expect(screen.queryByText('Ready to scan')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Understand this repository/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Scan project$/i })).not.toBeInTheDocument();
@@ -165,7 +171,7 @@ describe('ShipSeal direct scan entry', () => {
 
     expect(scanMocks.startGitHubScan).toHaveBeenCalledTimes(1);
     expect(scanMocks.startGitHubScan).toHaveBeenCalledWith('https://github.com/Csisz/public-repo', 'develop');
-    expect(screen.getByText(/The workspace is forming/i)).toBeInTheDocument();
+    expect(screen.getByText(/Forming repository intelligence/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Scan project$/i })).not.toBeInTheDocument();
   });
 
@@ -186,8 +192,8 @@ describe('ShipSeal direct scan entry', () => {
 
     expect(scanMocks.startGitHubAppScan).toHaveBeenCalledTimes(1);
     expect(scanMocks.startGitHubAppScan).toHaveBeenCalledWith({ installationId: '12345', owner: 'Csisz', repo: 'shipseal', ref: 'main' });
-    expect(await screen.findByRole('heading', { name: /Understanding repository structure/i })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Skip to workspace/i }));
+    expect(await screen.findByRole('heading', { name: /Your repository intelligence is ready/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Skip to workspace/i })).not.toBeInTheDocument();
     expect(await screen.findByText('Project: shipseal')).toBeInTheDocument();
     expect(screen.getByText('Intake skipped: true')).toBeInTheDocument();
     expect(screen.getByText('Packages: []')).toBeInTheDocument();
@@ -207,7 +213,7 @@ describe('ShipSeal direct scan entry', () => {
     fireEvent.click(screen.getByRole('button', { name: /Retry scan/i }));
 
     expect(scanMocks.startScan).toHaveBeenCalledTimes(2);
-    expect(screen.getByText(/The workspace is forming/i)).toBeInTheDocument();
+    expect(screen.getByText(/Forming repository intelligence/i)).toBeInTheDocument();
   });
 
   it('keeps the sample project flow scan-free', () => {
@@ -215,7 +221,7 @@ describe('ShipSeal direct scan entry', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Try sample project/i }));
 
-    expect(screen.getByRole('heading', { name: /Understanding repository structure/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Your repository intelligence is ready/i })).toBeInTheDocument();
     expect(scanMocks.startScan).not.toHaveBeenCalled();
     expect(scanMocks.startGitHubScan).not.toHaveBeenCalled();
     expect(scanMocks.startGitHubAppScan).not.toHaveBeenCalled();

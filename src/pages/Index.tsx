@@ -148,6 +148,17 @@ const Index = () => {
     intelligenceReveal?.key === activeReportKey &&
     intelligenceReveal.visible
   );
+  const prepareRepositoryProductIntelligence = scan.prepareRepositoryProductIntelligence;
+  const productIntelligencePreparationState = scan.repositoryProductIntelligenceStatus?.state;
+  const futuresReady = Boolean(sampleReport)
+    || Boolean(scan.repositoryProductIntelligence?.opportunities.length)
+    || Boolean(productIntelligencePreparationState && ['enhanced', 'fallback', 'cancelled'].includes(productIntelligencePreparationState));
+
+  useEffect(() => {
+    if (!showIntelligenceReveal || sampleReport || futuresReady) return;
+    if (productIntelligencePreparationState !== 'deterministic' || !prepareRepositoryProductIntelligence) return;
+    void prepareRepositoryProductIntelligence().catch(() => undefined);
+  }, [futuresReady, prepareRepositoryProductIntelligence, productIntelligencePreparationState, sampleReport, showIntelligenceReveal]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -507,7 +518,13 @@ const Index = () => {
       {!showIntelligenceReveal && verificationContextMessage && <div role="status" className="container relative z-10 pt-20 md:pt-24"><div className="rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">{verificationContextMessage}</div></div>}
 
       {showIntelligenceReveal && activeReport ? (
-        <IntelligenceReveal key={activeReportKey || activeReport.scannedAt} report={activeReport} onComplete={completeIntelligenceReveal} />
+        <IntelligenceReveal
+          key={activeReportKey || activeReport.scannedAt}
+          report={activeReport}
+          futuresReady={futuresReady}
+          statusMessage={scan.repositoryProductIntelligenceStatus?.message}
+          onComplete={completeIntelligenceReveal}
+        />
       ) : activeReport ? (
         <main className="pt-16 md:pt-20">
           <Suspense fallback={<div className="container py-24 text-sm text-muted-foreground">Loading report...</div>}>

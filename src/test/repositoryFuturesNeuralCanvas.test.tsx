@@ -113,8 +113,8 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const selectedEdge = container.querySelector('[data-edge-layer="semantic"][data-selected-route="true"]');
     const broaderEdge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:alternative"]');
 
-    expect(stage).toHaveAttribute('data-field-density', 'structured-neural');
-    expect(stage).toHaveAttribute('data-layout-strategy', 'ordered-stream-bands');
+    expect(stage).toHaveAttribute('data-field-density', 'deep-layered-neural');
+    expect(stage).toHaveAttribute('data-layout-strategy', 'grounded-direction-capability-implementation-layers');
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
     expect(container.querySelector('[data-field-layer="structured-rows"]')).toBeInTheDocument();
     expect(container.querySelector('[data-field-layer="prerequisite-rail"]')).toBeInTheDocument();
@@ -188,7 +188,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(cameraState()).toEqual(before);
   });
 
-  it('minimally reveals an offscreen selected Future while preserving zoom', () => {
+  it('keeps a Future stable when the complete initial frame already makes it visible', () => {
     render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Back to current repository' }));
     const before = cameraState();
@@ -196,8 +196,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const after = cameraState();
 
-    expect(after.x).not.toBe(before.x);
-    expect(after.zoom).toBe(before.zoom);
+    expect(after).toEqual(before);
   });
 
   it('keeps the assisted camera position when the inspector closes', () => {
@@ -332,15 +331,15 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
 
     expect(stage).toHaveAttribute('data-camera-lod', 'far');
     expect(support).toHaveAttribute('data-label-detail', 'title');
-    expect(minorNode).toHaveAttribute('data-label-detail', 'anchor');
+    expect(minorNode).toHaveAttribute('data-label-detail', 'title');
     fireEvent.click(minorNode);
     expect(minorNode).toHaveAttribute('data-label-detail', 'title');
   });
 
-  it('keeps the current grounded topology visible under a tiny integrated analysis state', () => {
+  it('gates all Future topology while integrated analysis is still forming', () => {
     render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({ productIntelligenceState: 'analysing' })} />);
     expect(screen.getByRole('button', { name: 'Current repository: shipseal' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /future goal/i })).toHaveLength(2);
+    expect(screen.queryAllByRole('button', { name: /future goal/i })).toHaveLength(0);
     expect(screen.getByRole('status')).toHaveTextContent('Future paths are forming');
     expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-product-intelligence-state', 'analysing');
   });
@@ -354,7 +353,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'vertical'));
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveClass('min-h-[6.25rem]');
-    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '860px', height: '1480px' });
+    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '960px', height: '1960px' });
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
     expect(inspector).toHaveClass('inset-x-3');
