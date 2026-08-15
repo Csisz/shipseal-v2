@@ -23,6 +23,7 @@ export type RepositoryDeepIntelligenceProviderErrorCode =
   | 'request_preflight_rejected'
   | 'provider_http_rejected'
   | 'provider_envelope_invalid'
+  | 'language_validation_failed'
   | 'invalid_response'
   | 'response_too_large'
   | 'unknown_provider_error';

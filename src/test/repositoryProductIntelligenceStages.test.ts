@@ -64,6 +64,42 @@ describe('staged Product Intelligence', () => {
     }, stage, 'en')).toThrow(/generated-language contract/i);
   });
 
+  it('retries a temporary root-stage failure once without rebuilding repository understanding', async () => {
+    let rootCalls = 0;
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      const stage = body.productStage;
+      if (stage.kind === 'roots') {
+        rootCalls += 1;
+        if (rootCalls === 1) return json({
+          version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'fallback', category: 'provider_unavailable', retryable: true,
+          message: 'Temporary provider failure', deepState: 'failed', diagnostics: { costEstimate: 'unavailable', operationalFailureCategory: 'provider_unavailable' },
+        });
+        return json({
+          version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'enhanced', result: rootResult,
+          providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable' },
+        });
+      }
+      return json({
+        version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+        state: 'stage-enhanced', providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable' },
+        stageResult: {
+          pipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION, stage: 'expansion', fingerprint: stage.fingerprint,
+          batchIndex: stage.batchIndex, totalBatches: stage.totalBatches,
+          expansions: stage.parents!.map(parent => ({ parentId: parent.id, evolutions: [
+            { sourceId: `${parent.id}-one`, generation: 2, title: 'Adaptive experience', description: 'Grounded evolution.', userValue: 'Better outcomes.' },
+            { sourceId: `${parent.id}-two`, generation: 2, title: 'Guided experience', description: 'Grounded evolution.', userValue: 'Clearer decisions.' },
+          ] })),
+        },
+      });
+    }));
+
+    const result = await requestRepositoryProductIntelligenceStaged(request);
+    expect(result.state).toBe('enhanced');
+    expect(rootCalls).toBe(2);
+    if (result.state === 'enhanced') expect(result.diagnostics.stageRetryCount).toBe(1);
+  });
+
   it('preserves completed batches and retries only the failed batch', async () => {
     let failBatchOne = true;
     const calls: string[] = [];
@@ -96,12 +132,12 @@ describe('staged Product Intelligence', () => {
 
     const first = await requestRepositoryProductIntelligenceStaged(request);
     expect(first).toMatchObject({ state: 'fallback', category: 'request_timeout' });
-    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-2']);
+    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-2']);
 
     failBatchOne = false;
     const second = await requestRepositoryProductIntelligenceStaged(request);
     expect(second.state).toBe('enhanced');
-    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-2', 'batch-1']);
+    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-2', 'batch-1']);
     if (second.state === 'enhanced') {
       expect(second.result.productIntelligence?.opportunities.every(item => item.futureEvolutions.length === 3)).toBe(true);
       expect(second.diagnostics).toMatchObject({ expansionBatchCount: 3, acceptedSecondGenerationCount: 14, acceptedThirdGenerationCount: 7 });

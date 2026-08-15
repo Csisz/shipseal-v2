@@ -11,12 +11,14 @@ import type { RepositoryProductFutureEvolution, RepositoryProductIntelligenceRes
 export const REPOSITORY_PRODUCT_EXPANSION_BATCH_SIZE = 3;
 export const REPOSITORY_PRODUCT_EXPANSION_CONCURRENCY = 2;
 export const REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS = 42_000;
+export const REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS = 2;
 
 export interface RepositoryProductPipelineProgress {
   stage: 'roots' | 'expansion' | 'merging';
   completedBatches: number;
   totalBatches: number;
   activeBatchIndexes: number[];
+  stageAttempt?: number;
 }
 
 export function buildRepositoryProductRootStage(request: RepositoryDeepIntelligenceRequest): RepositoryProductProviderStage {

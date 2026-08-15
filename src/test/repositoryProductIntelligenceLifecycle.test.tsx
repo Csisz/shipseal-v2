@@ -129,7 +129,7 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     const second = renderHook(() => useRepoScan());
     await act(async () => { await second.result.current.startScan(new File(['zip'], 'timeout.zip')); });
     await waitFor(() => expect(second.result.current.repositoryProductIntelligenceStatus).toMatchObject({ state: 'fallback', category: 'request_timeout' }));
-    expect(second.result.current.repositoryProductIntelligenceStatus.message).toBe('Future analysis is taking longer than expected.');
+    expect(second.result.current.repositoryProductIntelligenceStatus.message).toBe('Future analysis took longer than expected.');
   });
 
   it('terminates cancellation and issues a new provider request on retry', async () => {

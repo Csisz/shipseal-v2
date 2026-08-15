@@ -58,6 +58,7 @@ interface Props {
   repositoryProductIntelligenceStatus?: RepositoryIntelligenceProviderStatus;
   repositoryProductIntelligence?: RepositoryProductIntelligenceResult | null;
   prepareRepositoryIntelligenceEnhancement?: () => Promise<void>;
+  retryRepositoryProductIntelligence?: () => Promise<void>;
   agentOperatingMode?: AgentOperatingModeId;
   githubConnection?: GitHubConnectionState;
   verificationBaseline?: RepositoryVerificationBaseline | null;
@@ -92,6 +93,7 @@ export function ResultWorkspace({
   repositoryProductIntelligenceStatus,
   repositoryProductIntelligence,
   prepareRepositoryIntelligenceEnhancement,
+  retryRepositoryProductIntelligence,
   agentOperatingMode,
   githubConnection,
   verificationBaseline,
@@ -120,6 +122,7 @@ export function ResultWorkspace({
   const [packagePrepared, setPackagePrepared] = useState(false);
   const [prCreated, setPrCreated] = useState(false);
   const [workspaceReportIdentity, setWorkspaceReportIdentity] = useState(reportIdentity);
+  const [futureDegradedAccess, setFutureDegradedAccess] = useState(false);
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
@@ -146,6 +149,7 @@ export function ResultWorkspace({
     setPlanReviewed(false);
     setPackagePrepared(false);
     setPrCreated(false);
+    setFutureDegradedAccess(false);
   }, [initialIntake, intakeSkipped, reportIdentity, workspaceReportIdentity]);
 
   useEffect(() => {
@@ -215,8 +219,20 @@ export function ResultWorkspace({
     packagePrepared: packagePrepared || prCreated,
     verificationResult,
   });
-  const selectorReady = !repositoryProductIntelligenceStatus
+  const futuresReady = !repositoryProductIntelligenceStatus
     || repositoryProductIntelligenceStatus.state === 'enhanced' && Boolean(repositoryProductIntelligence?.opportunities.length);
+  const futureTerminalFailure = Boolean(repositoryProductIntelligenceStatus
+    && ['fallback', 'cancelled'].includes(repositoryProductIntelligenceStatus.state));
+
+  useEffect(() => {
+    if (futureTerminalFailure) setFutureDegradedAccess(true);
+  }, [futureTerminalFailure]);
+
+  useEffect(() => {
+    if (effectiveEntryView === 'futures' && !futuresReady) setEntryView(null);
+  }, [effectiveEntryView, futuresReady]);
+
+  const selectorReady = futuresReady || futureDegradedAccess || futureTerminalFailure;
 
   if (!effectiveEntryView && !selectorReady) {
     const terminalFailure = ['fallback', 'cancelled'].includes(repositoryProductIntelligenceStatus.state);
@@ -238,6 +254,9 @@ export function ResultWorkspace({
       <PostScanViewSelector
         report={report}
         opportunityCount={repositoryProductIntelligence?.opportunities.length || 0}
+        futuresAvailable={futuresReady}
+        futuresStatus={repositoryProductIntelligenceStatus}
+        onRetryFutures={retryRepositoryProductIntelligence ? () => { void retryRepositoryProductIntelligence(); } : undefined}
         onSelect={handleEntryViewSelect}
       />
     );

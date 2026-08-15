@@ -19,7 +19,7 @@ import { getGitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
 import type { RepositoryVerificationBaseline, WorkspaceStoryChapterId } from '@/lib/workspace';
-import { validateRepositoryIntelligenceVerificationBaseline, type RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
+import { validateRepositoryIntelligenceVerificationBaseline, type RepositoryIntelligenceProviderStatus, type RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
 import { getScan } from '@/lib/persistence';
 import { useOptionalAccount } from '@/components/account/accountContext';
 import {
@@ -45,6 +45,9 @@ const PostScanChaptersQa = import.meta.env.DEV
   : null;
 const RepositoryFuturesLayoutQa = import.meta.env.DEV
   ? lazy(() => import('@/dev/RepositoryFuturesLayoutQa'))
+  : null;
+const RepositoryFutureRecoveryQa = import.meta.env.DEV
+  ? lazy(() => import('@/dev/RepositoryFutureRecoveryQa'))
   : null;
 const GITHUB_INSTALLATION_STORAGE_KEY = 'shipseal.githubInstallationId';
 
@@ -222,6 +225,22 @@ const Index = () => {
     futurePreparationState: activeFuturePreparationState,
   });
   const futuresReady = formationPhase === 'ready';
+  const futureProviderTerminal = !sampleReport && ['fallback', 'cancelled'].includes(productIntelligencePreparationState || '');
+  const futureOnlyTerminalFailure = Boolean(
+    activeReport
+    && (sampleReport || scan.repositoryIntelligenceReview)
+    && (futureProviderTerminal || activeFuturePreparationState === 'failed')
+  );
+  const workspaceFuturesStatus: RepositoryIntelligenceProviderStatus = activeFuturePreparationState === 'failed'
+    ? {
+        state: 'fallback',
+        deepState: 'rejected',
+        category: 'schema_validation_failed',
+        retryable: true,
+        message: 'Some future pathways could not be completed.',
+        diagnostics: { costEstimate: 'unavailable', operationalFailureCategory: 'merge_incomplete', failureBoundary: 'staged-merge' },
+      }
+    : scan.repositoryProductIntelligenceStatus;
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -381,11 +400,11 @@ const Index = () => {
   }, []);
 
   useEffect(() => {
-    if (!showIntelligenceReveal || formationPhase !== 'ready') return undefined;
+    if (!showIntelligenceReveal || formationPhase !== 'ready' && !futureOnlyTerminalFailure) return undefined;
     const reducedMotion = Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
-    const timer = window.setTimeout(completeIntelligenceReveal, reducedMotion ? 0 : 720);
+    const timer = window.setTimeout(completeIntelligenceReveal, reducedMotion || futureOnlyTerminalFailure ? 0 : 720);
     return () => window.clearTimeout(timer);
-  }, [completeIntelligenceReveal, formationPhase, showIntelligenceReveal]);
+  }, [completeIntelligenceReveal, formationPhase, futureOnlyTerminalFailure, showIntelligenceReveal]);
 
   const replayIntelligenceReveal = useCallback(() => {
     if (!activeReportKey) return;
@@ -623,6 +642,9 @@ const Index = () => {
   if (RepositoryFuturesLayoutQa && new URLSearchParams(window.location.search).get('omega18Qa') === 'futures-layout') {
     return <Suspense fallback={<div className="min-h-screen bg-background p-8 text-muted-foreground">Loading Futures layout fixture...</div>}><RepositoryFuturesLayoutQa /></Suspense>;
   }
+  if (RepositoryFutureRecoveryQa && new URLSearchParams(window.location.search).get('omega18Qa') === 'futures-recovery') {
+    return <Suspense fallback={<div className="min-h-screen bg-background p-8 text-muted-foreground">Loading Future recovery fixture...</div>}><RepositoryFutureRecoveryQa /></Suspense>;
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -655,7 +677,8 @@ const Index = () => {
               repositoryIntelligenceProviderStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus}
               repositoryProductIntelligence={sampleReport ? null : scan.repositoryProductIntelligence}
               prepareRepositoryIntelligenceEnhancement={sampleReport ? undefined : scan.prepareRepositoryIntelligenceEnhancement}
-              repositoryProductIntelligenceStatus={scan.repositoryProductIntelligenceStatus}
+              repositoryProductIntelligenceStatus={sampleReport ? undefined : workspaceFuturesStatus}
+              retryRepositoryProductIntelligence={sampleReport ? undefined : scan.retryRepositoryProductIntelligence}
               history={history}
               onReset={reset}
               onClearHistory={handleClearHistory}

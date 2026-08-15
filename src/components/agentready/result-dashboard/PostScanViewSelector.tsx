@@ -1,20 +1,31 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowUpRight, GitFork, Orbit, Sparkles } from 'lucide-react';
 import type { ReadinessReport } from '@/lib/types';
+import type { RepositoryIntelligenceProviderStatus } from '@/lib/repositoryIntelligence';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 export type PostScanEntryView = 'universe' | 'futures';
 
 export function PostScanViewSelector({
   report,
   opportunityCount = 0,
+  futuresAvailable = true,
+  futuresStatus,
+  onRetryFutures,
   onSelect,
 }: {
   report: ReadinessReport;
   opportunityCount?: number;
+  futuresAvailable?: boolean;
+  futuresStatus?: RepositoryIntelligenceProviderStatus;
+  onRetryFutures?: () => void;
   onSelect: (view: PostScanEntryView) => void;
 }) {
   const rootRef = useRef<HTMLElement>(null);
   const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;
+  const futuresRetrying = futuresStatus?.state === 'preparing';
+  const supportReference = futuresStatus && 'diagnostics' in futuresStatus ? futuresStatus.diagnostics?.requestId : undefined;
 
   useEffect(() => {
     rootRef.current?.focus({ preventScroll: true });
@@ -48,6 +59,30 @@ export function PostScanViewSelector({
           </h1>
         </header>
 
+        {!futuresAvailable && (
+          <aside className="mx-auto mb-5 flex w-full max-w-3xl flex-col items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-4 text-left sm:flex-row sm:items-center sm:justify-between" role="status" data-testid="futures-degraded-status">
+            <div>
+              <div className="text-sm font-medium text-foreground">Project Universe is ready</div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {futuresRetrying
+                  ? `${futuresStatus?.message || 'Future analysis is retrying in the background.'} You can explore the repository now.`
+                  : futuresStatus?.message || 'Future pathways can be retried without scanning the repository again.'}
+              </p>
+              {supportReference && (
+                <details className="mt-2 text-xs text-muted-foreground">
+                  <summary className="cursor-pointer">Support details</summary>
+                  <div className="mt-1 font-mono">Reference: {supportReference}</div>
+                </details>
+              )}
+            </div>
+            {onRetryFutures && (
+              <Button type="button" size="sm" variant="outline" onClick={onRetryFutures} disabled={futuresRetrying} className="shrink-0">
+                {futuresRetrying ? 'Retrying Future analysis…' : 'Retry Future analysis'}
+              </Button>
+            )}
+          </aside>
+        )}
+
         <div className="grid flex-1 gap-3 lg:min-h-0 lg:grid-cols-2 lg:gap-0">
           <ViewChoice
             view="universe"
@@ -66,12 +101,15 @@ export function PostScanViewSelector({
             index="02"
             overline="Projected state"
             title="Repository Futures"
-            description="Explore product directions, future pathways and what this project could become."
-            action="Open Repository Futures"
-            metadata={[opportunityCount ? `${opportunityCount.toLocaleString()} product directions` : 'Evidence-led directions', 'Neural future pathways']}
+            description={futuresAvailable ? 'Explore product directions, future pathways and what this project could become.' : 'Validated Product Futures are unavailable until Future analysis completes successfully.'}
+            action={futuresAvailable ? 'Open Repository Futures' : futuresRetrying ? 'Future analysis in progress' : 'Repository Futures unavailable'}
+            metadata={futuresAvailable
+              ? [opportunityCount ? `${opportunityCount.toLocaleString()} product directions` : 'Evidence-led directions', 'Neural future pathways']
+              : ['No incomplete Futures shown', futuresRetrying ? 'Analysis retrying' : 'Retry available']}
             motif={<FuturesMotif />}
             onSelect={onSelect}
             onKeyDown={activateFromKeyboard}
+            disabled={!futuresAvailable}
           />
         </div>
       </div>
@@ -90,6 +128,7 @@ function ViewChoice({
   motif,
   onSelect,
   onKeyDown,
+  disabled = false,
 }: {
   view: PostScanEntryView;
   index: string;
@@ -97,18 +136,23 @@ function ViewChoice({
   title: string;
   description: string;
   action: string;
-  metadata: [string, string];
+  metadata: readonly string[];
   motif: ReactNode;
   onSelect: (view: PostScanEntryView) => void;
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>, view: PostScanEntryView) => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       aria-label={action}
+      disabled={disabled}
       onClick={() => onSelect(view)}
       onKeyDown={event => onKeyDown(event, view)}
-      className="group relative flex min-h-[24rem] flex-col overflow-hidden rounded-[1.75rem] border border-primary/15 bg-[linear-gradient(145deg,hsl(var(--universe-surface)/0.72),hsl(var(--universe-stage-bg)/0.36))] p-6 text-left shadow-[0_24px_80px_hsl(var(--universe-stage-bg)/0.28)] transition-[border-color,background-color,box-shadow,transform] duration-200 hover:z-10 hover:border-primary/40 hover:shadow-[0_30px_100px_hsl(var(--primary)/0.12)] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none sm:p-8 lg:min-h-0 lg:rounded-none lg:border-y lg:first:rounded-l-[2rem] lg:last:rounded-r-[2rem] lg:last:border-l-0 lg:hover:-translate-y-1"
+      className={cn(
+        'group relative flex min-h-[24rem] flex-col overflow-hidden rounded-[1.75rem] border border-primary/15 bg-[linear-gradient(145deg,hsl(var(--universe-surface)/0.72),hsl(var(--universe-stage-bg)/0.36))] p-6 text-left shadow-[0_24px_80px_hsl(var(--universe-stage-bg)/0.28)] transition-[border-color,background-color,box-shadow,transform] duration-200 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none sm:p-8 lg:min-h-0 lg:rounded-none lg:border-y lg:first:rounded-l-[2rem] lg:last:rounded-r-[2rem] lg:last:border-l-0',
+        disabled ? 'cursor-not-allowed opacity-55' : 'hover:z-10 hover:border-primary/40 hover:shadow-[0_30px_100px_hsl(var(--primary)/0.12)] lg:hover:-translate-y-1',
+      )}
     >
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_46%,hsl(var(--primary)/0.09),transparent_36%)] opacity-60 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none" />
       <div className="relative flex items-center justify-between gap-4 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">

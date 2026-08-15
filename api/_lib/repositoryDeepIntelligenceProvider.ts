@@ -25,6 +25,8 @@ import type {
   RepositoryProviderJsonParsingStage,
   RepositoryIntelligenceValidationCategory,
   RepositoryIntelligenceValidationReason,
+  RepositoryIntelligenceOperationalFailureCategory,
+  RepositoryIntelligenceFailureBoundary,
   RepositoryProductProviderStage,
 } from '../../src/lib/repositoryIntelligence/productionProviderContract.js';
 import {
@@ -118,6 +120,20 @@ export type ProductionProviderLogEvent = {
   providerTotalTokens?: number;
   providerModelId?: string;
   providerJsonParsingStage?: RepositoryProviderJsonParsingStage;
+  requestFingerprint?: string;
+  productStage?: 'roots' | 'expansion';
+  stageFingerprint?: string;
+  expansionBatchIndex?: number;
+  expansionBatchCount?: number;
+  parentFutureIds?: string[];
+  parentFutureCount?: number;
+  providerHttpStatusCategory?: string;
+  operationalFailureCategory?: RepositoryIntelligenceOperationalFailureCategory;
+  failureBoundary?: RepositoryIntelligenceFailureBoundary;
+  acceptedRootCount?: number;
+  rejectedRootCount?: number;
+  acceptedSecondGenerationCount?: number;
+  acceptedThirdGenerationCount?: number;
 };
 
 export type ProductionProviderLogger = (event: ProductionProviderLogEvent) => void;
@@ -349,11 +365,12 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
     now?: () => number;
     random?: () => number;
     productStage?: RepositoryProductProviderStage;
+    requestId?: string;
   }) {}
 
   async analyze(request: RepositoryDeepIntelligenceRequest, runOptions?: RepositoryDeepIntelligenceRunOptions): Promise<unknown> {
     const { config } = this.options;
-    const requestId = `ri-${request.fingerprint.slice(0, 16)}`;
+    const requestId = this.options.requestId || `ri-${request.fingerprint.slice(0, 16)}`;
     const startedAt = (this.options.now || Date.now)();
     const validation = validateProductionProviderRequest(request, config.policy);
     if ('message' in validation) {
@@ -378,6 +395,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
     const fetcher = this.options.fetcher || fetch;
     let retryCount = 0;
     let languageRepairAttempted = false;
+    let lastProviderHttpStatusCategory: string | undefined;
     for (;;) {
       if (runOptions?.signal?.aborted) throw new RepositoryDeepIntelligenceProviderError('request_cancelled', 'Deep-intelligence request was cancelled.');
       try {
@@ -392,9 +410,15 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
         });
         if (!response.ok) {
           const failure = httpFailure(response.status);
+          lastProviderHttpStatusCategory = providerHttpStatusCategory(response.status, failure.code);
           if (failure.retryable && retryCount < config.policy.maximumRetryCount) {
             retryCount += 1;
-            this.log(requestId, 'retry', startedAt, validation.requestBytes, retryCount, failure.code, providerDetails);
+            this.log(requestId, 'retry', startedAt, validation.requestBytes, retryCount, failure.code, {
+              ...providerDetails,
+              providerHttpStatusCategory: lastProviderHttpStatusCategory,
+              operationalFailureCategory: operationalFailureForProviderError(failure.code),
+              failureBoundary: 'provider-http',
+            });
             await boundedRetryDelay(response.headers.get('Retry-After'), config.policy.maximumRetryDelayMs, runOptions?.signal, this.options.random);
             continue;
           }
@@ -429,9 +453,9 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
             continue;
           }
           throw new RepositoryDeepIntelligenceProviderError(
-            'invalid_response',
+            'language_validation_failed',
             'Product Strategist output did not satisfy the generated-language contract after one repair attempt.',
-            false,
+            true,
           );
         }
         this.log(requestId, 'success', startedAt, validation.requestBytes, retryCount, undefined, {
@@ -458,12 +482,14 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
         if (this.options.productStage?.kind === 'expansion' && error instanceof Error
           && /(?:Expansion response|generated-language contract)/i.test(error.message)) {
           const failure = new RepositoryDeepIntelligenceProviderError(
-            'invalid_response',
+            'language_validation_failed',
             'Future expansion batch failed deterministic schema or language validation.',
-            false,
+            true,
           );
           this.log(requestId, 'failure', startedAt, validation.requestBytes, retryCount, failure.code, {
             validationCategory: 'response-schema-rejected',
+            operationalFailureCategory: 'language_validation_failed',
+            failureBoundary: 'language-validation',
             inputTokenEstimate: estimateDeepIntelligenceInputTokens(validation.requestBytes),
             ...providerDetails,
           });
@@ -473,6 +499,9 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
           this.log(requestId, 'failure', startedAt, validation.requestBytes, retryCount, error.code, {
             validationCategory: providerValidationCategory(error.code, error.failureStage),
             ...(error instanceof ProductionProviderEnvelopeError ? error.safeDiagnostics : {}),
+            providerHttpStatusCategory: lastProviderHttpStatusCategory,
+            operationalFailureCategory: operationalFailureForProviderError(error.code),
+            failureBoundary: providerFailureBoundary(error),
             inputTokenEstimate: estimateDeepIntelligenceInputTokens(validation.requestBytes),
             ...providerDetails,
           });
@@ -481,21 +510,39 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
         if (runOptions?.signal?.aborted) throw new RepositoryDeepIntelligenceProviderError('request_cancelled', 'Deep-intelligence request was cancelled.');
         if (retryCount < config.policy.maximumRetryCount) {
           retryCount += 1;
-          this.log(requestId, 'retry', startedAt, validation.requestBytes, retryCount, 'provider_unavailable', providerDetails);
+          this.log(requestId, 'retry', startedAt, validation.requestBytes, retryCount, 'provider_unavailable', {
+            ...providerDetails,
+            operationalFailureCategory: 'provider_unavailable',
+            failureBoundary: 'provider-http',
+          });
           await boundedRetryDelay(null, config.policy.maximumRetryDelayMs, runOptions?.signal, this.options.random);
           continue;
         }
-        this.log(requestId, 'failure', startedAt, validation.requestBytes, retryCount, 'provider_unavailable', providerDetails);
+        this.log(requestId, 'failure', startedAt, validation.requestBytes, retryCount, 'provider_unavailable', {
+          ...providerDetails,
+          operationalFailureCategory: 'provider_unavailable',
+          failureBoundary: 'provider-http',
+        });
         throw new RepositoryDeepIntelligenceProviderError('provider_unavailable', 'Deep-intelligence provider is temporarily unavailable.', true);
       }
     }
   }
 
   private log(requestId: string, outcome: ProductionProviderLogEvent['outcome'], startedAt: number, requestBytes: number, retryCount: number, statusCategory?: string, details: Partial<ProductionProviderLogEvent> = {}) {
+    const stage = this.options.productStage;
     this.options.logger?.({
       event: 'repository_intelligence_provider', requestId, providerId: this.providerId,
       modelId: this.options.config.model, outcome,
       durationMs: Math.max(0, (this.options.now || Date.now)() - startedAt), requestBytes, retryCount, statusCategory,
+      requestFingerprint: stage?.fingerprint || undefined,
+      productStage: stage?.kind,
+      stageFingerprint: stage?.fingerprint,
+      ...(stage?.kind === 'expansion' ? {
+        expansionBatchIndex: stage.batchIndex,
+        expansionBatchCount: stage.totalBatches,
+        parentFutureIds: stage.parents.map(parent => parent.id),
+        parentFutureCount: stage.parents.length,
+      } : {}),
       ...details,
     });
   }
@@ -565,7 +612,7 @@ export function buildProductionProviderBody(
   const body = {
     model: config.model,
     max_completion_tokens: expansion ? Math.min(1_800, config.policy.maximumOutputTokens)
-      : options.productStage?.kind === 'roots' ? Math.min(2_400, config.policy.maximumOutputTokens)
+      : options.productStage?.kind === 'roots' ? Math.min(3_200, config.policy.maximumOutputTokens)
         : config.policy.maximumOutputTokens,
     response_format: expansion
       ? buildProductStrategistExpansionResponseFormat(expansion)
@@ -756,7 +803,7 @@ class ProductionProviderEnvelopeError extends RepositoryDeepIntelligenceProvider
     message: string,
     readonly safeDiagnostics: ProviderEnvelopeDiagnostics,
   ) {
-    super('provider_envelope_invalid', message, false, 'provider-envelope');
+    super('provider_envelope_invalid', message, safeDiagnostics.validationReason === 'completion-truncated', 'provider-envelope');
     this.name = 'ProductionProviderEnvelopeError';
   }
 }
@@ -997,12 +1044,38 @@ function httpFailure(status: number) {
   return new RepositoryDeepIntelligenceProviderError('provider_http_rejected', 'Deep-intelligence provider rejected the bounded request.', false, 'provider-http');
 }
 
+function providerHttpStatusCategory(status: number, code: string) {
+  if (status === 401 || status === 403) return 'authentication';
+  if (status === 429) return 'rate-limited';
+  if (status >= 500) return 'server-error';
+  if (status >= 400) return 'request-rejected';
+  return code;
+}
+
+function operationalFailureForProviderError(code: string): RepositoryIntelligenceOperationalFailureCategory {
+  if (code === 'rate_limited') return 'provider_rate_limited';
+  if (code === 'provider_unavailable') return 'provider_unavailable';
+  if (code === 'provider_envelope_invalid') return 'invalid_provider_envelope';
+  if (code === 'language_validation_failed') return 'language_validation_failed';
+  if (code === 'request_cancelled') return 'cancelled';
+  return 'structured_output_rejected';
+}
+
+function providerFailureBoundary(error: RepositoryDeepIntelligenceProviderError): RepositoryIntelligenceFailureBoundary {
+  if (error.code === 'language_validation_failed') return 'language-validation';
+  if (error.failureStage === 'provider-http') return 'provider-http';
+  if (error.failureStage === 'provider-envelope') return 'provider-envelope';
+  if (error.failureStage === 'request-preflight') return 'request-preflight';
+  return 'provider-generation';
+}
+
 function providerValidationCategory(code: string, failureStage?: string): ProductionProviderLogEvent['validationCategory'] {
   if (failureStage === 'provider-http') return 'provider-http-rejected';
   if (failureStage === 'provider-envelope') return 'provider-envelope-invalid';
   if (failureStage === 'request-preflight') return 'request-preflight-rejected';
   if (code === 'request_preflight_rejected') return 'request-preflight-rejected';
   if (code === 'provider_envelope_invalid') return 'provider-envelope-invalid';
+  if (code === 'language_validation_failed') return 'response-schema-rejected';
   if (['provider_http_rejected', 'authentication_failed', 'rate_limited'].includes(code)) return 'provider-http-rejected';
   return undefined;
 }

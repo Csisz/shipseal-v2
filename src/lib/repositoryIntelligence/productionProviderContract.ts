@@ -96,8 +96,37 @@ export type RepositoryDeepIntelligenceState =
   | 'disabled' | 'unavailable' | 'pending' | 'completed' | 'completed-with-warnings'
   | 'rejected' | 'failed' | 'timed-out' | 'budget-exceeded';
 
+export type RepositoryIntelligenceOperationalFailureCategory =
+  | 'configuration_invalid'
+  | 'credentials_missing'
+  | 'provider_unavailable'
+  | 'provider_rate_limited'
+  | 'provider_timeout'
+  | 'browser_timeout'
+  | 'invalid_provider_envelope'
+  | 'structured_output_rejected'
+  | 'language_validation_failed'
+  | 'evidence_validation_failed'
+  | 'roots_schema_failed'
+  | 'expansion_schema_failed'
+  | 'merge_incomplete'
+  | 'cancelled';
+
+export type RepositoryIntelligenceFailureBoundary =
+  | 'configuration'
+  | 'request-preflight'
+  | 'provider-http'
+  | 'provider-generation'
+  | 'provider-envelope'
+  | 'language-validation'
+  | 'schema-validation'
+  | 'evidence-normalization'
+  | 'staged-merge'
+  | 'browser-network';
+
 export interface RepositoryIntelligenceSafeDiagnostics {
   requestId?: string;
+  requestFingerprint?: string;
   reportIdentityHash?: string;
   providerType?: string;
   promptVersion?: string;
@@ -164,6 +193,14 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   schemaValidationFailureCount?: number;
   providerTimedOut?: boolean;
   browserTimedOut?: boolean;
+  operationalFailureCategory?: RepositoryIntelligenceOperationalFailureCategory;
+  failureBoundary?: RepositoryIntelligenceFailureBoundary;
+  providerHttpStatusCategory?: string;
+  expansionParentFutureIds?: string[];
+  expansionParentCount?: number;
+  acceptedRootCount?: number;
+  rejectedRootCount?: number;
+  stageRetryCount?: number;
 }
 
 export interface RepositoryIntelligenceDeepInsightSummary {
@@ -243,3 +280,24 @@ export const DETERMINISTIC_REPOSITORY_INTELLIGENCE_STATUS: RepositoryIntelligenc
   message: 'Deterministic repository intelligence is ready for review.',
   retryable: false,
 });
+
+export function repositoryFutureFailureMessage(
+  category: RepositoryIntelligenceProviderFailureCategory,
+  diagnostics?: RepositoryIntelligenceSafeDiagnostics,
+) {
+  const operational = diagnostics?.operationalFailureCategory;
+  if (operational === 'provider_timeout' || operational === 'browser_timeout' || category === 'request_timeout') {
+    return 'Future analysis took longer than expected.';
+  }
+  if (operational === 'provider_unavailable' || operational === 'provider_rate_limited'
+    || category === 'provider_unavailable' || category === 'rate_limited') {
+    return 'Future analysis is temporarily unavailable.';
+  }
+  if (operational === 'configuration_invalid' || operational === 'credentials_missing'
+    || category === 'configuration_invalid' || category === 'credentials_missing' || category === 'provider_disabled') {
+    return 'Future analysis is not available in this environment.';
+  }
+  if (operational === 'cancelled' || category === 'request_cancelled') return 'Future analysis was cancelled.';
+  if (operational === 'merge_incomplete') return 'Some future pathways could not be completed.';
+  return 'ShipSeal could not validate this Future analysis.';
+}

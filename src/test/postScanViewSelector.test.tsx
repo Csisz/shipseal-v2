@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildSampleReport } from '@/lib/readiness';
 import type { ReadinessReport } from '@/lib/types';
+import type { RepositoryProductIntelligenceResult } from '@/lib/repositoryIntelligence';
 
 vi.mock('@/components/agentready/result-workspace/universe/UniverseWorkspace', () => ({
   AiWorkspaceHero: ({ activeResultChapter }: { activeResultChapter: string }) => (
@@ -110,6 +111,63 @@ describe('premium post-scan view selector', () => {
     futures.focus();
     fireEvent.keyDown(futures, { key: ' ' });
     expect(await screen.findByTestId('futures-experience')).toBeInTheDocument();
+  });
+
+  it('keeps Universe usable while Futures retries and does not force navigation when Futures becomes ready', async () => {
+    const report = reportWithIdentity('2026-08-11T10:01:30.000Z');
+    const retry = vi.fn(async () => undefined);
+    const onReset = vi.fn();
+    const fallbackStatus = {
+      state: 'fallback' as const,
+      deepState: 'timed-out' as const,
+      category: 'request_timeout' as const,
+      retryable: true as const,
+      message: 'Future analysis took longer than expected.',
+      diagnostics: { costEstimate: 'unavailable' as const, requestId: 'ri-roots-safe-reference', operationalFailureCategory: 'provider_timeout' as const },
+    };
+    const { rerender } = render(<ResultWorkspace
+      report={report}
+      history={[]}
+      onReset={onReset}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={fallbackStatus}
+      retryRepositoryProductIntelligence={retry}
+    />);
+
+    expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('Project Universe is ready');
+    expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Repository Futures unavailable' })).toBeDisabled();
+    expect(screen.queryByTestId('futures-experience')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry Future analysis' }));
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(onReset).not.toHaveBeenCalled();
+
+    rerender(<ResultWorkspace
+      report={report}
+      history={[]}
+      onReset={onReset}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{ state: 'preparing', deepState: 'pending', retryable: false, productStage: 'expansion', completedBatches: 2, totalBatches: 3, message: 'Building future pathways · 2 of 3 pathway groups complete.' }}
+      retryRepositoryProductIntelligence={retry}
+    />);
+    expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('2 of 3 pathway groups complete');
+    expect(screen.getByRole('button', { name: 'Future analysis in progress' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Project Universe' }));
+    expect(screen.getByTestId('universe-experience')).toBeInTheDocument();
+
+    const product = { opportunities: [{ id: 'future.one' }] } as unknown as RepositoryProductIntelligenceResult;
+    rerender(<ResultWorkspace
+      report={report}
+      history={[]}
+      onReset={onReset}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligence={product}
+      repositoryProductIntelligenceStatus={{ state: 'enhanced', deepState: 'completed', retryable: false, providerId: 'fixture', message: 'Future analysis is ready.' }}
+      retryRepositoryProductIntelligence={retry}
+    />);
+    expect(screen.getByTestId('universe-experience')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Change view/i }));
+    expect(screen.getByRole('button', { name: 'Open Repository Futures' })).toBeEnabled();
   });
 
   it('hands a sample report from the unified ready formation to the selector without exposing the workspace first', () => {

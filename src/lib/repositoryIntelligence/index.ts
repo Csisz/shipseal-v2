@@ -52,6 +52,7 @@ export { clearRepositoryIntelligenceEnhancementSessionCache, requestRepositoryIn
 export {
   DETERMINISTIC_REPOSITORY_INTELLIGENCE_STATUS,
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+  repositoryFutureFailureMessage,
 } from './productionProviderContract';
 
 export {
@@ -209,6 +210,8 @@ export type {
   RepositoryIntelligenceSafeDiagnostics,
   RepositoryIntelligenceProviderStatus,
   RepositoryIntelligenceValidationCategory,
+  RepositoryIntelligenceOperationalFailureCategory,
+  RepositoryIntelligenceFailureBoundary,
 } from './productionProviderContract';
 
 export type {

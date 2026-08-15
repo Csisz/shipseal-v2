@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { runRepositoryDeepIntelligence } from '../src/lib/repositoryIntelligence/deepIntelligenceExecution.js';
 import {
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
@@ -30,6 +31,8 @@ import type { ProductionProviderPolicy } from './_lib/repositoryDeepIntelligence
 import { buildProductStrategistProviderPayload } from './_lib/repositoryProductStrategistPayload.js';
 import type {
   RepositoryIntelligenceSafeDiagnostics,
+  RepositoryIntelligenceFailureBoundary,
+  RepositoryIntelligenceOperationalFailureCategory,
   RepositoryIntelligenceValidationCategory,
   RepositoryIntelligenceValidationReason,
 } from '../src/lib/repositoryIntelligence/productionProviderContract.js';
@@ -48,13 +51,22 @@ export async function prepareProductionRepositoryIntelligence(
   input: unknown,
   options: PrepareProductionRepositoryIntelligenceOptions = {},
 ): Promise<{ status: number; body: RepositoryIntelligenceProviderApiResponse }> {
+  const logger = options.logger || safeOperationalLogger;
+  const earlyMetadata = readSafeStageMetadata(input);
+  const earlyRequestId = createOperationalRequestId(earlyMetadata.fingerprint || 'unvalidated', earlyMetadata.stage);
   let config;
   try { config = resolveProductionProviderConfig(options.env); } catch {
-    return fallback(503, 'configuration_invalid', false);
+    logEarlyOperationalFailure(logger, earlyRequestId, earlyMetadata, 'configuration_invalid', 'configuration');
+    return fallback(503, 'configuration_invalid', false, earlyFailureDiagnostics(earlyRequestId, earlyMetadata, 'configuration_invalid'));
   }
-  if (!config.enabled) return fallback(200, 'provider_disabled', false);
-  if (!config.apiKey || !config.model) return fallback(200, 'credentials_missing', false);
-  const logger = options.logger || safeOperationalLogger;
+  if (!config.enabled) {
+    logEarlyOperationalFailure(logger, earlyRequestId, earlyMetadata, 'configuration_invalid', 'configuration', config.provider, config.model);
+    return fallback(200, 'provider_disabled', false, earlyFailureDiagnostics(earlyRequestId, earlyMetadata, 'configuration_invalid'));
+  }
+  if (!config.apiKey || !config.model) {
+    logEarlyOperationalFailure(logger, earlyRequestId, earlyMetadata, 'credentials_missing', 'configuration', config.provider, config.model);
+    return fallback(200, 'credentials_missing', false, earlyFailureDiagnostics(earlyRequestId, earlyMetadata, 'credentials_missing'));
+  }
   if (!input || typeof input !== 'object' || Array.isArray(input)
     || (input as { version?: unknown }).version !== REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION) {
     return fallback(400, 'invalid_request', false);
@@ -70,6 +82,7 @@ export async function prepareProductionRepositoryIntelligence(
   );
   if (!productStageValidation.valid) return fallback(400, 'invalid_request', false);
   const productStage = productStageValidation.stage;
+  const requestId = createOperationalRequestId(productStage?.fingerprint || requestValidation.request.fingerprint, productStage?.kind);
   const executionPolicy = resolveProductionExecutionPolicy(requestValidation.request, config.policy);
   const executionConfig = {
     ...config,
@@ -86,7 +99,6 @@ export async function prepareProductionRepositoryIntelligence(
   }
   const outboundValidation = validatePreparedProductionProviderRequest(preparedContext, executionPolicy);
   if ('reason' in outboundValidation) {
-    const requestId = `ri-${preparedContext.request.fingerprint.slice(0, 16)}`;
     logger({
       event: 'repository_intelligence_provider',
       requestId,
@@ -119,7 +131,8 @@ export async function prepareProductionRepositoryIntelligence(
     const productPayload = buildProductStrategistProviderPayload(preparedContext.request);
     if (!productPayload.evidenceIndex.length) {
       return fallback(200, 'evidence_validation_failed', false, diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
-        requestId: `ri-${preparedContext.request.fingerprint.slice(0, 16)}`,
+        requestId,
+        requestFingerprint: productStage?.fingerprint || preparedContext.request.fingerprint,
         executionProfile: 'product-strategist',
         validationCategory: 'insufficient-product-evidence',
         productUnderstandingAccepted: false,
@@ -154,6 +167,7 @@ export async function prepareProductionRepositoryIntelligence(
     config: executionConfig,
     fetcher: options.fetcher,
     productStage,
+    requestId,
     logger: event => {
       providerRetryCount = Math.max(providerRetryCount, event.retryCount);
       if (event.statusCategory === 'generated_language_repair') languageRepairCount += 1;
@@ -177,6 +191,9 @@ export async function prepareProductionRepositoryIntelligence(
         ...(event.providerTotalTokens === undefined ? {} : { providerTotalTokens: event.providerTotalTokens }),
         ...(event.providerModelId === undefined ? {} : { providerModelId: event.providerModelId }),
         ...(event.providerJsonParsingStage === undefined ? {} : { providerJsonParsingStage: event.providerJsonParsingStage }),
+        ...(event.providerHttpStatusCategory === undefined ? {} : { providerHttpStatusCategory: event.providerHttpStatusCategory }),
+        ...(event.operationalFailureCategory === undefined ? {} : { operationalFailureCategory: event.operationalFailureCategory }),
+        ...(event.failureBoundary === undefined ? {} : { failureBoundary: event.failureBoundary }),
       };
       logger(event);
     },
@@ -191,8 +208,11 @@ export async function prepareProductionRepositoryIntelligence(
       signal: options.signal,
       providerId: config.provider,
       modelId: config.model,
+      logger,
+      requestId,
       diagnostics: () => diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
-        requestId: `ri-${productStage.fingerprint.slice(0, 16)}`,
+        requestId,
+        requestFingerprint: productStage.fingerprint,
         reportIdentityHash: stableContextFingerprint(preparedContext.request.repository),
         providerType: config.provider,
         promptVersion: preparedContext.request.promptContractVersion,
@@ -210,6 +230,8 @@ export async function prepareProductionRepositoryIntelligence(
         stageFingerprint: productStage.fingerprint,
         expansionBatchIndex: productStage.batchIndex,
         expansionBatchCount: productStage.totalBatches,
+        expansionParentFutureIds: productStage.parents.map(parent => parent.id),
+        expansionParentCount: productStage.parents.length,
         ...providerResponseDiagnostics,
       }),
     });
@@ -218,15 +240,17 @@ export async function prepareProductionRepositoryIntelligence(
     provider,
     request: preparedContext.request,
     signal: options.signal,
-    timeoutMs: executionPolicy.timeoutMs,
+    timeoutMs: executionConfig.policy.timeoutMs,
   });
   const durationMs = Math.max(0, Date.now() - startedAt);
   const productStrategistExecution = preparedContext.request.executionProfile === 'product-strategist';
   const productIntelligence = execution.result?.productIntelligence;
   const productValidationDiagnostics = productIntelligence?.validationDiagnostics;
   const acceptedProductOpportunityCount = productIntelligence?.opportunities.length || 0;
+  const operationalFailure = operationalFailureForExecution(execution, productStage);
   const diagnostics = diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
-    requestId: `ri-${preparedContext.request.fingerprint.slice(0, 16)}`,
+    requestId,
+    requestFingerprint: productStage?.fingerprint || preparedContext.request.fingerprint,
     reportIdentityHash: stableContextFingerprint(preparedContext.request.repository),
     providerType: config.provider,
     promptVersion: preparedContext.request.promptContractVersion,
@@ -245,6 +269,8 @@ export async function prepareProductionRepositoryIntelligence(
     selectedFileCount: providerMeasurement.selectedFileCount,
     ...(productStage ? { productStage: productStage.kind, stageFingerprint: productStage.fingerprint } : {}),
     ...(productStrategistExecution ? {
+      acceptedRootCount: acceptedProductOpportunityCount,
+      rejectedRootCount: productIntelligence?.rejectedOpportunities.length || 0,
       productUnderstandingAccepted: Boolean(productIntelligence?.understanding),
       productUnderstandingRejectionReason: productIntelligence?.understandingRejectionReason
         || (execution.error?.code === 'product-understanding-schema-rejected' ? 'invalid-understanding-shape' : undefined),
@@ -258,6 +284,7 @@ export async function prepareProductionRepositoryIntelligence(
       compactPathReferenceRejectedCount: productValidationDiagnostics?.compactPathReferenceRejectedCount || 0,
       compactSupportReferenceRejectedCount: productValidationDiagnostics?.compactSupportReferenceRejectedCount || 0,
     } : {}),
+    ...operationalFailure,
     ...providerResponseDiagnostics,
   });
   const hasAcceptedExecutionOutput = productStrategistExecution
@@ -303,6 +330,11 @@ export async function prepareProductionRepositoryIntelligence(
       providerInputTokenEstimate: enhancedDiagnostics.providerEstimatedInputTokens,
       outputTokenCap: enhancedDiagnostics.outputTokenCap,
       selectedFileCount: enhancedDiagnostics.selectedFileCount,
+      requestFingerprint: enhancedDiagnostics.requestFingerprint,
+      productStage: productStage?.kind,
+      stageFingerprint: productStage?.fingerprint,
+      acceptedRootCount: productStage?.kind === 'roots' ? acceptedProductOpportunityCount : undefined,
+      rejectedRootCount: productStage?.kind === 'roots' ? productIntelligence?.rejectedOpportunities.length || 0 : undefined,
     });
     return {
       status: 200,
@@ -319,6 +351,8 @@ export async function prepareProductionRepositoryIntelligence(
   }
   if (execution.status === 'completed') return fallback(200, 'evidence_validation_failed', false, {
     ...diagnostics,
+    operationalFailureCategory: 'evidence_validation_failed',
+    failureBoundary: 'evidence-normalization',
     validationCategory: productStrategistExecution && acceptedProductOpportunityCount < 3
       ? 'insufficient-product-opportunities'
       : diagnostics.validationCategory,
@@ -389,6 +423,8 @@ async function executeProductExpansionStage(input: {
   signal?: AbortSignal;
   providerId: string;
   modelId: string;
+  logger: ProductionProviderLogger;
+  requestId: string;
   diagnostics: () => RepositoryIntelligenceSafeDiagnostics;
 }): Promise<{ status: number; body: RepositoryIntelligenceProviderApiResponse }> {
   const controller = new AbortController();
@@ -404,14 +440,26 @@ async function executeProductExpansionStage(input: {
       || result.fingerprint !== input.stage.fingerprint || result.batchIndex !== input.stage.batchIndex
       || result.totalBatches !== input.stage.totalBatches || !Array.isArray(result.expansions)
       || result.expansions.length !== input.stage.parents.length) {
-      return fallback(200, 'schema_validation_failed', true, { ...input.diagnostics(), durationMs: Date.now() - startedAt, schemaValidationFailureCount: 1 });
+      const diagnostics = { ...input.diagnostics(), durationMs: Date.now() - startedAt, schemaValidationFailureCount: 1, operationalFailureCategory: 'expansion_schema_failed' as const, failureBoundary: 'schema-validation' as const };
+      logExpansionValidation(input, 'failure', diagnostics, 0, 0);
+      return fallback(200, 'schema_validation_failed', true, diagnostics);
     }
     const secondGeneration = result.expansions.flatMap(item => item.evolutions || []).filter(item => item.generation === 2).length;
     const thirdGeneration = result.expansions.flatMap(item => item.evolutions || []).filter(item => item.generation === 3).length;
     if (result.expansions.some(item => !input.stage.parents.some(parent => parent.id === item.parentId)
       || item.evolutions.filter(evolution => evolution.generation === 2).length < 2)) {
-      return fallback(200, 'schema_validation_failed', true, { ...input.diagnostics(), durationMs: Date.now() - startedAt, schemaValidationFailureCount: 1 });
+      const diagnostics = { ...input.diagnostics(), durationMs: Date.now() - startedAt, schemaValidationFailureCount: 1, operationalFailureCategory: 'expansion_schema_failed' as const, failureBoundary: 'schema-validation' as const };
+      logExpansionValidation(input, 'failure', diagnostics, secondGeneration, thirdGeneration);
+      return fallback(200, 'schema_validation_failed', true, diagnostics);
     }
+    const diagnostics = {
+      ...input.diagnostics(),
+      durationMs: Math.max(0, Date.now() - startedAt),
+      outputBytes: Buffer.byteLength(JSON.stringify(result), 'utf8'),
+      acceptedSecondGenerationCount: secondGeneration,
+      acceptedThirdGenerationCount: thirdGeneration,
+    };
+    logExpansionValidation(input, 'validated', diagnostics, secondGeneration, thirdGeneration);
     return {
       status: 200,
       body: {
@@ -421,23 +469,19 @@ async function executeProductExpansionStage(input: {
         providerId: input.providerId,
         modelId: input.modelId,
         deepState: 'completed',
-        diagnostics: {
-          ...input.diagnostics(),
-          durationMs: Math.max(0, Date.now() - startedAt),
-          outputBytes: Buffer.byteLength(JSON.stringify(result), 'utf8'),
-          acceptedSecondGenerationCount: secondGeneration,
-          acceptedThirdGenerationCount: thirdGeneration,
-        },
+        diagnostics,
       },
     };
   } catch (error) {
     const cancelled = input.signal?.aborted;
     const category = timedOut ? 'request_timeout' : cancelled ? 'request_cancelled'
       : error instanceof RepositoryDeepIntelligenceProviderError ? mapExecutionError(error.code) : 'unknown_provider_error';
+    const operational = operationalFailureForProviderCategory(category, error);
     return fallback(200, category, category !== 'authentication_failed', {
       ...input.diagnostics(),
       durationMs: Math.max(0, Date.now() - startedAt),
       providerTimedOut: timedOut,
+      ...operational,
     });
   } finally {
     clearTimeout(timer);
@@ -450,12 +494,179 @@ function mapExecutionError(code?: string): RepositoryIntelligenceProviderFailure
     || code === 'response_too_large' || code === 'request_cancelled') return code;
   if (code === 'response-too-large') return 'response_too_large';
   if (['malformed-response', 'unsupported-schema', 'provider-mismatch', 'unsafe-provider-metadata', 'invalid_response',
-    'request_preflight_rejected', 'provider_http_rejected', 'provider_envelope_invalid',
+    'request_preflight_rejected', 'provider_http_rejected', 'provider_envelope_invalid', 'language_validation_failed',
     'product-understanding-schema-rejected', 'product-opportunity-schema-rejected'].includes(code || '')) {
     return 'schema_validation_failed';
   }
   if (code === 'unsupported-capability') return 'schema_validation_failed';
   return 'unknown_provider_error';
+}
+
+function operationalFailureForExecution(
+  execution: Awaited<ReturnType<typeof runRepositoryDeepIntelligence>>,
+  stage?: RepositoryProductProviderStage,
+): Partial<RepositoryIntelligenceSafeDiagnostics> {
+  if (execution.status === 'completed') return {};
+  if (execution.status === 'timeout') return { operationalFailureCategory: 'provider_timeout', failureBoundary: 'provider-generation', providerTimedOut: true };
+  if (execution.status === 'cancelled') return { operationalFailureCategory: 'cancelled', failureBoundary: 'provider-generation' };
+  const code = execution.error?.code;
+  if (code === 'provider_envelope_invalid') return { operationalFailureCategory: 'invalid_provider_envelope', failureBoundary: 'provider-envelope' };
+  if (code === 'language_validation_failed') return { operationalFailureCategory: 'language_validation_failed', failureBoundary: 'language-validation' };
+  if (code === 'rate_limited') return { operationalFailureCategory: 'provider_rate_limited', failureBoundary: 'provider-http' };
+  if (code === 'provider_unavailable') return { operationalFailureCategory: 'provider_unavailable', failureBoundary: 'provider-http' };
+  if (code === 'product-understanding-schema-rejected' || code === 'product-opportunity-schema-rejected'
+    || execution.status === 'invalid-response') {
+    return {
+      operationalFailureCategory: stage?.kind === 'roots' ? 'roots_schema_failed' : 'structured_output_rejected',
+      failureBoundary: 'schema-validation',
+    };
+  }
+  return { operationalFailureCategory: 'structured_output_rejected', failureBoundary: 'schema-validation' };
+}
+
+function operationalFailureForProviderCategory(
+  category: RepositoryIntelligenceProviderFailureCategory,
+  error: unknown,
+): Partial<RepositoryIntelligenceSafeDiagnostics> {
+  if (category === 'request_timeout') return { operationalFailureCategory: 'provider_timeout', failureBoundary: 'provider-generation' };
+  if (category === 'request_cancelled') return { operationalFailureCategory: 'cancelled', failureBoundary: 'provider-generation' };
+  if (category === 'rate_limited') return { operationalFailureCategory: 'provider_rate_limited', failureBoundary: 'provider-http' };
+  if (category === 'provider_unavailable') return { operationalFailureCategory: 'provider_unavailable', failureBoundary: 'provider-http' };
+  if (error instanceof RepositoryDeepIntelligenceProviderError && error.code === 'provider_envelope_invalid') {
+    return { operationalFailureCategory: 'invalid_provider_envelope', failureBoundary: 'provider-envelope' };
+  }
+  if (error instanceof RepositoryDeepIntelligenceProviderError && error.code === 'language_validation_failed') {
+    return { operationalFailureCategory: 'language_validation_failed', failureBoundary: 'language-validation' };
+  }
+  return { operationalFailureCategory: 'expansion_schema_failed', failureBoundary: 'schema-validation' };
+}
+
+function logExpansionValidation(
+  input: Parameters<typeof executeProductExpansionStage>[0],
+  outcome: 'validated' | 'failure',
+  diagnostics: RepositoryIntelligenceSafeDiagnostics,
+  secondGeneration: number,
+  thirdGeneration: number,
+) {
+  input.logger({
+    event: 'repository_intelligence_provider',
+    requestId: input.requestId,
+    providerId: input.providerId,
+    modelId: input.modelId,
+    outcome,
+    durationMs: diagnostics.durationMs || 0,
+    requestBytes: diagnostics.providerRequestBytes || 0,
+    retryCount: diagnostics.retryCount || 0,
+    statusCategory: diagnostics.operationalFailureCategory,
+    requestFingerprint: input.stage.fingerprint,
+    productStage: 'expansion',
+    stageFingerprint: input.stage.fingerprint,
+    expansionBatchIndex: input.stage.batchIndex,
+    expansionBatchCount: input.stage.totalBatches,
+    parentFutureIds: input.stage.parents.map(parent => parent.id),
+    parentFutureCount: input.stage.parents.length,
+    outputBytes: diagnostics.outputBytes,
+    providerRequestBytes: diagnostics.providerRequestBytes,
+    providerInputTokenEstimate: diagnostics.providerEstimatedInputTokens,
+    providerPromptTokens: diagnostics.providerPromptTokens,
+    providerCompletionTokens: diagnostics.providerCompletionTokens,
+    providerReasoningTokens: diagnostics.providerReasoningTokens,
+    providerTotalTokens: diagnostics.providerTotalTokens,
+    providerFinishReason: diagnostics.providerFinishReason,
+    providerModelId: diagnostics.providerModelId,
+    validationCategory: diagnostics.validationCategory,
+    validationReason: diagnostics.validationReason,
+    operationalFailureCategory: diagnostics.operationalFailureCategory,
+    failureBoundary: diagnostics.failureBoundary,
+    acceptedSecondGenerationCount: secondGeneration,
+    acceptedThirdGenerationCount: thirdGeneration,
+  });
+}
+
+function createOperationalRequestId(fingerprint: string, stage?: RepositoryProductProviderStage['kind']) {
+  return `ri-${stage || 'general'}-${fingerprint.slice(0, 10)}-${randomUUID().slice(0, 8)}`;
+}
+
+function readSafeStageMetadata(input: unknown): {
+  fingerprint?: string;
+  stage?: RepositoryProductProviderStage['kind'];
+  batchIndex?: number;
+  parentIds: string[];
+} {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { parentIds: [] };
+  const candidate = input as { request?: unknown; productStage?: unknown };
+  const request = candidate.request && typeof candidate.request === 'object' && !Array.isArray(candidate.request)
+    ? candidate.request as { fingerprint?: unknown }
+    : undefined;
+  const stage = candidate.productStage && typeof candidate.productStage === 'object' && !Array.isArray(candidate.productStage)
+    ? candidate.productStage as { kind?: unknown; fingerprint?: unknown; batchIndex?: unknown; parents?: unknown }
+    : undefined;
+  const kind = stage?.kind === 'roots' || stage?.kind === 'expansion' ? stage.kind : undefined;
+  const fingerprint = typeof stage?.fingerprint === 'string' && stage.fingerprint.length <= 160
+    ? stage.fingerprint
+    : typeof request?.fingerprint === 'string' && request.fingerprint.length <= 160 ? request.fingerprint : undefined;
+  const parentIds = Array.isArray(stage?.parents)
+    ? stage.parents.flatMap(parent => {
+      if (!parent || typeof parent !== 'object' || Array.isArray(parent)) return [];
+      const id = (parent as { id?: unknown }).id;
+      return typeof id === 'string' && /^[a-z0-9:._-]{1,160}$/i.test(id) ? [id] : [];
+    }).slice(0, 3)
+    : [];
+  return {
+    fingerprint,
+    stage: kind,
+    batchIndex: typeof stage?.batchIndex === 'number' ? stage.batchIndex : undefined,
+    parentIds,
+  };
+}
+
+function earlyFailureDiagnostics(
+  requestId: string,
+  metadata: ReturnType<typeof readSafeStageMetadata>,
+  category: RepositoryIntelligenceOperationalFailureCategory,
+): RepositoryIntelligenceSafeDiagnostics {
+  return {
+    requestId,
+    requestFingerprint: metadata.fingerprint,
+    productStage: metadata.stage,
+    stageFingerprint: metadata.fingerprint,
+    expansionBatchIndex: metadata.batchIndex,
+    expansionParentFutureIds: metadata.parentIds,
+    expansionParentCount: metadata.parentIds.length,
+    operationalFailureCategory: category,
+    failureBoundary: 'configuration',
+    costEstimate: 'unavailable',
+  };
+}
+
+function logEarlyOperationalFailure(
+  logger: ProductionProviderLogger,
+  requestId: string,
+  metadata: ReturnType<typeof readSafeStageMetadata>,
+  category: RepositoryIntelligenceOperationalFailureCategory,
+  boundary: RepositoryIntelligenceFailureBoundary,
+  providerId = 'unavailable',
+  modelId = 'unavailable',
+) {
+  logger({
+    event: 'repository_intelligence_provider',
+    requestId,
+    providerId,
+    modelId,
+    outcome: 'failure',
+    durationMs: 0,
+    requestBytes: 0,
+    retryCount: 0,
+    statusCategory: category,
+    requestFingerprint: metadata.fingerprint,
+    productStage: metadata.stage,
+    stageFingerprint: metadata.fingerprint,
+    expansionBatchIndex: metadata.batchIndex,
+    parentFutureIds: metadata.parentIds,
+    parentFutureCount: metadata.parentIds.length,
+    operationalFailureCategory: category,
+    failureBoundary: boundary,
+  });
 }
 
 function validationCategoryForExecution(execution: Awaited<ReturnType<typeof runRepositoryDeepIntelligence>>): RepositoryIntelligenceValidationCategory | undefined {
@@ -464,6 +675,7 @@ function validationCategoryForExecution(execution: Awaited<ReturnType<typeof run
   if (execution.error?.code === 'provider_envelope_invalid') return 'provider-envelope-invalid';
   if (execution.error?.code === 'product-understanding-schema-rejected') return 'product-understanding-schema-rejected';
   if (execution.error?.code === 'product-opportunity-schema-rejected') return 'product-opportunity-schema-rejected';
+  if (execution.error?.code === 'language_validation_failed') return 'response-schema-rejected';
   if (execution.error?.code === 'invalid_response') return 'response-schema-rejected';
   if (execution.status === 'invalid-response') return 'response-schema-rejected';
   if (execution.status === 'completed' && execution.result?.productIntelligence?.rejectedOpportunities.length) {

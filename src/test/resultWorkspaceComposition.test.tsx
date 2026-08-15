@@ -62,15 +62,19 @@ vi.mock('@/components/agentready/ProjectIntakeForm', () => ({
 }));
 
 const selectorMockState = vi.hoisted(() => ({
-  view: 'universe' as 'universe' | 'futures',
+  view: 'universe' as 'universe' | 'futures' | null,
 }));
 
 vi.mock('@/components/agentready/result-dashboard/PostScanViewSelector', async () => {
   const React = await import('react');
   return {
-    PostScanViewSelector: ({ onSelect }: { onSelect: (view: 'universe' | 'futures') => void }) => {
-      React.useEffect(() => onSelect(selectorMockState.view), [onSelect]);
-      return null;
+    PostScanViewSelector: ({ onSelect, futuresAvailable = true, onRetryFutures }: { onSelect: (view: 'universe' | 'futures') => void; futuresAvailable?: boolean; onRetryFutures?: () => void }) => {
+      React.useEffect(() => { if (selectorMockState.view) onSelect(selectorMockState.view); }, [onSelect]);
+      return <div data-testid="post-scan-view-selector">
+        <button type="button" onClick={() => onSelect('universe')}>Open Project Universe</button>
+        <button type="button" disabled={!futuresAvailable} onClick={() => onSelect('futures')}>Open Repository Futures</button>
+        {onRetryFutures && <button type="button" onClick={onRetryFutures}>Retry Future analysis</button>}
+      </div>;
     },
   };
 });
@@ -455,7 +459,9 @@ describe('Result Workspace composition', () => {
     expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
   });
 
-  it('keeps the selector and Futures canvas hidden after a terminal provider failure', async () => {
+  it('opens a degraded selector after a terminal provider failure while keeping Futures unavailable', async () => {
+    selectorMockState.view = null;
+    const retry = vi.fn(async () => undefined);
     render(<ResultDashboard
       report={buildSampleReport()}
       history={[]}
@@ -463,14 +469,18 @@ describe('Result Workspace composition', () => {
       onClearHistory={vi.fn()}
       repositoryProductIntelligenceStatus={{
         state: 'fallback', deepState: 'timed-out', category: 'request_timeout', retryable: true,
-        message: 'Future analysis is taking longer than expected.',
+        message: 'Future analysis took longer than expected.',
       }}
+      retryRepositoryProductIntelligence={retry}
     />);
 
-    expect(await screen.findByText('Future analysis is taking longer than expected.')).toBeInTheDocument();
-    expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
+    expect(await screen.findByTestId('post-scan-view-selector')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Open Repository Futures' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Retry Future analysis' })).toBeEnabled();
     expect(screen.queryByTestId('repository-futures-workspace')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
+    selectorMockState.view = 'universe';
   });
 
   it('opens with a simplified repository-specific entry and routes the primary action to Repository Intelligence review', async () => {

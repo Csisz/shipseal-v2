@@ -12,7 +12,8 @@ const evidence = [
   { id: 'evidence:app', path: 'src/App.tsx', confidence: 0.92, validationState: 'validated', assertionState: 'observed' },
 ];
 
-const report = buildReport({
+// eslint-disable-next-line react-refresh/only-export-components -- shared only by development QA fixtures
+export const futuresQaReport = buildReport({
   repoName: 'shipseal/futures-layout-qa',
   source: { sourceType: 'github-app', githubOwner: 'shipseal', githubRepo: 'futures-layout-qa', githubBranch: 'main' },
   files: [
@@ -70,7 +71,8 @@ function opportunity(id: string, title: string, origin: 'evidence-backed' | 'str
   };
 }
 
-const productIntelligence = validateRepositoryProductIntelligence({
+// eslint-disable-next-line react-refresh/only-export-components -- shared only by development QA fixtures
+export const futuresQaProductIntelligence = validateRepositoryProductIntelligence({
   sourceAnalysisFingerprint: 'analysis:futures-layout-qa',
   rawUnderstanding: {
     schemaVersion: REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
@@ -106,11 +108,11 @@ export default function RepositoryFuturesLayoutQa() {
     <main className="min-h-screen bg-workspace text-foreground" data-testid="repository-futures-layout-qa">
       <div className="fixed bottom-3 right-3 z-[100]"><ThemeToggle /></div>
       <ResultWorkspace
-        report={report}
+        report={futuresQaReport}
         history={[]}
         onReset={() => undefined}
         onClearHistory={() => undefined}
-        repositoryProductIntelligence={productIntelligence}
+        repositoryProductIntelligence={futuresQaProductIntelligence}
         repositoryProductIntelligenceStatus={{ state: 'enhanced', deepState: 'completed', message: 'Product opportunities enhanced.', retryable: false, providerId: 'qa-provider' }}
       />
     </main>

@@ -10,6 +10,7 @@ import type {
   RepositoryIntelligenceVerificationResult,
   RepositoryProductIntelligenceResult,
 } from '@/lib/repositoryIntelligence';
+import { repositoryFutureFailureMessage } from '@/lib/repositoryIntelligence';
 
 export type RepoScanStatus = 'idle' | 'scanning' | 'completed' | 'failed' | 'cancelled';
 
@@ -608,9 +609,11 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
                 totalBatches: progress.totalBatches,
                 activeBatchIndexes: progress.activeBatchIndexes,
                 message: progress.stage === 'roots'
-                  ? 'Understanding the product and finding grounded directions.'
+                  ? progress.stageAttempt && progress.stageAttempt > 1
+                    ? 'Retrying product directions with the completed repository understanding.'
+                    : 'Understanding the product and finding grounded directions.'
                   : progress.stage === 'expansion'
-                    ? `Building future pathways · ${progress.completedBatches} of ${progress.totalBatches} pathway groups complete.`
+                    ? `${progress.stageAttempt && progress.stageAttempt > 1 ? 'Retrying one pathway group' : 'Building future pathways'} · ${progress.completedBatches} of ${progress.totalBatches} pathway groups complete.`
                     : 'Validating and preparing your Future graph.',
               },
             }));
@@ -653,17 +656,24 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         }
         if (response.state === 'stage-enhanced') throw new Error('Incomplete staged response reached the Product Intelligence owner.');
         const incompleteExpansion = response.diagnostics?.productStage === 'expansion';
-        const fallbackStatus: RepositoryIntelligenceProviderStatus = response.category === 'request_timeout'
-          ? { state: 'fallback', deepState: response.deepState, message: incompleteExpansion ? 'Some future pathways took longer than expected.' : 'Future analysis is taking longer than expected.', retryable: true, category: 'request_timeout', diagnostics: response.diagnostics }
-          : { state: 'fallback', deepState: response.deepState, message: response.message, retryable: response.retryable, category: response.category, diagnostics: response.diagnostics };
+        const fallbackStatus: RepositoryIntelligenceProviderStatus = {
+          state: 'fallback',
+          deepState: response.deepState,
+          message: incompleteExpansion && response.category === 'request_timeout'
+            ? 'Some future pathways took longer than expected.'
+            : repositoryFutureFailureMessage(response.category, response.diagnostics),
+          retryable: response.retryable,
+          category: response.category,
+          diagnostics: response.diagnostics,
+        };
         setState(current => ({ ...current, repositoryProductIntelligenceStatus: fallbackStatus }));
       } catch {
         if (scanTokenRef.current !== token || productRequestIdentityRef.current !== requestIdentity) return;
         setState(current => ({
           ...current,
           repositoryProductIntelligenceStatus: controller.signal.aborted
-            ? { state: 'cancelled', deepState: 'failed', category: 'request_cancelled', retryable: true, message: 'Product opportunity analysis was cancelled. Repository evidence fallback remains available.' }
-            : { state: 'fallback', deepState: 'failed', category: 'provider_unavailable', retryable: true, message: 'Product opportunity analysis is unavailable. Repository evidence fallback remains available.' },
+            ? { state: 'cancelled', deepState: 'failed', category: 'request_cancelled', retryable: true, message: 'Future analysis was cancelled.', diagnostics: { costEstimate: 'unavailable', operationalFailureCategory: 'cancelled', failureBoundary: 'browser-network' } }
+            : { state: 'fallback', deepState: 'failed', category: 'provider_unavailable', retryable: true, message: 'Future analysis is temporarily unavailable.', diagnostics: { costEstimate: 'unavailable', operationalFailureCategory: 'provider_unavailable', failureBoundary: 'browser-network' } },
         }));
       } finally {
         if (productAbortRef.current === controller) productAbortRef.current = null;
@@ -680,7 +690,8 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           ...current,
           repositoryProductIntelligenceStatus: {
             state: 'fallback', deepState: 'failed', category: 'provider_unavailable', retryable: true,
-            message: 'Future analysis failed. Retry when you are ready.',
+            message: 'Future analysis is temporarily unavailable.',
+            diagnostics: { costEstimate: 'unavailable', operationalFailureCategory: 'provider_unavailable', failureBoundary: 'browser-network' },
           },
         }));
       });

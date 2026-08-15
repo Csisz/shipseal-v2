@@ -6,6 +6,7 @@ import {
 import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest';
 import {
   REPOSITORY_PRODUCT_EXPANSION_CONCURRENCY,
+  REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS,
   REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS,
   buildRepositoryProductExpansionStages,
   buildRepositoryProductRootStage,
@@ -77,34 +78,54 @@ export async function requestRepositoryProductIntelligenceStaged(
 ): Promise<RepositoryIntelligenceProviderApiResponse> {
   const cacheEligible = !options.fetcher;
   const rootsStage = buildRepositoryProductRootStage(request);
-  options.onProgress?.({ stage: 'roots', completedBatches: 0, totalBatches: 0, activeBatchIndexes: [] });
+  options.onProgress?.({ stage: 'roots', completedBatches: 0, totalBatches: 0, activeBatchIndexes: [], stageAttempt: 1 });
   let roots = cacheEligible ? completedProductRoots.get(rootsStage.fingerprint) : undefined;
   if (!roots) {
-    const response = await performRequest(request, { ...options, timeoutMs: options.timeoutMs ?? REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS }, rootsStage);
-    if (response.state !== 'enhanced') return response;
-    const opportunityCount = response.result.productIntelligence?.opportunities.length || 0;
-    if (opportunityCount < 6 || opportunityCount > 8) return invalidStageResponse('Future roots did not satisfy the six-to-eight direction contract.', rootsStage);
-    roots = response;
-    if (cacheEligible) completedProductRoots.set(rootsStage.fingerprint, response);
+    let rootFailure: RepositoryIntelligenceProviderApiResponse | undefined;
+    for (let attempt = 1; attempt <= REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS; attempt += 1) {
+      options.onProgress?.({ stage: 'roots', completedBatches: 0, totalBatches: 0, activeBatchIndexes: [], stageAttempt: attempt });
+      const response = await performRequest(request, { ...options, timeoutMs: options.timeoutMs ?? REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS }, rootsStage);
+      if (response.state === 'enhanced') {
+        const opportunityCount = response.result.productIntelligence?.opportunities.length || 0;
+        if (opportunityCount >= 6 && opportunityCount <= 8) {
+          roots = withStageRetryCount(response, attempt - 1);
+          break;
+        }
+        rootFailure = invalidStageResponse('Future roots did not satisfy the six-to-eight direction contract.', rootsStage, attempt - 1);
+      } else {
+        rootFailure = withStageRetryCount(response, attempt - 1);
+      }
+      if (!isRetryableStageFailure(rootFailure) || attempt === REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS) return rootFailure;
+    }
+    if (!roots) return rootFailure || invalidStageResponse('Future roots could not be completed.', rootsStage);
+    if (cacheEligible) completedProductRoots.set(rootsStage.fingerprint, roots);
   }
   if (!roots.result.productIntelligence) return invalidStageResponse('Product Understanding was unavailable.', rootsStage);
 
   const stages = buildRepositoryProductExpansionStages(request, roots.result.productIntelligence);
   let completed = stages.filter(stage => completedProductBatches.has(stage.fingerprint)).length;
   const active = new Set<number>();
-  options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [] });
+  options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [], stageAttempt: 1 });
   const responses = await mapWithBoundedConcurrency(stages, REPOSITORY_PRODUCT_EXPANSION_CONCURRENCY, async stage => {
     const cached = cacheEligible ? completedProductBatches.get(stage.fingerprint) : undefined;
     if (cached) return { response: cached, stage };
     active.add(stage.batchIndex);
-    options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [...active].sort() });
-    const response = await performRequest(request, { ...options, timeoutMs: options.timeoutMs ?? REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS }, stage);
+    options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [...active].sort(), stageAttempt: 1 });
+    let response: RepositoryIntelligenceProviderApiResponse = invalidStageResponse('This pathway group could not be completed.', stage);
+    for (let attempt = 1; attempt <= REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS; attempt += 1) {
+      options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [...active].sort(), stageAttempt: attempt });
+      response = withStageRetryCount(
+        await performRequest(request, { ...options, timeoutMs: options.timeoutMs ?? REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS }, stage),
+        attempt - 1,
+      );
+      if (response.state === 'stage-enhanced' || !isRetryableStageFailure(response) || attempt === REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS) break;
+    }
     active.delete(stage.batchIndex);
     if (response.state === 'stage-enhanced') {
       completed += 1;
       if (cacheEligible) completedProductBatches.set(stage.fingerprint, response);
     }
-    options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [...active].sort() });
+    options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [...active].sort(), stageAttempt: response.diagnostics?.stageRetryCount === 1 ? 2 : 1 });
     return { response, stage };
   });
   const failed = responses.find(item => item.response.state !== 'stage-enhanced');
@@ -114,7 +135,7 @@ export async function requestRepositoryProductIntelligenceStaged(
       ? { ...response, message: response.category === 'request_timeout' ? 'Some future pathways took longer than expected.' : 'Some future pathways could not be completed.', diagnostics: { ...response.diagnostics, productStage: 'expansion', stageFingerprint: failed.stage.fingerprint, expansionBatchIndex: failed.stage.batchIndex, expansionBatchCount: failed.stage.totalBatches } }
       : invalidStageResponse('Some future pathways could not be completed.', failed.stage);
   }
-  options.onProgress?.({ stage: 'merging', completedBatches: stages.length, totalBatches: stages.length, activeBatchIndexes: [] });
+  options.onProgress?.({ stage: 'merging', completedBatches: stages.length, totalBatches: stages.length, activeBatchIndexes: [], stageAttempt: 1 });
   try {
     const stageResults = responses.map(item => (item.response as Extract<RepositoryIntelligenceProviderApiResponse, { state: 'stage-enhanced' }>).stageResult);
     const result = mergeRepositoryProductExpansionResults(roots.result, stageResults);
@@ -123,7 +144,14 @@ export async function requestRepositoryProductIntelligenceStaged(
     const diagnostics = aggregateStagedDiagnostics(roots, responses.map(item => item.response as Extract<RepositoryIntelligenceProviderApiResponse, { state: 'stage-enhanced' }>), secondGeneration, thirdGeneration);
     return { ...roots, result, diagnostics };
   } catch {
-    return invalidStageResponse('Validated pathway groups could not be merged.', rootsStage);
+    return {
+      ...invalidStageResponse('Validated pathway groups could not be merged.', rootsStage),
+      diagnostics: {
+        ...invalidStageResponse('Validated pathway groups could not be merged.', rootsStage).diagnostics,
+        operationalFailureCategory: 'merge_incomplete',
+        failureBoundary: 'staged-merge',
+      },
+    };
   }
 }
 
@@ -134,7 +162,7 @@ function aggregateStagedDiagnostics(
   thirdGeneration: number,
 ) {
   const all = [roots.diagnostics, ...batches.map(batch => batch.diagnostics)];
-  const sum = (key: 'providerRequestBytes' | 'providerPromptTokens' | 'providerCompletionTokens' | 'providerReasoningTokens' | 'providerTotalTokens' | 'outputBytes' | 'durationMs' | 'retryCount' | 'languageRepairCount') => all.reduce((total, item) => total + (item[key] || 0), 0);
+  const sum = (key: 'providerRequestBytes' | 'providerPromptTokens' | 'providerCompletionTokens' | 'providerReasoningTokens' | 'providerTotalTokens' | 'outputBytes' | 'durationMs' | 'retryCount' | 'languageRepairCount' | 'stageRetryCount') => all.reduce((total, item) => total + (item[key] || 0), 0);
   return {
     ...roots.diagnostics,
     productStage: 'expansion' as const,
@@ -150,6 +178,7 @@ function aggregateStagedDiagnostics(
     durationMs: sum('durationMs'),
     retryCount: sum('retryCount'),
     languageRepairCount: sum('languageRepairCount'),
+    stageRetryCount: sum('stageRetryCount'),
   };
 }
 
@@ -210,13 +239,22 @@ async function validateResponse(response: Response): Promise<RepositoryIntellige
   const payload = await response.json().catch(() => null) as Partial<RepositoryIntelligenceProviderApiResponse> | null;
   if (!response.ok || !payload || payload.version !== REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION
     || !['enhanced', 'stage-enhanced', 'fallback'].includes(payload.state || '')) {
+    const rateLimited = response.status === 429;
+    const authenticationFailed = response.status === 401 || response.status === 403;
+    const invalidEnvelope = response.ok && !payload;
     return {
       version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
       state: 'fallback' as const,
-      category: response.status === 413 ? 'invalid_request' : 'provider_unavailable',
-      retryable: response.status >= 500,
+      category: response.status === 413 ? 'invalid_request' : rateLimited ? 'rate_limited' : authenticationFailed ? 'authentication_failed' : invalidEnvelope ? 'invalid_response' : 'provider_unavailable',
+      retryable: rateLimited || response.status >= 500 || invalidEnvelope,
       message: 'Enhanced intelligence is unavailable. Deterministic repository intelligence remains ready.',
       deepState: response.status === 413 ? 'budget-exceeded' as const : 'failed' as const,
+      diagnostics: {
+        costEstimate: 'unavailable',
+        operationalFailureCategory: rateLimited ? 'provider_rate_limited' : invalidEnvelope ? 'invalid_provider_envelope' : 'provider_unavailable',
+        failureBoundary: invalidEnvelope ? 'provider-envelope' : 'browser-network',
+        providerHttpStatusCategory: authenticationFailed ? 'authentication' : rateLimited ? 'rate-limited' : response.status >= 500 ? 'server-error' : 'request-rejected',
+      },
     };
   }
   return payload as RepositoryIntelligenceProviderApiResponse;
@@ -230,11 +268,16 @@ function timeoutResponse(): RepositoryIntelligenceProviderApiResponse {
     retryable: true,
     message: 'Future analysis is taking longer than expected.',
     deepState: 'timed-out',
-    diagnostics: { costEstimate: 'unavailable', browserTimedOut: true },
+    diagnostics: {
+      costEstimate: 'unavailable',
+      browserTimedOut: true,
+      operationalFailureCategory: 'browser_timeout',
+      failureBoundary: 'browser-network',
+    },
   };
 }
 
-function invalidStageResponse(message: string, stage: RepositoryProductProviderStage): RepositoryIntelligenceProviderApiResponse {
+function invalidStageResponse(message: string, stage: RepositoryProductProviderStage, stageRetryCount = 0): RepositoryIntelligenceProviderApiResponse {
   return {
     version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
     state: 'fallback',
@@ -248,6 +291,13 @@ function invalidStageResponse(message: string, stage: RepositoryProductProviderS
       stageFingerprint: stage.fingerprint,
       ...(stage.kind === 'expansion' ? { expansionBatchIndex: stage.batchIndex, expansionBatchCount: stage.totalBatches } : {}),
       schemaValidationFailureCount: 1,
+      stageRetryCount,
+      operationalFailureCategory: stage.kind === 'roots' ? 'roots_schema_failed' : 'expansion_schema_failed',
+      failureBoundary: 'schema-validation',
+      ...(stage.kind === 'expansion' ? {
+        expansionParentFutureIds: stage.parents.map(parent => parent.id),
+        expansionParentCount: stage.parents.length,
+      } : {}),
     },
   };
 }
@@ -260,6 +310,7 @@ function cancelledResponse(): RepositoryIntelligenceProviderApiResponse {
     retryable: true,
     message: 'Future analysis was cancelled.',
     deepState: 'failed',
+    diagnostics: { costEstimate: 'unavailable', operationalFailureCategory: 'cancelled', failureBoundary: 'browser-network' },
   };
 }
 
@@ -271,7 +322,24 @@ function unavailableResponse(): RepositoryIntelligenceProviderApiResponse {
     retryable: true,
     message: 'Future analysis failed. Retry when you are ready.',
     deepState: 'failed',
+    diagnostics: { costEstimate: 'unavailable', operationalFailureCategory: 'provider_unavailable', failureBoundary: 'browser-network' },
   };
+}
+
+function isRetryableStageFailure(response: RepositoryIntelligenceProviderApiResponse) {
+  return response.state === 'fallback' && response.retryable
+    && !['authentication_failed', 'configuration_invalid', 'credentials_missing', 'provider_disabled', 'request_cancelled'].includes(response.category);
+}
+
+function withStageRetryCount<T extends RepositoryIntelligenceProviderApiResponse>(response: T, stageRetryCount: number): T {
+  if (!stageRetryCount) return response;
+  return {
+    ...response,
+    diagnostics: {
+      ...(response.diagnostics || { costEstimate: 'unavailable' as const }),
+      stageRetryCount,
+    },
+  } as T;
 }
 
 export function clearRepositoryIntelligenceEnhancementSessionCache() {

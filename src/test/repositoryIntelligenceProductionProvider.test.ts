@@ -382,7 +382,7 @@ describe('production Repository Intelligence provider', () => {
       roots: { bytes: rootsMeasurement.providerRequestBytes, estimatedTokens: rootsMeasurement.providerInputTokenEstimate, outputCap: rootsMeasurement.outputTokenCap },
       expansion: { bytes: expansionMeasurement.providerRequestBytes, estimatedTokens: expansionMeasurement.providerInputTokenEstimate, outputCap: expansionMeasurement.outputTokenCap },
     }));
-    expect(rootsMeasurement.outputTokenCap).toBe(2_400);
+    expect(rootsMeasurement.outputTokenCap).toBe(3_200);
     expect(expansionMeasurement.outputTokenCap).toBe(1_800);
     expect(expansionMeasurement.providerRequestBytes).toBeLessThan(rootsMeasurement.providerRequestBytes);
 
@@ -906,6 +906,52 @@ describe('production Repository Intelligence provider', () => {
       expect.objectContaining({ statusCategory: 'generated_language_repair' }),
     ]));
     expect(logs.filter(event => event.outcome === 'success')).toHaveLength(1);
+  });
+
+  it('preserves the production root truncation boundary with unique stage-safe diagnostics', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = buildRepositoryProductRootStage(request);
+    const logs: ProductionProviderLogEvent[] = [];
+    const fetcher = vi.fn(async () => rawEnvelope({
+      model: 'gpt-5.1-2025-11-13',
+      usage: { prompt_tokens: 6_800, completion_tokens: 3_200, total_tokens: 10_000 },
+      choices: [{ finish_reason: 'length', message: { content: '{"partial":true}' } }],
+    }));
+    const execute = () => prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: event => logs.push(event) });
+
+    const first = await execute();
+    const second = await execute();
+    expect(first.body).toMatchObject({
+      state: 'fallback',
+      category: 'schema_validation_failed',
+      retryable: true,
+      diagnostics: {
+        productStage: 'roots',
+        outputTokenCap: 3_200,
+        providerFinishReason: 'length',
+        validationReason: 'completion-truncated',
+        operationalFailureCategory: 'invalid_provider_envelope',
+        failureBoundary: 'provider-envelope',
+      },
+    });
+    expect(second.body).toMatchObject({ state: 'fallback', retryable: true });
+    const requestIds = logs.filter(event => event.outcome === 'failure').map(event => event.requestId);
+    expect(new Set(requestIds).size).toBe(2);
+    expect(logs).toEqual(expect.arrayContaining([expect.objectContaining({
+      productStage: 'roots',
+      stageFingerprint: productStage.fingerprint,
+      providerModelId: 'gpt-5.1-2025-11-13',
+      providerCompletionTokens: 3_200,
+      providerFinishReason: 'length',
+      operationalFailureCategory: 'invalid_provider_envelope',
+      failureBoundary: 'provider-envelope',
+    })]));
+    expect(JSON.stringify(logs)).not.toContain('src/main.tsx');
+    expect(JSON.stringify(logs)).not.toContain('bootstrap');
   });
 
   it('falls back safely when the one language repair attempt still contains mixed generated text', async () => {
