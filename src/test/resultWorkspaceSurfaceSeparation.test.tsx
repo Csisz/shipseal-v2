@@ -34,8 +34,12 @@ describe('Repository Futures and Project Universe surface separation', () => {
 
     const futures = await screen.findByTestId('repository-futures-workspace');
     expect(futures.closest('[data-view-transition="selector-to-futures"]')).toHaveClass('futures-surface-enter');
+    expect(futures).toHaveAttribute('data-futures-environment', 'full-stage');
     expect(within(futures).getByTestId('repository-futures-stage')).toBeInTheDocument();
     expect(within(futures).getByTestId('repository-futures-stage')).toHaveAttribute('data-primary-surface', 'neural-canvas');
+    expect(within(futures).getByTestId('repository-futures-stage')).toHaveAttribute('data-stage-shell', 'immersive');
+    expect(screen.getByTestId('experience-shell-utility')).toHaveAttribute('data-current-experience', 'Repository Futures');
+    expect(screen.getByTestId('experience-shell-utility')).not.toHaveClass('sticky');
     expect(within(futures).getByTestId('future-pathways-hero-stage')).toBeInTheDocument();
     expect(within(futures).getAllByRole('group', { name: 'Future Pathways mode' })).toHaveLength(1);
     const otherImprovements = within(futures).getByText('Other improvements').closest('details');
@@ -52,6 +56,7 @@ describe('Repository Futures and Project Universe surface separation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open Project Universe' }));
 
     expect(await screen.findByTestId('separated-universe-renderer')).toBeInTheDocument();
+    expect(screen.getByTestId('experience-shell-utility')).toHaveAttribute('data-current-experience', 'Project Universe');
     await waitFor(() => expect(universeRendererState.moduleLoads).toBeGreaterThan(0));
     expect(screen.queryByTestId('repository-futures-workspace')).not.toBeInTheDocument();
   });

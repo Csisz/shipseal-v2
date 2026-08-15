@@ -511,8 +511,8 @@
 
 .repository-formation-atmosphere {
   background:
-    radial-gradient(circle at 50% 48%, hsl(var(--primary) / 0.14), transparent 28%),
-    radial-gradient(circle at 50% 48%, hsl(var(--accent) / 0.06), transparent 52%),
+    radial-gradient(circle at 50% 46%, hsl(var(--primary) / 0.12), transparent 23%),
+    radial-gradient(circle at 50% 46%, hsl(var(--accent) / 0.045), transparent 48%),
     linear-gradient(180deg, hsl(var(--background) / 0.08), transparent 48%, hsl(var(--background) / 0.2));
 }
 
@@ -528,6 +528,11 @@
 .repository-formation-bloom::after {
   inset: 28%;
   border-color: hsl(var(--accent) / 0.17);
+}
+
+.repository-formation-orbit {
+  transform-origin: center;
+  animation: repository-formation-orbit 8s linear infinite;
 }
 
 .repository-formation-ring {
@@ -546,7 +551,18 @@
 }
 
 .repository-formation-core {
+  isolation: isolate;
   box-shadow: 0 0 54px hsl(var(--primary) / 0.15), inset 0 0 28px hsl(var(--primary) / 0.035);
+}
+
+.repository-formation-core::before {
+  position: absolute;
+  inset: -16%;
+  z-index: -1;
+  content: '';
+  border-radius: inherit;
+  background: radial-gradient(circle, hsl(var(--primary) / 0.18), transparent 68%);
+  opacity: 0.34;
 }
 
 .repository-formation-arc {
@@ -575,8 +591,18 @@
 .repository-formation[data-formation-stage='workspace'] .repository-formation-arc-c,
 .repository-formation[data-formation-stage='ready'] .repository-formation-arc-c { opacity: 0.48; }
 
-.repository-formation[data-formation-state='active'] .repository-formation-core {
-  animation: repository-formation-breathe 2.4s ease-in-out infinite;
+.repository-formation-active-trace {
+  fill: none;
+  stroke: hsl(var(--primary-glow));
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-dasharray: 0.08 0.92;
+  filter: drop-shadow(0 0 5px hsl(var(--primary) / 0.55));
+  animation: repository-formation-flow 1.8s linear infinite;
+}
+
+.repository-formation[data-formation-state='active'] .repository-formation-core::before {
+  animation: repository-formation-breathe 2.8s ease-in-out infinite;
 }
 
 .repository-formation-active-dot {
@@ -588,13 +614,18 @@
   stroke-dashoffset: 0;
 }
 
-@keyframes repository-formation-path {
+@keyframes repository-formation-orbit {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes repository-formation-flow {
+  from { stroke-dashoffset: 1; }
   to { stroke-dashoffset: 0; }
 }
 
 @keyframes repository-formation-breathe {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.025); }
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.58; }
 }
 
 @keyframes repository-formation-active {
@@ -604,11 +635,14 @@
 
 @media (prefers-reduced-motion: reduce) {
   .repository-formation-ring,
-  .repository-formation-arc {
+  .repository-formation-arc,
+  .repository-formation-core::before {
     transition: none;
   }
 
-  .repository-formation[data-formation-state='active'] .repository-formation-core,
+  .repository-formation-orbit,
+  .repository-formation-active-trace,
+  .repository-formation[data-formation-state='active'] .repository-formation-core::before,
   .repository-formation-active-dot {
     animation: none;
   }

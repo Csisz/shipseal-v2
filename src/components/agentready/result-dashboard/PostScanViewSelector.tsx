@@ -33,7 +33,7 @@ export function PostScanViewSelector({
       tabIndex={-1}
       aria-labelledby="post-scan-view-selector-heading"
       data-testid="post-scan-view-selector"
-      className="relative left-1/2 min-h-[calc(100svh-4rem)] w-screen -translate-x-1/2 overflow-hidden bg-workspace text-foreground outline-none motion-safe:animate-fade-in motion-reduce:animate-none"
+      className="relative min-h-[calc(100svh-4rem)] w-full overflow-hidden bg-workspace text-foreground outline-none motion-safe:animate-fade-in motion-reduce:animate-none"
     >
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_18%_18%,hsl(var(--primary)/0.12),transparent_34%),radial-gradient(circle_at_84%_78%,hsl(var(--accent)/0.1),transparent_36%),linear-gradient(180deg,hsl(var(--background)/0.12),transparent_42%,hsl(var(--background)/0.22))]" />
       <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-1/2 hidden w-px bg-gradient-to-b from-transparent via-border/70 to-transparent lg:block" />

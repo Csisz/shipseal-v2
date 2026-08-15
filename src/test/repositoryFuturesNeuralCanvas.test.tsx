@@ -115,6 +115,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
 
     expect(stage).toHaveAttribute('data-field-density', 'breathable-layered-neural');
     expect(stage).toHaveAttribute('data-layout-strategy', 'stable-grounded-lattice-with-role-aware-enablers-and-terminal-collision-allocation');
+    expect(stage).toHaveAttribute('data-stage-framing', 'immersive-full-stage');
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
     expect(container.querySelector('[data-field-layer="structured-rows"]')).toBeInTheDocument();
     expect(container.querySelector('[data-field-layer="prerequisite-rail"]')).not.toBeInTheDocument();

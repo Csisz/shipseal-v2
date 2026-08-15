@@ -54,10 +54,14 @@ describe('unified repository formation experience', () => {
       const { rerender } = render(<RepositoryFormation repositoryName="fixture" stage="directions" title="Forming repository intelligence" action="Analysing product directions." />);
       expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
       expect(screen.queryByText(/\d+%/)).not.toBeInTheDocument();
+      expect(document.querySelector('.repository-formation-active-trace')).toBeInTheDocument();
+      expect(document.querySelector('.repository-formation-orbit')).toBeInTheDocument();
       act(() => vi.advanceTimersByTime(8_000));
       expect(screen.getByTestId('formation-long-running')).toHaveTextContent(/Still analysing/i);
 
       rerender(<RepositoryFormation repositoryName="fixture" stage="directions" title="Forming repository intelligence" action="" failure={{ message: 'Future analysis is taking longer than expected.', onRetry }} />);
+      expect(document.querySelector('.repository-formation-active-trace')).not.toBeInTheDocument();
+      expect(document.querySelector('.repository-formation-orbit')).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Retry Future analysis' }));
       expect(onRetry).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId('repository-formation')).toHaveAttribute('aria-busy', 'false');

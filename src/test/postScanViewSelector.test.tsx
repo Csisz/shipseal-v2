@@ -48,6 +48,8 @@ describe('premium post-scan view selector', () => {
     renderWorkspace();
 
     expect(screen.getByTestId('post-scan-view-selector')).toBeInTheDocument();
+    expect(screen.getByTestId('post-scan-view-selector')).toHaveClass('w-full');
+    expect(screen.getByTestId('post-scan-view-selector')).not.toHaveClass('w-screen');
     expect(screen.getByRole('heading', { name: /Choose your first perspective/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Open Repository Futures' })).toBeEnabled();
@@ -64,6 +66,7 @@ describe('premium post-scan view selector', () => {
 
     expect(screen.getByTestId('universe-experience')).toHaveAttribute('data-active-chapter', 'understand');
     expect(screen.getByRole('button', { name: /Change view.*Current view: Project Universe/i })).toBeEnabled();
+    expect(screen.getByTestId('experience-shell-utility')).not.toHaveClass('sticky');
     fireEvent.click(screen.getByRole('button', { name: /Change view/i }));
     expect(screen.getByTestId('post-scan-view-selector')).toBeInTheDocument();
   });

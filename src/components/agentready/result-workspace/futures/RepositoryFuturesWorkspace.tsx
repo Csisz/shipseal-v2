@@ -34,12 +34,12 @@ export default function RepositoryFuturesWorkspace({
     <section
       aria-labelledby="repository-futures-heading"
       data-testid="repository-futures-workspace"
-      data-futures-environment="cinematic-field"
-      className="relative w-full overflow-hidden bg-workspace pb-10"
+      data-futures-environment="full-stage"
+      className="relative min-h-[calc(100dvh-3rem)] w-full overflow-x-clip bg-workspace pb-10"
     >
-      <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(circle_at_72%_0%,hsl(var(--primary)/0.1),transparent_44%),radial-gradient(circle_at_18%_8%,hsl(var(--accent)/0.055),transparent_38%)]" />
-      <div className="relative mx-auto w-full max-w-[1680px] px-3 pb-4 pt-3 sm:px-5 md:px-7 md:pt-5">
-        <header className="mb-3 max-w-3xl motion-safe:animate-fade-in-up motion-reduce:animate-none md:mb-4">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_8%,hsl(var(--primary)/0.1),transparent_34%),radial-gradient(circle_at_18%_18%,hsl(var(--accent)/0.055),transparent_32%),linear-gradient(180deg,hsl(var(--workspace)/0.34),transparent_46%)]" />
+      <div className="relative mx-auto w-full max-w-[1920px] pb-4 pt-3 md:pt-5">
+        <header className="mb-3 max-w-3xl px-4 motion-safe:animate-fade-in-up motion-reduce:animate-none sm:px-6 md:mb-4 lg:px-8">
           <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.2em] text-primary-glow">
             <GitBranch className="h-3.5 w-3.5" aria-hidden="true" /> Repository Futures
           </div>
@@ -53,7 +53,7 @@ export default function RepositoryFuturesWorkspace({
           </p>
         </header>
 
-        <div data-testid="repository-futures-stage" data-primary-surface="neural-canvas" className="min-h-[64dvh]">
+        <div data-testid="repository-futures-stage" data-primary-surface="neural-canvas" data-stage-shell="immersive" className="min-h-[72dvh] w-full">
           <RepositoryFuturePathways
             report={report}
             universe={repositoryModel}
@@ -63,7 +63,7 @@ export default function RepositoryFuturesWorkspace({
         </div>
 
         {secondaryContent && (
-          <div className="mt-6" data-secondary-surface="other-improvements">
+          <div className="mx-auto mt-6 w-full max-w-[1680px] px-4 sm:px-6 lg:px-8" data-secondary-surface="other-improvements">
             <ResultWorkspaceDisclosure title="Other improvements" defaultOpen={secondaryOpen} lazyMount>
               {secondaryContent}
             </ResultWorkspaceDisclosure>

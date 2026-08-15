@@ -1,12 +1,11 @@
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
-import RepositoryFuturesWorkspace from '@/components/agentready/result-workspace/futures/RepositoryFuturesWorkspace';
+import { ResultWorkspace } from '@/components/agentready/ResultWorkspace';
 import { buildReport } from '@/lib/readiness';
 import {
   REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
   REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
   validateRepositoryProductIntelligence,
 } from '@/lib/repositoryIntelligence';
-import { buildRepositoryUniverseModel } from '@/lib/workspace';
 
 const evidence = [
   { id: 'evidence:readme', path: 'README.md', confidence: 0.96, validationState: 'validated', assertionState: 'observed' },
@@ -105,12 +104,14 @@ const productIntelligence = validateRepositoryProductIntelligence({
 export default function RepositoryFuturesLayoutQa() {
   return (
     <main className="min-h-screen bg-workspace text-foreground" data-testid="repository-futures-layout-qa">
-      <div className="fixed right-3 top-3 z-[100]"><ThemeToggle /></div>
-      <RepositoryFuturesWorkspace
+      <div className="fixed bottom-3 right-3 z-[100]"><ThemeToggle /></div>
+      <ResultWorkspace
         report={report}
-        repositoryModel={buildRepositoryUniverseModel(report)}
-        productIntelligence={productIntelligence}
-        productIntelligenceStatus={{ state: 'enhanced', deepState: 'completed', message: 'Product opportunities enhanced.', retryable: false, providerId: 'qa-provider' }}
+        history={[]}
+        onReset={() => undefined}
+        onClearHistory={() => undefined}
+        repositoryProductIntelligence={productIntelligence}
+        repositoryProductIntelligenceStatus={{ state: 'enhanced', deepState: 'completed', message: 'Product opportunities enhanced.', retryable: false, providerId: 'qa-provider' }}
       />
     </main>
   );

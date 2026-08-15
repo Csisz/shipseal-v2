@@ -367,7 +367,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         onClick={event => {
           if (!(event.target as Element).closest('[data-neural-node], [data-camera-control], [data-futures-mode-owner], [data-neural-inspector]')) clearFocus();
         }}
-        className={`futures-neural-stage relative h-[calc(100svh-220px)] min-h-[590px] max-h-[820px] select-none overflow-hidden overscroll-contain rounded-[1rem] border border-primary/15 outline-none [touch-action:none] focus-visible:ring-2 focus-visible:ring-ring md:min-h-[600px] ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        data-stage-framing="immersive-full-stage"
+        className={`futures-neural-stage relative h-[calc(100svh-10rem)] min-h-[640px] max-h-[960px] select-none overflow-hidden overscroll-contain border-y border-primary/10 outline-none [touch-action:none] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:min-h-[720px] ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
         <div aria-hidden="true" className="futures-neural-mesh pointer-events-none absolute inset-0 opacity-[0.2]" />
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,hsl(var(--futures-field-bg)/0.44)_100%)]" />

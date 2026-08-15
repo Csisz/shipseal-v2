@@ -42,6 +42,7 @@ export function RepositoryFormation({
     ? REPOSITORY_FORMATION_PHASES.length
     : REPOSITORY_FORMATION_PHASES.findIndex(phase => phase.id === stage);
   const ready = stage === 'ready';
+  const activeTrace = formationActiveTrace(stage);
 
   useEffect(() => {
     setShowLongRunningMessage(false);
@@ -71,32 +72,40 @@ export function RepositoryFormation({
         </button>
       )}
 
-      <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col items-center text-center">
-        <div className="font-mono text-[10px] uppercase tracking-[0.24em] text-primary-glow">
+      <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-col items-center text-center">
+        <div className="max-w-full truncate font-mono text-[10px] uppercase tracking-[0.22em] text-primary-glow">
           ShipSeal intelligence {sourceLabel ? `· ${sourceLabel}` : ''}
         </div>
-        <h1 id="repository-formation-title" className="mt-4 max-w-2xl font-display text-3xl font-semibold tracking-[-0.035em] sm:text-4xl md:text-5xl">
+        <h1 id="repository-formation-title" className="mt-3 max-w-xl font-display text-3xl font-semibold tracking-[-0.035em] sm:text-4xl">
           {failure ? 'Future analysis needs attention' : title}
         </h1>
-        <p className="mt-3 max-w-xl text-sm text-muted-foreground sm:text-base">
+        <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
           {failure?.message || action}
         </p>
 
-        <div className="repository-formation-bloom relative mt-7 size-52 sm:mt-8 sm:size-60" aria-hidden="true">
+        <div className="repository-formation-bloom relative mt-6 size-44 sm:mt-7 sm:size-48" aria-hidden="true">
           <svg viewBox="0 0 280 280" className="absolute inset-0 h-full w-full overflow-visible" fill="none">
-            <circle cx="140" cy="140" r="112" className="repository-formation-ring repository-formation-ring-outer" strokeWidth="0.8" strokeDasharray="2 10" />
-            <circle cx="140" cy="140" r="78" className="repository-formation-ring repository-formation-ring-inner" strokeWidth="0.8" />
+            <circle cx="140" cy="140" r="112" className="repository-formation-ring repository-formation-ring-outer" strokeWidth="0.7" strokeDasharray="2 12" />
+            <circle cx="140" cy="140" r="76" className="repository-formation-ring repository-formation-ring-inner" strokeWidth="0.7" />
             <path pathLength="1" className="repository-formation-arc repository-formation-arc-a" d="M36 148 C74 90 104 92 140 140 C178 190 211 184 246 126" />
             <path pathLength="1" className="repository-formation-arc repository-formation-arc-b" d="M42 178 C82 152 104 158 140 140 C177 121 204 83 240 92" />
             <path pathLength="1" className="repository-formation-arc repository-formation-arc-c" d="M55 105 C91 111 111 124 140 140 C171 157 198 158 226 188" />
+            {!ready && !failure && activeTrace && (
+              <path pathLength="1" className="repository-formation-active-trace" d={activeTrace} />
+            )}
           </svg>
+          {!ready && !failure && (
+            <span className="repository-formation-orbit absolute inset-[7%] rounded-full border border-primary/15">
+              <span className="absolute left-1/2 top-[-3px] size-1.5 -translate-x-1/2 rounded-full bg-primary-glow shadow-[0_0_12px_hsl(var(--primary)/0.65)]" />
+            </span>
+          )}
           <div className={cn(
-            'repository-formation-core absolute left-1/2 top-1/2 grid h-24 w-24 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border bg-background/80 backdrop-blur-xl sm:h-28 sm:w-28',
+            'repository-formation-core absolute left-1/2 top-1/2 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border bg-background/80 backdrop-blur-xl sm:h-24 sm:w-24',
             failure ? 'border-destructive/55' : ready ? 'border-success/55' : 'border-primary/55',
           )}>
             <div>
               {ready ? <Check className="mx-auto size-5 text-success" /> : <Network className="mx-auto size-5 text-primary-glow" />}
-              <div className="mt-2 max-w-[6.5rem] truncate font-display text-[11px] font-semibold sm:max-w-[7rem] sm:text-xs">{repositoryName}</div>
+              <div className="mt-2 max-w-[4.5rem] truncate font-display text-[10px] font-semibold sm:max-w-[5.5rem] sm:text-[11px]">{repositoryName}</div>
               <div className="mt-1 font-mono text-[8px] uppercase tracking-[0.12em] text-muted-foreground">
                 {safeProgress == null ? ready ? 'Ready' : 'Active' : `${safeProgress}%`}
               </div>
@@ -104,12 +113,12 @@ export function RepositoryFormation({
           </div>
         </div>
 
-        <ol className="mt-6 flex w-full max-w-sm flex-col gap-2 text-left" aria-label="Repository formation progress">
+        <ol className="mt-5 flex w-full max-w-xs flex-col gap-1.5 text-left" aria-label="Repository formation progress">
           {REPOSITORY_FORMATION_PHASES.map((phase, index) => {
             const complete = ready || index < activeIndex;
             const active = !ready && index === activeIndex;
             return (
-              <li key={phase.id} className={cn('flex items-center gap-3 text-sm', complete ? 'text-foreground/75' : active ? 'text-foreground' : 'text-muted-foreground/45')} aria-current={active ? 'step' : undefined}>
+              <li key={phase.id} className={cn('flex min-h-6 items-center gap-3 text-sm', complete ? 'text-foreground/65' : active ? 'font-medium text-foreground' : 'text-muted-foreground/40')} aria-current={active ? 'step' : undefined}>
                 {complete ? (
                   <Check className="size-3.5 shrink-0 text-success" aria-hidden="true" />
                 ) : active ? (
@@ -141,4 +150,21 @@ export function RepositoryFormation({
       </div>
     </section>
   );
+}
+
+function formationActiveTrace(stage: RepositoryFormationStage) {
+  switch (stage) {
+    case 'reading':
+      return 'M140 28 A112 112 0 0 1 252 140';
+    case 'understanding':
+      return 'M36 148 C74 90 104 92 140 140 C178 190 211 184 246 126';
+    case 'directions':
+      return 'M42 178 C82 152 104 158 140 140 C177 121 204 83 240 92';
+    case 'pathways':
+      return 'M55 105 C91 111 111 124 140 140 C171 157 198 158 226 188';
+    case 'workspace':
+      return 'M28 140 A112 112 0 0 0 252 140';
+    case 'ready':
+      return undefined;
+  }
 }

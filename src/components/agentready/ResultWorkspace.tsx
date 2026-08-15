@@ -245,7 +245,7 @@ export function ResultWorkspace({
 
   if (effectiveEntryView === 'futures' && repositoryUniverse) {
     return (
-      <section data-view-transition="selector-to-futures" className="container max-w-[1480px] py-4 md:py-5 futures-surface-enter motion-reduce:animate-none">
+      <section data-view-transition="selector-to-futures" data-experience-shell="futures" className="w-full bg-workspace futures-surface-enter motion-reduce:animate-none">
         <div className="dashboard-print-warning">
           For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
         </div>
@@ -291,7 +291,7 @@ export function ResultWorkspace({
   }
 
   return (
-    <section className="container max-w-[1480px] py-4 md:py-5 animate-fade-in-up">
+    <section data-experience-shell="universe" className="container max-w-[1480px] py-4 md:py-5 animate-fade-in-up">
       <div className="dashboard-print-warning">
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
@@ -315,7 +315,7 @@ export function ResultWorkspace({
         onChange={handleResultChapterChange}
       />}
 
-      <div key="repository-universe" ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} className="relative left-1/2 min-h-[calc(100dvh-5rem)] w-screen -translate-x-1/2 scroll-mt-20 overflow-hidden bg-background focus:outline-none">
+      <div key="repository-universe" ref={repositoryUniverseRef} id="repository-universe" tabIndex={-1} hidden={activeResultChapter === 'deliver'} className="relative min-h-[calc(100dvh-5rem)] w-full scroll-mt-20 overflow-hidden bg-background focus:outline-none">
         {universeRequested && repositoryUniverse ? <AiWorkspaceHero
           report={report}
           limitationReason={limitedScanReason}
@@ -450,16 +450,26 @@ export function ResultWorkspace({
 
 function ChangeViewControl({ currentView, onChange }: { currentView: 'Project Universe' | 'Repository Futures'; onChange: () => void }) {
   return (
-    <div className="pointer-events-none sticky top-20 z-[var(--layer-toolbar)] mb-2 flex justify-end px-1">
-      <button
-        type="button"
-        onClick={onChange}
-        className="pointer-events-auto inline-flex min-h-10 items-center gap-2 rounded-full border border-primary/20 bg-[hsl(var(--surface-floating)/0.88)] px-3.5 text-xs font-medium text-muted-foreground shadow-[var(--shadow-floating-panel)] backdrop-blur-xl transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
-      >
-        <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden="true" />
-        Change view
-        <span className="sr-only">Current view: {currentView}</span>
-      </button>
+    <div
+      data-testid="experience-shell-utility"
+      data-current-experience={currentView}
+      className="relative z-[var(--layer-toolbar)] w-full border-y border-primary/10 bg-[hsl(var(--surface-floating)/0.72)] backdrop-blur-xl"
+    >
+      <div className="mx-auto flex min-h-12 w-full max-w-[1920px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+        <span className="truncate font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground sm:text-[10px]">
+          {currentView}
+        </span>
+        <button
+          type="button"
+          data-testid="change-view-control"
+          onClick={onChange}
+          className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full border border-primary/20 bg-background/60 px-3.5 text-xs font-medium text-muted-foreground transition-[color,border-color,background-color] duration-200 hover:border-primary/40 hover:bg-background/80 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+        >
+          <PanelsTopLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          Change view
+          <span className="sr-only">Current view: {currentView}</span>
+        </button>
+      </div>
     </div>
   );
 }
