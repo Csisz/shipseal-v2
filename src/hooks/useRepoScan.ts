@@ -530,6 +530,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           }));
           return;
         }
+        if (response.state === 'stage-enhanced') throw new Error('Unexpected Product expansion response in general Deep Intelligence.');
         const fallbackStatus: RepositoryIntelligenceProviderStatus = response.category === 'request_cancelled'
           ? { state: 'cancelled', deepState: response.deepState, message: response.message, retryable: true, category: 'request_cancelled', diagnostics: response.diagnostics }
           : { state: 'fallback', deepState: response.deepState, message: response.message, retryable: response.retryable, category: response.category, diagnostics: response.diagnostics };
@@ -577,7 +578,8 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         repositoryProductIntelligence: null,
         repositoryProductIntelligenceStatus: {
           state: 'preparing', deepState: 'pending',
-          message: 'ShipSeal is understanding the product and exploring its strongest next directions.', retryable: false,
+          productStage: 'roots', completedBatches: 0, totalBatches: 0,
+          message: 'ShipSeal is understanding the product and finding grounded directions.', retryable: false,
         },
       }));
       try {
@@ -593,7 +595,27 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           contextBundle,
           evidenceResult: preparation.evidenceResult,
         });
-        const response = await clientModule.requestRepositoryIntelligenceEnhancement(request, { signal: controller.signal });
+        const response = await clientModule.requestRepositoryProductIntelligenceStaged(request, {
+          signal: controller.signal,
+          onProgress: progress => {
+            if (scanTokenRef.current !== token || productRequestIdentityRef.current !== requestIdentity || controller.signal.aborted) return;
+            setState(current => ({
+              ...current,
+              repositoryProductIntelligenceStatus: {
+                state: 'preparing', deepState: 'pending', retryable: false,
+                productStage: progress.stage,
+                completedBatches: progress.completedBatches,
+                totalBatches: progress.totalBatches,
+                activeBatchIndexes: progress.activeBatchIndexes,
+                message: progress.stage === 'roots'
+                  ? 'Understanding the product and finding grounded directions.'
+                  : progress.stage === 'expansion'
+                    ? `Building future pathways · ${progress.completedBatches} of ${progress.totalBatches} pathway groups complete.`
+                    : 'Validating and preparing your Future graph.',
+              },
+            }));
+          },
+        });
         if (scanTokenRef.current !== token || productRequestIdentityRef.current !== requestIdentity) return;
         if (controller.signal.aborted || response.state === 'fallback' && response.category === 'request_cancelled') {
           setState(current => ({
@@ -629,8 +651,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           }
           return;
         }
+        if (response.state === 'stage-enhanced') throw new Error('Incomplete staged response reached the Product Intelligence owner.');
+        const incompleteExpansion = response.diagnostics?.productStage === 'expansion';
         const fallbackStatus: RepositoryIntelligenceProviderStatus = response.category === 'request_timeout'
-          ? { state: 'fallback', deepState: response.deepState, message: 'Future analysis is taking longer than expected.', retryable: true, category: 'request_timeout', diagnostics: response.diagnostics }
+          ? { state: 'fallback', deepState: response.deepState, message: incompleteExpansion ? 'Some future pathways took longer than expected.' : 'Future analysis is taking longer than expected.', retryable: true, category: 'request_timeout', diagnostics: response.diagnostics }
           : { state: 'fallback', deepState: response.deepState, message: response.message, retryable: response.retryable, category: response.category, diagnostics: response.diagnostics };
         setState(current => ({ ...current, repositoryProductIntelligenceStatus: fallbackStatus }));
       } catch {

@@ -96,7 +96,8 @@ const TERMINAL_COLUMN_SPACING = 170;
 const TERMINAL_COLLISION_WIDTH = 152;
 const TERMINAL_COLLISION_HEIGHT = 88;
 
-const verticalStreamPosition = (index: number) => 36 + index * 104;
+const VERTICAL_WORLD = { width: 2600, height: 1540 } as const;
+const verticalStreamPosition = (index: number) => 220 + index * 300;
 
 function repositoryFuturesVerticalFlowPosition(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return 195;
@@ -222,9 +223,9 @@ export function buildRepositoryFuturesCanvasModel(
   // The interactive topology is gated until the actual response reaches a
   // terminal state. No deterministic/example nodes leak into the forming UI.
   const readyCandidates = overlay.productIntelligenceState === 'analysing' ? [] : uniqueCandidates(overlay.candidates);
-  // The phone field keeps six real directions so every lane remains tappable;
-  // the complete eight-direction generation remains available on larger views.
-  const candidates = orientation === 'vertical' ? readyCandidates.slice(0, 6) : readyCandidates;
+  // Orientation is presentation only: both projections retain the exact same
+  // semantic roster, identities and relationships.
+  const candidates = readyCandidates;
   const occupiedVisualRows = new Set<number>();
   const visualRowByGoalId = new Map<string, number>();
   candidates.forEach(candidate => {
@@ -426,15 +427,12 @@ export function buildRepositoryFuturesCanvasModel(
   }
 
   const terminalIndexById = new Map<string, number>();
-  const terminalGoalIds = new Set(nodes
+  nodes
     .filter(node => node.kind === 'evolution' && node.depth === 3 && node.parentGoalId)
-    .map(node => node.parentGoalId!));
-  terminalGoalIds.forEach(goalId => {
-    nodes
-      .filter(node => node.kind === 'evolution' && node.depth === 3 && node.parentGoalId === goalId)
-      .sort((left, right) => left.x - right.x || left.y - right.y || left.id.localeCompare(right.id))
-      .forEach((node, index) => terminalIndexById.set(node.id, index));
-  });
+    .sort((left, right) => (left.presentationRow?.index ?? 99) - (right.presentationRow?.index ?? 99)
+      || (left.parentGoalId || '').localeCompare(right.parentGoalId || '')
+      || left.x - right.x || left.y - right.y || left.id.localeCompare(right.id))
+    .forEach((node, index) => terminalIndexById.set(node.id, index));
   const orientedNodes = orientation === 'vertical'
     ? nodes.map(node => {
       const rowOffset = node.presentationRow
@@ -442,19 +440,21 @@ export function buildRepositoryFuturesCanvasModel(
         : 0;
       const terminalIndex = terminalIndexById.get(node.id);
       const terminalEvolution = terminalIndex !== undefined;
+      const terminalCount = terminalIndexById.size;
+      const laneX = node.presentationRow ? verticalStreamPosition(node.presentationRow.index) : VERTICAL_WORLD.width / 2;
       return {
         ...node,
-        x: node.presentationRow
-          ? verticalStreamPosition(node.presentationRow.index) + (terminalEvolution ? 0 : rowOffset)
-          : node.y,
+        x: node.kind === 'repository'
+          ? VERTICAL_WORLD.width / 2
+          : terminalEvolution
+            ? 180 + terminalIndex * ((VERTICAL_WORLD.width - 360) / Math.max(1, terminalCount - 1))
+            : laneX + (node.kind === 'evolution' || node.kind === 'capability' ? rowOffset * 3.2 : rowOffset * 1.6),
         // Desktop generations need wide horizontal breathing room; applying that
         // full rhythm to the narrow top-to-bottom field would put the repository
         // behind the mode controls at the camera's minimum zoom. This semantic
         // flow-axis map keeps every generation distinct while fitting the touch
         // overview without changing the shared V7.2 camera architecture.
-        y: terminalEvolution
-          ? 1000 + terminalIndex * 132
-          : repositoryFuturesVerticalFlowPosition(node) + (node.kind === 'evolution' ? rowOffset * 1.5 : 0),
+        y: terminalEvolution ? 1100 : repositoryFuturesVerticalFlowPosition(node),
         canonicalPosition: node.canonicalPosition ? {
           ...node.canonicalPosition,
           x: node.canonicalPosition.y,
@@ -466,18 +466,32 @@ export function buildRepositoryFuturesCanvasModel(
   return {
     nodes: orientedNodes,
     edges,
-    horizons: [
-      { depth: 1, label: 'Direction', position: lattice.direction },
-      { depth: 2, label: 'Next evolution', position: lattice.next },
-      { depth: 3, label: 'Later possibility', position: lattice.later },
-    ],
-    progressionBands: [
-      { id: 'current', label: 'Current', position: lattice.repository },
-      { id: 'now', label: 'Directions', position: lattice.direction },
-      { id: 'next', label: 'Next evolutions', position: lattice.next },
-      { id: 'later', label: 'Later possibilities', position: lattice.later },
-      { id: 'future', label: 'Outcome horizon', position: lattice.outcome },
-    ],
+    horizons: orientation === 'vertical'
+      ? [
+        { depth: 1, label: 'Direction', position: 480 },
+        { depth: 2, label: 'Next evolution', position: 790 },
+        { depth: 3, label: 'Later possibility', position: 1100 },
+      ]
+      : [
+        { depth: 1, label: 'Direction', position: lattice.direction },
+        { depth: 2, label: 'Next evolution', position: lattice.next },
+        { depth: 3, label: 'Later possibility', position: lattice.later },
+      ],
+    progressionBands: orientation === 'vertical'
+      ? [
+        { id: 'current', label: 'Current', position: 195 },
+        { id: 'now', label: 'Directions', position: 480 },
+        { id: 'next', label: 'Next evolutions', position: 790 },
+        { id: 'later', label: 'Later possibilities', position: 1100 },
+        { id: 'future', label: 'Outcome horizon', position: 1380 },
+      ]
+      : [
+        { id: 'current', label: 'Current', position: lattice.repository },
+        { id: 'now', label: 'Directions', position: lattice.direction },
+        { id: 'next', label: 'Next evolutions', position: lattice.next },
+        { id: 'later', label: 'Later possibilities', position: lattice.later },
+        { id: 'future', label: 'Outcome horizon', position: lattice.outcome },
+      ],
     streamRows: structuredRows.map((row, index) => ({
       index,
       label: nodes.find(node => node.presentationRow?.index === index)?.presentationRow?.label || row.label,
@@ -486,7 +500,7 @@ export function buildRepositoryFuturesCanvasModel(
     })),
     orientation,
     world: orientation === 'vertical'
-      ? { width: FUTURES_CANVAS_WORLD.height, height: FUTURES_CANVAS_WORLD.width }
+      ? VERTICAL_WORLD
       : FUTURES_CANVAS_WORLD,
   };
 }

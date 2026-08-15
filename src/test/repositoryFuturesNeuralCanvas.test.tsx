@@ -84,6 +84,24 @@ function cameraState() {
 }
 
 describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
+  it('reprojects the same focused semantic graph without mutating the selected plan', async () => {
+    const value = overlay();
+    const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    const semanticIds = [...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-neural-node')).sort();
+    const edgeIds = [...container.querySelectorAll('[data-future-edge-id][data-edge-layer="semantic"]')].map(edge => edge.getAttribute('data-future-edge-id')).sort();
+    fireEvent.click(screen.getByRole('button', { name: /Primary future goal: Guided repository futures/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Vertical Future map' }));
+    await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'vertical'));
+    expect([...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-neural-node')).sort()).toEqual(semanticIds);
+    expect([...container.querySelectorAll('[data-future-edge-id][data-edge-layer="semantic"]')].map(edge => edge.getAttribute('data-future-edge-id')).sort()).toEqual(edgeIds);
+    expect(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).toHaveTextContent('Guided repository futures');
+    expect(value.onCandidateSelect).not.toHaveBeenCalled();
+    expect(value.onCandidateAddSupport).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Horizontal Future map' }));
+    await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'horizontal'));
+  });
+
   it('renders an accessible real-data topology with role grammar, selected route, and inspector', () => {
     const value = overlay();
     const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
@@ -437,7 +455,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'vertical'));
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveClass('min-h-[6.25rem]');
-    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '1040px', height: '1840px' });
+    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '2600px', height: '1540px' });
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
     expect(inspector).toHaveClass('inset-x-3');

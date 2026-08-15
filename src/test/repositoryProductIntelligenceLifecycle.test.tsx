@@ -26,6 +26,7 @@ vi.mock('@/lib/repositoryIntelligence/deepIntelligenceClient', () => ({
     }
   },
   requestRepositoryIntelligenceEnhancement: lifecycleMocks.request,
+  requestRepositoryProductIntelligenceStaged: lifecycleMocks.request,
 }));
 
 import { useRepoScan } from '@/hooks/useRepoScan';

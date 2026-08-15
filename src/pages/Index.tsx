@@ -588,7 +588,7 @@ const Index = () => {
     ? scanCountLine
     : formationPhase === 'understanding'
       ? scan.status === 'scanning' ? scan.currentStep || 'Building repository intelligence' : 'Turning scan evidence into repository intelligence.'
-      : formationPhase === 'directions'
+      : formationPhase === 'directions' || formationPhase === 'pathways' && scan.repositoryProductIntelligenceStatus.state === 'preparing'
         ? scan.repositoryProductIntelligenceStatus.message
         : formationPhase === 'pathways'
           ? 'Normalising validated product opportunities into usable pathways.'

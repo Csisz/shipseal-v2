@@ -126,6 +126,34 @@ export function buildProductStrategistProviderPayload(request: RepositoryDeepInt
   };
 }
 
+/** Stage 1 keeps the strategic skeleton while excluding deep-network payload weight. */
+export function buildProductStrategistRootProviderPayload(request: RepositoryDeepIntelligenceRequest): ProductStrategistProviderPayload {
+  const full = buildProductStrategistProviderPayload(request);
+  const context = full.context.slice(0, 8).map(item => ({
+    ...item,
+    ...(item.excerpt ? { excerpt: compactText(item.excerpt, 700) } : {}),
+    symbols: item.symbols?.slice(0, 8),
+    exports: item.exports?.slice(0, 8),
+    relatedPaths: item.relatedPaths?.slice(0, 4),
+  }));
+  const referencedEvidence = new Set(context.flatMap(item => item.evidenceIds));
+  const selectedEvidence = full.evidenceIndex.filter(item => referencedEvidence.has(item.id));
+  const evidenceIndex = (selectedEvidence.length ? selectedEvidence : full.evidenceIndex.slice(0, 12))
+    .slice(0, 40)
+    .map(item => ({ ...item, fact: compactText(item.fact, 200) }));
+  return {
+    ...full,
+    objective: 'Infer concise Product Understanding and six to eight grounded first-generation product directions. Deep evolution is generated in later batches.',
+    context,
+    evidenceIndex,
+    responseContract: {
+      ...full.responseContract,
+      permittedEvidenceIds: evidenceIndex.map(item => item.id),
+      permittedCurrentPaths: context.map(item => item.path),
+    },
+  };
+}
+
 function compactExcerpt(content: string, maximumCharacters: number) {
   const marker = 'Bounded product-relevant source excerpt:\n';
   const markerIndex = content.indexOf(marker);

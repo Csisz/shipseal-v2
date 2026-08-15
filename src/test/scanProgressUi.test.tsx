@@ -42,6 +42,7 @@ describe('unified repository formation experience', () => {
     expect(resolveRepositoryFormationPhase({ ...base, scanStatus: 'scanning', currentScanStep: 'Reading repository' })).toBe('reading');
     expect(resolveRepositoryFormationPhase({ ...base, scanStatus: 'scanning', currentScanStep: 'Building repository intelligence' })).toBe('understanding');
     expect(resolveRepositoryFormationPhase({ ...base, productStatus: { state: 'preparing', message: 'working', retryable: false }, productIntelligenceReady: false })).toBe('directions');
+    expect(resolveRepositoryFormationPhase({ ...base, productStatus: { state: 'preparing', productStage: 'expansion', completedBatches: 2, totalBatches: 3, message: '2 of 3 pathway groups complete', retryable: false }, productIntelligenceReady: false })).toBe('pathways');
     expect(resolveRepositoryFormationPhase({ ...base, futurePreparationState: 'building' })).toBe('pathways');
     expect(resolveRepositoryFormationPhase({ ...base, futurePreparationState: 'preparing-workspace' })).toBe('workspace');
     expect(resolveRepositoryFormationPhase(base)).toBe('ready');

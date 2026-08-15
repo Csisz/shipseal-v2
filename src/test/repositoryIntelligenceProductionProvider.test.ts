@@ -34,6 +34,7 @@ import {
 } from '../../api/_lib/repositoryProductStrategistResponse';
 import type { RepoScanInput } from '@/lib/types';
 import { RepositoryIntelligenceEnhancementSingleFlight } from '@/lib/repositoryIntelligence/deepIntelligenceClient';
+import { buildRepositoryProductRootStage } from '@/lib/repositoryIntelligence/stagedProductIntelligence';
 
 function fixtureRequest(
   requestedCapabilities: Parameters<typeof buildRepositoryDeepIntelligenceRequest>[0]['requestedCapabilities'] = ['architecture-analysis', 'structured-output'],
@@ -365,6 +366,25 @@ describe('production Repository Intelligence provider', () => {
     expect(providerMeasurement.providerRequestBytes).toBeLessThanOrEqual(60_000);
     expect(providerMeasurement.providerInputTokenEstimate).toBeLessThanOrEqual(15_000);
     expect(providerMeasurement.outputTokenCap).toBe(4_000);
+    const rootsStage = buildRepositoryProductRootStage(focused.request);
+    const rootsBody = buildProductionProviderBody(focused.request, { ...config, policy: focusedPolicy }, { productStage: rootsStage });
+    const rootsMeasurement = measureProductionProviderBody(focused.request, { ...config, policy: focusedPolicy }, rootsBody);
+    const evidenceIds = focused.request.evidenceReferences.slice(0, 2).map(item => item.id);
+    const expansionStage = {
+      kind: 'expansion' as const, fingerprint: 'controlled-expansion-fingerprint', batchIndex: 0, totalBatches: 3,
+      parents: Array.from({ length: 3 }, (_, index) => ({ id: `product-opportunity:${index}`, title: `Future ${index}`, opportunityStatement: 'Grounded direction.', userValue: 'Grounded value.', whyItFits: 'Grounded fit.', evidenceIds })),
+    };
+    const expansionBody = buildProductionProviderBody(focused.request, { ...config, policy: focusedPolicy }, { productStage: expansionStage });
+    const expansionMeasurement = measureProductionProviderBody(focused.request, { ...config, policy: focusedPolicy }, expansionBody);
+    console.info(JSON.stringify({
+      diagnostic: 'product-strategist-staged-request-profile',
+      monolith: { bytes: providerMeasurement.providerRequestBytes, estimatedTokens: providerMeasurement.providerInputTokenEstimate, outputCap: providerMeasurement.outputTokenCap },
+      roots: { bytes: rootsMeasurement.providerRequestBytes, estimatedTokens: rootsMeasurement.providerInputTokenEstimate, outputCap: rootsMeasurement.outputTokenCap },
+      expansion: { bytes: expansionMeasurement.providerRequestBytes, estimatedTokens: expansionMeasurement.providerInputTokenEstimate, outputCap: expansionMeasurement.outputTokenCap },
+    }));
+    expect(rootsMeasurement.outputTokenCap).toBe(2_400);
+    expect(expansionMeasurement.outputTokenCap).toBe(1_800);
+    expect(expansionMeasurement.providerRequestBytes).toBeLessThan(rootsMeasurement.providerRequestBytes);
 
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       const body = String(init?.body || '');

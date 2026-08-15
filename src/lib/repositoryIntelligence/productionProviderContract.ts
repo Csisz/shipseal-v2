@@ -6,6 +6,47 @@ import type {
 } from './productIntelligenceSchema.js';
 
 export const REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION = 'shipseal.repository-intelligence-provider-api.v1' as const;
+export const REPOSITORY_PRODUCT_PIPELINE_VERSION = 'shipseal.repository-product-pipeline.v1' as const;
+
+export interface RepositoryProductExpansionParent {
+  id: string;
+  title: string;
+  opportunityStatement: string;
+  userValue: string;
+  whyItFits: string;
+  evidenceIds: string[];
+}
+
+export type RepositoryProductProviderStage =
+  | { kind: 'roots'; fingerprint: string }
+  | {
+    kind: 'expansion';
+    fingerprint: string;
+    batchIndex: number;
+    totalBatches: number;
+    parents: RepositoryProductExpansionParent[];
+  };
+
+export interface RepositoryProductExpansionEvolution {
+  sourceId: string;
+  parentSourceId?: string;
+  generation: 2 | 3;
+  title: string;
+  description: string;
+  userValue: string;
+}
+
+export interface RepositoryProductExpansionStageResult {
+  pipelineVersion: typeof REPOSITORY_PRODUCT_PIPELINE_VERSION;
+  stage: 'expansion';
+  fingerprint: string;
+  batchIndex: number;
+  totalBatches: number;
+  expansions: Array<{
+    parentId: string;
+    evolutions: RepositoryProductExpansionEvolution[];
+  }>;
+}
 
 export type RepositoryIntelligenceValidationCategory =
   | 'request-preflight-rejected'
@@ -69,6 +110,7 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   outputBytes?: number;
   durationMs?: number;
   retryCount?: number;
+  languageRepairCount?: number;
   selectedFiles?: number;
   includedContextBytes?: number;
   redactedValueCount?: number;
@@ -113,6 +155,15 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   providerJsonParsingStage?: RepositoryProviderJsonParsingStage;
   costEstimate: 'unavailable';
   cacheUsed?: boolean;
+  productStage?: 'roots' | 'expansion';
+  stageFingerprint?: string;
+  expansionBatchIndex?: number;
+  expansionBatchCount?: number;
+  acceptedSecondGenerationCount?: number;
+  acceptedThirdGenerationCount?: number;
+  schemaValidationFailureCount?: number;
+  providerTimedOut?: boolean;
+  browserTimedOut?: boolean;
 }
 
 export interface RepositoryIntelligenceDeepInsightSummary {
@@ -146,7 +197,7 @@ export type RepositoryIntelligenceProviderFailureCategory =
 
 export type RepositoryIntelligenceProviderStatus =
   | { state: 'deterministic'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false }
-  | { state: 'preparing'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false }
+  | { state: 'preparing'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; productStage?: 'roots' | 'expansion' | 'merging'; completedBatches?: number; totalBatches?: number; activeBatchIndexes?: number[] }
   | { state: 'enhanced'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; providerId: string; modelId?: string; diagnostics?: RepositoryIntelligenceSafeDiagnostics; insights?: RepositoryIntelligenceDeepInsightSummary[] }
   | { state: 'fallback'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: boolean; category: RepositoryIntelligenceProviderFailureCategory; diagnostics?: RepositoryIntelligenceSafeDiagnostics }
   | { state: 'cancelled'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: true; category: 'request_cancelled'; diagnostics?: RepositoryIntelligenceSafeDiagnostics };
@@ -154,6 +205,7 @@ export type RepositoryIntelligenceProviderStatus =
 export interface RepositoryIntelligenceProviderApiRequest {
   version: typeof REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION;
   request: RepositoryDeepIntelligenceRequest;
+  productStage?: RepositoryProductProviderStage;
 }
 
 export type RepositoryIntelligenceProviderApiResponse =
@@ -161,6 +213,15 @@ export type RepositoryIntelligenceProviderApiResponse =
     version: typeof REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION;
     state: 'enhanced';
     result: RepositoryDeepIntelligenceValidatedResult;
+    providerId: string;
+    modelId?: string;
+    deepState: 'completed' | 'completed-with-warnings';
+    diagnostics: RepositoryIntelligenceSafeDiagnostics;
+  }
+  | {
+    version: typeof REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION;
+    state: 'stage-enhanced';
+    stageResult: RepositoryProductExpansionStageResult;
     providerId: string;
     modelId?: string;
     deepState: 'completed' | 'completed-with-warnings';

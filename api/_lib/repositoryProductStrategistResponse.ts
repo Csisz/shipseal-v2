@@ -9,7 +9,14 @@ import {
   attachRepositoryProductNormalizationDiagnostics,
   type RepositoryProductNormalizationDiagnostics,
   type RepositoryProductOpportunityRejectionReason,
+  containsCjkScript,
+  requiresEnglishGeneratedText,
 } from '../../src/lib/repositoryIntelligence/productIntelligenceSchema.js';
+import {
+  REPOSITORY_PRODUCT_PIPELINE_VERSION,
+  type RepositoryProductExpansionStageResult,
+  type RepositoryProductProviderStage,
+} from '../../src/lib/repositoryIntelligence/productionProviderContract.js';
 import {
   PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION,
   buildProductStrategistProviderPayload,
@@ -141,7 +148,7 @@ const stringArrayJsonSchema = (maximumItems: number, maximumCharacters: number, 
   items: stringJsonSchema(maximumCharacters, description),
 });
 
-export function buildProductStrategistCompactJsonSchema(payload: ProductStrategistProviderPayload) {
+export function buildProductStrategistCompactJsonSchema(payload: ProductStrategistProviderPayload, options: { rootsOnly?: boolean } = {}) {
   if (!payload.evidenceIndex.length) {
     throw new Error('Product Strategist compact response requires at least one transmitted evidence item.');
   }
@@ -205,8 +212,8 @@ export function buildProductStrategistCompactJsonSchema(payload: ProductStrategi
             },
             n: stringArrayJsonSchema(limits.opportunity.newCapabilities, limits.opportunity.newCapabilityCharacters, 'Major required new capability title.', 1),
             evo: {
-              type: 'array', minItems: 2, maxItems: limits.opportunity.secondGenerationEvolutions,
-              description: 'Two to four product evolutions that this direction could unlock next. These are user-value futures, not implementation tasks.',
+              type: 'array', minItems: options.rootsOnly ? 0 : 2, maxItems: options.rootsOnly ? 0 : limits.opportunity.secondGenerationEvolutions,
+              description: options.rootsOnly ? 'Stage 1 must leave deep evolution empty.' : 'Two to four product evolutions that this direction could unlock next. These are user-value futures, not implementation tasks.',
               items: {
                 type: 'object', additionalProperties: false, required: ['t', 's', 'v', 'next'],
                 properties: {
@@ -268,15 +275,104 @@ export function buildProductStrategistCompactJsonSchema(payload: ProductStrategi
   } as const;
 }
 
-export function buildProductStrategistResponseFormat(payload: ProductStrategistProviderPayload) {
+export function buildProductStrategistResponseFormat(payload: ProductStrategistProviderPayload, options: { rootsOnly?: boolean } = {}) {
   return {
     type: 'json_schema' as const,
     json_schema: {
       name: 'shipseal_product_strategist',
       description: `Compact ${PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION} response normalized and revalidated by ShipSeal.`,
       strict: true,
-      schema: buildProductStrategistCompactJsonSchema(payload),
+      schema: buildProductStrategistCompactJsonSchema(payload, options),
     },
+  };
+}
+
+const expansionLeafSchema = z.object({
+  id: compactString(80),
+  t: compactString(limits.opportunity.evolutionTitleCharacters),
+  s: compactString(limits.opportunity.evolutionDescriptionCharacters),
+  v: compactString(limits.opportunity.evolutionUserValueCharacters),
+}).strict();
+const expansionBranchSchema = expansionLeafSchema.extend({
+  next: z.array(expansionLeafSchema).max(limits.opportunity.thirdGenerationEvolutions),
+}).strict();
+const expansionResponseSchema = z.object({
+  x: z.array(z.object({
+    p: z.string().trim().min(8).max(200),
+    evo: z.array(expansionBranchSchema).min(2).max(limits.opportunity.secondGenerationEvolutions),
+  }).strict()).min(1).max(3),
+}).strict();
+
+export function buildProductStrategistExpansionResponseFormat(stage: Extract<RepositoryProductProviderStage, { kind: 'expansion' }>) {
+  const leaf = {
+    type: 'object', additionalProperties: false, required: ['id', 't', 's', 'v'],
+    properties: {
+      id: stringJsonSchema(80, 'Stable stage-local slug identifier.'),
+      t: stringJsonSchema(limits.opportunity.evolutionTitleCharacters, 'Short product-future title.'),
+      s: stringJsonSchema(limits.opportunity.evolutionDescriptionCharacters, 'Grounded product evolution, not an implementation task.'),
+      v: stringJsonSchema(limits.opportunity.evolutionUserValueCharacters, 'Concise user value.'),
+    },
+  };
+  return {
+    type: 'json_schema' as const,
+    json_schema: {
+      name: 'shipseal_future_expansion_batch', strict: true,
+      description: 'One independently validated Future expansion batch.',
+      schema: {
+        type: 'object', additionalProperties: false, required: ['x'],
+        properties: {
+          x: {
+            type: 'array', minItems: stage.parents.length, maxItems: stage.parents.length,
+            items: {
+              type: 'object', additionalProperties: false, required: ['p', 'evo'],
+              properties: {
+                p: { type: 'string', enum: stage.parents.map(parent => parent.id), description: 'Exact stable parent Future ID.' },
+                evo: {
+                  type: 'array', minItems: 2, maxItems: 4,
+                  items: {
+                    ...leaf,
+                    required: [...leaf.required, 'next'],
+                    properties: { ...leaf.properties, next: { type: 'array', maxItems: 2, items: leaf } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+}
+
+export function normalizeProductStrategistExpansionResponse(
+  input: unknown,
+  stage: Extract<RepositoryProductProviderStage, { kind: 'expansion' }>,
+  locale?: string,
+): RepositoryProductExpansionStageResult {
+  const parsed = expansionResponseSchema.safeParse(input);
+  if (!parsed.success) throw new Error('Expansion response did not match its bounded schema.');
+  const expected = new Set(stage.parents.map(parent => parent.id));
+  if (parsed.data.x.length !== expected.size || new Set(parsed.data.x.map(item => item.p)).size !== expected.size
+    || parsed.data.x.some(item => !expected.has(item.p))) throw new Error('Expansion response did not preserve stable parent identities.');
+  if (parsed.data.x.some(item => {
+    const ids = item.evo.flatMap(evolution => [evolution.id, ...evolution.next.map(next => next.id)]);
+    return new Set(ids).size !== ids.length;
+  })) throw new Error('Expansion response contained duplicate stage-local identities.');
+  const generated = parsed.data.x.flatMap(item => item.evo.flatMap(evolution => [evolution.t, evolution.s, evolution.v, ...evolution.next.flatMap(next => [next.t, next.s, next.v])]));
+  if (requiresEnglishGeneratedText(locale) && generated.some(containsCjkScript)) throw new Error('Expansion response violated the English generated-language contract.');
+  return {
+    pipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION,
+    stage: 'expansion',
+    fingerprint: stage.fingerprint,
+    batchIndex: stage.batchIndex,
+    totalBatches: stage.totalBatches,
+    expansions: parsed.data.x.map(item => ({
+      parentId: item.p,
+      evolutions: item.evo.flatMap(evolution => [
+        { sourceId: evolution.id, generation: 2 as const, title: evolution.t, description: evolution.s, userValue: evolution.v },
+        ...evolution.next.map(next => ({ sourceId: next.id, parentSourceId: evolution.id, generation: 3 as const, title: next.t, description: next.s, userValue: next.v })),
+      ]),
+    })),
   };
 }
 

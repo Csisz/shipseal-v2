@@ -258,8 +258,8 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
       productIntelligenceState: 'enhanced',
     }, 'vertical');
     const mobileTerminal = mobile.nodes.filter(node => node.kind === 'evolution' && node.depth === 3);
-    expect(Math.abs(mobileTerminal[0].y - mobileTerminal[1].y)).toBeGreaterThanOrEqual(132);
-    expect(mobileTerminal[0].x).toBe(mobileTerminal[1].x);
+    expect(Math.abs(mobileTerminal[0].x - mobileTerminal[1].x)).toBeGreaterThanOrEqual(132);
+    expect(mobileTerminal[0].y).toBe(mobileTerminal[1].y);
   });
 
   it('places existing enablers upstream and required enablers downstream of their route', () => {
@@ -504,10 +504,11 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     const vertical = buildRepositoryFuturesCanvasModel('shipseal', input, 'vertical');
 
     expect(vertical.orientation).toBe('vertical');
-    expect(vertical.world).toEqual({ width: horizontal.world.height, height: horizontal.world.width });
+    expect(vertical.world.width).toBeGreaterThan(horizontal.world.width);
+    expect(vertical.world.height).toBeGreaterThan(horizontal.world.height);
     horizontal.nodes.forEach(node => {
       const verticalNode = vertical.nodes.find(item => item.id === node.id)!;
-      if (!node.presentationRow) expect(verticalNode.x).toBe(node.y);
+      if (node.kind === 'repository') expect(verticalNode.x).toBe(vertical.world.width / 2);
       if (node.canonicalPosition) expect(verticalNode.canonicalPosition).toMatchObject({ x: node.canonicalPosition.y, y: node.canonicalPosition.x });
       else expect(verticalNode.canonicalPosition).toBeUndefined();
     });

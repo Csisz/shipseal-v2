@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Bookmark, Boxes, Check, FileOutput, Focus, GitBranch, LockKeyhole, Minus, Plus, Route, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowRight, Bookmark, Boxes, Check, FileOutput, Focus, GitBranch, LockKeyhole, Minus, Plus, Route, Sparkles, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RepositoryFutureStageOverlay } from './futurePathwaysPresentation';
 import {
@@ -45,11 +45,11 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   const initialFramingRef = useRef(false);
   const orientationRef = useRef<'horizontal' | 'vertical'>();
   const revealedPinnedIdRef = useRef<string>();
+  const orientationPreferenceTouchedRef = useRef(false);
   const mobile = useIsMobile();
   const reducedMotion = useReducedMotion();
-  const model = useMemo(() => mobile
-    ? buildRepositoryFuturesCanvasModel(repositoryName, overlay, 'vertical')
-    : buildRepositoryFuturesCanvasModel(repositoryName, overlay, 'horizontal'), [mobile, overlay, repositoryName]);
+  const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>(() => mobile ? 'vertical' : 'horizontal');
+  const model = useMemo(() => buildRepositoryFuturesCanvasModel(repositoryName, overlay, orientation), [orientation, overlay, repositoryName]);
   const nodeById = useMemo(() => new Map(model.nodes.map(node => [node.id, node])), [model.nodes]);
   const [camera, setCamera] = useState(() => fitRepositoryFuturesCamera(DEFAULT_VIEWPORT, model.world));
   const [hoveredId, setHoveredId] = useState<string>();
@@ -74,6 +74,10 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   meaningfulBoundsRef.current = meaningfulBounds;
   initialFramingBoundsRef.current = initialFramingBounds;
   pinnedIdRef.current = pinnedId;
+
+  useEffect(() => {
+    if (!orientationPreferenceTouchedRef.current) setOrientation(mobile ? 'vertical' : 'horizontal');
+  }, [mobile]);
 
   const getViewport = useCallback(() => {
     const bounds = stageRef.current?.getBoundingClientRect();
@@ -129,7 +133,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
     orientationRef.current = model.orientation;
     if (!initialFramingRef.current || orientationChanged) {
       const viewport = getViewport();
-      applyCamera(fitRepositoryFuturesBoundsCamera(viewport, initialFramingBoundsRef.current, repositoryFuturesSafeInsets(viewport), 54, 1.02));
+      applyCamera(fitRepositoryFuturesBoundsCamera(viewport, initialFramingBoundsRef.current, repositoryFuturesSafeInsets(viewport), 54, 1.02), orientationChanged);
       initialFramingRef.current = true;
     }
   }, [applyCamera, getViewport, model.orientation]);
@@ -337,7 +341,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
     <section aria-labelledby="neural-futures-heading" className="relative">
       <div className="sr-only">
         <h3 id="neural-futures-heading">Neural Repository Futures map</h3>
-        <p>Current repository on the left, grounded future goals across three horizons, and required dependencies connected only where the Future draft requires them.</p>
+        <p>{model.orientation === 'horizontal' ? 'Current repository on the left with future generations progressing to the right.' : 'Current repository at the top with future generations progressing downward.'} Required dependencies connect only where the Future draft requires them.</p>
       </div>
       <div
         ref={stageRef}
@@ -372,12 +376,22 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
       >
         <div aria-hidden="true" className="futures-neural-mesh pointer-events-none absolute inset-0 opacity-[0.2]" />
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_35%,hsl(var(--futures-field-bg)/0.44)_100%)]" />
-        <div data-futures-mode-owner role="group" aria-label="Future Pathways mode" className="absolute left-3 top-3 z-30 inline-flex rounded-full border border-border/40 bg-background/[0.72] p-0.5 shadow-sm backdrop-blur-md md:left-5 md:top-5">
-          {(['quick', 'deep'] as const).map(value => (
-            <button key={value} type="button" aria-label={value === 'quick' ? 'Quick Path' : 'Deep Configuration'} aria-pressed={overlay.mode === value} onClick={event => { event.stopPropagation(); overlay.onModeChange(value); }} className={`min-h-9 rounded-full px-3 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${overlay.mode === value ? 'bg-primary/15 text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
-              {value === 'quick' ? 'Quick' : 'Deep'}
-            </button>
-          ))}
+        <div data-futures-mode-owner className="absolute left-3 top-3 z-30 flex flex-wrap items-center gap-1.5 md:left-5 md:top-5">
+          <div role="group" aria-label="Future Pathways mode" className="inline-flex rounded-full border border-border/40 bg-background/[0.72] p-0.5 shadow-sm backdrop-blur-md">
+            {(['quick', 'deep'] as const).map(value => (
+              <button key={value} type="button" aria-label={value === 'quick' ? 'Quick Path' : 'Deep Configuration'} aria-pressed={overlay.mode === value} onClick={event => { event.stopPropagation(); overlay.onModeChange(value); }} className={`min-h-9 rounded-full px-3 text-[11px] font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${overlay.mode === value ? 'bg-primary/15 text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                {value === 'quick' ? 'Quick' : 'Deep'}
+              </button>
+            ))}
+          </div>
+          <div role="group" aria-label="Future map orientation" className="inline-flex rounded-full border border-border/40 bg-background/[0.72] p-0.5 shadow-sm backdrop-blur-md">
+            {(['horizontal', 'vertical'] as const).map(value => (
+              <button key={value} type="button" aria-label={`${value === 'horizontal' ? 'Horizontal' : 'Vertical'} Future map`} aria-pressed={orientation === value} onClick={event => { event.stopPropagation(); orientationPreferenceTouchedRef.current = true; setOrientation(value); }} className={`flex min-h-9 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${orientation === value ? 'bg-primary/15 text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                {value === 'horizontal' ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+                <span className="hidden lg:inline">{value === 'horizontal' ? 'Horizontal' : 'Vertical'}</span>
+              </button>
+            ))}
+          </div>
         </div>
         <div data-camera-control className="absolute bottom-3 left-3 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-0.5 rounded-full border border-border/35 bg-background/[0.72] p-0.5 shadow-sm backdrop-blur-md md:bottom-5 md:left-5">
           <CameraButton label="Zoom out" onClick={() => zoomAtCenter(1 / 1.16)}><Minus /></CameraButton>
@@ -387,7 +401,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
           <CameraButton label="Back to current repository" onClick={backToRepository}><GitBranch /></CameraButton>
           {activeId && <CameraButton label="Clear focused route" onClick={clearFocus}><X /></CameraButton>}
         </div>
-        <div aria-label="Live Future Plan summary" data-plan-status={primary ? 'composed' : 'empty'} className="pointer-events-none absolute right-3 top-3 z-20 max-w-[calc(100%-8.5rem)] rounded-lg border border-primary/15 bg-background/[0.62] px-3 py-2 text-right text-[10px] text-muted-foreground shadow-sm backdrop-blur-md md:right-5 md:top-5 md:max-w-md">
+        <div aria-label="Live Future Plan summary" data-plan-status={primary ? 'composed' : 'empty'} className="pointer-events-none absolute right-3 top-16 z-20 max-w-[calc(100%-1.5rem)] rounded-lg border border-primary/15 bg-background/[0.62] px-3 py-2 text-right text-[10px] text-muted-foreground shadow-sm backdrop-blur-md md:right-5 md:max-w-md lg:top-5">
           {primary ? <>
             <span className="block truncate font-medium text-foreground"><span className="font-mono text-[9px] uppercase tracking-[0.12em] text-primary">Primary</span> · {primary.title}</span>
             <span className="mt-1 block font-mono uppercase tracking-[0.1em]">Supports {overlay.supportCount}/2 · Requirements {overlay.dependencies.length} automatic</span>

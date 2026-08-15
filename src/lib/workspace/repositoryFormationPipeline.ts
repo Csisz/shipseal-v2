@@ -46,7 +46,11 @@ export function resolveRepositoryFormationPhase({
       : 'reading';
   }
   if (!repositoryIntelligenceReady) return 'understanding';
-  if (!productIntelligenceReady) return 'directions';
+  if (!productIntelligenceReady) {
+    return productStatus.state === 'preparing' && (productStatus.productStage === 'expansion' || productStatus.productStage === 'merging')
+      ? 'pathways'
+      : 'directions';
+  }
   if (futurePreparationState === 'idle' || futurePreparationState === 'building') return 'pathways';
   if (futurePreparationState === 'preparing-workspace') return 'workspace';
   if (futurePreparationState === 'ready') return 'ready';
