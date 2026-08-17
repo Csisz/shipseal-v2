@@ -13,6 +13,7 @@ import {
   mergeRepositoryProductExpansionResults,
 } from '../lib/repositoryIntelligence/stagedProductIntelligence';
 import type { RepositoryProductProviderStage } from '../lib/repositoryIntelligence/productionProviderContract';
+import { stableContextFingerprint } from '../lib/repositoryIntelligence/contextSelection';
 
 const smokeEnabled = process.env.SHIPSEAL_PRODUCTION_SMOKE === 'true';
 const productionOrigin = process.env.SHIPSEAL_PRODUCTION_ORIGIN || 'https://www.getshipseal.com';
@@ -41,9 +42,9 @@ describe.runIf(smokeEnabled)('production brainforge smoke', () => {
 
     const rootsStage = buildRepositoryProductRootStage(request);
     const roots = await postProductStage(request, rootsStage);
-    expect(roots.body.state).toBe('enhanced');
     if (roots.body.state !== 'enhanced') {
       console.info(JSON.stringify({ phase: 'roots', state: roots.body.state, diagnostics: safeDiagnostics(roots.body) }));
+      expect(roots.body.state).toBe('enhanced');
       return;
     }
 
@@ -79,6 +80,9 @@ describe.runIf(smokeEnabled)('production brainforge smoke', () => {
         languageValidation: expansion.body.diagnostics?.languageValidation,
         expansionSchemaValidation: expansion.body.diagnostics?.expansionSchemaValidation,
         expansionResponseShape: expansion.body.diagnostics?.expansionResponseShape,
+        rateLimitAttempt: expansion.body.diagnostics?.rateLimitAttempt,
+        retryAfterMs: expansion.body.diagnostics?.retryAfterMs,
+        rateLimitType: expansion.body.diagnostics?.rateLimitType,
       }));
       expect(expansion.body.state).toBe('stage-enhanced');
       expect(expansion.body.diagnostics).toMatchObject({ productStage: 'expansion', requestId: expect.any(String) });
@@ -130,7 +134,16 @@ async function postProductStage(
   const response = await fetch(`${productionOrigin}/api/repository-intelligence`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request, productStage }),
+    body: JSON.stringify({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+      stageAttemptKey: stableContextFingerprint({
+        reportFingerprint: request.fingerprint,
+        stageFingerprint: productStage.fingerprint,
+        stageAttempt: 1,
+      }),
+    }),
   });
   const body = await response.json() as RepositoryIntelligenceProviderApiResponse;
   expect(response.ok).toBe(true);
@@ -156,5 +169,16 @@ function safeDiagnostics(response: RepositoryIntelligenceProviderApiResponse) {
     compactOpportunityShapeIssueFields: diagnostics.compactOpportunityShapeIssueFields,
     providerModelId: diagnostics.providerModelId,
     providerFinishReason: diagnostics.providerFinishReason,
+    operationalFailureCategory: diagnostics.operationalFailureCategory,
+    providerHttpStatusCategory: diagnostics.providerHttpStatusCategory,
+    rateLimitAttempt: diagnostics.rateLimitAttempt,
+    retryAfterMs: diagnostics.retryAfterMs,
+    rateLimitResetRequestsMs: diagnostics.rateLimitResetRequestsMs,
+    rateLimitResetTokensMs: diagnostics.rateLimitResetTokensMs,
+    rateLimitRemainingRequests: diagnostics.rateLimitRemainingRequests,
+    rateLimitRemainingTokens: diagnostics.rateLimitRemainingTokens,
+    rateLimitLimitRequests: diagnostics.rateLimitLimitRequests,
+    rateLimitLimitTokens: diagnostics.rateLimitLimitTokens,
+    rateLimitType: diagnostics.rateLimitType,
   };
 }
