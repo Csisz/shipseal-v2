@@ -4,6 +4,7 @@ import { runRepositoryDeepIntelligence } from '../src/lib/repositoryIntelligence
 import {
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
   REPOSITORY_PRODUCT_PIPELINE_VERSION,
+  REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION,
   type RepositoryIntelligenceProviderApiResponse,
   type RepositoryIntelligenceProviderFailureCategory,
   type RepositoryProductExpansionStageResult,
@@ -783,10 +784,47 @@ async function readJsonBody(req: VercelLikeRequest) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
 }
 
+export function resolveRepositoryIntelligenceBuildIdentity(env: NodeJS.ProcessEnv = process.env) {
+  const buildCommit = /^[a-f0-9]{7,40}$/i.test(env.VERCEL_GIT_COMMIT_SHA || '')
+    ? env.VERCEL_GIT_COMMIT_SHA!.toLowerCase()
+    : /^[a-f0-9]{7,40}$/i.test(env.SHIPSEAL_BUILD_COMMIT || '')
+      ? env.SHIPSEAL_BUILD_COMMIT!.toLowerCase()
+      : 'unknown';
+  const buildDeployment = /^dpl_[A-Za-z0-9]{8,80}$/.test(env.VERCEL_DEPLOYMENT_ID || '')
+    ? env.VERCEL_DEPLOYMENT_ID
+    : undefined;
+  return {
+    buildCommit,
+    ...(buildDeployment ? { buildDeployment } : {}),
+    productPipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION,
+    rootContractVersion: REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION,
+  };
+}
+
+export function attachRepositoryIntelligenceBuildIdentity(
+  payload: RepositoryIntelligenceProviderApiResponse,
+  env: NodeJS.ProcessEnv = process.env,
+): RepositoryIntelligenceProviderApiResponse {
+  const identity = resolveRepositoryIntelligenceBuildIdentity(env);
+  return {
+    ...payload,
+    diagnostics: {
+      ...(payload.diagnostics || { costEstimate: 'unavailable' as const }),
+      ...identity,
+    },
+  } as RepositoryIntelligenceProviderApiResponse;
+}
+
 function sendJson(res: ServerResponse, status: number, payload: unknown) {
+  const identity = resolveRepositoryIntelligenceBuildIdentity();
   res.statusCode = status;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.end(JSON.stringify(payload));
+  res.setHeader('X-ShipSeal-Build', identity.buildCommit);
+  const responsePayload = payload && typeof payload === 'object' && !Array.isArray(payload)
+    && (payload as { version?: unknown }).version === REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION
+    ? attachRepositoryIntelligenceBuildIdentity(payload as RepositoryIntelligenceProviderApiResponse)
+    : payload;
+  res.end(JSON.stringify(responsePayload));
 }
 
 export default async function handler(req: VercelLikeRequest, res: ServerResponse) {

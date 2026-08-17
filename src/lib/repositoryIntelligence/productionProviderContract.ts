@@ -7,6 +7,7 @@ import type {
 
 export const REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION = 'shipseal.repository-intelligence-provider-api.v1' as const;
 export const REPOSITORY_PRODUCT_PIPELINE_VERSION = 'shipseal.repository-product-pipeline.v1' as const;
+export const REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION = 'shipseal.repository-product-roots.v2' as const;
 
 export interface RepositoryProductExpansionParent {
   id: string;
@@ -125,6 +126,10 @@ export type RepositoryIntelligenceFailureBoundary =
   | 'browser-network';
 
 export interface RepositoryIntelligenceSafeDiagnostics {
+  buildCommit?: string;
+  buildDeployment?: string;
+  productPipelineVersion?: typeof REPOSITORY_PRODUCT_PIPELINE_VERSION;
+  rootContractVersion?: typeof REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION;
   requestId?: string;
   requestFingerprint?: string;
   reportIdentityHash?: string;

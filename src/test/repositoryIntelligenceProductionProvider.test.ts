@@ -9,7 +9,12 @@ import {
   validateRepositoryProductIntelligence,
 } from '@/lib/repositoryIntelligence';
 import { stableContextFingerprint } from '@/lib/repositoryIntelligence/contextSelection';
-import { prepareProductionRepositoryIntelligence, resolveProductionExecutionPolicy } from '../../api/repository-intelligence';
+import {
+  attachRepositoryIntelligenceBuildIdentity,
+  prepareProductionRepositoryIntelligence,
+  resolveProductionExecutionPolicy,
+  resolveRepositoryIntelligenceBuildIdentity,
+} from '../../api/repository-intelligence';
 import {
   OpenAiCompatibleRepositoryDeepIntelligenceProvider,
   PRODUCT_STRATEGIST_STRUCTURED_OUTPUT_DECISION,
@@ -262,6 +267,80 @@ function validRootProductProviderPayload(
   };
 }
 
+function contractGeneratedRootBoundaryPayload(
+  request: ReturnType<typeof fixtureRequest>['request'],
+  opportunityCount: 6 | 7 | 8,
+  boundary: 'minimum' | 'maximum',
+) {
+  const projection = buildProductStrategistProviderPayload(request);
+  const schema = buildProductStrategistResponseFormat(projection, { rootsOnly: true }).json_schema.schema;
+  const understanding = schema.properties.p.properties;
+  const opportunity = schema.properties.o.items.properties;
+  const lengthFor = (value: { minItems?: number; maxItems: number }) => boundary === 'maximum'
+    ? value.maxItems : value.minItems || 0;
+  const stringsFor = (value: { minItems?: number; maxItems: number }, label: string) => Array.from(
+    { length: lengthFor(value) },
+    (_, index) => `${label} ${index + 1}`,
+  );
+  const evidenceFor = (value: { minItems: number; maxItems: number }) => Array.from(
+    { length: boundary === 'maximum' ? value.maxItems : value.minItems },
+    (_, index) => index % projection.evidenceIndex.length,
+  );
+  const capabilityCount = lengthFor(understanding.caps);
+  const pathCount = projection.responseContract.permittedCurrentPaths.length;
+
+  return {
+    p: {
+      s: 'Contract-generated product summary.',
+      u: stringsFor(understanding.u, 'User'),
+      p: 'Contract-generated product problem.',
+      loop: stringsFor(understanding.loop, 'Loop step'),
+      caps: Array.from({ length: capabilityCount }, (_, index) => ({
+        t: `Capability ${index + 1}`,
+        d: `Current capability ${index + 1}.`,
+        e: evidenceFor(understanding.caps.items.properties.e),
+      })),
+      constraints: stringsFor(understanding.constraints, 'Constraint'),
+      business: stringsFor(understanding.business, 'Business clue'),
+      missing: stringsFor(understanding.missing, 'Missing area'),
+      e: evidenceFor(understanding.e),
+      notes: stringsFor(understanding.notes, 'Limitation'),
+      q: boundary === 'maximum' ? understanding.q.maximum : understanding.q.minimum,
+    },
+    o: Array.from({ length: opportunityCount }, (_, index) => ({
+      t: `Contract Future ${index + 1}`,
+      s: `Contract-generated direction ${index + 1}.`,
+      v: `Contract-generated user value ${index + 1}.`,
+      f: `Contract-generated fit ${index + 1}.`,
+      u: stringsFor(opportunity.u, `Target ${index + 1}`),
+      e: evidenceFor(opportunity.e),
+      o: opportunity.o.enum[index % opportunity.o.enum.length],
+      x: Array.from(
+        { length: boundary === 'maximum' ? Math.min(opportunity.x.maxItems, capabilityCount) : 0 },
+        (_unused, capabilityIndex) => capabilityIndex,
+      ),
+      n: stringsFor(opportunity.n, `Required capability ${index + 1}`),
+      evo: [],
+      support: boundary === 'maximum'
+        ? Array.from({ length: Math.min(opportunity.support.maxItems, index) }, (_unused, supportIndex) => supportIndex)
+        : [],
+      conflicts: stringsFor(opportunity.conflicts, `Conflict ${index + 1}`),
+      areas: Array.from({ length: lengthFor(opportunity.areas) }, (_unused, areaIndex) => ({
+        l: `Area ${index + 1}.${areaIndex + 1}`,
+        p: pathCount ? areaIndex % pathCount : -1,
+      })),
+      w: opportunity.w.enum[index % opportunity.w.enum.length],
+      b: opportunity.b.enum[index % opportunity.b.enum.length],
+      verify: `Verify contract future ${index + 1}.`,
+      caveats: Array.from({ length: lengthFor(opportunity.caveats) }, (_unused, caveatIndex) => ({
+        t: `Caveat ${index + 1}.${caveatIndex + 1}`,
+        r: caveatIndex % 2 === 0,
+      })),
+      q: boundary === 'maximum' ? opportunity.q.maximum : opportunity.q.minimum,
+    })),
+  };
+}
+
 function maximumCompactProductProviderPayload(
   request = fixtureRequest(['product-opportunity-analysis', 'structured-output']).request,
 ) {
@@ -348,6 +427,34 @@ const enabledEnv = {
 };
 
 describe('production Repository Intelligence provider', () => {
+  it('exposes only allowlisted build identity in safe response diagnostics', () => {
+    const identity = resolveRepositoryIntelligenceBuildIdentity({
+      VERCEL_GIT_COMMIT_SHA: '00785e3ff45794b427d2bbdf9affee275d712c92',
+      VERCEL_DEPLOYMENT_ID: 'dpl_762eaPzBG1WCGwb17aaPBpwRHc9R',
+      SHIPSEAL_DEEP_INTELLIGENCE_API_KEY: 'must-not-appear',
+    });
+    expect(identity).toEqual({
+      buildCommit: '00785e3ff45794b427d2bbdf9affee275d712c92',
+      buildDeployment: 'dpl_762eaPzBG1WCGwb17aaPBpwRHc9R',
+      productPipelineVersion: 'shipseal.repository-product-pipeline.v1',
+      rootContractVersion: 'shipseal.repository-product-roots.v2',
+    });
+    const response = attachRepositoryIntelligenceBuildIdentity({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      state: 'fallback',
+      category: 'provider_disabled',
+      retryable: false,
+      message: 'Unavailable.',
+      deepState: 'disabled',
+    }, { VERCEL_GIT_COMMIT_SHA: 'not-a-commit', VERCEL_DEPLOYMENT_ID: 'not-a-deployment' });
+    expect(response.diagnostics).toMatchObject({
+      buildCommit: 'unknown',
+      productPipelineVersion: 'shipseal.repository-product-pipeline.v1',
+      rootContractVersion: 'shipseal.repository-product-roots.v2',
+    });
+    expect(JSON.stringify({ identity, response })).not.toContain('must-not-appear');
+  });
+
   it('keeps the roots response format and roots normalizer symmetrical without weakening the full contract', () => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const payload = validRootProductProviderPayload(request, 7);
@@ -365,10 +472,14 @@ describe('production Repository Intelligence provider', () => {
     });
   });
 
-  it.each([6, 7, 8] as const)('accepts %i production-shaped roots with empty evolution through the real provider path', async opportunityCount => {
+  it.each([
+    { opportunityCount: 6 as const, boundary: 'minimum' as const },
+    { opportunityCount: 7 as const, boundary: 'maximum' as const },
+    { opportunityCount: 8 as const, boundary: 'minimum' as const },
+  ])('accepts $opportunityCount contract-generated $boundary roots through the real provider path', async ({ opportunityCount, boundary }) => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const productStage = buildRepositoryProductRootStage(request);
-    const payload = validRootProductProviderPayload(request, opportunityCount);
+    const payload = contractGeneratedRootBoundaryPayload(request, opportunityCount, boundary);
     const fetcher = vi.fn(async () => envelope(payload));
     const result = await prepareProductionRepositoryIntelligence({
       version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
