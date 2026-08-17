@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowUpRight, GitFork, Orbit, Sparkles } from 'lucide-react';
 import type { ReadinessReport } from '@/lib/types';
 import type { RepositoryIntelligenceProviderStatus } from '@/lib/repositoryIntelligence';
@@ -26,6 +26,11 @@ export function PostScanViewSelector({
   const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;
   const futuresRetrying = futuresStatus?.state === 'preparing';
   const supportReference = futuresStatus && 'diagnostics' in futuresStatus ? futuresStatus.diagnostics?.requestId : undefined;
+  const rateLimitRetryAt = futuresStatus?.state === 'preparing'
+    ? futuresStatus.rateLimitRetryAt
+    : futuresStatus && 'diagnostics' in futuresStatus ? futuresStatus.diagnostics?.rateLimitRetryAt : undefined;
+  const cooldownSeconds = useCooldownSeconds(rateLimitRetryAt);
+  const rateLimitWaiting = Boolean(rateLimitRetryAt && cooldownSeconds > 0);
 
   useEffect(() => {
     rootRef.current?.focus({ preventScroll: true });
@@ -65,8 +70,9 @@ export function PostScanViewSelector({
               <div className="text-sm font-medium text-foreground">Project Universe is ready</div>
               <p className="mt-1 text-sm text-muted-foreground">
                 {futuresRetrying
-                  ? `${futuresStatus?.message || 'Future analysis is retrying in the background.'} You can explore the repository now.`
+                  ? `${futuresStatus?.message || 'Future analysis is retrying in the background.'}${rateLimitWaiting ? ` Retrying in ${cooldownSeconds} seconds.` : ''} You can explore the repository now.`
                   : futuresStatus?.message || 'Future pathways can be retried without scanning the repository again.'}
+                {!futuresRetrying && rateLimitWaiting ? ` Retry available in ${cooldownSeconds} seconds.` : ''}
               </p>
               {supportReference && (
                 <details className="mt-2 text-xs text-muted-foreground">
@@ -76,8 +82,8 @@ export function PostScanViewSelector({
               )}
             </div>
             {onRetryFutures && (
-              <Button type="button" size="sm" variant="outline" onClick={onRetryFutures} disabled={futuresRetrying} className="shrink-0">
-                {futuresRetrying ? 'Retrying Future analysis…' : 'Retry Future analysis'}
+              <Button type="button" size="sm" variant="outline" onClick={onRetryFutures} disabled={futuresRetrying || rateLimitWaiting} className="shrink-0">
+                {futuresRetrying ? 'Retrying Future analysis…' : rateLimitWaiting ? `Retry available in ${cooldownSeconds}s` : 'Retry Future analysis'}
               </Button>
             )}
           </aside>
@@ -105,7 +111,7 @@ export function PostScanViewSelector({
             action={futuresAvailable ? 'Open Repository Futures' : futuresRetrying ? 'Future analysis in progress' : 'Repository Futures unavailable'}
             metadata={futuresAvailable
               ? [opportunityCount ? `${opportunityCount.toLocaleString()} product directions` : 'Evidence-led directions', 'Neural future pathways']
-              : ['No incomplete Futures shown', futuresRetrying ? 'Analysis retrying' : 'Retry available']}
+              : ['No incomplete Futures shown', futuresRetrying ? rateLimitWaiting ? 'Capacity cooldown' : 'Analysis retrying' : rateLimitWaiting ? 'Retry cooling down' : 'Retry available']}
             motif={<FuturesMotif />}
             onSelect={onSelect}
             onKeyDown={activateFromKeyboard}
@@ -115,6 +121,21 @@ export function PostScanViewSelector({
       </div>
     </section>
   );
+}
+
+function useCooldownSeconds(retryAt?: number) {
+  const [seconds, setSeconds] = useState(() => cooldownSecondsUntil(retryAt));
+  useEffect(() => {
+    setSeconds(cooldownSecondsUntil(retryAt));
+    if (!retryAt || retryAt <= Date.now()) return;
+    const timer = window.setInterval(() => setSeconds(cooldownSecondsUntil(retryAt)), 250);
+    return () => window.clearInterval(timer);
+  }, [retryAt]);
+  return seconds;
+}
+
+function cooldownSecondsUntil(retryAt?: number) {
+  return retryAt ? Math.max(0, Math.ceil((retryAt - Date.now()) / 1_000)) : 0;
 }
 
 function ViewChoice({

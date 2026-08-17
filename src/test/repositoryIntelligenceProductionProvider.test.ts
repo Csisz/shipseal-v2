@@ -12,6 +12,7 @@ import { stableContextFingerprint } from '@/lib/repositoryIntelligence/contextSe
 import {
   attachRepositoryIntelligenceBuildIdentity,
   prepareProductionRepositoryIntelligence,
+  RepositoryIntelligenceServerStageSingleFlight,
   resolveProductionExecutionPolicy,
   resolveRepositoryIntelligenceBuildIdentity,
 } from '../../api/repository-intelligence';
@@ -1483,6 +1484,35 @@ describe('production Repository Intelligence provider', () => {
     expect(task).toHaveBeenCalledTimes(1);
   });
 
+  it('best-effort suppresses duplicate server stage attempts with the same stable key', async () => {
+    const singleFlight = new RepositoryIntelligenceServerStageSingleFlight();
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const task = vi.fn(async () => {
+      await gate;
+      return {
+        status: 200,
+        body: {
+          version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+          state: 'fallback' as const,
+          category: 'rate_limited' as const,
+          retryable: true,
+          message: 'waiting',
+          deepState: 'failed' as const,
+          diagnostics: { costEstimate: 'unavailable' as const },
+        },
+      };
+    });
+    const first = singleFlight.run('stable-stage-attempt-key', task);
+    const duplicate = singleFlight.run('stable-stage-attempt-key', task);
+    expect(first.duplicateSuppressed).toBe(false);
+    expect(duplicate.duplicateSuppressed).toBe(true);
+    expect(first.promise).toBe(duplicate.promise);
+    expect(task).toHaveBeenCalledTimes(1);
+    release();
+    await first.promise;
+  });
+
   it('uses only the validated bounded request and returns validated enhancement data', async () => {
     const { request } = fixtureRequest();
     const logs: ProductionProviderLogEvent[] = [];
@@ -1815,12 +1845,42 @@ describe('production Repository Intelligence provider', () => {
     expect(rejected.body).toMatchObject({ diagnostics: { validationCategory: 'provider-http-rejected' } });
     expect(auth).toHaveBeenCalledTimes(1);
 
-    const rateLimited = vi.fn(async () => new Response('', { status: 429, headers: { 'Retry-After': '0' } }));
+    const rateLimited = vi.fn(async () => new Response('', { status: 429, headers: {
+      'Retry-After': '20',
+      'x-ratelimit-reset-requests': '20s',
+      'x-ratelimit-reset-tokens': '1m2s',
+      'x-ratelimit-remaining-requests': '0',
+      'x-ratelimit-remaining-tokens': '42',
+    } }));
     const limited = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv, fetcher: rateLimited as typeof fetch, logger: vi.fn(),
     });
-    expect(limited.body).toMatchObject({ state: 'fallback', category: 'rate_limited', retryable: true });
-    expect(rateLimited).toHaveBeenCalledTimes(2);
+    expect(limited.body).toMatchObject({
+      state: 'fallback', category: 'rate_limited', retryable: true,
+      diagnostics: {
+        rateLimitAttempt: 1,
+        retryAfterMs: 20_000,
+        rateLimitResetRequestsMs: 20_000,
+        rateLimitResetTokensMs: 62_000,
+        rateLimitRemainingRequests: 0,
+        rateLimitRemainingTokens: 42,
+        rateLimitType: 'requests',
+      },
+    });
+    expect(rateLimited).toHaveBeenCalledTimes(1);
+
+    const quotaLimited = vi.fn(async () => new Response(JSON.stringify({
+      error: { code: 'insufficient_quota', type: 'insufficient_quota', message: 'Billing quota reached for private-project-id.' },
+    }), { status: 429, headers: { 'Content-Type': 'application/json' } }));
+    const quota = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
+      env: enabledEnv, fetcher: quotaLimited as typeof fetch, logger: vi.fn(),
+    });
+    expect(quota.body).toMatchObject({
+      state: 'fallback', category: 'rate_limited', retryable: false,
+      diagnostics: { rateLimitType: 'quota-or-billing' },
+    });
+    expect(JSON.stringify(quota.body.diagnostics)).not.toContain('private-project-id');
+    expect(quotaLimited).toHaveBeenCalledTimes(1);
 
     const network = vi.fn()
       .mockRejectedValueOnce(new TypeError('network unavailable'))

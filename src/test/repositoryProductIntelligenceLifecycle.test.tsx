@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildSampleReport } from '@/lib/readiness';
 import type { RepoScanInput } from '@/lib/types';
 
@@ -80,7 +80,23 @@ function timeoutResponse() {
   };
 }
 
+function rateLimitedResponse(retryAt: number) {
+  return {
+    version: 'shipseal.repository-intelligence-provider.v1',
+    state: 'fallback',
+    category: 'rate_limited',
+    retryable: true,
+    message: 'Future analysis is waiting for AI capacity.',
+    deepState: 'failed',
+    diagnostics: {
+      costEstimate: 'unavailable', operationalFailureCategory: 'provider_rate_limited', failureBoundary: 'provider-http',
+      retryAfterMs: 20_000, backoffMs: 20_000, rateLimitRetryAt: retryAt, rateLimitRecoveryStatus: 'exhausted',
+    },
+  };
+}
+
 describe('report-scoped Product Intelligence lifecycle', () => {
+  afterEach(() => vi.restoreAllMocks());
   beforeEach(() => {
     lifecycleMocks.scan.mockReset();
     lifecycleMocks.request.mockReset();
@@ -144,6 +160,30 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     act(() => result.current.cancelRepositoryProductIntelligence());
     await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus.state).toBe('cancelled'));
 
+    await act(async () => { await result.current.retryRepositoryProductIntelligence(); });
+    await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus.state).toBe('enhanced'));
+    expect(lifecycleMocks.request).toHaveBeenCalledTimes(2);
+    expect(lifecycleMocks.scan).toHaveBeenCalledTimes(1);
+  });
+
+  it('prevents manual retry clicks from bypassing an observed provider cooldown', async () => {
+    let now = 1_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    lifecycleMocks.request.mockResolvedValueOnce(rateLimitedResponse(21_000));
+    const { result } = renderHook(() => useRepoScan());
+
+    await act(async () => { await result.current.startScan(new File(['zip'], 'rate-limit.zip')); });
+    await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus).toMatchObject({ state: 'fallback', category: 'rate_limited' }));
+    await act(async () => {
+      await Promise.all([
+        result.current.retryRepositoryProductIntelligence(),
+        result.current.retryRepositoryProductIntelligence(),
+      ]);
+    });
+    expect(lifecycleMocks.request).toHaveBeenCalledTimes(1);
+
+    now = 21_001;
+    lifecycleMocks.request.mockResolvedValueOnce(enhancedResponse());
     await act(async () => { await result.current.retryRepositoryProductIntelligence(); });
     await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus.state).toBe('enhanced'));
     expect(lifecycleMocks.request).toHaveBeenCalledTimes(2);

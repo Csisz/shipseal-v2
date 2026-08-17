@@ -32,6 +32,38 @@ const rootResult = {
 
 function json(value: unknown) { return new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
 
+function enhancedRoots() {
+  return json({
+    version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'enhanced', result: rootResult,
+    providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable' },
+  });
+}
+
+function enhancedBatch(stage: { fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities }) {
+  return json({
+    version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+    state: 'stage-enhanced', providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable' },
+    stageResult: {
+      pipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION, stage: 'expansion', fingerprint: stage.fingerprint,
+      batchIndex: stage.batchIndex, totalBatches: stage.totalBatches,
+      expansions: stage.parents!.map(parent => ({ parentId: parent.id, evolutions: [
+        { sourceId: `${parent.id}-one`, generation: 2, title: 'Adaptive experience', description: 'Grounded evolution.', userValue: 'Better outcomes.' },
+        { sourceId: `${parent.id}-two`, generation: 2, title: 'Guided experience', description: 'Grounded evolution.', userValue: 'Clearer decisions.' },
+      ] })),
+    },
+  });
+}
+
+function rateLimited(retryAfterMs = 20_000) {
+  return json({
+    version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'fallback', category: 'rate_limited', retryable: true,
+    message: 'Future analysis is waiting for AI capacity.', deepState: 'failed', diagnostics: {
+      costEstimate: 'unavailable', operationalFailureCategory: 'provider_rate_limited', failureBoundary: 'provider-http',
+      rateLimitAttempt: 1, retryAfterMs, rateLimitRemainingRequests: 0, rateLimitRemainingTokens: 10, rateLimitType: 'requests',
+    },
+  });
+}
+
 describe('staged Product Intelligence', () => {
   afterEach(() => { vi.unstubAllGlobals(); clearRepositoryIntelligenceEnhancementSessionCache(); });
 
@@ -110,6 +142,94 @@ describe('staged Product Intelligence', () => {
     expect(result.state).toBe('enhanced');
     expect(rootCalls).toBe(2);
     if (result.state === 'enhanced') expect(result.diagnostics.stageRetryCount).toBe(1);
+  });
+
+  it('waits for Retry-After and performs only one stage-owned 429 retry', async () => {
+    const calls: string[] = [];
+    const waits: number[] = [];
+    const progress: Array<{ rateLimitRetryAt?: number }> = [];
+    let rootCalls = 0;
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { stageAttemptKey?: string; productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      expect(body.stageAttemptKey).toMatch(/^[a-z0-9]{8,80}$/i);
+      const stage = body.productStage;
+      calls.push(stage.kind === 'roots' ? 'roots' : `batch-${stage.batchIndex}`);
+      if (stage.kind === 'roots') return ++rootCalls === 1 ? rateLimited() : enhancedRoots();
+      return enhancedBatch(stage);
+    });
+
+    const result = await requestRepositoryProductIntelligenceStaged(request, {
+      fetcher: fetcher as typeof fetch,
+      now: () => 1_000,
+      random: () => 0,
+      wait: async delayMs => { waits.push(delayMs); },
+      onProgress: value => progress.push(value),
+    });
+
+    expect(result.state).toBe('enhanced');
+    expect(calls.filter(call => call === 'roots')).toHaveLength(2);
+    expect(waits).toEqual([20_000]);
+    expect(progress).toContainEqual(expect.objectContaining({ rateLimitRetryAt: 21_000 }));
+    if (result.state === 'enhanced') expect(result.diagnostics).toMatchObject({
+      rateLimitAttempt: 1, retryAfterMs: 20_000, backoffMs: 20_000, rateLimitRecoveryStatus: 'recovered',
+    });
+  });
+
+  it('shares concurrent report-and-stage requests through one active browser call', async () => {
+    const calls: string[] = [];
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      const stage = body.productStage;
+      calls.push(stage.kind === 'roots' ? 'roots' : `batch-${stage.batchIndex}`);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      return stage.kind === 'roots' ? enhancedRoots() : enhancedBatch(stage);
+    });
+
+    const [first, duplicate] = await Promise.all([
+      requestRepositoryProductIntelligenceStaged(request, { fetcher: fetcher as typeof fetch }),
+      requestRepositoryProductIntelligenceStaged(request, { fetcher: fetcher as typeof fetch }),
+    ]);
+
+    expect(first.state).toBe('enhanced');
+    expect(duplicate.state).toBe('enhanced');
+    expect(calls).toHaveLength(4);
+    expect(calls.filter(call => call === 'roots')).toHaveLength(1);
+    expect(new Set(calls)).toEqual(new Set(['roots', 'batch-0', 'batch-1', 'batch-2']));
+    if (duplicate.state === 'enhanced') expect(duplicate.diagnostics.duplicateSuppressed).toBe(true);
+  });
+
+  it('reduces expansion recovery to one call, preserves completed work, and suppresses later bursts', async () => {
+    let batchOneRateLimited = true;
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      const stage = body.productStage;
+      calls.push(stage.kind === 'roots' ? 'roots' : `batch-${stage.batchIndex}`);
+      if (stage.kind === 'roots') return enhancedRoots();
+      if (stage.batchIndex === 1 && batchOneRateLimited) return rateLimited(2_000);
+      return enhancedBatch(stage);
+    }));
+
+    const first = await requestRepositoryProductIntelligenceStaged(request, {
+      random: () => 0,
+      wait: async () => undefined,
+    });
+    expect(first).toMatchObject({
+      state: 'fallback', category: 'rate_limited',
+      diagnostics: {
+        productStage: 'expansion', expansionBatchIndex: 1,
+        expansionConcurrencyAtRetry: 1, rateLimitRecoveryStatus: 'exhausted',
+      },
+    });
+    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1']);
+
+    batchOneRateLimited = false;
+    const second = await requestRepositoryProductIntelligenceStaged(request, {
+      random: () => 0,
+      wait: async () => undefined,
+    });
+    expect(second.state).toBe('enhanced');
+    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-1', 'batch-2']);
   });
 
   it('preserves completed batches and retries only the failed batch', async () => {

@@ -170,6 +170,39 @@ describe('premium post-scan view selector', () => {
     expect(screen.getByRole('button', { name: 'Open Repository Futures' })).toBeEnabled();
   });
 
+  it('shows a factual capacity cooldown and disables manual retry until it expires', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const retry = vi.fn(async () => undefined);
+    try {
+      render(<ResultWorkspace
+        report={reportWithIdentity('2026-08-11T10:01:45.000Z')}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        repositoryProductIntelligenceStatus={{
+          state: 'fallback', deepState: 'failed', category: 'rate_limited', retryable: true,
+          message: 'Future analysis is waiting for AI capacity.',
+          diagnostics: {
+            costEstimate: 'unavailable', operationalFailureCategory: 'provider_rate_limited', failureBoundary: 'provider-http',
+            retryAfterMs: 12_000, rateLimitRetryAt: 13_000, rateLimitRecoveryStatus: 'exhausted',
+          },
+        }}
+        retryRepositoryProductIntelligence={retry}
+      />);
+
+      expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('Retry available in 12 seconds');
+      expect(screen.getByRole('button', { name: 'Retry available in 12s' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
+      act(() => vi.advanceTimersByTime(12_000));
+      expect(screen.getByRole('button', { name: 'Retry Future analysis' })).toBeEnabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry Future analysis' }));
+      expect(retry).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('hands a sample report from the unified ready formation to the selector without exposing the workspace first', () => {
     vi.useFakeTimers();
     const report = reportWithIdentity('2026-08-11T10:02:00.000Z');

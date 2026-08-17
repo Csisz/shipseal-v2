@@ -19,6 +19,8 @@ export interface RepositoryProductPipelineProgress {
   totalBatches: number;
   activeBatchIndexes: number[];
   stageAttempt?: number;
+  rateLimitRetryAt?: number;
+  rateLimitAttempt?: number;
 }
 
 export function buildRepositoryProductRootStage(request: RepositoryDeepIntelligenceRequest): RepositoryProductProviderStage {

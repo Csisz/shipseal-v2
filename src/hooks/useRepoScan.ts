@@ -94,6 +94,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
   const productRequestIdentityRef = useRef('');
   const productRequestPromiseRef = useRef<Promise<void> | null>(null);
   const productRequestAttemptRef = useRef(0);
+  const productRateLimitCooldownUntilRef = useRef(0);
   const scanTokenRef = useRef(0);
 
   const resetScan = useCallback(() => {
@@ -107,6 +108,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     productRequestIdentityRef.current = '';
     productRequestPromiseRef.current = null;
     productRequestAttemptRef.current = 0;
+    productRateLimitCooldownUntilRef.current = 0;
     scanTokenRef.current += 1;
     setState(initialState);
   }, []);
@@ -122,6 +124,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     productRequestIdentityRef.current = '';
     productRequestPromiseRef.current = null;
     productRequestAttemptRef.current = 0;
+    productRateLimitCooldownUntilRef.current = 0;
     scanTokenRef.current += 1;
     setState(current => ({
       ...current,
@@ -559,6 +562,9 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     const scanInput = repositoryIntelligenceScanInputRef.current;
     const reportIdentity = productReportIdentityRef.current;
     if (!preparation || !scanInput || !reportIdentity) return Promise.resolve();
+    if (options.retry && Date.now() < productRateLimitCooldownUntilRef.current) {
+      return productRequestPromiseRef.current || Promise.resolve();
+    }
     if (!options.retry && productRequestIdentityRef.current.startsWith(`${reportIdentity}:attempt-`)) {
       return productRequestPromiseRef.current || Promise.resolve();
     }
@@ -600,6 +606,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           signal: controller.signal,
           onProgress: progress => {
             if (scanTokenRef.current !== token || productRequestIdentityRef.current !== requestIdentity || controller.signal.aborted) return;
+            if (progress.rateLimitRetryAt) productRateLimitCooldownUntilRef.current = progress.rateLimitRetryAt;
             setState(current => ({
               ...current,
               repositoryProductIntelligenceStatus: {
@@ -608,7 +615,11 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
                 completedBatches: progress.completedBatches,
                 totalBatches: progress.totalBatches,
                 activeBatchIndexes: progress.activeBatchIndexes,
-                message: progress.stage === 'roots'
+                rateLimitRetryAt: progress.rateLimitRetryAt,
+                rateLimitAttempt: progress.rateLimitAttempt,
+                message: progress.rateLimitRetryAt
+                  ? 'Future analysis is waiting for AI capacity. ShipSeal will retry automatically.'
+                  : progress.stage === 'roots'
                   ? progress.stageAttempt && progress.stageAttempt > 1
                     ? 'Retrying product directions with the completed repository understanding.'
                     : 'Understanding the product and finding grounded directions.'
@@ -632,6 +643,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           return;
         }
         if (response.state === 'enhanced') {
+          productRateLimitCooldownUntilRef.current = 0;
           if (response.result.productIntelligence?.opportunities.length) {
             setState(current => ({
               ...current,
@@ -656,6 +668,9 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         }
         if (response.state === 'stage-enhanced') throw new Error('Incomplete staged response reached the Product Intelligence owner.');
         const incompleteExpansion = response.diagnostics?.productStage === 'expansion';
+        productRateLimitCooldownUntilRef.current = response.category === 'rate_limited'
+          ? response.diagnostics?.rateLimitRetryAt || 0
+          : 0;
         const fallbackStatus: RepositoryIntelligenceProviderStatus = {
           state: 'fallback',
           deepState: response.deepState,

@@ -1,5 +1,6 @@
 import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
 import type { RepositoryDeepIntelligenceValidatedResult } from './deepIntelligenceSchema.js';
+import type { RepositoryRateLimitType } from './rateLimitPolicy.js';
 import type {
   RepositoryProductOpportunityRejectionReason,
   RepositoryProductUnderstandingRejectionReason,
@@ -235,6 +236,21 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   acceptedRootCount?: number;
   rejectedRootCount?: number;
   stageRetryCount?: number;
+  rateLimitAttempt?: number;
+  retryAfterMs?: number;
+  backoffMs?: number;
+  rateLimitRetryAt?: number;
+  rateLimitResetRequestsMs?: number;
+  rateLimitResetTokensMs?: number;
+  rateLimitRemainingRequests?: number;
+  rateLimitRemainingTokens?: number;
+  rateLimitLimitRequests?: number;
+  rateLimitLimitTokens?: number;
+  rateLimitType?: RepositoryRateLimitType;
+  duplicateSuppressed?: boolean;
+  stageAttemptKey?: string;
+  expansionConcurrencyAtRetry?: number;
+  rateLimitRecoveryStatus?: 'waiting' | 'recovered' | 'exhausted' | 'action-required';
 }
 
 export interface RepositoryIntelligenceDeepInsightSummary {
@@ -268,7 +284,7 @@ export type RepositoryIntelligenceProviderFailureCategory =
 
 export type RepositoryIntelligenceProviderStatus =
   | { state: 'deterministic'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false }
-  | { state: 'preparing'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; productStage?: 'roots' | 'expansion' | 'merging'; completedBatches?: number; totalBatches?: number; activeBatchIndexes?: number[] }
+  | { state: 'preparing'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; productStage?: 'roots' | 'expansion' | 'merging'; completedBatches?: number; totalBatches?: number; activeBatchIndexes?: number[]; rateLimitRetryAt?: number; rateLimitAttempt?: number }
   | { state: 'enhanced'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; providerId: string; modelId?: string; diagnostics?: RepositoryIntelligenceSafeDiagnostics; insights?: RepositoryIntelligenceDeepInsightSummary[] }
   | { state: 'fallback'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: boolean; category: RepositoryIntelligenceProviderFailureCategory; diagnostics?: RepositoryIntelligenceSafeDiagnostics }
   | { state: 'cancelled'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: true; category: 'request_cancelled'; diagnostics?: RepositoryIntelligenceSafeDiagnostics };
@@ -277,6 +293,7 @@ export interface RepositoryIntelligenceProviderApiRequest {
   version: typeof REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION;
   request: RepositoryDeepIntelligenceRequest;
   productStage?: RepositoryProductProviderStage;
+  stageAttemptKey?: string;
 }
 
 export type RepositoryIntelligenceProviderApiResponse =
@@ -325,7 +342,9 @@ export function repositoryFutureFailureMessage(
   }
   if (operational === 'provider_unavailable' || operational === 'provider_rate_limited'
     || category === 'provider_unavailable' || category === 'rate_limited') {
-    return 'Future analysis is temporarily unavailable.';
+    return operational === 'provider_rate_limited' || category === 'rate_limited'
+      ? 'Future analysis is waiting for AI capacity.'
+      : 'Future analysis is temporarily unavailable.';
   }
   if (operational === 'configuration_invalid' || operational === 'credentials_missing'
     || category === 'configuration_invalid' || category === 'credentials_missing' || category === 'provider_disabled') {

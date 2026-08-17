@@ -45,6 +45,11 @@ import {
 } from './repositoryProductStrategistResponse.js';
 import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../../src/lib/repositoryIntelligence/productStrategistContext.js';
 import { productIntelligenceUsesDisallowedGeneratedScript } from '../../src/lib/repositoryIntelligence/productIntelligenceSchema.js';
+import {
+  readRepositoryRateLimitHeaders,
+  type RepositoryRateLimitDiagnostics,
+  type RepositoryRateLimitType,
+} from '../../src/lib/repositoryIntelligence/rateLimitPolicy.js';
 
 export const PRODUCTION_PROVIDER_POLICY_VERSION = 'shipseal.production-provider-policy.v1' as const;
 export const PRODUCT_STRATEGIST_STRUCTURED_OUTPUT_DECISION = 'strict-json-schema-with-deterministic-normalization' as const;
@@ -162,6 +167,17 @@ export type ProductionProviderLogEvent = {
       evolutions?: Array<{ index: number; keys: string[]; nextType: string; nextCount?: number }>;
     }>;
   };
+  rateLimitAttempt?: number;
+  retryAfterMs?: number;
+  rateLimitResetRequestsMs?: number;
+  rateLimitResetTokensMs?: number;
+  rateLimitRemainingRequests?: number;
+  rateLimitRemainingTokens?: number;
+  rateLimitLimitRequests?: number;
+  rateLimitLimitTokens?: number;
+  rateLimitType?: RepositoryRateLimitType;
+  stageAttemptKey?: string;
+  duplicateSuppressed?: boolean;
 };
 
 export type ProductionProviderLogger = (event: ProductionProviderLogEvent) => void;
@@ -425,6 +441,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
     let languageRepairAttempted = false;
     let expansionRepairShape: ProductStrategistExpansionRepairShape | undefined;
     let lastProviderHttpStatusCategory: string | undefined;
+    let lastRateLimitDiagnostics: RepositoryRateLimitDiagnostics = {};
     for (;;) {
       let parsedEnvelopeDiagnostics: Partial<ProductionProviderLogEvent> = {};
       if (runOptions?.signal?.aborted) throw new RepositoryDeepIntelligenceProviderError('request_cancelled', 'Deep-intelligence request was cancelled.');
@@ -439,15 +456,27 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
           signal: runOptions?.signal,
         });
         if (!response.ok) {
-          const failure = httpFailure(response.status);
+          if (response.status === 429) {
+            lastRateLimitDiagnostics = {
+              ...readRepositoryRateLimitHeaders(response.headers, (this.options.now || Date.now)()),
+              rateLimitAttempt: retryCount + 1,
+            };
+            const bodyType = await readSafeRateLimitType(response, runOptions?.signal);
+            if (bodyType !== 'unknown') lastRateLimitDiagnostics.rateLimitType = bodyType;
+          }
+          const actionRequiredRateLimit = lastRateLimitDiagnostics.rateLimitType === 'quota-or-billing';
+          const failure = httpFailure(response.status, !actionRequiredRateLimit);
           lastProviderHttpStatusCategory = providerHttpStatusCategory(response.status, failure.code);
-          if (failure.retryable && retryCount < config.policy.maximumRetryCount) {
+          // The staged browser pipeline owns temporary 429 recovery so one
+          // stage cannot multiply retries at both the provider and client layers.
+          if (failure.code !== 'rate_limited' && failure.retryable && retryCount < config.policy.maximumRetryCount) {
             retryCount += 1;
             this.log(requestId, 'retry', startedAt, validation.requestBytes, retryCount, failure.code, {
               ...providerDetails,
               providerHttpStatusCategory: lastProviderHttpStatusCategory,
               operationalFailureCategory: operationalFailureForProviderError(failure.code),
               failureBoundary: 'provider-http',
+              ...lastRateLimitDiagnostics,
             });
             await boundedRetryDelay(response.headers.get('Retry-After'), config.policy.maximumRetryDelayMs, runOptions?.signal, this.options.random);
             continue;
@@ -545,6 +574,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
             operationalFailureCategory: operationalFailureForProviderError(error.code),
             failureBoundary: providerFailureBoundary(error),
             inputTokenEstimate: estimateDeepIntelligenceInputTokens(validation.requestBytes),
+            ...lastRateLimitDiagnostics,
             ...providerDetails,
           });
           throw error;
@@ -1093,11 +1123,31 @@ async function readBoundedResponseText(response: Response, maximumBytes: number,
   return new TextDecoder().decode(joined);
 }
 
-function httpFailure(status: number) {
+function httpFailure(status: number, retryableRateLimit = true) {
   if (status === 401 || status === 403) return new RepositoryDeepIntelligenceProviderError('authentication_failed', 'Deep-intelligence provider authentication failed.', false, 'provider-http');
-  if (status === 429) return new RepositoryDeepIntelligenceProviderError('rate_limited', 'Deep-intelligence provider rate limit was reached.', true, 'provider-http');
+  if (status === 429) return new RepositoryDeepIntelligenceProviderError('rate_limited', 'Deep-intelligence provider rate limit was reached.', retryableRateLimit, 'provider-http');
   if (status >= 500) return new RepositoryDeepIntelligenceProviderError('provider_unavailable', 'Deep-intelligence provider is temporarily unavailable.', true, 'provider-http');
   return new RepositoryDeepIntelligenceProviderError('provider_http_rejected', 'Deep-intelligence provider rejected the bounded request.', false, 'provider-http');
+}
+
+async function readSafeRateLimitType(response: Response, signal?: AbortSignal): Promise<RepositoryRateLimitType> {
+  const contentType = response.headers.get('Content-Type') || '';
+  if (!contentType.toLowerCase().includes('application/json')) return 'unknown';
+  try {
+    if (signal?.aborted) return 'unknown';
+    const text = await response.text();
+    if (text.length > 16_000) return 'unknown';
+    const payload = JSON.parse(text) as { error?: { code?: unknown; type?: unknown; message?: unknown } };
+    const code = typeof payload.error?.code === 'string' ? payload.error.code.toLowerCase() : '';
+    const type = typeof payload.error?.type === 'string' ? payload.error.type.toLowerCase() : '';
+    const message = typeof payload.error?.message === 'string' ? payload.error.message.toLowerCase() : '';
+    if (code.includes('insufficient_quota') || type.includes('insufficient_quota') || /quota|billing|spend limit/.test(message)) return 'quota-or-billing';
+    if (/tokens per min|\btpm\b/.test(message)) return 'tokens';
+    if (/requests per min|\brpm\b/.test(message)) return 'requests';
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
 }
 
 function providerHttpStatusCategory(status: number, code: string) {

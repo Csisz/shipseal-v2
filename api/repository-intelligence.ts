@@ -41,6 +41,25 @@ import type {
 const MAX_BODY_BYTES = 900 * 1024;
 type VercelLikeRequest = IncomingMessage & { body?: unknown };
 
+type ProductionRepositoryIntelligenceResult = Awaited<ReturnType<typeof prepareProductionRepositoryIntelligence>>;
+
+export class RepositoryIntelligenceServerStageSingleFlight {
+  private readonly active = new Map<string, Promise<ProductionRepositoryIntelligenceResult>>();
+
+  run(key: string | undefined, task: () => Promise<ProductionRepositoryIntelligenceResult>) {
+    if (!key) return { duplicateSuppressed: false, promise: task() };
+    const existing = this.active.get(key);
+    if (existing) return { duplicateSuppressed: true, promise: existing };
+    const promise = task().finally(() => {
+      if (this.active.get(key) === promise) this.active.delete(key);
+    });
+    this.active.set(key, promise);
+    return { duplicateSuppressed: false, promise };
+  }
+}
+
+const serverStageSingleFlight = new RepositoryIntelligenceServerStageSingleFlight();
+
 export interface PrepareProductionRepositoryIntelligenceOptions {
   env?: NodeJS.ProcessEnv;
   fetcher?: typeof fetch;
@@ -83,6 +102,7 @@ export async function prepareProductionRepositoryIntelligence(
   );
   if (!productStageValidation.valid) return fallback(400, 'invalid_request', false);
   const productStage = productStageValidation.stage;
+  const stageAttemptKey = readStageAttemptKey(input);
   const requestId = createOperationalRequestId(productStage?.fingerprint || requestValidation.request.fingerprint, productStage?.kind);
   const executionPolicy = resolveProductionExecutionPolicy(requestValidation.request, config.policy);
   const executionConfig = {
@@ -163,7 +183,9 @@ export async function prepareProductionRepositoryIntelligence(
   let languageRepairCount = 0;
   let providerValidationCategory: RepositoryIntelligenceValidationCategory | undefined;
   let providerValidationReason: RepositoryIntelligenceValidationReason | undefined;
-  let providerResponseDiagnostics: Partial<RepositoryIntelligenceSafeDiagnostics> = {};
+  let providerResponseDiagnostics: Partial<RepositoryIntelligenceSafeDiagnostics> = {
+    ...(stageAttemptKey ? { stageAttemptKey, duplicateSuppressed: false } : {}),
+  };
   const provider = new OpenAiCompatibleRepositoryDeepIntelligenceProvider({
     config: executionConfig,
     fetcher: options.fetcher,
@@ -199,8 +221,17 @@ export async function prepareProductionRepositoryIntelligence(
         ...(event.languageValidation === undefined ? {} : { languageValidation: event.languageValidation }),
         ...(event.expansionSchemaValidation === undefined ? {} : { expansionSchemaValidation: event.expansionSchemaValidation }),
         ...(event.expansionResponseShape === undefined ? {} : { expansionResponseShape: event.expansionResponseShape }),
+        ...(event.rateLimitAttempt === undefined ? {} : { rateLimitAttempt: event.rateLimitAttempt }),
+        ...(event.retryAfterMs === undefined ? {} : { retryAfterMs: event.retryAfterMs }),
+        ...(event.rateLimitResetRequestsMs === undefined ? {} : { rateLimitResetRequestsMs: event.rateLimitResetRequestsMs }),
+        ...(event.rateLimitResetTokensMs === undefined ? {} : { rateLimitResetTokensMs: event.rateLimitResetTokensMs }),
+        ...(event.rateLimitRemainingRequests === undefined ? {} : { rateLimitRemainingRequests: event.rateLimitRemainingRequests }),
+        ...(event.rateLimitRemainingTokens === undefined ? {} : { rateLimitRemainingTokens: event.rateLimitRemainingTokens }),
+        ...(event.rateLimitLimitRequests === undefined ? {} : { rateLimitLimitRequests: event.rateLimitLimitRequests }),
+        ...(event.rateLimitLimitTokens === undefined ? {} : { rateLimitLimitTokens: event.rateLimitLimitTokens }),
+        ...(event.rateLimitType === undefined ? {} : { rateLimitType: event.rateLimitType }),
       };
-      logger(event);
+      logger({ ...event, ...(stageAttemptKey ? { stageAttemptKey } : {}) });
     },
   });
   const startedAt = Date.now();
@@ -857,9 +888,42 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   const abort = () => controller.abort();
   req.once('aborted', abort);
   try {
-    const result = await prepareProductionRepositoryIntelligence(input, { signal: controller.signal });
-    return sendJson(res, result.status, result.body);
+    const stageAttemptKey = readStageAttemptKey(input);
+    const flight = serverStageSingleFlight.run(stageAttemptKey, () => prepareProductionRepositoryIntelligence(input, { signal: controller.signal }));
+    if (flight.duplicateSuppressed) {
+      const metadata = readSafeStageMetadata(input);
+      console.info(JSON.stringify({
+        event: 'repository_intelligence_stage_deduplication',
+        stageAttemptKey,
+        stageFingerprint: metadata.fingerprint,
+        productStage: metadata.stage,
+        duplicateSuppressed: true,
+      }));
+    }
+    const result = await flight.promise;
+    const body = flight.duplicateSuppressed ? withDuplicateSuppressed(result.body, stageAttemptKey) : result.body;
+    return sendJson(res, result.status, body);
   } finally {
     req.removeListener('aborted', abort);
   }
+}
+
+function readStageAttemptKey(input: unknown) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const value = (input as { stageAttemptKey?: unknown }).stageAttemptKey;
+  return typeof value === 'string' && /^[a-z0-9]{8,80}$/i.test(value) ? value : undefined;
+}
+
+function withDuplicateSuppressed(
+  body: RepositoryIntelligenceProviderApiResponse,
+  stageAttemptKey?: string,
+): RepositoryIntelligenceProviderApiResponse {
+  return {
+    ...body,
+    diagnostics: {
+      ...(body.diagnostics || { costEstimate: 'unavailable' as const }),
+      ...(stageAttemptKey ? { stageAttemptKey } : {}),
+      duplicateSuppressed: true,
+    },
+  } as RepositoryIntelligenceProviderApiResponse;
 }
