@@ -135,6 +135,11 @@ export const productStrategistCompactOpportunitySchema = z.object({
   q: z.number().finite().min(0).max(1),
 }).strict();
 
+/** Stage 1 intentionally returns strategic roots without deep evolution. */
+export const productStrategistCompactRootOpportunitySchema = productStrategistCompactOpportunitySchema.extend({
+  evo: z.array(compactSecondGenerationEvolutionSchema).length(0),
+}).strict();
+
 const compactResponseCollectionSchema = z.object({
   p: z.unknown(),
   o: z.array(z.unknown()).min(3).max(8),
@@ -383,6 +388,7 @@ export function normalizeProductStrategistProviderResponse(
   input: unknown,
   request: RepositoryDeepIntelligenceRequest,
   modelId?: string,
+  options: { rootsOnly?: boolean } = {},
 ): unknown {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return input;
   const record = input as Record<string, unknown>;
@@ -393,6 +399,9 @@ export function normalizeProductStrategistProviderResponse(
   const payload = buildProductStrategistProviderPayload(request);
   const diagnostics: RepositoryProductNormalizationDiagnostics = {
     parsedOpportunityCount: 0,
+    compactOpportunityContract: options.rootsOnly ? 'roots' : 'full',
+    compactOpportunityShapeRejectedCount: 0,
+    compactOpportunityShapeIssueFields: [],
     opportunityRejectionReasons: Array.from({ length: collection.data.o.length }),
     compactEvidenceReferenceCount: 0,
     compactEvidenceReferenceRejectedCount: 0,
@@ -411,11 +420,22 @@ export function normalizeProductStrategistProviderResponse(
     if (rejected) diagnostics.understandingRejectionReason = 'compact-evidence-index-out-of-range';
   }
 
-  const parsedOpportunities = collection.data.o.map(raw => productStrategistCompactOpportunitySchema.safeParse(raw));
+  const opportunitySchema = options.rootsOnly
+    ? productStrategistCompactRootOpportunitySchema
+    : productStrategistCompactOpportunitySchema;
+  const parsedOpportunities = collection.data.o.map(raw => opportunitySchema.safeParse(raw));
   diagnostics.parsedOpportunityCount = parsedOpportunities.filter(result => result.success).length;
   const opportunityValues = parsedOpportunities.map(result => result.success ? result.data : undefined);
   const opportunityResults = parsedOpportunities.map((result, index) => {
-    if (!result.success) return collection.data.o[index];
+    if (!result.success) {
+      diagnostics.opportunityRejectionReasons![index] = 'invalid-shape';
+      diagnostics.compactOpportunityShapeRejectedCount = (diagnostics.compactOpportunityShapeRejectedCount || 0) + 1;
+      diagnostics.compactOpportunityShapeIssueFields = [...new Set([
+        ...(diagnostics.compactOpportunityShapeIssueFields || []),
+        ...result.error.issues.map(issue => issue.path.slice(0, 2).map(String).join('.')).filter(Boolean),
+      ])].sort();
+      return collection.data.o[index];
+    }
     diagnostics.compactEvidenceReferenceCount = (diagnostics.compactEvidenceReferenceCount || 0) + result.data.e.length;
     const reason = auditOpportunityReferences(result.data, index, {
       evidenceCount: payload.evidenceIndex.length,

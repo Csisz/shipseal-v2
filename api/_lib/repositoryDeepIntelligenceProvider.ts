@@ -134,6 +134,9 @@ export type ProductionProviderLogEvent = {
   rejectedRootCount?: number;
   acceptedSecondGenerationCount?: number;
   acceptedThirdGenerationCount?: number;
+  compactOpportunityContract?: 'roots' | 'full';
+  compactOpportunityShapeRejectedCount?: number;
+  compactOpportunityShapeIssueFields?: string[];
 };
 
 export type ProductionProviderLogger = (event: ProductionProviderLogEvent) => void;
@@ -441,6 +444,7 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
             parsedEnvelope.payload,
             request,
             parsedEnvelope.diagnostics.providerModelId || config.model,
+            { rootsOnly: this.options.productStage?.kind === 'roots' },
           )
           : parsedEnvelope.payload;
         if (request.executionProfile === 'product-strategist' && this.options.productStage?.kind !== 'expansion'

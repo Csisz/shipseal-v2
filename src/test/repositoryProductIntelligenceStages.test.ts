@@ -62,6 +62,18 @@ describe('staged Product Intelligence', () => {
       ...response,
       x: response.x.map((item, index) => index ? item : { ...item, evo: [{ ...item.evo[0], t: 'Adaptive自动 planning' }, item.evo[1]] }),
     }, stage, 'en')).toThrow(/generated-language contract/i);
+    expect(() => normalizeProductStrategistExpansionResponse({
+      ...response,
+      x: response.x.map((item, index) => index ? item : { ...item, evo: [item.evo[0]] }),
+    }, stage, 'en')).toThrow(/bounded schema/i);
+    expect(() => normalizeProductStrategistExpansionResponse({
+      ...response,
+      x: response.x.map((item, index) => index ? item : { ...item, p: 'product-opportunity:unknown' }),
+    }, stage, 'en')).toThrow(/stable parent identities|bounded schema/i);
+    expect(() => normalizeProductStrategistExpansionResponse({
+      ...response,
+      x: response.x.map((item, index) => index ? item : { ...item, evo: [item.evo[0], { ...item.evo[1], id: item.evo[0].id }] }),
+    }, stage, 'en')).toThrow(/duplicate stage-local identities/i);
   });
 
   it('retries a temporary root-stage failure once without rebuilding repository understanding', async () => {
@@ -140,6 +152,9 @@ describe('staged Product Intelligence', () => {
     expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-2', 'batch-1']);
     if (second.state === 'enhanced') {
       expect(second.result.productIntelligence?.opportunities.every(item => item.futureEvolutions.length === 3)).toBe(true);
+      expect(second.result.productIntelligence?.opportunities.map(item => item.sourceId).sort())
+        .toEqual(opportunities.map(item => item.sourceId).sort());
+      expect(new Set(second.result.productIntelligence?.opportunities.map(item => item.sourceId)).size).toBe(7);
       expect(second.diagnostics).toMatchObject({ expansionBatchCount: 3, acceptedSecondGenerationCount: 14, acceptedThirdGenerationCount: 7 });
     }
   });

@@ -157,6 +157,9 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   productUnderstandingAccepted?: boolean;
   productUnderstandingRejectionReason?: RepositoryProductUnderstandingRejectionReason;
   parsedProductOpportunityCount?: number;
+  compactOpportunityContract?: 'roots' | 'full';
+  compactOpportunityShapeRejectedCount?: number;
+  compactOpportunityShapeIssueFields?: string[];
   acceptedProductOpportunityCount?: number;
   rejectedProductOpportunityCount?: number;
   rejectedProductOpportunityReasonCounts?: Partial<Record<RepositoryProductOpportunityRejectionReason, number>>;

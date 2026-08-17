@@ -45,6 +45,9 @@ export type RepositoryProductOpportunityRejectionReason =
 export interface RepositoryProductNormalizationDiagnostics {
   understandingRejectionReason?: RepositoryProductUnderstandingRejectionReason;
   parsedOpportunityCount?: number;
+  compactOpportunityContract?: 'roots' | 'full';
+  compactOpportunityShapeRejectedCount?: number;
+  compactOpportunityShapeIssueFields?: string[];
   opportunityRejectionReasons?: Array<RepositoryProductOpportunityRejectionReason | undefined>;
   compactEvidenceReferenceCount?: number;
   compactEvidenceReferenceRejectedCount?: number;
@@ -255,6 +258,9 @@ export interface RepositoryProductOpportunityRejection {
 export interface RepositoryProductValidationDiagnostics {
   parsedOpportunityCount: number;
   rejectedOpportunityReasonCounts: Partial<Record<RepositoryProductOpportunityRejectionReason, number>>;
+  compactOpportunityContract?: 'roots' | 'full';
+  compactOpportunityShapeRejectedCount?: number;
+  compactOpportunityShapeIssueFields?: string[];
   compactEvidenceReferenceCount: number;
   compactEvidenceReferenceRejectedCount: number;
   compactCapabilityReferenceRejectedCount: number;
@@ -364,6 +370,9 @@ export function validateRepositoryProductIntelligence(input: {
   const validationDiagnostics: RepositoryProductValidationDiagnostics = {
     parsedOpportunityCount: input.normalizationDiagnostics?.parsedOpportunityCount ?? parsedOpportunities.length,
     rejectedOpportunityReasonCounts,
+    compactOpportunityContract: input.normalizationDiagnostics?.compactOpportunityContract,
+    compactOpportunityShapeRejectedCount: input.normalizationDiagnostics?.compactOpportunityShapeRejectedCount,
+    compactOpportunityShapeIssueFields: input.normalizationDiagnostics?.compactOpportunityShapeIssueFields,
     compactEvidenceReferenceCount: input.normalizationDiagnostics?.compactEvidenceReferenceCount || 0,
     compactEvidenceReferenceRejectedCount: input.normalizationDiagnostics?.compactEvidenceReferenceRejectedCount || 0,
     compactCapabilityReferenceRejectedCount: input.normalizationDiagnostics?.compactCapabilityReferenceRejectedCount || 0,

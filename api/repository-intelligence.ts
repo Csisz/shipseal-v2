@@ -275,6 +275,9 @@ export async function prepareProductionRepositoryIntelligence(
       productUnderstandingRejectionReason: productIntelligence?.understandingRejectionReason
         || (execution.error?.code === 'product-understanding-schema-rejected' ? 'invalid-understanding-shape' : undefined),
       parsedProductOpportunityCount: productValidationDiagnostics?.parsedOpportunityCount || 0,
+      compactOpportunityContract: productValidationDiagnostics?.compactOpportunityContract,
+      compactOpportunityShapeRejectedCount: productValidationDiagnostics?.compactOpportunityShapeRejectedCount || 0,
+      compactOpportunityShapeIssueFields: productValidationDiagnostics?.compactOpportunityShapeIssueFields || [],
       acceptedProductOpportunityCount,
       rejectedProductOpportunityCount: productIntelligence?.rejectedOpportunities.length || 0,
       rejectedProductOpportunityReasonCounts: productValidationDiagnostics?.rejectedOpportunityReasonCounts || {},
@@ -349,17 +352,53 @@ export async function prepareProductionRepositoryIntelligence(
       },
     };
   }
-  if (execution.status === 'completed') return fallback(200, 'evidence_validation_failed', false, {
-    ...diagnostics,
-    operationalFailureCategory: 'evidence_validation_failed',
-    failureBoundary: 'evidence-normalization',
-    validationCategory: productStrategistExecution && acceptedProductOpportunityCount < 3
-      ? 'insufficient-product-opportunities'
-      : diagnostics.validationCategory,
-    acceptedFindingCount: execution.result?.findings.length || 0,
-    rejectedFindingCount: execution.result?.rejectedFindings.length || 0,
-    validationWarningCount: execution.result?.summary.validationMessages.length || 0,
-  });
+  if (execution.status === 'completed') {
+    const shapeRejectedCount = productValidationDiagnostics?.compactOpportunityShapeRejectedCount
+      || productValidationDiagnostics?.rejectedOpportunityReasonCounts['invalid-shape'] || 0;
+    const referenceRejectedCount = (productValidationDiagnostics?.compactEvidenceReferenceRejectedCount || 0)
+      + (productValidationDiagnostics?.compactCapabilityReferenceRejectedCount || 0)
+      + (productValidationDiagnostics?.compactPathReferenceRejectedCount || 0)
+      + (productValidationDiagnostics?.compactSupportReferenceRejectedCount || 0);
+    const responseShapeFailure = productStrategistExecution && shapeRejectedCount > 0 && referenceRejectedCount === 0;
+    const failureDiagnostics: RepositoryIntelligenceSafeDiagnostics = {
+      ...diagnostics,
+      operationalFailureCategory: responseShapeFailure
+        ? productStage?.kind === 'roots' ? 'roots_schema_failed' : 'structured_output_rejected'
+        : 'evidence_validation_failed',
+      failureBoundary: responseShapeFailure ? 'schema-validation' : 'evidence-normalization',
+      validationCategory: responseShapeFailure
+        ? 'response-schema-rejected'
+        : productStrategistExecution && acceptedProductOpportunityCount < 3
+          ? 'insufficient-product-opportunities'
+          : diagnostics.validationCategory,
+      acceptedFindingCount: execution.result?.findings.length || 0,
+      rejectedFindingCount: execution.result?.rejectedFindings.length || 0,
+      validationWarningCount: execution.result?.summary.validationMessages.length || 0,
+    };
+    logger({
+      event: 'repository_intelligence_provider',
+      requestId,
+      providerId: config.provider,
+      modelId: config.model,
+      outcome: 'failure',
+      durationMs,
+      requestBytes: preparedContext.budget.requestBytes,
+      retryCount: providerRetryCount,
+      statusCategory: failureDiagnostics.operationalFailureCategory,
+      validationCategory: failureDiagnostics.validationCategory,
+      requestFingerprint: failureDiagnostics.requestFingerprint,
+      productStage: productStage?.kind,
+      stageFingerprint: productStage?.fingerprint,
+      acceptedRootCount: productStage?.kind === 'roots' ? acceptedProductOpportunityCount : undefined,
+      rejectedRootCount: productStage?.kind === 'roots' ? productIntelligence?.rejectedOpportunities.length || 0 : undefined,
+      compactOpportunityContract: failureDiagnostics.compactOpportunityContract,
+      compactOpportunityShapeRejectedCount: failureDiagnostics.compactOpportunityShapeRejectedCount,
+      compactOpportunityShapeIssueFields: failureDiagnostics.compactOpportunityShapeIssueFields,
+      operationalFailureCategory: failureDiagnostics.operationalFailureCategory,
+      failureBoundary: failureDiagnostics.failureBoundary,
+    });
+    return fallback(200, responseShapeFailure ? 'schema_validation_failed' : 'evidence_validation_failed', false, failureDiagnostics);
+  }
   if (execution.status === 'timeout') return fallback(200, 'request_timeout', true, diagnostics);
   if (execution.status === 'cancelled') return fallback(200, 'request_cancelled', true, diagnostics);
   const category = mapExecutionError(execution.error?.code);

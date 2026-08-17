@@ -6,17 +6,19 @@ import { futuresQaProductIntelligence, futuresQaReport } from './RepositoryFutur
 
 const failureStatus: RepositoryIntelligenceProviderStatus = {
   state: 'fallback',
-  deepState: 'failed',
-  message: 'Future analysis took longer than expected.',
+  deepState: 'rejected',
+  message: 'ShipSeal couldn’t validate this Future analysis.',
   retryable: true,
-  category: 'request_timeout',
+  category: 'schema_validation_failed',
   diagnostics: {
     requestId: 'ri-roots-qa-safe-ref',
     requestFingerprint: 'qa-fingerprint',
     productStage: 'roots',
-    operationalFailureCategory: 'provider_timeout',
-    failureBoundary: 'provider-generation',
-    providerTimedOut: true,
+    operationalFailureCategory: 'roots_schema_failed',
+    failureBoundary: 'schema-validation',
+    compactOpportunityContract: 'roots',
+    compactOpportunityShapeRejectedCount: 7,
+    compactOpportunityShapeIssueFields: ['evo'],
     costEstimate: 'unavailable',
   },
 };

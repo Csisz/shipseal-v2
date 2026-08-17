@@ -31,10 +31,12 @@ import {
   PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS,
   buildProductStrategistResponseFormat,
   normalizeProductStrategistProviderResponse,
+  productStrategistCompactOpportunitySchema,
+  productStrategistCompactRootOpportunitySchema,
 } from '../../api/_lib/repositoryProductStrategistResponse';
 import type { RepoScanInput } from '@/lib/types';
 import { RepositoryIntelligenceEnhancementSingleFlight } from '@/lib/repositoryIntelligence/deepIntelligenceClient';
-import { buildRepositoryProductRootStage } from '@/lib/repositoryIntelligence/stagedProductIntelligence';
+import { buildRepositoryProductExpansionStages, buildRepositoryProductRootStage } from '@/lib/repositoryIntelligence/stagedProductIntelligence';
 
 function fixtureRequest(
   requestedCapabilities: Parameters<typeof buildRepositoryDeepIntelligenceRequest>[0]['requestedCapabilities'] = ['architecture-analysis', 'structured-output'],
@@ -240,6 +242,26 @@ function validProductProviderPayload(
   };
 }
 
+function validRootProductProviderPayload(
+  request = fixtureRequest(['product-opportunity-analysis', 'structured-output']).request,
+  opportunityCount: 6 | 7 | 8 = 7,
+) {
+  const base = validProductProviderPayload(request, 5);
+  return {
+    ...base,
+    o: Array.from({ length: opportunityCount }, (_, index) => {
+      const template = base.o[index % base.o.length];
+      return {
+        ...template,
+        t: `Grounded Future ${index + 1}`,
+        s: `Grounded product direction ${index + 1} extends the current repository workflow.`,
+        support: index > 0 && index % 3 === 0 ? [0] : [],
+        evo: [],
+      };
+    }),
+  };
+}
+
 function maximumCompactProductProviderPayload(
   request = fixtureRequest(['product-opportunity-analysis', 'structured-output']).request,
 ) {
@@ -326,6 +348,101 @@ const enabledEnv = {
 };
 
 describe('production Repository Intelligence provider', () => {
+  it('keeps the roots response format and roots normalizer symmetrical without weakening the full contract', () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const payload = validRootProductProviderPayload(request, 7);
+    const providerPayload = buildProductStrategistProviderPayload(request);
+    const rootsFormat = buildProductStrategistResponseFormat(providerPayload, { rootsOnly: true });
+    const evolutionSchema = rootsFormat.json_schema.schema.properties.o.items.properties.evo;
+
+    expect(evolutionSchema).toMatchObject({ minItems: 0, maxItems: 0 });
+    expect(productStrategistCompactRootOpportunitySchema.safeParse(payload.o[0]).success).toBe(true);
+    expect(productStrategistCompactOpportunitySchema.safeParse(payload.o[0]).success).toBe(false);
+    expect(normalizeProductStrategistProviderResponse(payload, request, 'controlled-model', { rootsOnly: true })).toMatchObject({
+      productOpportunities: expect.arrayContaining([
+        expect.objectContaining({ id: 'op-0', futureEvolutions: [] }),
+      ]),
+    });
+  });
+
+  it.each([6, 7, 8] as const)('accepts %i production-shaped roots with empty evolution through the real provider path', async opportunityCount => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = buildRepositoryProductRootStage(request);
+    const payload = validRootProductProviderPayload(request, opportunityCount);
+    const fetcher = vi.fn(async () => envelope(payload));
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: vi.fn() });
+
+    expect(result.body).toMatchObject({
+      state: 'enhanced',
+      diagnostics: {
+        productStage: 'roots',
+        parsedProductOpportunityCount: opportunityCount,
+        acceptedRootCount: opportunityCount,
+        rejectedRootCount: 0,
+        compactOpportunityContract: 'roots',
+        compactOpportunityShapeRejectedCount: 0,
+      },
+      result: { productIntelligence: { opportunities: expect.any(Array) } },
+    });
+    if (result.body.state === 'enhanced') {
+      expect(result.body.result.productIntelligence?.opportunities).toHaveLength(opportunityCount);
+      expect(result.body.result.productIntelligence?.opportunities.every(opportunity => opportunity.futureEvolutions.length === 0)).toBe(true);
+      expect(new Set(result.body.result.productIntelligence?.opportunities.map(opportunity => opportunity.sourceId)).size).toBe(opportunityCount);
+      if (opportunityCount === 7 && result.body.result.productIntelligence) {
+        const expansionStages = buildRepositoryProductExpansionStages(request, result.body.result.productIntelligence);
+        expect(expansionStages).toHaveLength(3);
+        expect(expansionStages.map(stage => stage.parents.length)).toEqual([3, 3, 1]);
+        expect(new Set(expansionStages.flatMap(stage => stage.parents.map(parent => parent.id))).size).toBe(7);
+      }
+    }
+  });
+
+  it('classifies roots compact-shape rejection separately from real evidence-reference rejection', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = buildRepositoryProductRootStage(request);
+    const invalidShape = validRootProductProviderPayload(request, 7);
+    invalidShape.o = invalidShape.o.map(opportunity => {
+      const { evo: _evo, ...withoutEvolution } = opportunity;
+      return withoutEvolution as typeof opportunity;
+    });
+    const shapeResult = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request, productStage,
+    }, { env: enabledEnv, fetcher: vi.fn(async () => envelope(invalidShape)) as typeof fetch, logger: vi.fn() });
+    expect(shapeResult.body).toMatchObject({
+      state: 'fallback',
+      category: 'schema_validation_failed',
+      diagnostics: {
+        operationalFailureCategory: 'roots_schema_failed',
+        failureBoundary: 'schema-validation',
+        validationCategory: 'response-schema-rejected',
+        parsedProductOpportunityCount: 0,
+        compactOpportunityShapeRejectedCount: 7,
+        compactOpportunityShapeIssueFields: ['evo'],
+        compactEvidenceReferenceRejectedCount: 0,
+      },
+    });
+
+    const invalidEvidence = validRootProductProviderPayload(request, 7);
+    invalidEvidence.o = invalidEvidence.o.map(opportunity => ({ ...opportunity, e: [999] }));
+    const evidenceResult = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request, productStage,
+    }, { env: enabledEnv, fetcher: vi.fn(async () => envelope(invalidEvidence)) as typeof fetch, logger: vi.fn() });
+    expect(evidenceResult.body).toMatchObject({
+      state: 'fallback',
+      category: 'evidence_validation_failed',
+      diagnostics: {
+        operationalFailureCategory: 'evidence_validation_failed',
+        failureBoundary: 'evidence-normalization',
+        compactOpportunityShapeRejectedCount: 0,
+        compactEvidenceReferenceRejectedCount: 7,
+      },
+    });
+  });
+
   it('reduces a 40-file Production-shape request to the focused Product Strategist profile before transmission', async () => {
     const request = productionShapeFixture();
     const config = resolveProductionProviderConfig(enabledEnv);

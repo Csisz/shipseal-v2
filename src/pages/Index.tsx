@@ -49,6 +49,9 @@ const RepositoryFuturesLayoutQa = import.meta.env.DEV
 const RepositoryFutureRecoveryQa = import.meta.env.DEV
   ? lazy(() => import('@/dev/RepositoryFutureRecoveryQa'))
   : null;
+const RepositoryRootContractQa = import.meta.env.DEV
+  ? lazy(() => import('@/dev/RepositoryRootContractQa'))
+  : null;
 const GITHUB_INSTALLATION_STORAGE_KEY = 'shipseal.githubInstallationId';
 
 function scrollWindowToTop(behavior: ScrollBehavior) {
@@ -644,6 +647,9 @@ const Index = () => {
   }
   if (RepositoryFutureRecoveryQa && new URLSearchParams(window.location.search).get('omega18Qa') === 'futures-recovery') {
     return <Suspense fallback={<div className="min-h-screen bg-background p-8 text-muted-foreground">Loading Future recovery fixture...</div>}><RepositoryFutureRecoveryQa /></Suspense>;
+  }
+  if (RepositoryRootContractQa && new URLSearchParams(window.location.search).get('omega18Qa') === 'roots-contract') {
+    return <Suspense fallback={<div className="min-h-screen bg-background p-8 text-muted-foreground">Loading roots contract fixture...</div>}><RepositoryRootContractQa /></Suspense>;
   }
 
   return (
