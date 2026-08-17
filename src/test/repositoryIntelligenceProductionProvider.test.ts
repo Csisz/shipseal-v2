@@ -446,9 +446,9 @@ function maximumCompactProductProviderPayload(
   };
 }
 
-function envelope(payload: unknown, fenced = false) {
+function envelope(payload: unknown, fenced = false, usage?: unknown) {
   const content = JSON.stringify(payload);
-  return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: fenced ? `\`\`\`json\n${content}\n\`\`\`` : content } }] }), {
+  return new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: fenced ? `\`\`\`json\n${content}\n\`\`\`` : content } }], ...(usage ? { usage } : {}) }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
@@ -1169,7 +1169,11 @@ describe('production Repository Intelligence provider', () => {
     const logs: Array<{ outcome: string; statusCategory?: string }> = [];
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       bodies.push(String(init?.body || ''));
-      return envelope(bodies.length === 1 ? mixed : repaired);
+      return envelope(bodies.length === 1 ? mixed : repaired, false, {
+        prompt_tokens: 2_400,
+        completion_tokens: 1_200,
+        total_tokens: 3_600,
+      });
     });
 
     const result = await prepareProductionRepositoryIntelligence({
@@ -1197,7 +1201,11 @@ describe('production Repository Intelligence provider', () => {
     const logs: ProductionProviderLogEvent[] = [];
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
       bodies.push(JSON.parse(String(init?.body || '{}')));
-      return envelope(bodies.length === 1 ? mixed : repaired);
+      return envelope(bodies.length === 1 ? mixed : repaired, false, {
+        prompt_tokens: 2_400,
+        completion_tokens: 1_200,
+        total_tokens: 3_600,
+      });
     });
 
     const result = await prepareProductionRepositoryIntelligence({
@@ -1218,6 +1226,8 @@ describe('production Repository Intelligence provider', () => {
           violatingFieldCount: 2,
           paths: ['x[1].evo[0].t', 'x[1].evo[0].next[0].s'],
         },
+        providerPromptTokens: 2_400,
+        providerCompletionTokens: 1_200,
       },
     });
     expect(bodies[0].messages[0].content).not.toContain('LANGUAGE REPAIR');

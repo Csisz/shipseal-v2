@@ -484,7 +484,13 @@ export function normalizeProductStrategistExpansionResponse(
   locale?: string,
   options: { repairShape?: ProductStrategistExpansionRepairShape } = {},
 ): RepositoryProductExpansionStageResult {
-  const parsed = expansionResponseSchema.safeParse(input);
+  const candidate = input && typeof input === 'object' && !Array.isArray(input)
+    ? (() => {
+      const { usage: _providerEnvelopeUsage, ...response } = input as Record<string, unknown>;
+      return response;
+    })()
+    : input;
+  const parsed = expansionResponseSchema.safeParse(candidate);
   if (!parsed.success) {
     const paths = uniqueBoundedPaths(parsed.error.issues.map(issue => safeIssuePath(issue.path)));
     throw new ProductStrategistExpansionValidationError('schema', {
@@ -493,7 +499,7 @@ export function normalizeProductStrategistExpansionResponse(
         paths,
         issueCategories: [...new Set(parsed.error.issues.map(issue => issue.code))].slice(0, 12),
       },
-      expansionResponseShape: describeExpansionResponseShape(input),
+      expansionResponseShape: describeExpansionResponseShape(candidate),
     });
   }
   const expected = new Set(stage.parents.map(parent => parent.id));
