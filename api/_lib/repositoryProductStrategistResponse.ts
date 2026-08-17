@@ -328,7 +328,9 @@ type ProductStrategistExpansionValidationSafeDiagnostics = {
   expansionSchemaValidation?: {
     issueCount: number;
     paths: string[];
+    issueCategories: string[];
   };
+  expansionResponseShape?: ReturnType<typeof describeExpansionResponseShape>;
 };
 
 /** Contains structural metadata only. Generated values never cross the diagnostics boundary. */
@@ -350,11 +352,58 @@ function safeIssuePath(path: PropertyKey[]) {
   const formatted = path.reduce<string>((result, segment) => typeof segment === 'number'
     ? `${result}[${segment}]`
     : result ? `${result}.${String(segment)}` : String(segment), '');
-  return formatted.slice(0, 160);
+  return formatted ? formatted.slice(0, 160) : '$';
 }
 
 function uniqueBoundedPaths(paths: string[]) {
   return [...new Set(paths)].filter(Boolean).slice(0, 24);
+}
+
+function structuralType(value: unknown) {
+  if (Array.isArray(value)) return 'array';
+  if (value === null) return 'null';
+  return typeof value;
+}
+
+function safeStructuralKeys(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  return Object.keys(value).slice(0, 24).map(key => /^[A-Za-z0-9_-]{1,40}$/.test(key) ? key : '[unsupported-key]');
+}
+
+function describeExpansionResponseShape(input: unknown) {
+  const record = input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : undefined;
+  const groups = Array.isArray(record?.x) ? record.x : undefined;
+  return {
+    topLevelType: structuralType(input),
+    keys: safeStructuralKeys(input),
+    ...(groups ? {
+      groupCount: groups.length,
+      groups: groups.slice(0, 3).map((group, groupIndex) => {
+        const groupRecord = group && typeof group === 'object' && !Array.isArray(group) ? group as Record<string, unknown> : undefined;
+        const evolutions = Array.isArray(groupRecord?.evo) ? groupRecord.evo : undefined;
+        return {
+          index: groupIndex,
+          keys: safeStructuralKeys(group),
+          parentIdType: structuralType(groupRecord?.p),
+          evolutionsType: structuralType(groupRecord?.evo),
+          ...(evolutions ? {
+            evolutionCount: evolutions.length,
+            evolutions: evolutions.slice(0, 4).map((evolution, evolutionIndex) => {
+              const evolutionRecord = evolution && typeof evolution === 'object' && !Array.isArray(evolution)
+                ? evolution as Record<string, unknown> : undefined;
+              const next = Array.isArray(evolutionRecord?.next) ? evolutionRecord.next : undefined;
+              return {
+                index: evolutionIndex,
+                keys: safeStructuralKeys(evolution),
+                nextType: structuralType(evolutionRecord?.next),
+                ...(next ? { nextCount: next.length } : {}),
+              };
+            }),
+          } : {}),
+        };
+      }),
+    } : {}),
+  };
 }
 
 function expansionRepairShape(input: z.infer<typeof expansionResponseSchema>): ProductStrategistExpansionRepairShape {
@@ -439,7 +488,12 @@ export function normalizeProductStrategistExpansionResponse(
   if (!parsed.success) {
     const paths = uniqueBoundedPaths(parsed.error.issues.map(issue => safeIssuePath(issue.path)));
     throw new ProductStrategistExpansionValidationError('schema', {
-      expansionSchemaValidation: { issueCount: parsed.error.issues.length, paths },
+      expansionSchemaValidation: {
+        issueCount: parsed.error.issues.length,
+        paths,
+        issueCategories: [...new Set(parsed.error.issues.map(issue => issue.code))].slice(0, 12),
+      },
+      expansionResponseShape: describeExpansionResponseShape(input),
     });
   }
   const expected = new Set(stage.parents.map(parent => parent.id));

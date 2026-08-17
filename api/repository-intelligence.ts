@@ -198,6 +198,7 @@ export async function prepareProductionRepositoryIntelligence(
         ...(event.failureBoundary === undefined ? {} : { failureBoundary: event.failureBoundary }),
         ...(event.languageValidation === undefined ? {} : { languageValidation: event.languageValidation }),
         ...(event.expansionSchemaValidation === undefined ? {} : { expansionSchemaValidation: event.expansionSchemaValidation }),
+        ...(event.expansionResponseShape === undefined ? {} : { expansionResponseShape: event.expansionResponseShape }),
       };
       logger(event);
     },
@@ -636,6 +637,7 @@ function logExpansionValidation(
     failureBoundary: diagnostics.failureBoundary,
     languageValidation: diagnostics.languageValidation,
     expansionSchemaValidation: diagnostics.expansionSchemaValidation,
+    expansionResponseShape: diagnostics.expansionResponseShape,
     acceptedSecondGenerationCount: secondGeneration,
     acceptedThirdGenerationCount: thirdGeneration,
   });

@@ -10,6 +10,7 @@ import {
 import {
   buildRepositoryProductExpansionStages,
   buildRepositoryProductRootStage,
+  mergeRepositoryProductExpansionResults,
 } from '../lib/repositoryIntelligence/stagedProductIntelligence';
 import type { RepositoryProductProviderStage } from '../lib/repositoryIntelligence/productionProviderContract';
 
@@ -59,9 +60,36 @@ describe.runIf(smokeEnabled)('production brainforge smoke', () => {
 
     const expansionStages = buildRepositoryProductExpansionStages(request, roots.body.result.productIntelligence!);
     expect(expansionStages.length).toBeGreaterThan(0);
-    const expansion = await postProductStage(request, expansionStages[0]);
-    expect(['stage-enhanced', 'fallback']).toContain(expansion.body.state);
-    expect(expansion.body.diagnostics).toMatchObject({ productStage: 'expansion', requestId: expect.any(String) });
+    const expansions = [];
+    for (const stage of expansionStages) {
+      const expansion = await postProductStage(request, stage);
+      expansions.push({ stage, ...expansion });
+      console.info(JSON.stringify({
+        phase: 'expansion',
+        batchIndex: stage.batchIndex,
+        requestId: expansion.body.diagnostics?.requestId,
+        vercelRequestId: expansion.vercelRequestId,
+        stageFingerprint: stage.fingerprint,
+        state: expansion.body.state,
+        languageRepairCount: expansion.body.diagnostics?.languageRepairCount || 0,
+        retryCount: expansion.body.diagnostics?.retryCount || 0,
+        providerFinishReason: expansion.body.diagnostics?.providerFinishReason,
+        operationalFailureCategory: expansion.body.diagnostics?.operationalFailureCategory,
+        failureBoundary: expansion.body.diagnostics?.failureBoundary,
+        languageValidation: expansion.body.diagnostics?.languageValidation,
+        expansionSchemaValidation: expansion.body.diagnostics?.expansionSchemaValidation,
+        expansionResponseShape: expansion.body.diagnostics?.expansionResponseShape,
+      }));
+      expect(expansion.body.state).toBe('stage-enhanced');
+      expect(expansion.body.diagnostics).toMatchObject({ productStage: 'expansion', requestId: expect.any(String) });
+    }
+    const stageResults = expansions.map(expansion => {
+      if (expansion.body.state !== 'stage-enhanced') throw new Error('Expansion stage was not accepted.');
+      return expansion.body.stageResult;
+    });
+    const merged = mergeRepositoryProductExpansionResults(roots.body.result, stageResults);
+    const futureReady = merged.productIntelligence?.opportunities.every(opportunity => opportunity.futureEvolutions.length >= 2) || false;
+    expect(futureReady).toBe(true);
 
     console.info(JSON.stringify({
       buildExpected: process.env.SHIPSEAL_EXPECTED_BUILD_COMMIT || '00785e3ff45794b427d2bbdf9affee275d712c92',
@@ -80,13 +108,19 @@ describe.runIf(smokeEnabled)('production brainforge smoke', () => {
       rootCountAccepted: roots.body.diagnostics?.acceptedRootCount,
       rootCountRejected: roots.body.diagnostics?.rejectedRootCount,
       expansionBatchCount: expansionStages.length,
-      expansionRequestId: expansion.body.diagnostics?.requestId,
-      expansionVercelRequestId: expansion.vercelRequestId,
-      expansionFailureCategory: expansion.body.state === 'fallback' ? expansion.body.category : undefined,
-      expansionFailureBoundary: expansion.body.diagnostics?.failureBoundary,
-      finalState: expansion.body.state,
+      expansionRequests: expansions.map(expansion => ({
+        batchIndex: expansion.stage.batchIndex,
+        stageFingerprint: expansion.stage.fingerprint,
+        requestId: expansion.body.diagnostics?.requestId,
+        vercelRequestId: expansion.vercelRequestId,
+        state: expansion.body.state,
+        languageRepairCount: expansion.body.diagnostics?.languageRepairCount || 0,
+        retryCount: expansion.body.diagnostics?.retryCount || 0,
+        providerFinishReason: expansion.body.diagnostics?.providerFinishReason,
+      })),
+      finalState: futureReady ? 'future-ready' : 'fallback',
     }));
-  }, 120_000);
+  }, 300_000);
 });
 
 async function postProductStage(

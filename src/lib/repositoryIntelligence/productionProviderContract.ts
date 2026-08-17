@@ -210,6 +210,20 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   expansionSchemaValidation?: {
     issueCount: number;
     paths: string[];
+    issueCategories: string[];
+  };
+  expansionResponseShape?: {
+    topLevelType: string;
+    keys: string[];
+    groupCount?: number;
+    groups?: Array<{
+      index: number;
+      keys: string[];
+      parentIdType: string;
+      evolutionsType: string;
+      evolutionCount?: number;
+      evolutions?: Array<{ index: number; keys: string[]; nextType: string; nextCount?: number }>;
+    }>;
   };
   providerTimedOut?: boolean;
   browserTimedOut?: boolean;

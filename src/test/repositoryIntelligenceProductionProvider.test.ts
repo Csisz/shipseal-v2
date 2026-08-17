@@ -1330,7 +1330,13 @@ describe('production Repository Intelligence provider', () => {
         languageRepairCount: 0,
         operationalFailureCategory: 'expansion_schema_failed',
         failureBoundary: 'schema-validation',
-        expansionSchemaValidation: { issueCount: 1, paths: ['x[0].evo[0].t'] },
+        expansionSchemaValidation: { issueCount: 1, paths: ['x[0].evo[0].t'], issueCategories: ['invalid_type'] },
+        expansionResponseShape: {
+          topLevelType: 'object', keys: ['x'], groupCount: 3,
+          groups: expect.arrayContaining([expect.objectContaining({
+            index: 0, keys: ['p', 'evo'], parentIdType: 'string', evolutionsType: 'array', evolutionCount: 2,
+          })]),
+        },
       },
     });
     expect(logs.some(event => event.statusCategory === 'generated_language_repair')).toBe(false);
