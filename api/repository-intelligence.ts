@@ -175,6 +175,7 @@ export async function prepareProductionRepositoryIntelligence(
       if (event.validationCategory) providerValidationCategory = event.validationCategory;
       if (event.validationReason) providerValidationReason = event.validationReason;
       providerResponseDiagnostics = {
+        ...providerResponseDiagnostics,
         ...(event.providerHttpContentType === undefined ? {} : { providerHttpContentType: event.providerHttpContentType }),
         ...(event.providerOuterJsonParsed === undefined ? {} : { providerOuterJsonParsed: event.providerOuterJsonParsed }),
         ...(event.providerChoicesCount === undefined ? {} : { providerChoicesCount: event.providerChoicesCount }),
@@ -195,6 +196,8 @@ export async function prepareProductionRepositoryIntelligence(
         ...(event.providerHttpStatusCategory === undefined ? {} : { providerHttpStatusCategory: event.providerHttpStatusCategory }),
         ...(event.operationalFailureCategory === undefined ? {} : { operationalFailureCategory: event.operationalFailureCategory }),
         ...(event.failureBoundary === undefined ? {} : { failureBoundary: event.failureBoundary }),
+        ...(event.languageValidation === undefined ? {} : { languageValidation: event.languageValidation }),
+        ...(event.expansionSchemaValidation === undefined ? {} : { expansionSchemaValidation: event.expansionSchemaValidation }),
       };
       logger(event);
     },
@@ -535,6 +538,7 @@ function mapExecutionError(code?: string): RepositoryIntelligenceProviderFailure
   if (code === 'response-too-large') return 'response_too_large';
   if (['malformed-response', 'unsupported-schema', 'provider-mismatch', 'unsafe-provider-metadata', 'invalid_response',
     'request_preflight_rejected', 'provider_http_rejected', 'provider_envelope_invalid', 'language_validation_failed',
+    'expansion_schema_failed', 'expansion_language_failed', 'expansion_parent_identity_failed', 'expansion_duplicate_identity_failed',
     'product-understanding-schema-rejected', 'product-opportunity-schema-rejected'].includes(code || '')) {
     return 'schema_validation_failed';
   }
@@ -578,6 +582,18 @@ function operationalFailureForProviderCategory(
   if (error instanceof RepositoryDeepIntelligenceProviderError && error.code === 'language_validation_failed') {
     return { operationalFailureCategory: 'language_validation_failed', failureBoundary: 'language-validation' };
   }
+  if (error instanceof RepositoryDeepIntelligenceProviderError && error.code === 'expansion_language_failed') {
+    return { operationalFailureCategory: 'expansion_language_failed', failureBoundary: 'language-validation' };
+  }
+  if (error instanceof RepositoryDeepIntelligenceProviderError && error.code === 'expansion_parent_identity_failed') {
+    return { operationalFailureCategory: 'expansion_parent_identity_failed', failureBoundary: 'schema-validation' };
+  }
+  if (error instanceof RepositoryDeepIntelligenceProviderError && error.code === 'expansion_duplicate_identity_failed') {
+    return { operationalFailureCategory: 'expansion_duplicate_identity_failed', failureBoundary: 'schema-validation' };
+  }
+  if (error instanceof RepositoryDeepIntelligenceProviderError && error.code === 'expansion_schema_failed') {
+    return { operationalFailureCategory: 'expansion_schema_failed', failureBoundary: 'schema-validation' };
+  }
   return { operationalFailureCategory: 'expansion_schema_failed', failureBoundary: 'schema-validation' };
 }
 
@@ -618,6 +634,8 @@ function logExpansionValidation(
     validationReason: diagnostics.validationReason,
     operationalFailureCategory: diagnostics.operationalFailureCategory,
     failureBoundary: diagnostics.failureBoundary,
+    languageValidation: diagnostics.languageValidation,
+    expansionSchemaValidation: diagnostics.expansionSchemaValidation,
     acceptedSecondGenerationCount: secondGeneration,
     acceptedThirdGenerationCount: thirdGeneration,
   });
@@ -715,7 +733,7 @@ function validationCategoryForExecution(execution: Awaited<ReturnType<typeof run
   if (execution.error?.code === 'provider_envelope_invalid') return 'provider-envelope-invalid';
   if (execution.error?.code === 'product-understanding-schema-rejected') return 'product-understanding-schema-rejected';
   if (execution.error?.code === 'product-opportunity-schema-rejected') return 'product-opportunity-schema-rejected';
-  if (execution.error?.code === 'language_validation_failed') return 'response-schema-rejected';
+  if (execution.error?.code === 'language_validation_failed' || execution.error?.code.startsWith('expansion_')) return 'response-schema-rejected';
   if (execution.error?.code === 'invalid_response') return 'response-schema-rejected';
   if (execution.status === 'invalid-response') return 'response-schema-rejected';
   if (execution.status === 'completed' && execution.result?.productIntelligence?.rejectedOpportunities.length) {

@@ -147,5 +147,6 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     await act(async () => { await result.current.retryRepositoryProductIntelligence(); });
     await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus.state).toBe('enhanced'));
     expect(lifecycleMocks.request).toHaveBeenCalledTimes(2);
+    expect(lifecycleMocks.scan).toHaveBeenCalledTimes(1);
   });
 });

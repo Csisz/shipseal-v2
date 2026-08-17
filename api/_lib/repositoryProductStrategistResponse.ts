@@ -308,6 +308,86 @@ const expansionResponseSchema = z.object({
   }).strict()).min(1).max(3),
 }).strict();
 
+export type ProductStrategistExpansionRepairShape = Array<{
+  parentId: string;
+  evolutions: Array<{ id: string; nextIds: string[] }>;
+}>;
+
+export type ProductStrategistExpansionValidationCategory =
+  | 'schema'
+  | 'language'
+  | 'parent-identity'
+  | 'duplicate-identity';
+
+type ProductStrategistExpansionValidationSafeDiagnostics = {
+  languageValidation?: {
+    scriptCategories: Array<'CJK'>;
+    violatingFieldCount: number;
+    paths: string[];
+  };
+  expansionSchemaValidation?: {
+    issueCount: number;
+    paths: string[];
+  };
+};
+
+/** Contains structural metadata only. Generated values never cross the diagnostics boundary. */
+export class ProductStrategistExpansionValidationError extends Error {
+  constructor(
+    public readonly category: ProductStrategistExpansionValidationCategory,
+    public readonly safeDiagnostics: ProductStrategistExpansionValidationSafeDiagnostics = {},
+    public readonly repairShape?: ProductStrategistExpansionRepairShape,
+  ) {
+    super(category === 'language' ? 'Expansion response violated the English generated-language contract.'
+      : category === 'schema' ? 'Expansion response did not match its bounded schema.'
+        : category === 'parent-identity' ? 'Expansion response did not preserve stable parent identities.'
+          : 'Expansion response contained duplicate stage-local identities.');
+    this.name = 'ProductStrategistExpansionValidationError';
+  }
+}
+
+function safeIssuePath(path: PropertyKey[]) {
+  const formatted = path.reduce<string>((result, segment) => typeof segment === 'number'
+    ? `${result}[${segment}]`
+    : result ? `${result}.${String(segment)}` : String(segment), '');
+  return formatted.slice(0, 160);
+}
+
+function uniqueBoundedPaths(paths: string[]) {
+  return [...new Set(paths)].filter(Boolean).slice(0, 24);
+}
+
+function expansionRepairShape(input: z.infer<typeof expansionResponseSchema>): ProductStrategistExpansionRepairShape {
+  return input.x.map(item => ({
+    parentId: item.p,
+    evolutions: item.evo.map(evolution => ({ id: evolution.id, nextIds: evolution.next.map(next => next.id) })),
+  }));
+}
+
+function sameExpansionRepairShape(actual: ProductStrategistExpansionRepairShape, expected: ProductStrategistExpansionRepairShape) {
+  return actual.length === expected.length && actual.every((parent, parentIndex) => {
+    const expectedParent = expected[parentIndex];
+    return parent.parentId === expectedParent?.parentId
+      && parent.evolutions.length === expectedParent.evolutions.length
+      && parent.evolutions.every((evolution, evolutionIndex) => evolution.id === expectedParent.evolutions[evolutionIndex]?.id
+        && evolution.nextIds.length === expectedParent.evolutions[evolutionIndex]?.nextIds.length
+        && evolution.nextIds.every((id, nextIndex) => id === expectedParent.evolutions[evolutionIndex]?.nextIds[nextIndex]));
+  });
+}
+
+function generatedLanguageViolationPaths(input: z.infer<typeof expansionResponseSchema>) {
+  const paths: string[] = [];
+  input.x.forEach((item, parentIndex) => item.evo.forEach((evolution, evolutionIndex) => {
+    (['t', 's', 'v'] as const).forEach(field => {
+      if (containsCjkScript(evolution[field])) paths.push(`x[${parentIndex}].evo[${evolutionIndex}].${field}`);
+    });
+    evolution.next.forEach((next, nextIndex) => (['t', 's', 'v'] as const).forEach(field => {
+      if (containsCjkScript(next[field])) paths.push(`x[${parentIndex}].evo[${evolutionIndex}].next[${nextIndex}].${field}`);
+    }));
+  }));
+  return uniqueBoundedPaths(paths);
+}
+
 export function buildProductStrategistExpansionResponseFormat(stage: Extract<RepositoryProductProviderStage, { kind: 'expansion' }>) {
   const leaf = {
     type: 'object', additionalProperties: false, required: ['id', 't', 's', 'v'],
@@ -353,18 +433,32 @@ export function normalizeProductStrategistExpansionResponse(
   input: unknown,
   stage: Extract<RepositoryProductProviderStage, { kind: 'expansion' }>,
   locale?: string,
+  options: { repairShape?: ProductStrategistExpansionRepairShape } = {},
 ): RepositoryProductExpansionStageResult {
   const parsed = expansionResponseSchema.safeParse(input);
-  if (!parsed.success) throw new Error('Expansion response did not match its bounded schema.');
+  if (!parsed.success) {
+    const paths = uniqueBoundedPaths(parsed.error.issues.map(issue => safeIssuePath(issue.path)));
+    throw new ProductStrategistExpansionValidationError('schema', {
+      expansionSchemaValidation: { issueCount: parsed.error.issues.length, paths },
+    });
+  }
   const expected = new Set(stage.parents.map(parent => parent.id));
   if (parsed.data.x.length !== expected.size || new Set(parsed.data.x.map(item => item.p)).size !== expected.size
-    || parsed.data.x.some(item => !expected.has(item.p))) throw new Error('Expansion response did not preserve stable parent identities.');
+    || parsed.data.x.some(item => !expected.has(item.p))) throw new ProductStrategistExpansionValidationError('parent-identity');
   if (parsed.data.x.some(item => {
     const ids = item.evo.flatMap(evolution => [evolution.id, ...evolution.next.map(next => next.id)]);
     return new Set(ids).size !== ids.length;
-  })) throw new Error('Expansion response contained duplicate stage-local identities.');
-  const generated = parsed.data.x.flatMap(item => item.evo.flatMap(evolution => [evolution.t, evolution.s, evolution.v, ...evolution.next.flatMap(next => [next.t, next.s, next.v])]));
-  if (requiresEnglishGeneratedText(locale) && generated.some(containsCjkScript)) throw new Error('Expansion response violated the English generated-language contract.');
+  })) throw new ProductStrategistExpansionValidationError('duplicate-identity');
+  const shape = expansionRepairShape(parsed.data);
+  if (options.repairShape && !sameExpansionRepairShape(shape, options.repairShape)) {
+    throw new ProductStrategistExpansionValidationError('parent-identity');
+  }
+  const violationPaths = requiresEnglishGeneratedText(locale) ? generatedLanguageViolationPaths(parsed.data) : [];
+  if (violationPaths.length) {
+    throw new ProductStrategistExpansionValidationError('language', {
+      languageValidation: { scriptCategories: ['CJK'], violatingFieldCount: violationPaths.length, paths: violationPaths },
+    }, shape);
+  }
   return {
     pipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION,
     stage: 'expansion',

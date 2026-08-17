@@ -42,6 +42,7 @@ import {
 import type { RepoScanInput } from '@/lib/types';
 import { RepositoryIntelligenceEnhancementSingleFlight } from '@/lib/repositoryIntelligence/deepIntelligenceClient';
 import { buildRepositoryProductExpansionStages, buildRepositoryProductRootStage } from '@/lib/repositoryIntelligence/stagedProductIntelligence';
+import type { RepositoryProductProviderStage } from '@/lib/repositoryIntelligence/productionProviderContract';
 
 function fixtureRequest(
   requestedCapabilities: Parameters<typeof buildRepositoryDeepIntelligenceRequest>[0]['requestedCapabilities'] = ['architecture-analysis', 'structured-output'],
@@ -264,6 +265,55 @@ function validRootProductProviderPayload(
         evo: [],
       };
     }),
+  };
+}
+
+function productionExpansionStage(request: ReturnType<typeof fixtureRequest>['request']) {
+  const evidenceId = request.evidenceReferences[0].id;
+  const productIntelligence = {
+    sourceAnalysisFingerprint: request.fingerprint,
+    fingerprint: 'controlled-roots',
+    opportunities: Array.from({ length: 7 }, (_, index) => ({
+      id: `product-opportunity:${index}`,
+      sourceId: `root-${index}`,
+      title: `Future ${index + 1}`,
+      opportunityStatement: `Grounded direction ${index + 1}.`,
+      userValue: `Grounded user value ${index + 1}.`,
+      whyItFits: 'The bounded repository evidence supports this direction.',
+      evidenceIds: [evidenceId],
+      futureEvolutions: [],
+      fingerprint: `root-fingerprint-${index}`,
+    })),
+  };
+  return buildRepositoryProductExpansionStages(request, productIntelligence as never)[0];
+}
+
+function validExpansionProviderPayload(stage: Extract<RepositoryProductProviderStage, { kind: 'expansion' }>) {
+  return {
+    x: stage.parents.map((parent, parentIndex) => ({
+      p: parent.id,
+      evo: [
+        {
+          id: `adaptive-${parentIndex}`,
+          t: 'Adaptive planning',
+          s: 'Plans adapt to grounded usage signals.',
+          v: 'Users receive more relevant guidance.',
+          next: [{
+            id: `connected-${parentIndex}`,
+            t: 'Connected guidance',
+            s: 'Later decisions use validated progress signals.',
+            v: 'Users coordinate the next useful step.',
+          }],
+        },
+        {
+          id: `guided-${parentIndex}`,
+          t: 'Guided decisions',
+          s: 'Evidence guides a clear next decision.',
+          v: 'Users can act with greater confidence.',
+          next: [],
+        },
+      ],
+    })),
   };
 }
 
@@ -1134,6 +1184,207 @@ describe('production Repository Intelligence provider', () => {
       expect.objectContaining({ statusCategory: 'generated_language_repair' }),
     ]));
     expect(logs.filter(event => event.outcome === 'success')).toHaveLength(1);
+  });
+
+  it('repairs one production-shaped expansion batch once and preserves its exact graph identity', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = productionExpansionStage(request);
+    const mixed = validExpansionProviderPayload(productStage);
+    mixed.x[1].evo[0].t = '自動規劃';
+    mixed.x[1].evo[0].next[0].s = '次の判断を支援します';
+    const repaired = validExpansionProviderPayload(productStage);
+    const bodies: Array<ReturnType<typeof buildProductionProviderBody>> = [];
+    const logs: ProductionProviderLogEvent[] = [];
+    const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      bodies.push(JSON.parse(String(init?.body || '{}')));
+      return envelope(bodies.length === 1 ? mixed : repaired);
+    });
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: event => logs.push(event) });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.body).toMatchObject({
+      state: 'stage-enhanced',
+      stageResult: { fingerprint: productStage.fingerprint, batchIndex: productStage.batchIndex },
+      diagnostics: {
+        retryCount: 1,
+        languageRepairCount: 1,
+        languageValidation: {
+          scriptCategories: ['CJK'],
+          violatingFieldCount: 2,
+          paths: ['x[1].evo[0].t', 'x[1].evo[0].next[0].s'],
+        },
+      },
+    });
+    expect(bodies[0].messages[0].content).not.toContain('LANGUAGE REPAIR');
+    expect(bodies[1].messages[0].content).toContain('rewrite ALL generated user-facing strings in English');
+    expect(bodies[1].messages[0].content).toContain('Preserve every parent ID, evolution ID');
+    const originalContext = JSON.parse(bodies[0].messages[1].content) as Record<string, unknown>;
+    const repairContext = JSON.parse(bodies[1].messages[1].content) as Record<string, unknown>;
+    expect(repairContext).toMatchObject({
+      stageFingerprint: productStage.fingerprint,
+      batchIndex: productStage.batchIndex,
+      parents: productStage.parents,
+      evidenceIndex: originalContext.evidenceIndex,
+      repairContract: {
+        preserveExactParentAndEvolutionIdentities: mixed.x.map(item => ({
+          parentId: item.p,
+          evolutions: item.evo.map(evolution => ({ id: evolution.id, nextIds: evolution.next.map(next => next.id) })),
+        })),
+      },
+    });
+    expect(bodies[1].response_format).toEqual(bodies[0].response_format);
+    expect(logs.filter(event => event.statusCategory === 'generated_language_repair')).toHaveLength(1);
+    expect(logs).toEqual(expect.arrayContaining([expect.objectContaining({
+      outcome: 'retry',
+      productStage: 'expansion',
+      expansionBatchIndex: productStage.batchIndex,
+      languageValidation: expect.objectContaining({ violatingFieldCount: 2 }),
+    })]));
+    expect(JSON.stringify(logs)).not.toMatch(/自動規劃|次の判断/);
+  });
+
+  it('allows CJK source evidence when every generated expansion field is English', async () => {
+    const { request } = fixtureRequest(
+      ['product-opportunity-analysis', 'structured-output'],
+      '# 製品資料\n利用者向けの既存ソース情報。',
+    );
+    const productStage = productionExpansionStage(request);
+    const fetcher = vi.fn(async () => envelope(validExpansionProviderPayload(productStage)));
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: vi.fn() });
+
+    expect(result.body.state).toBe('stage-enhanced');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.body.state === 'stage-enhanced' && result.body.diagnostics.languageRepairCount).toBe(0);
+  });
+
+  it('terminates after one failed expansion language repair with safe retryable diagnostics', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = productionExpansionStage(request);
+    const mixed = validExpansionProviderPayload(productStage);
+    mixed.x[0].evo[0].v = '利用者価値を向上';
+    const logs: ProductionProviderLogEvent[] = [];
+    const fetcher = vi.fn(async () => envelope(mixed));
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: event => logs.push(event) });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.body).toMatchObject({
+      state: 'fallback',
+      category: 'schema_validation_failed',
+      retryable: true,
+      diagnostics: {
+        retryCount: 1,
+        languageRepairCount: 1,
+        operationalFailureCategory: 'expansion_language_failed',
+        failureBoundary: 'language-validation',
+        languageValidation: {
+          scriptCategories: ['CJK'],
+          violatingFieldCount: 1,
+          paths: ['x[0].evo[0].v'],
+        },
+      },
+    });
+    expect(logs.filter(event => event.statusCategory === 'generated_language_repair')).toHaveLength(1);
+    expect(logs).toEqual(expect.arrayContaining([expect.objectContaining({
+      outcome: 'failure',
+      operationalFailureCategory: 'expansion_language_failed',
+      failureBoundary: 'language-validation',
+    })]));
+    expect(JSON.stringify({ logs, body: result.body })).not.toContain('利用者価値');
+  });
+
+  it('keeps expansion schema rejection distinct and does not launch language repair', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = productionExpansionStage(request);
+    const invalid = validExpansionProviderPayload(productStage) as unknown as {
+      x: Array<{ evo: Array<Record<string, unknown>> }>;
+    };
+    delete invalid.x[0].evo[0].t;
+    const logs: ProductionProviderLogEvent[] = [];
+    const fetcher = vi.fn(async () => envelope(invalid));
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: event => logs.push(event) });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.body).toMatchObject({
+      state: 'fallback',
+      category: 'schema_validation_failed',
+      diagnostics: {
+        languageRepairCount: 0,
+        operationalFailureCategory: 'expansion_schema_failed',
+        failureBoundary: 'schema-validation',
+        expansionSchemaValidation: { issueCount: 1, paths: ['x[0].evo[0].t'] },
+      },
+    });
+    expect(logs.some(event => event.statusCategory === 'generated_language_repair')).toBe(false);
+  });
+
+  it('rejects a repaired batch that changes graph identity instead of accepting semantic drift', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = productionExpansionStage(request);
+    const mixed = validExpansionProviderPayload(productStage);
+    mixed.x[0].evo[0].s = '利用者に適応する計画';
+    const drifted = validExpansionProviderPayload(productStage);
+    drifted.x[0].evo[0].id = 'different-evolution';
+    const fetcher = vi.fn(async () => envelope(fetcher.mock.calls.length === 1 ? mixed : drifted));
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: vi.fn() });
+
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(result.body).toMatchObject({
+      state: 'fallback',
+      retryable: true,
+      diagnostics: {
+        languageRepairCount: 1,
+        operationalFailureCategory: 'expansion_parent_identity_failed',
+        failureBoundary: 'schema-validation',
+      },
+    });
+  });
+
+  it('reports duplicate expansion identities separately from language and schema failures', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = productionExpansionStage(request);
+    const duplicate = validExpansionProviderPayload(productStage);
+    duplicate.x[0].evo[1].id = duplicate.x[0].evo[0].id;
+    const fetcher = vi.fn(async () => envelope(duplicate));
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, { env: enabledEnv, fetcher: fetcher as typeof fetch, logger: vi.fn() });
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(result.body).toMatchObject({
+      state: 'fallback',
+      diagnostics: {
+        languageRepairCount: 0,
+        operationalFailureCategory: 'expansion_duplicate_identity_failed',
+        failureBoundary: 'schema-validation',
+      },
+    });
   });
 
   it('preserves the production root truncation boundary with unique stage-safe diagnostics', async () => {

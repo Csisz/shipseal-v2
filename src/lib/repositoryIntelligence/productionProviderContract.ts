@@ -110,6 +110,9 @@ export type RepositoryIntelligenceOperationalFailureCategory =
   | 'evidence_validation_failed'
   | 'roots_schema_failed'
   | 'expansion_schema_failed'
+  | 'expansion_language_failed'
+  | 'expansion_parent_identity_failed'
+  | 'expansion_duplicate_identity_failed'
   | 'merge_incomplete'
   | 'cancelled';
 
@@ -199,6 +202,15 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   acceptedSecondGenerationCount?: number;
   acceptedThirdGenerationCount?: number;
   schemaValidationFailureCount?: number;
+  languageValidation?: {
+    scriptCategories: Array<'CJK'>;
+    violatingFieldCount: number;
+    paths: string[];
+  };
+  expansionSchemaValidation?: {
+    issueCount: number;
+    paths: string[];
+  };
   providerTimedOut?: boolean;
   browserTimedOut?: boolean;
   operationalFailureCategory?: RepositoryIntelligenceOperationalFailureCategory;

@@ -124,8 +124,10 @@ describe('staged Product Intelligence', () => {
         providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable' },
       });
       if (stage.batchIndex === 1 && failBatchOne) return json({
-        version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'fallback', category: 'request_timeout', retryable: true,
-        message: 'Timed out', deepState: 'timed-out', diagnostics: { costEstimate: 'unavailable', providerTimedOut: true },
+        version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'fallback', category: 'schema_validation_failed', retryable: true,
+        message: 'Expansion language repair failed', deepState: 'failed', diagnostics: {
+          costEstimate: 'unavailable', operationalFailureCategory: 'expansion_language_failed', failureBoundary: 'language-validation',
+        },
       });
       return json({
         version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
@@ -143,7 +145,10 @@ describe('staged Product Intelligence', () => {
     }));
 
     const first = await requestRepositoryProductIntelligenceStaged(request);
-    expect(first).toMatchObject({ state: 'fallback', category: 'request_timeout' });
+    expect(first).toMatchObject({
+      state: 'fallback', category: 'schema_validation_failed',
+      diagnostics: { operationalFailureCategory: 'expansion_language_failed', expansionBatchIndex: 1 },
+    });
     expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-2']);
 
     failBatchOne = false;

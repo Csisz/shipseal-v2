@@ -24,6 +24,10 @@ export type RepositoryDeepIntelligenceProviderErrorCode =
   | 'provider_http_rejected'
   | 'provider_envelope_invalid'
   | 'language_validation_failed'
+  | 'expansion_schema_failed'
+  | 'expansion_language_failed'
+  | 'expansion_parent_identity_failed'
+  | 'expansion_duplicate_identity_failed'
   | 'invalid_response'
   | 'response_too_large'
   | 'unknown_provider_error';
