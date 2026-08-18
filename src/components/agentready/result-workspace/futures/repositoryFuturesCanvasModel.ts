@@ -3,7 +3,7 @@ import type {
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
 
-export const FUTURES_CANVAS_WORLD = { width: 1840, height: 1040 } as const;
+export const FUTURES_CANVAS_WORLD = { width: 1840, height: 1160 } as const;
 export type RepositoryFuturesCanvasOrientation = 'horizontal' | 'vertical';
 export type RepositoryFuturesPresentationStream = 'strategic' | 'evidence' | 'product' | 'foundation' | 'exploratory' | 'general';
 
@@ -74,14 +74,14 @@ function stableHash(value: string) {
 }
 
 const structuredRows = [
-  { label: 'Strategic opportunities', position: 125 },
-  { label: 'Evidence-backed opportunities', position: 233 },
-  { label: 'Product & preview directions', position: 341 },
-  { label: 'Knowledge systems', position: 449 },
-  { label: 'Agent workflows', position: 557 },
-  { label: 'Delivery systems', position: 665 },
-  { label: 'Safety & governance', position: 773 },
-  { label: 'Exploratory directions', position: 881 },
+  { label: 'Strategic opportunities', position: 126 },
+  { label: 'Evidence-backed opportunities', position: 250 },
+  { label: 'Product & preview directions', position: 374 },
+  { label: 'Knowledge systems', position: 498 },
+  { label: 'Agent workflows', position: 622 },
+  { label: 'Delivery systems', position: 746 },
+  { label: 'Safety & governance', position: 870 },
+  { label: 'Exploratory directions', position: 994 },
 ] as const;
 
 const lattice = {
@@ -96,8 +96,8 @@ const TERMINAL_COLUMN_SPACING = 170;
 const TERMINAL_COLLISION_WIDTH = 152;
 const TERMINAL_COLLISION_HEIGHT = 88;
 
-const VERTICAL_WORLD = { width: 2600, height: 1540 } as const;
-const verticalStreamPosition = (index: number) => 220 + index * 300;
+const VERTICAL_WORLD = { width: 2300, height: 1540 } as const;
+const verticalStreamPosition = (index: number) => 205 + index * 270;
 
 function repositoryFuturesVerticalFlowPosition(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return 195;
@@ -426,35 +426,40 @@ export function buildRepositoryFuturesCanvasModel(
     });
   }
 
-  const terminalIndexById = new Map<string, number>();
-  nodes
+  const terminalOffsetsById = new Map<string, { x: number; y: number }>();
+  const terminalGoalIds = [...new Set(nodes
     .filter(node => node.kind === 'evolution' && node.depth === 3 && node.parentGoalId)
-    .sort((left, right) => (left.presentationRow?.index ?? 99) - (right.presentationRow?.index ?? 99)
-      || (left.parentGoalId || '').localeCompare(right.parentGoalId || '')
-      || left.x - right.x || left.y - right.y || left.id.localeCompare(right.id))
-    .forEach((node, index) => terminalIndexById.set(node.id, index));
+    .map(node => node.parentGoalId!))].sort();
+  terminalGoalIds.forEach(goalId => {
+    const terminalNodes = nodes
+      .filter(node => node.kind === 'evolution' && node.depth === 3 && node.parentGoalId === goalId)
+      .sort((left, right) => left.x - right.x || left.y - right.y || left.id.localeCompare(right.id));
+    terminalNodes.forEach((node, index) => {
+      const rank = index - (terminalNodes.length - 1) / 2;
+      terminalOffsetsById.set(node.id, { x: rank * 136, y: 0 });
+    });
+  });
   const orientedNodes = orientation === 'vertical'
     ? nodes.map(node => {
       const rowOffset = node.presentationRow
         ? node.y - structuredRows[node.presentationRow.index].position
         : 0;
-      const terminalIndex = terminalIndexById.get(node.id);
-      const terminalEvolution = terminalIndex !== undefined;
-      const terminalCount = terminalIndexById.size;
+      const terminalOffset = terminalOffsetsById.get(node.id);
+      const terminalEvolution = terminalOffset !== undefined;
       const laneX = node.presentationRow ? verticalStreamPosition(node.presentationRow.index) : VERTICAL_WORLD.width / 2;
       return {
         ...node,
         x: node.kind === 'repository'
           ? VERTICAL_WORLD.width / 2
           : terminalEvolution
-            ? 180 + terminalIndex * ((VERTICAL_WORLD.width - 360) / Math.max(1, terminalCount - 1))
+            ? laneX + terminalOffset.x
             : laneX + (node.kind === 'evolution' || node.kind === 'capability' ? rowOffset * 3.2 : rowOffset * 1.6),
         // Desktop generations need wide horizontal breathing room; applying that
         // full rhythm to the narrow top-to-bottom field would put the repository
         // behind the mode controls at the camera's minimum zoom. This semantic
         // flow-axis map keeps every generation distinct while fitting the touch
         // overview without changing the shared V7.2 camera architecture.
-        y: terminalEvolution ? 1100 : repositoryFuturesVerticalFlowPosition(node),
+        y: terminalEvolution ? 1100 + terminalOffset.y : repositoryFuturesVerticalFlowPosition(node),
         canonicalPosition: node.canonicalPosition ? {
           ...node.canonicalPosition,
           x: node.canonicalPosition.y,

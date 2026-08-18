@@ -88,12 +88,12 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const value = overlay();
     const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
     const stage = screen.getByTestId('repository-futures-neural-canvas');
-    const semanticIds = [...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-neural-node')).sort();
+    const semanticIds = [...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-future-node-id')).sort();
     const edgeIds = [...container.querySelectorAll('[data-future-edge-id][data-edge-layer="semantic"]')].map(edge => edge.getAttribute('data-future-edge-id')).sort();
     fireEvent.click(screen.getByRole('button', { name: /Primary future goal: Guided repository futures/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Vertical Future map' }));
     await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'vertical'));
-    expect([...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-neural-node')).sort()).toEqual(semanticIds);
+    expect([...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-future-node-id')).sort()).toEqual(semanticIds);
     expect([...container.querySelectorAll('[data-future-edge-id][data-edge-layer="semantic"]')].map(edge => edge.getAttribute('data-future-edge-id')).sort()).toEqual(edgeIds);
     expect(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).toHaveTextContent('Guided repository futures');
     expect(value.onCandidateSelect).not.toHaveBeenCalled();
@@ -142,9 +142,9 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(ambientEdges).toHaveLength(semanticEdges.length);
     expect([...semanticEdges].every(edge => edge.hasAttribute('data-future-edge-id'))).toBe(true);
     expect(selectedEdge).toHaveAttribute('data-trace-state', 'related');
-    expect(selectedEdge).toHaveAttribute('opacity', '0.94');
+    expect(selectedEdge).toHaveAttribute('opacity', '0.96');
     expect(broaderEdge).toHaveAttribute('data-trace-state', 'dimmed');
-    expect(broaderEdge).toHaveAttribute('opacity', '0.22');
+    expect(broaderEdge).toHaveAttribute('opacity', '0.16');
     expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveAttribute('data-neural-role', 'primary');
     expect(screen.getByRole('button', { name: /Required dependency/i })).toHaveAttribute('data-neural-role', 'required');
     expect(screen.getByRole('button', { name: /Required dependency/i })).toHaveAttribute('data-enabler-position', 'downstream-required');
@@ -380,8 +380,8 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(primary).toHaveTextContent('Guided repository futures');
     expect(next).toHaveAttribute('data-label-detail', 'compact');
     expect(next).toHaveTextContent('Adaptive guidance layer');
-    expect(later).toHaveAttribute('data-label-detail', 'anchor');
-    expect(later).not.toHaveTextContent('Repository coaching network');
+    expect(later).toHaveAttribute('data-label-detail', 'compact');
+    expect(later).toHaveTextContent('Repository coaching network');
     expect(later).toHaveAccessibleName(/Repository coaching network/i);
 
     fireEvent.mouseEnter(later);
@@ -389,7 +389,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(screen.getByRole('tooltip')).toHaveTextContent('Repository coaching network');
     expect(screen.getByRole('tooltip')).toHaveTextContent('Coaching connects related repository decisions.');
     fireEvent.mouseLeave(later);
-    expect(later).toHaveAttribute('data-label-detail', 'anchor');
+    expect(later).toHaveAttribute('data-label-detail', 'compact');
   });
 
   it('transitions selected corridors on stable real edge elements without replaying path animation', () => {
@@ -438,6 +438,109 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(minorNode).toHaveAttribute('data-label-detail', 'title');
   });
 
+  it('keeps graph truth stable while Quick and Deep expose distinct disclosure tiers', () => {
+    const base = overlay();
+    const value = overlay({
+      phase: 'possibility',
+      draftFingerprint: undefined,
+      candidates: base.candidates.map(candidate => ({ ...candidate, role: 'candidate' as const })),
+      dependencies: [],
+      projections: [{
+        id: 'evolution:alternative-next',
+        goalId: 'goal:alternative',
+        kind: 'evolution',
+        title: 'Evidence guidance layer',
+        sourceId: 'goal:alternative',
+        order: 0,
+        humanReviewRequired: false,
+        generation: 2,
+      }, {
+        id: 'evolution:alternative-later',
+        goalId: 'goal:alternative',
+        kind: 'evolution',
+        title: 'Evidence collaboration network',
+        sourceId: 'evolution:alternative-next',
+        order: 1,
+        humanReviewRequired: false,
+        generation: 3,
+      }],
+    });
+    const { container, rerender } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    for (let index = 0; index < 4; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    const nodeIds = [...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-future-node-id'));
+    const edgeIds = [...container.querySelectorAll('[data-edge-layer="semantic"]')].map(edge => edge.getAttribute('data-future-edge-id'));
+    const later = screen.getByRole('button', { name: /Later product possibility: Evidence collaboration network/i });
+
+    expect(stage).toHaveAttribute('data-disclosure-mode', 'quick');
+    expect(screen.getAllByRole('button', { name: /future goal/i }).every(node => node.getAttribute('data-disclosure-tier') === 'A')).toBe(true);
+    expect(screen.getByRole('button', { name: /Next product evolution: Evidence guidance layer/i })).toHaveAttribute('data-disclosure-tier', 'B');
+    expect(later).toHaveAttribute('data-disclosure-tier', 'C');
+    expect(later).toHaveAttribute('data-label-detail', 'anchor');
+    expect(later).toHaveAccessibleName(/Evidence collaboration network/i);
+
+    rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={{ ...value, mode: 'deep' }} />);
+
+    expect(stage).toHaveAttribute('data-disclosure-mode', 'deep');
+    expect(later).toHaveAttribute('data-label-detail', 'compact');
+    expect(later).toHaveTextContent('Evidence collaboration network');
+    expect([...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-future-node-id'))).toEqual(nodeIds);
+    expect([...container.querySelectorAll('[data-edge-layer="semantic"]')].map(edge => edge.getAttribute('data-future-edge-id'))).toEqual(edgeIds);
+  });
+
+  it('converges Primary and two Supports while hover and click restore an unrelated branch without changing the plan', () => {
+    const base = overlay();
+    const supportA = { ...base.candidates[1], goalId: 'goal:support-a', title: 'Support A', role: 'supporting' as const };
+    const supportB = { ...base.candidates[1], goalId: 'goal:support-b', title: 'Support B', role: 'supporting' as const };
+    const unrelated = { ...base.candidates[1], goalId: 'goal:unrelated', title: 'Quiet alternate route', role: 'candidate' as const };
+    const value = overlay({
+      candidates: [base.candidates[0], supportA, supportB, unrelated],
+      supportCount: 2,
+      projections: [{
+        id: 'evolution:unrelated-next',
+        goalId: unrelated.goalId,
+        kind: 'evolution',
+        title: 'Quiet alternate evolution',
+        sourceId: unrelated.goalId,
+        order: 0,
+        humanReviewRequired: false,
+        generation: 2,
+      }],
+    });
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    for (let index = 0; index < 4; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
+    const primary = screen.getByRole('button', { name: /Primary future goal/i });
+    const supports = screen.getAllByRole('button', { name: /Supporting future goal/i });
+    const alternate = screen.getByRole('button', { name: /Candidate future goal: Quiet alternate route/i });
+    const alternateEvolution = screen.getByRole('button', { name: /Next product evolution: Quiet alternate evolution/i });
+
+    expect(primary).toHaveAttribute('data-corridor-level', 'primary');
+    expect(primary).toHaveStyle({ opacity: '1' });
+    expect(supports).toHaveLength(2);
+    supports.forEach(support => {
+      expect(support).toHaveAttribute('data-corridor-level', 'supporting');
+      expect(support).toHaveStyle({ opacity: '0.82' });
+    });
+    expect(alternate).toHaveAttribute('data-corridor-level', 'unrelated');
+    expect(alternate).toHaveStyle({ opacity: '0.34' });
+    expect(alternateEvolution).toHaveAttribute('data-label-detail', 'compact');
+
+    fireEvent.mouseEnter(alternate);
+    expect(alternate).toHaveAttribute('data-corridor-level', 'focused');
+    expect(alternateEvolution).toHaveAttribute('data-corridor-level', 'neighbor');
+    expect(alternateEvolution).toHaveTextContent('Quiet alternate evolution');
+    expect(primary).toHaveAttribute('data-corridor-level', 'primary');
+    fireEvent.mouseLeave(alternate);
+    expect(alternate).toHaveAttribute('data-corridor-level', 'unrelated');
+
+    fireEvent.click(alternate);
+    fireEvent.mouseLeave(alternate);
+    expect(alternate).toHaveAttribute('data-interaction-state', 'pinned');
+    expect(alternateEvolution).toHaveAttribute('data-corridor-level', 'neighbor');
+    expect(value.onCandidateSelect).not.toHaveBeenCalled();
+    expect(value.onCandidateAddSupport).not.toHaveBeenCalled();
+  });
+
   it('gates all Future topology while integrated analysis is still forming', () => {
     render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({ productIntelligenceState: 'analysing' })} />);
     expect(screen.getByRole('button', { name: 'Current repository: shipseal' })).toBeInTheDocument();
@@ -453,9 +556,11 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const stage = screen.getByTestId('repository-futures-neural-canvas');
 
     await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'vertical'));
+    expect(Number(stage.getAttribute('data-camera-zoom'))).toBeCloseTo(0.72, 2);
+    expect(stage).toHaveAttribute('data-mobile-disclosure', 'focused-pan-and-zoom');
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveClass('min-h-[6.25rem]');
-    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '2600px', height: '1540px' });
+    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '2300px', height: '1540px' });
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
     expect(inspector).toHaveClass('inset-x-3');

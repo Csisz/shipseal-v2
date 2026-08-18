@@ -721,6 +721,36 @@
   backdrop-filter: blur(6px);
 }
 
+.future-field-node[data-neural-node='evolution'][data-future-depth='2'],
+.future-field-node[data-neural-node='capability'] {
+  backdrop-filter: blur(6px);
+}
+
+.future-field-node[data-neural-node='evolution'][data-future-depth='3'],
+.future-field-node[data-neural-node='artifact'] {
+  background-image:
+    radial-gradient(circle at 18% 24%, hsl(var(--futures-atmosphere) / 0.055), transparent 40%),
+    linear-gradient(145deg, hsl(var(--futures-node-surface) / 0.48), hsl(var(--futures-field-surface) / 0.14));
+  backdrop-filter: blur(4px);
+}
+
+.future-field-node[data-neural-node='evolution'][data-future-depth='3']::before,
+.future-field-node[data-neural-node='artifact']::before {
+  inset: -5px;
+  opacity: 0.2;
+}
+
+.future-field-node[data-corridor-level='unrelated'] {
+  filter: saturate(0.72);
+}
+
+.future-field-node[data-corridor-level='primary'],
+.future-field-node[data-corridor-level='supporting'],
+.future-field-node[data-corridor-level='focused'],
+.future-field-node[data-corridor-level='neighbor'] {
+  filter: saturate(1);
+}
+
 @media (max-width: 767px) {
   .futures-neural-stage {
     background:

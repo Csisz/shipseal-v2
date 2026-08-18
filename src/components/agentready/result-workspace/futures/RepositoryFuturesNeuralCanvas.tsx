@@ -31,8 +31,9 @@ interface RepositoryFuturesNeuralCanvasProps {
 }
 
 const DEFAULT_VIEWPORT = { width: 1200, height: 680 };
-const nodeWidths = { repository: 184, candidate: 166, primary: 192, supporting: 178, saved: 156, blocked: 158, dependency: 96, evolution: 146, capability: 118, artifact: 108 } as const;
+const nodeWidths = { repository: 184, candidate: 166, primary: 192, supporting: 178, saved: 156, blocked: 158, dependency: 92, evolution: 132, capability: 108, artifact: 96 } as const;
 type NodeLabelDetail = 'near' | 'title' | 'compact' | 'anchor';
+type NodeCorridorLevel = 'repository' | 'primary' | 'supporting' | 'focused' | 'neighbor' | 'context' | 'unrelated';
 
 export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: RepositoryFuturesNeuralCanvasProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -61,6 +62,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   const activeNode = pinnedId ? nodeById.get(pinnedId) : undefined;
   const hoverNode = !mobile && hoveredId && hoveredId !== pinnedId ? nodeById.get(hoveredId) : undefined;
   const primary = overlay.candidates.find(candidate => candidate.role === 'primary');
+  const roleByGoalId = useMemo(() => new Map(overlay.candidates.map(candidate => [candidate.goalId, candidate.role])), [overlay.candidates]);
   const trace = useMemo(() => repositoryFuturesTrace(model, activeId), [activeId, model]);
   const lod = repositoryFuturesLod(camera.zoom);
   const meaningfulBounds = useMemo(() => repositoryFuturesBounds(model.nodes.map(nodeCameraTarget))!, [model.nodes]);
@@ -133,10 +135,23 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
     orientationRef.current = model.orientation;
     if (!initialFramingRef.current || orientationChanged) {
       const viewport = getViewport();
-      applyCamera(fitRepositoryFuturesBoundsCamera(viewport, initialFramingBoundsRef.current, repositoryFuturesSafeInsets(viewport), 54, 1.02), orientationChanged);
+      const insets = getInsets(Boolean(pinnedId));
+      const root = model.nodes.find(node => node.kind === 'repository');
+      const framingBounds = overlay.mode === 'quick' && primary && selectedPlanBounds
+        ? selectedPlanBounds
+        : initialFramingBoundsRef.current;
+      const initialCamera = mobile && model.orientation === 'vertical' && root
+        ? constrainRepositoryFuturesCamera(
+          frameRepositoryFuturesOrigin(viewport, root, model.orientation, insets, 0.72),
+          viewport,
+          meaningfulBoundsRef.current,
+          insets,
+        )
+        : fitRepositoryFuturesBoundsCamera(viewport, framingBounds, insets, 54, 1.02);
+      applyCamera(initialCamera, orientationChanged);
       initialFramingRef.current = true;
     }
-  }, [applyCamera, getViewport, model.orientation]);
+  }, [applyCamera, getInsets, getViewport, mobile, model.nodes, model.orientation, overlay.mode, pinnedId, primary, selectedPlanBounds]);
 
   useLayoutEffect(() => {
     if (!stageRef.current || typeof ResizeObserver === 'undefined') return undefined;
@@ -353,6 +368,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         data-camera-y={camera.y.toFixed(2)}
         data-camera-zoom={camera.zoom.toFixed(3)}
         data-camera-lod={lod}
+        data-disclosure-mode={overlay.mode}
+        data-mobile-disclosure={mobile ? 'focused-pan-and-zoom' : 'full-field'}
         data-future-orientation={model.orientation}
         data-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-reveal-motion={reducedMotion ? 'static' : 'topology-one-shot'}
@@ -465,7 +482,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
             </g>
             <g data-field-layer="node-halos" aria-hidden="true">
               {model.nodes.map(node => {
-                const selected = node.role === 'primary' || node.role === 'supporting' || Boolean(node.selected);
+                const corridorLevel = nodeCorridorLevel(node, activeId, trace.nodeIds, roleByGoalId);
+                const selected = corridorLevel === 'primary' || corridorLevel === 'supporting';
                 const prerequisite = node.kind === 'dependency';
                 return <ellipse
                   key={node.id}
@@ -475,31 +493,33 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                   rx={node.role === 'primary' ? 80 : node.kind === 'repository' ? 72 : prerequisite ? 38 : 58}
                   ry={node.role === 'primary' ? 42 : prerequisite ? 20 : 30}
                   fill={selected ? 'hsl(var(--futures-selected))' : prerequisite ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-atmosphere))'}
-                  opacity={selected ? 0.075 : prerequisite ? 0.055 : 0.035}
+                  opacity={haloOpacity(corridorLevel, selected, prerequisite, overlay.mode)}
                 />;
               })}
             </g>
             {model.edges.map(edge => {
               const traced = !activeId || trace.edgeIds.has(edge.id);
               const hoverTraced = Boolean(hoveredId && trace.edgeIds.has(edge.id));
-              const baseOpacity = lod === 'far' ? 0.38 : lod === 'near' ? 0.66 : 0.54;
-              const opacity = traced ? edge.selected ? 0.94 : baseOpacity : 0.22;
+              const corridorLevel = edgeCorridorLevel(edge, activeId, trace.edgeIds, roleByGoalId);
+              const target = nodeById.get(edge.targetId);
+              const opacity = edgeOpacity(corridorLevel, overlay.mode, lod, target ? nodeDisclosureDepth(target) : 1);
               const path = repositoryFuturesEdgePath(edge, nodeById, model.orientation);
               return (
-                <g key={edge.id} data-relationship-emphasis={edge.selected ? 'selected' : 'supporting'}>
+                <g key={edge.id} data-relationship-emphasis={corridorLevel}>
                   <path
                     data-future-edge-id={edge.id}
                     data-future-edge={edge.kind}
                     data-edge-layer="ambient"
                     data-selected-route={edge.selected || undefined}
                     data-trace-state={traced ? 'related' : 'dimmed'}
+                    data-corridor-level={corridorLevel}
                     data-hover-trace={hoverTraced ? 'real-relationship' : undefined}
                     data-corridor-transition={edge.selected ? reducedMotion ? 'static' : 'semantic-emphasis' : undefined}
                     d={path}
                     fill="none"
                     stroke={edge.selected ? 'hsl(var(--futures-selected))' : edge.kind === 'requirement' ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-structure))'}
                     strokeWidth={edge.selected ? 8 : edge.kind === 'requirement' ? 5 : 3}
-                    opacity={traced ? edge.selected ? 0.12 : 0.055 : 0.035}
+                    opacity={Math.max(0.018, opacity * (edge.selected ? 0.13 : 0.08))}
                     strokeLinecap="round"
                     className="future-canvas-edge-ambient motion-reduce:transition-none"
                   />
@@ -509,6 +529,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                     data-edge-layer="semantic"
                     data-selected-route={edge.selected || undefined}
                     data-trace-state={traced ? 'related' : 'dimmed'}
+                    data-corridor-level={corridorLevel}
                     data-hover-trace={hoverTraced ? 'real-relationship' : undefined}
                     data-corridor-transition={edge.selected ? reducedMotion ? 'static' : 'semantic-emphasis' : undefined}
                     d={path}
@@ -530,7 +551,15 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
           {model.nodes.map(node => {
             const traced = !activeId || trace.nodeIds.has(node.id);
             const focused = activeId === node.id;
-            const labelDetail = nodeLabelDetail(node, lod, focused);
+            const corridorLevel = nodeCorridorLevel(node, activeId, trace.nodeIds, roleByGoalId);
+            const labelDetail = nodeLabelDetail(node, lod, {
+              mode: overlay.mode,
+              mobile,
+              focused,
+              corridorLevel,
+            });
+            const disclosureDepth = nodeDisclosureDepth(node);
+            const disclosureTier = disclosureDepth <= 1 ? 'A' : disclosureDepth === 2 ? 'B' : 'C';
             const showFullTitle = labelDetail === 'title' || labelDetail === 'near';
             const showMetadata = labelDetail === 'near';
             const showCompactTitle = labelDetail === 'compact';
@@ -539,12 +568,15 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 key={node.id}
                 type="button"
                 data-neural-node={node.kind}
+                data-future-node-id={node.id}
                 data-neural-role={node.role}
                 data-enabler-position={node.kind === 'dependency' ? node.role === 'satisfied' ? 'upstream-existing' : 'downstream-required' : undefined}
                 data-future-depth={node.depth}
                 data-presentation-row={node.presentationRow?.index}
                 data-presentation-stream={node.presentationRow?.stream}
                 data-trace-state={traced ? 'related' : 'dimmed'}
+                data-corridor-level={corridorLevel}
+                data-disclosure-tier={disclosureTier}
                 data-label-detail={labelDetail}
                 data-interaction-state={pinnedId === node.id ? 'pinned' : hoveredId === node.id ? 'hovered' : activeId && traced ? 'related' : 'idle'}
                 data-primary-alive={node.role === 'primary' ? reducedMotion ? 'static' : 'subtle-halo' : undefined}
@@ -558,13 +590,14 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 onMouseLeave={() => { if (!mobile) { setHoveredId(undefined); if (!pinnedId) overlay.onTracePreview?.(undefined); } }}
                 onFocus={() => { setHoveredId(node.id); overlay.onTracePreview?.(node.id); }}
                 onBlur={() => { setHoveredId(undefined); if (!pinnedId) overlay.onTracePreview?.(undefined); }}
-                className={`future-field-node absolute -translate-x-1/2 -translate-y-1/2 text-left outline-none transition-[opacity,border-color,box-shadow] duration-200 focus-visible:ring-4 focus-visible:ring-ring/70 motion-reduce:transition-none ${reducedMotion ? '' : 'future-canvas-node-reveal'} ${nodeGeometry(node)} ${nodeClass(node, pinnedId === node.id)} ${nodeSizeClass(node, mobile, labelDetail)} ${traced ? '' : 'opacity-[0.44]'}`}
+                className={`future-field-node absolute -translate-x-1/2 -translate-y-1/2 text-left outline-none transition-[width,min-height,padding,opacity,border-color,box-shadow,filter] focus-visible:ring-4 focus-visible:ring-ring/70 motion-reduce:transition-none ${reducedMotion ? '' : 'future-canvas-node-reveal'} ${nodeGeometry(node)} ${nodeClass(node, pinnedId === node.id)} ${nodeSizeClass(node, mobile, labelDetail)}`}
                 style={{
                   left: node.x,
                   top: node.y,
                   width: showFullTitle ? mobile ? mobileNodeWidth(node) : nodeWidth(node) : showCompactTitle ? compactNodeWidth(node, mobile) : mobile ? 32 : 24,
                   animationDelay: reducedMotion ? undefined : `${nodeRevealDelay(node)}ms`,
-                  transitionDuration: reducedMotion ? '0ms' : undefined,
+                  transitionDuration: reducedMotion ? '0ms' : '240ms',
+                  opacity: nodeOpacity(corridorLevel, disclosureDepth, overlay.mode),
                 }}
               >
                 {showFullTitle ? <>
@@ -767,16 +800,16 @@ function nodeWidth(node: RepositoryFuturesCanvasNode) {
 
 function compactNodeWidth(node: RepositoryFuturesCanvasNode, mobile: boolean) {
   if (node.kind === 'dependency') return mobile ? 96 : 92;
-  if (node.kind === 'evolution') return mobile ? 88 : 112;
-  if (node.kind === 'capability') return mobile ? 82 : 102;
-  if (node.kind === 'artifact') return mobile ? 76 : 94;
+  if (node.kind === 'evolution') return node.depth === 3 ? mobile ? 76 : 92 : mobile ? 84 : 104;
+  if (node.kind === 'capability') return mobile ? 78 : 96;
+  if (node.kind === 'artifact') return mobile ? 72 : 86;
   return mobile ? 90 : 112;
 }
 
 function mobileNodeWidth(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return 150;
   if (node.kind === 'dependency') return 112;
-  if (node.kind === 'evolution') return 94;
+  if (node.kind === 'evolution') return node.depth === 3 ? 82 : 92;
   if (node.kind === 'capability') return 86;
   if (node.kind === 'artifact') return 76;
   if (node.role === 'primary') return 100;
@@ -809,9 +842,12 @@ function nodeClass(node: RepositoryFuturesCanvasNode, pinned: boolean) {
   if (node.kind === 'dependency') return node.role === 'satisfied'
     ? 'border-success/36 bg-success/[0.045] text-foreground/85 ring-1 ring-inset ring-success/10'
     : 'border-accent/34 bg-accent/[0.04] text-foreground/82 ring-1 ring-inset ring-accent/9';
+  if (node.kind === 'evolution' && node.depth === 3) return node.selected
+    ? 'border-primary/38 bg-primary/[0.045] text-foreground ring-1 ring-primary/10 shadow-[0_0_10px_hsl(var(--primary)/0.07)]'
+    : 'border-primary/20 bg-background/[0.38] text-foreground/80 hover:border-primary/44 hover:bg-primary/[0.04]';
   if (node.kind === 'evolution') return node.selected
-    ? 'border-primary/48 bg-primary/[0.07] text-foreground ring-1 ring-primary/14 shadow-[0_0_16px_hsl(var(--primary)/0.1)]'
-    : 'border-primary/26 bg-background/[0.5] text-foreground/90 hover:border-primary/52 hover:bg-primary/[0.05]';
+    ? 'border-primary/46 bg-primary/[0.06] text-foreground ring-1 ring-primary/12 shadow-[0_0_13px_hsl(var(--primary)/0.08)]'
+    : 'border-primary/24 bg-background/[0.46] text-foreground/88 hover:border-primary/48 hover:bg-primary/[0.045]';
   if (node.kind === 'capability') return node.selected
     ? 'border-primary/55 bg-primary/[0.08] text-foreground ring-1 ring-primary/16 shadow-[0_0_18px_hsl(var(--primary)/0.12)]'
     : 'border-primary/28 bg-background/[0.42] text-foreground/90 hover:border-primary/48';
@@ -832,30 +868,134 @@ function nodeClass(node: RepositoryFuturesCanvasNode, pinned: boolean) {
 function nodeSizeClass(node: RepositoryFuturesCanvasNode, mobile: boolean, detail: NodeLabelDetail) {
   if (detail === 'anchor') return `${mobile ? 'h-7' : 'h-5'} min-h-0 rounded-full p-0`;
   if (detail === 'compact') return `${mobile ? 'min-h-8' : 'min-h-6'} rounded-full px-2 py-1`;
-  if (mobile && (node.kind === 'evolution' || node.kind === 'capability' || node.kind === 'artifact')) return 'min-h-[4.5rem] px-2 py-2';
+  if (mobile && node.kind === 'evolution' && node.depth === 3) return 'min-h-[2.8rem] px-2 py-1.5';
+  if (mobile && (node.kind === 'evolution' || node.kind === 'capability' || node.kind === 'artifact')) return 'min-h-[3.6rem] px-2 py-1.5';
   if (mobile) return 'min-h-[6.25rem] px-2 py-2';
-  if (node.kind === 'evolution') return 'min-h-[3.35rem] px-2.5 py-1.5';
+  if (node.kind === 'evolution' && node.depth === 3) return 'min-h-[2.25rem] px-2 py-1';
+  if (node.kind === 'evolution') return 'min-h-[2.8rem] px-2.5 py-1.5';
   if (node.kind === 'capability' || node.kind === 'artifact') return 'min-h-[2.8rem] px-2.5 py-1.5';
   if (node.kind === 'dependency') return 'min-h-[2.35rem] px-2 py-1';
   return `${node.role === 'primary' ? 'min-h-[3.9rem]' : 'min-h-[3.2rem]'} px-3 py-2`;
 }
 
-function nodeLabelDetail(node: RepositoryFuturesCanvasNode, lod: ReturnType<typeof repositoryFuturesLod>, focused: boolean): NodeLabelDetail {
+function nodeLabelDetail(
+  node: RepositoryFuturesCanvasNode,
+  lod: ReturnType<typeof repositoryFuturesLod>,
+  context: {
+    mode: RepositoryFutureStageOverlay['mode'];
+    mobile: boolean;
+    focused: boolean;
+    corridorLevel: NodeCorridorLevel;
+  },
+): NodeLabelDetail {
   if (node.kind === 'repository') return 'near';
-  if (focused) return lod === 'near' ? 'near' : 'title';
+  const activeCorridor = ['primary', 'supporting', 'focused', 'neighbor'].includes(context.corridorLevel);
+  if (context.focused) return lod === 'near' ? 'near' : 'title';
   if (node.kind === 'goal') return lod === 'near' ? 'near' : 'title';
-  if (lod === 'near') return 'near';
-  if (lod === 'medium') {
-    if (node.kind === 'dependency') return 'compact';
-    if ((node.kind === 'capability' || node.kind === 'artifact') && node.selected) return 'compact';
-    if (node.kind === 'evolution' && node.depth === 2) return node.selected ? 'title' : 'compact';
-    if (node.kind === 'evolution' && node.depth === 3 && node.selected) return 'compact';
-    return 'anchor';
+
+  if (context.mode === 'deep') {
+    if (lod === 'near') return 'near';
+    if (lod === 'medium') return node.depth === 3 ? 'title' : node.kind === 'dependency' ? 'compact' : 'title';
+    if (node.kind === 'evolution' && node.depth === 3) return 'compact';
+    return 'compact';
   }
-  if (node.kind === 'dependency') return 'compact';
-  if ((node.kind === 'capability' || node.kind === 'artifact') && node.selected) return 'compact';
-  if (node.kind === 'evolution' && node.depth === 2 && node.selected) return 'compact';
-  return 'anchor';
+
+  if (context.mobile) {
+    if (node.depth === 3) return activeCorridor && lod !== 'far' ? 'compact' : 'anchor';
+    if (!activeCorridor) return lod === 'near' ? 'compact' : 'anchor';
+    return lod === 'near' ? 'title' : 'compact';
+  }
+
+  if (node.depth === 3) {
+    if (!activeCorridor) return lod === 'near' ? 'compact' : 'anchor';
+    if (lod === 'near') return 'title';
+    return lod === 'medium' ? 'title' : 'compact';
+  }
+  if (node.kind === 'dependency') return activeCorridor ? lod === 'near' ? 'title' : 'compact' : 'anchor';
+  if (!activeCorridor) return lod === 'near' ? 'title' : 'compact';
+  return lod === 'near' ? 'near' : lod === 'medium' ? 'title' : 'compact';
+}
+
+function nodeCorridorLevel(
+  node: RepositoryFuturesCanvasNode,
+  activeId: string | undefined,
+  traceNodeIds: Set<string>,
+  roleByGoalId: Map<string, RepositoryFutureStageOverlay['candidates'][number]['role']>,
+): NodeCorridorLevel {
+  if (node.kind === 'repository') return 'repository';
+  const parentRole = node.parentGoalId ? roleByGoalId.get(node.parentGoalId) : undefined;
+  const dependencyRoles = node.kind === 'dependency'
+    ? node.dependency?.dependentGoalIds.map(goalId => roleByGoalId.get(goalId)) || []
+    : [];
+  const role = node.kind === 'goal' ? node.role : parentRole;
+  if (role === 'primary' || dependencyRoles.includes('primary')) return 'primary';
+  if (role === 'supporting' || dependencyRoles.includes('supporting')) return 'supporting';
+  if (activeId === node.id) return 'focused';
+  if (activeId && traceNodeIds.has(node.id)) return 'neighbor';
+  const hasPrimary = [...roleByGoalId.values()].includes('primary');
+  return hasPrimary || activeId ? 'unrelated' : 'context';
+}
+
+function edgeCorridorLevel(
+  edge: Parameters<typeof repositoryFuturesEdgePath>[0],
+  activeId: string | undefined,
+  traceEdgeIds: Set<string>,
+  roleByGoalId: Map<string, RepositoryFutureStageOverlay['candidates'][number]['role']>,
+): Exclude<NodeCorridorLevel, 'repository'> {
+  const roles = edge.goalIds.map(goalId => roleByGoalId.get(goalId));
+  if (roles.includes('primary')) return 'primary';
+  if (roles.includes('supporting')) return 'supporting';
+  if (activeId && traceEdgeIds.has(edge.id)) return 'neighbor';
+  const hasPrimary = [...roleByGoalId.values()].includes('primary');
+  return hasPrimary || activeId ? 'unrelated' : 'context';
+}
+
+function nodeDisclosureDepth(node: RepositoryFuturesCanvasNode): RepositoryFuturesCanvasNode['depth'] {
+  if (node.kind === 'repository') return 0;
+  if (node.kind === 'goal') return 1;
+  if (node.kind === 'artifact') return 3;
+  if (node.kind === 'evolution') return node.depth;
+  return 2;
+}
+
+function nodeOpacity(level: NodeCorridorLevel, depth: RepositoryFuturesCanvasNode['depth'], mode: RepositoryFutureStageOverlay['mode']) {
+  if (level === 'repository' || level === 'primary') return 1;
+  if (level === 'supporting') return 0.82;
+  if (level === 'focused') return 0.96;
+  if (level === 'neighbor') return mode === 'quick' ? 0.72 : 0.86;
+  if (level === 'unrelated') {
+    if (mode === 'deep') return depth === 3 ? 0.48 : 0.58;
+    return depth === 1 ? 0.34 : depth === 2 ? 0.26 : 0.22;
+  }
+  if (depth === 1) return 0.94;
+  if (mode === 'deep') return depth === 2 ? 0.78 : 0.62;
+  return depth === 2 ? 0.62 : 0.36;
+}
+
+function edgeOpacity(
+  level: Exclude<NodeCorridorLevel, 'repository'>,
+  mode: RepositoryFutureStageOverlay['mode'],
+  lod: ReturnType<typeof repositoryFuturesLod>,
+  targetDepth: RepositoryFuturesCanvasNode['depth'],
+) {
+  if (level === 'primary') return 0.96;
+  if (level === 'supporting') return 0.78;
+  if (level === 'focused') return 0.9;
+  if (level === 'neighbor') return mode === 'quick' ? 0.68 : 0.82;
+  if (level === 'unrelated') return mode === 'quick'
+    ? targetDepth >= 3 ? 0.09 : 0.16
+    : targetDepth >= 3 ? 0.24 : 0.34;
+  const base = lod === 'near' ? 0.58 : lod === 'medium' ? 0.46 : 0.34;
+  const depthFactor = targetDepth >= 3 ? mode === 'deep' ? 0.78 : 0.38 : targetDepth === 2 ? mode === 'deep' ? 0.92 : 0.72 : 1;
+  return base * depthFactor;
+}
+
+function haloOpacity(level: NodeCorridorLevel, selected: boolean, prerequisite: boolean, mode: RepositoryFutureStageOverlay['mode']) {
+  if (level === 'primary') return 0.09;
+  if (level === 'supporting') return 0.065;
+  if (level === 'focused' || level === 'neighbor') return 0.055;
+  if (level === 'unrelated') return mode === 'quick' ? 0.012 : 0.024;
+  return selected ? 0.075 : prerequisite ? 0.04 : 0.026;
 }
 
 function nodeRevealDelay(node: RepositoryFuturesCanvasNode) {

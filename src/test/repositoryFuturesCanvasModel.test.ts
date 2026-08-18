@@ -139,7 +139,7 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(goals).toHaveLength(6);
     expect(new Set(goals.map(node => node.x))).toEqual(new Set([510]));
     expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(2);
-    expect(gaps.every(gap => gap === 108)).toBe(true);
+    expect(gaps.every(gap => gap === 124)).toBe(true);
     expect(repository.x).toBeLessThan(goals[0].x);
     expect(repository.y).toBe((goals[0].y + goals.at(-1)!.y) / 2);
     expect(enabler.x).toBeGreaterThan(goals[0].x);
