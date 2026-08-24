@@ -37,7 +37,11 @@ import {
   type RepositoryFutureOrigin,
   type RepositoryFutureSynthesisResult,
 } from '@/lib/workspace/repositoryFutures';
-import type { RepositoryUniverseModel } from '@/lib/workspace';
+import {
+  buildExecutableFuturePlan,
+  type ExecutableFuturePlan,
+  type RepositoryUniverseModel,
+} from '@/lib/workspace';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type {
@@ -48,6 +52,7 @@ import type {
 import { RepositoryFuturePathwaysStage } from './RepositoryFuturePathwaysStage';
 import { RepositoryFuturesNeuralCanvas } from './RepositoryFuturesNeuralCanvas';
 import { buildRepositoryFuturePathwaysGraph } from './repositoryFuturePathwaysGraph';
+import ExecutableFuturePlanView, { ExecutableFuturePlanEntry } from './ExecutableFuturePlanView';
 
 interface RepositoryFuturePathwaysProps {
   report: ReadinessReport;
@@ -73,6 +78,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   const [fitFilter, setFitFilter] = useState<'all' | RepositoryFutureFit>('all');
   const [originFilter, setOriginFilter] = useState<'all' | RepositoryFutureOrigin>('all');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [planOpen, setPlanOpen] = useState(false);
   const graph = useMemo(() => buildRepositoryFuturePathwaysGraph(report, universe, productIntelligence), [productIntelligence, report, universe]);
   const previousGraphFingerprintRef = useRef(graph.fingerprint);
   const draftRef = useRef(draft);
@@ -110,6 +116,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       ? 'Available Futures changed with new repository intelligence. The previous draft was cleared so ShipSeal does not silently reinterpret your selections.'
       : '');
     setReplaceSupportGoalId(undefined);
+    setPlanOpen(false);
   }, [graph.fingerprint]);
 
   const acceptResult = useCallback((result: RepositoryFutureSynthesisResult, successNotice: string) => {
@@ -433,12 +440,21 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     if (roleFilter === 'blocked' && !['blocked', 'incompatible'].includes(compatibility)) return false;
     return true;
   }), [compatibilityFor, fitFilter, goalById, originFilter, roleFilter, savedGoalIds, selectedGoalIds]);
+  const executablePlan = useMemo<ExecutableFuturePlan | undefined>(() => draft
+    ? buildExecutableFuturePlan({ report, graph, draft, productIntelligence })
+    : undefined, [draft, graph, productIntelligence, report]);
+
+  if (planOpen && executablePlan) {
+    return <ExecutableFuturePlanView plan={executablePlan} onBack={() => setPlanOpen(false)} />;
+  }
 
   return (
     <section ref={rootRef} aria-label="Repository Future pathways" className="scroll-mt-20" data-futures-composition="canvas-first">
       <div data-primary-surface="neural-field">
         <RepositoryFuturesNeuralCanvas repositoryName={report.repoName} overlay={overlay} />
       </div>
+
+      <ExecutableFuturePlanEntry plan={executablePlan} onOpen={() => setPlanOpen(true)} />
 
       <details ref={composerRef} data-secondary-surface="configure-path" className="group mt-4 scroll-mt-20 border-t border-border/40 bg-transparent">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:px-3">

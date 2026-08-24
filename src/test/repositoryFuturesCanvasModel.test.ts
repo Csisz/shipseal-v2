@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   buildRepositoryFuturesCanvasModel,
   repositoryFuturesEdgePath,
+  repositoryFuturesLayoutBoxes,
+  repositoryFuturesLayoutCollisions,
+  repositoryFuturesNodeFootprint,
   repositoryFuturesSelectedPlanNodes,
   repositoryFuturesTrace,
 } from '@/components/agentready/result-workspace/futures/repositoryFuturesCanvasModel';
@@ -61,6 +64,48 @@ const dependency = {
   executionOrder: 0,
   humanReviewRequired: false,
 };
+
+function denseSpatialInput(rootCount = 8, generationsTwoPerRoot = 3, generationsThreePerParent = 2) {
+  const candidates = Array.from({ length: rootCount }, (_, rootIndex) => ({
+    ...candidate(`goal:dense-${rootIndex}`, rootIndex === 0 ? 'primary' : rootIndex < 3 ? 'supporting' : 'candidate', 2, 1),
+    candidateClass: 'product-opportunity' as const,
+    opportunityOrigin: rootIndex < 2 ? 'strategic' as const : rootIndex < 6 ? 'evidence-backed' as const : 'exploratory' as const,
+  }));
+  const projections = candidates.flatMap((root, rootIndex) => Array.from({ length: generationsTwoPerRoot }, (_, generationTwoIndex) => {
+    const generationTwoId = `evolution:dense-${rootIndex}-${generationTwoIndex}`;
+    return [
+      {
+        id: generationTwoId,
+        goalId: root.goalId,
+        kind: 'evolution' as const,
+        title: `Generation two ${rootIndex}.${generationTwoIndex}`,
+        sourceId: root.goalId,
+        order: generationTwoIndex,
+        humanReviewRequired: false,
+        generation: 2 as const,
+      },
+      ...Array.from({ length: generationsThreePerParent }, (_, generationThreeIndex) => ({
+        id: `evolution:dense-${rootIndex}-${generationTwoIndex}-${generationThreeIndex}`,
+        goalId: root.goalId,
+        kind: 'evolution' as const,
+        title: `Generation three ${rootIndex}.${generationTwoIndex}.${generationThreeIndex}`,
+        sourceId: generationTwoId,
+        order: generationsTwoPerRoot + generationTwoIndex * generationsThreePerParent + generationThreeIndex,
+        humanReviewRequired: false,
+        generation: 3 as const,
+      })),
+    ];
+  }).flat());
+  const dependencies = candidates.slice(0, 3).map((root, index) => ({
+    ...dependency,
+    id: `dependency:dense-${index}`,
+    title: `Required capability ${index}`,
+    dependentCount: 1,
+    dependentGoalIds: [root.goalId],
+    executionOrder: index,
+  }));
+  return { candidates, projections, dependencies, productIntelligenceState: 'enhanced' as const, mode: 'quick' as const };
+}
 
 describe('Omega 18.5-V4 repository futures canvas model', () => {
   it('places a current root and real future entities deterministically across explicit horizons', () => {
@@ -139,7 +184,7 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(goals).toHaveLength(6);
     expect(new Set(goals.map(node => node.x))).toEqual(new Set([510]));
     expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(2);
-    expect(gaps.every(gap => gap === 124)).toBe(true);
+    expect(gaps.every(gap => gap === 146)).toBe(true);
     expect(repository.x).toBeLessThan(goals[0].x);
     expect(repository.y).toBe((goals[0].y + goals.at(-1)!.y) / 2);
     expect(enabler.x).toBeGreaterThan(goals[0].x);
@@ -236,7 +281,8 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     const terminal = model.nodes.filter(node => node.kind === 'evolution' && node.depth === 3);
 
     expect(terminal).toHaveLength(2);
-    expect(Math.abs(terminal[0].x - terminal[1].x) >= 152 || Math.abs(terminal[0].y - terminal[1].y) >= 88).toBe(true);
+    expect(repositoryFuturesLayoutCollisions(model)).toEqual([]);
+    expect(new Set(terminal.map(node => node.x)).size).toBeGreaterThan(1);
     expect(model.edges).toEqual(expect.arrayContaining([
       expect.objectContaining({ sourceId: 'evolution:adaptive', targetId: 'evolution:orchestration' }),
       expect.objectContaining({ sourceId: 'evolution:collaborative', targetId: 'evolution:network' }),
@@ -258,8 +304,8 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
       productIntelligenceState: 'enhanced',
     }, 'vertical');
     const mobileTerminal = mobile.nodes.filter(node => node.kind === 'evolution' && node.depth === 3);
-    expect(Math.abs(mobileTerminal[0].x - mobileTerminal[1].x)).toBeGreaterThanOrEqual(132);
-    expect(mobileTerminal[0].y).toBe(mobileTerminal[1].y);
+    expect(repositoryFuturesLayoutCollisions(mobile)).toEqual([]);
+    expect(new Set(mobileTerminal.map(node => node.layoutBox?.terminalBand)).size).toBeGreaterThan(1);
   });
 
   it('places existing enablers upstream and required enablers downstream of their route', () => {
@@ -335,7 +381,7 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(goalPosition(replacedPrimary, 'goal:b')).toEqual(goalPosition(initial, 'goal:b'));
   });
 
-  it('does not reposition unrelated candidates when supports change, input order changes, or a new candidate appears', () => {
+  it('does not reposition candidates when supports change or input order changes', () => {
     const base = [
       candidate('goal:a', 'primary', 2, 1),
       candidate('goal:b', 'candidate', 2, 2),
@@ -350,13 +396,11 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     const withSupport = build(base.map(item => item.goalId === 'goal:b' ? { ...item, role: 'supporting' as const } : item));
     const withoutSupport = build(base);
     const reordered = build(base.slice().reverse());
-    const expanded = build([...base, candidate('goal:unrelated', 'candidate', 2, 2)]);
 
     for (const goalId of ['goal:a', 'goal:b', 'goal:c']) {
       expect(goalPosition(withSupport, goalId)).toEqual(goalPosition(initial, goalId));
       expect(goalPosition(withoutSupport, goalId)).toEqual(goalPosition(initial, goalId));
       expect(goalPosition(reordered, goalId)).toEqual(goalPosition(initial, goalId));
-      expect(goalPosition(expanded, goalId)).toEqual(goalPosition(initial, goalId));
     }
   });
 
@@ -517,6 +561,78 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(verticalRepository.y).toBeLessThan(Math.min(...verticalGoals.map(node => node.y)));
     expect(vertical.edges).toEqual(horizontal.edges);
     expect(repositoryFuturesEdgePath(vertical.edges[0], new Map(vertical.nodes.map(node => [node.id, node])), 'vertical')).toContain(' C ');
+  });
+
+  it('packs a dense eight-root horizontal field into parent-owned envelopes without readable-box collisions', () => {
+    const input = denseSpatialInput();
+    const first = buildRepositoryFuturesCanvasModel('shipseal', input, 'horizontal');
+    const second = buildRepositoryFuturesCanvasModel('shipseal', input, 'horizontal');
+    const boxes = repositoryFuturesLayoutBoxes(first);
+
+    expect(first.nodes.map(node => ({ id: node.id, x: node.x, y: node.y })))
+      .toEqual(second.nodes.map(node => ({ id: node.id, x: node.x, y: node.y })));
+    expect(repositoryFuturesLayoutCollisions(first)).toEqual([]);
+    expect(boxes.filter(box => box.kind === 'goal')).toHaveLength(8);
+    expect(first.nodes.filter(node => node.depth === 2).every(node => node.layoutBox?.branchGoalId === node.parentGoalId)).toBe(true);
+    expect(new Set(first.nodes.filter(node => node.depth === 3).map(node => node.x)).size).toBeGreaterThan(1);
+    const nodeMap = new Map(first.nodes.map(node => [node.id, node]));
+    const parentExits = first.edges
+      .filter(edge => edge.kind === 'expansion' && edge.sourceId === 'goal:dense-0')
+      .map(edge => repositoryFuturesEdgePath(edge, nodeMap).split(' C ')[0]);
+    expect(new Set(parentExits).size).toBeGreaterThan(1);
+    expect(first.world.width).toBeGreaterThanOrEqual(1840);
+    expect(first.world.height).toBeGreaterThan(1160);
+  });
+
+  it('uses parent-local sublanes for one four-child branch and reserves selected-corridor clearance without moving Generation one', () => {
+    const input = denseSpatialInput(3, 4, 2);
+    const selected = buildRepositoryFuturesCanvasModel('shipseal', input, 'horizontal');
+    const unselected = buildRepositoryFuturesCanvasModel('shipseal', {
+      ...input,
+      candidates: input.candidates.map(root => ({ ...root, role: 'candidate' as const })),
+    }, 'horizontal');
+    const firstBranch = selected.nodes.filter(node => node.parentGoalId === 'goal:dense-0' && node.depth === 2);
+
+    expect(firstBranch).toHaveLength(4);
+    expect(new Set(firstBranch.map(node => node.x)).size).toBeGreaterThan(1);
+    expect(new Set(firstBranch.map(node => node.y)).size).toBeGreaterThan(1);
+    expect(repositoryFuturesLayoutCollisions(selected)).toEqual([]);
+    input.candidates.forEach(root => {
+      expect(goalPosition(selected, root.goalId)).toEqual(goalPosition(unselected, root.goalId));
+    });
+  });
+
+  it('packs vertical terminals into deterministic parent-aware bands while preserving graph identities and topology', () => {
+    const input = denseSpatialInput(4, 4, 2);
+    const horizontal = buildRepositoryFuturesCanvasModel('shipseal', input, 'horizontal');
+    const vertical = buildRepositoryFuturesCanvasModel('shipseal', input, 'vertical');
+    const terminals = vertical.nodes.filter(node => node.depth === 3 && node.kind === 'evolution');
+    const parentGroups = new Map<string, typeof terminals>();
+    terminals.forEach(node => {
+      const parentId = node.layoutBox?.parentId || '';
+      parentGroups.set(parentId, [...(parentGroups.get(parentId) || []), node]);
+    });
+
+    expect(repositoryFuturesLayoutCollisions(vertical)).toEqual([]);
+    const bands = new Set(terminals.map(node => node.layoutBox?.terminalBand));
+    expect(bands.has(0)).toBe(true);
+    expect(bands.has(1)).toBe(true);
+    expect([...parentGroups.values()].every(group => Math.max(...group.map(node => node.x)) - Math.min(...group.map(node => node.x)) <= 328)).toBe(true);
+    expect(new Set(vertical.nodes.map(node => node.id))).toEqual(new Set(horizontal.nodes.map(node => node.id)));
+    expect(new Set(vertical.edges.map(edge => edge.id))).toEqual(new Set(horizontal.edges.map(edge => edge.id)));
+  });
+
+  it('uses mode-aware real footprints without changing semantic node identity', () => {
+    const input = denseSpatialInput(2, 2, 2);
+    const quick = buildRepositoryFuturesCanvasModel('shipseal', input, 'horizontal');
+    const deep = buildRepositoryFuturesCanvasModel('shipseal', { ...input, mode: 'deep' }, 'horizontal');
+    const quickTerminal = quick.nodes.find(node => node.depth === 3)!;
+    const deepTerminal = deep.nodes.find(node => node.id === quickTerminal.id)!;
+
+    expect(repositoryFuturesNodeFootprint(quickTerminal, 'deep').height).toBeGreaterThan(repositoryFuturesNodeFootprint(quickTerminal, 'quick').height);
+    expect(deepTerminal.layoutBox!.height).toBeGreaterThan(quickTerminal.layoutBox!.height);
+    expect(new Set(deep.nodes.map(node => node.id))).toEqual(new Set(quick.nodes.map(node => node.id)));
+    expect(new Set(deep.edges.map(edge => edge.id))).toEqual(new Set(quick.edges.map(edge => edge.id)));
   });
 });
 

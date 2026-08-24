@@ -68,7 +68,16 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   const meaningfulBounds = useMemo(() => repositoryFuturesBounds(model.nodes.map(nodeCameraTarget))!, [model.nodes]);
   const selectedPlanNodeIds = useMemo(() => new Set(repositoryFuturesSelectedPlanNodes(model).map(node => node.id)), [model]);
   const selectedPlanNodes = useMemo(() => model.nodes.filter(node => selectedPlanNodeIds.has(node.id)), [model.nodes, selectedPlanNodeIds]);
-  const selectedPlanBounds = useMemo(() => repositoryFuturesBounds(selectedPlanNodes.map(nodeCameraTarget)), [selectedPlanNodes]);
+  const selectedPlanBounds = useMemo(() => {
+    const selectedGoals = selectedPlanNodes.filter(node => node.kind === 'goal');
+    const repository = selectedPlanNodes.find(node => node.kind === 'repository');
+    const corridorNodes = model.orientation === 'vertical' && repository && selectedGoals.length
+      && (repository.x < Math.min(...selectedGoals.map(node => node.x)) - 240
+        || repository.x > Math.max(...selectedGoals.map(node => node.x)) + 240)
+      ? selectedPlanNodes.filter(node => node.kind !== 'repository')
+      : selectedPlanNodes;
+    return repositoryFuturesBounds(corridorNodes.map(nodeCameraTarget));
+  }, [model.orientation, selectedPlanNodes]);
   const initialFramingBounds = meaningfulBounds;
   const meaningfulBoundsRef = useRef(meaningfulBounds);
   const initialFramingBoundsRef = useRef(initialFramingBounds);
@@ -376,7 +385,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         data-corridor-motion={reducedMotion ? 'static' : 'semantic-transition'}
         data-product-intelligence-state={overlay.productIntelligenceState}
         data-field-density="breathable-layered-neural"
-        data-layout-strategy="stable-grounded-lattice-with-role-aware-enablers-and-terminal-collision-allocation"
+        data-layout-strategy="stable-parent-local-branch-envelopes-with-bounded-relaxation"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerEnd}
@@ -574,6 +583,13 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 data-future-depth={node.depth}
                 data-presentation-row={node.presentationRow?.index}
                 data-presentation-stream={node.presentationRow?.stream}
+                data-branch-envelope={node.layoutBox?.branchGoalId}
+                data-layout-parent={node.layoutBox?.parentId}
+                data-terminal-column={node.layoutBox?.terminalColumn}
+                data-terminal-band={node.layoutBox?.terminalBand}
+                data-layout-width={node.layoutBox?.width}
+                data-layout-height={node.layoutBox?.height}
+                data-layout-clearance={node.layoutBox?.clearance}
                 data-trace-state={traced ? 'related' : 'dimmed'}
                 data-corridor-level={corridorLevel}
                 data-disclosure-tier={disclosureTier}
@@ -822,8 +838,8 @@ function nodeCameraTarget(node: RepositoryFuturesCanvasNode) {
   return {
     x: node.x,
     y: node.y,
-    width: nodeWidth(node),
-    height: node.kind === 'repository' ? 88 : node.kind === 'dependency' ? 42 : node.kind === 'goal' ? 112 : node.kind === 'evolution' ? 82 : 72,
+    width: node.layoutBox?.width || nodeWidth(node),
+    height: node.layoutBox?.height || (node.kind === 'repository' ? 88 : node.kind === 'dependency' ? 42 : node.kind === 'goal' ? 112 : node.kind === 'evolution' ? 82 : 72),
   };
 }
 

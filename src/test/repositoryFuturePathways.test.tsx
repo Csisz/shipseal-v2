@@ -316,4 +316,98 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     expect(updatedInspector).toHaveTextContent(support.title);
     expect(updatedInspector).not.toHaveTextContent(supportOnlyDependency.title);
   });
+
+  it('keeps plan creation unavailable until a Primary exists, then opens one deterministic executable plan without a provider call', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await renderPathways();
+    expect(screen.getByRole('button', { name: 'Build this future' })).toBeDisabled();
+    expect(screen.getByText('Choose one Primary Future to create an implementation plan.')).toBeInTheDocument();
+
+    chooseFirstPrimary();
+    const buildButton = await screen.findByRole('button', { name: 'Build this future' });
+    expect(buildButton).toBeEnabled();
+    fireEvent.click(buildButton);
+
+    const plan = screen.getByTestId('executable-future-plan');
+    expect(plan).toHaveAttribute('data-review-phase', 'draft');
+    expect(within(plan).getByRole('heading', { name: 'From foundation to verification' })).toBeInTheDocument();
+    expect(within(plan).getByRole('heading', { name: 'Agent handoff' })).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('reviews, copies both canonical agent handoffs, and downloads Markdown without executing or mutating the repository', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    const createObjectURL = vi.fn().mockReturnValue('blob:future-plan');
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL });
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await renderPathways();
+    chooseFirstPrimary();
+    fireEvent.click(await screen.findByRole('button', { name: 'Build this future' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review plan' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark ready for agent' }));
+    expect(screen.getByTestId('executable-future-plan')).toHaveAttribute('data-review-phase', 'ready');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy for Codex' }));
+    const codexDialog = screen.getByRole('dialog');
+    const codexPreview = within(codexDialog).getByTestId('agent-prompt-preview');
+    expect(codexPreview).toHaveTextContent('Codex — ShipSeal Executable Future Plan');
+    expect(codexPreview).toHaveClass('whitespace-pre-wrap', 'break-words');
+    fireEvent.click(within(codexDialog).getByRole('button', { name: 'Copy for Codex' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Use repository-native inspection and editing tools.')));
+    fireEvent.click(within(codexDialog).getByRole('button', { name: 'Close' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy for Claude Code' }));
+    const claudeDialog = screen.getByRole('dialog');
+    expect(within(claudeDialog).getByTestId('agent-prompt-preview')).toHaveTextContent('Claude Code — ShipSeal Executable Future Plan');
+    fireEvent.click(within(claudeDialog).getByRole('button', { name: 'Copy for Claude Code' }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Read repository guidance files before editing')));
+    fireEvent.click(within(claudeDialog).getByRole('button', { name: 'Close' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Download plan' }));
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(anchorClick).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:future-plan');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+    anchorClick.mockRestore();
+    Reflect.deleteProperty(URL, 'createObjectURL');
+    Reflect.deleteProperty(URL, 'revokeObjectURL');
+  });
+
+  it('recomposes instantly after changing Primary and keeps Quick and Deep on the same plan identity', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await renderPathways();
+    chooseFirstPrimary();
+    fireEvent.click(await screen.findByRole('button', { name: 'Build this future' }));
+    const firstFingerprint = screen.getByTestId('executable-future-plan').getAttribute('data-plan-fingerprint');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Futures' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Deep Configuration' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Build this future' }));
+    expect(screen.getByTestId('executable-future-plan')).toHaveAttribute('data-plan-fingerprint', firstFingerprint);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Futures' }));
+    const replacement = screen.getAllByRole('button', { name: 'Make primary' })[0];
+    fireEvent.click(replacement);
+    fireEvent.click(screen.getByRole('button', { name: 'Build this future' }));
+    expect(screen.getByTestId('executable-future-plan').getAttribute('data-plan-fingerprint')).not.toBe(firstFingerprint);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('uses a single-column-safe document surface and disables convergence motion under reduced-motion preferences', async () => {
+    await renderPathways();
+    chooseFirstPrimary();
+    fireEvent.click(await screen.findByRole('button', { name: 'Build this future' }));
+    const plan = screen.getByTestId('executable-future-plan');
+    expect(plan).toHaveClass('overflow-hidden', 'motion-reduce:animate-none');
+    expect(within(plan).getByRole('button', { name: 'Download plan' })).toHaveClass('w-full');
+    expect(plan.querySelectorAll('[data-plan-stage-kind]').length).toBeGreaterThanOrEqual(3);
+  });
 });

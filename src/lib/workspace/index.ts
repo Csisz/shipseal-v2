@@ -98,6 +98,16 @@ export {
   buildRepositoryAgentFlightPath,
 } from './repositoryAgentFlightPath';
 
+export {
+  EXECUTABLE_FUTURE_HANDOFF_VERSION,
+  EXECUTABLE_FUTURE_PLAN_VERSION,
+  buildExecutableFuturePlan,
+  executableFuturePlanMarkdownFilename,
+  renderClaudeCodeFuturePlanPrompt,
+  renderCodexFuturePlanPrompt,
+  renderExecutableFuturePlanMarkdown,
+} from './executableFuturePlan';
+
 export type {
   AiWorkspaceTerm,
   AiWorkspaceTermId,
@@ -254,6 +264,24 @@ export type {
   AgentFlightPathStepType,
   RepositoryAgentFlightPath,
 } from './repositoryAgentFlightPath';
+
+export type {
+  BuildExecutableFuturePlanInput,
+  ExecutableFutureAgentHandoffs,
+  ExecutableFuturePlan,
+  ExecutableFuturePlanArea,
+  ExecutableFuturePlanAreaKind,
+  ExecutableFuturePlanCapability,
+  ExecutableFuturePlanEvidenceReference,
+  ExecutableFuturePlanGoal,
+  ExecutableFuturePlanRepository,
+  ExecutableFuturePlanReviewCategory,
+  ExecutableFuturePlanReviewGate,
+  ExecutableFuturePlanRisk,
+  ExecutableFuturePlanStage,
+  ExecutableFutureVerificationCheck,
+  ExecutableFutureVerificationPlan,
+} from './executableFuturePlan';
 
 export type {
   RepositoryAtlasCluster,
