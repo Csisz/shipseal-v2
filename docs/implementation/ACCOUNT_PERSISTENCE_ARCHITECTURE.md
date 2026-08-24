@@ -2,11 +2,11 @@
 
 Status: Omega 18.1 implementation decision
 
-Last updated: 2026-07-17
+Last updated: 2026-08-19
 
 ## Decision
 
-ShipSeal uses GitHub OAuth as the first account identity mechanism and PostgreSQL as the durable persistence mechanism. The deployment target remains Vercel serverless functions plus the existing React/Vite client. `postgres` is used only by server modules; browser code talks to bounded same-origin APIs. This avoids custom passwords, keeps identity aligned with the repository workflow, and does not couple account sessions to GitHub App installation access tokens.
+ShipSeal uses GitHub OAuth as the first account identity mechanism and PostgreSQL as the durable persistence mechanism. The deployment target remains Vercel serverless functions plus the existing React/Vite client. `postgres` uses a trusted, server-only `DATABASE_URL`; browser code talks only to bounded same-origin ShipSeal APIs and never queries Supabase tables directly. This avoids custom passwords, keeps identity aligned with the repository workflow, and does not couple account sessions to GitHub App installation access tokens.
 
 Account OAuth uses dedicated `SHIPSEAL_ACCOUNT_GITHUB_*` credentials, canonical application origin `SHIPSEAL_APP_ORIGIN`, and callback `/api/account/callback`. Production requires `https://www.getshipseal.com` and `https://www.getshipseal.com/api/account/callback` exactly. The OAuth access token is used once, server-side, to read the GitHub user identity; it is not persisted or returned. Existing GitHub App connect/install/PR authorization remains separate and unchanged.
 
@@ -55,7 +55,9 @@ Lists are bounded to 50 items per request. Request and response schemas are fini
 
 ## Migrations and operations
 
-Migrations `db/migrations/0001_account_persistence.sql` and `db/migrations/0002_verification_relationship_v2.sql` are explicit, ordered, and idempotent. They create owner/project and project/scan indexes, foreign keys, intentional cascades, migration tracking, and the versioned verification-evidence fields and fingerprint index. They never reset production data.
+Migrations `db/migrations/0001_account_persistence.sql`, `db/migrations/0002_verification_relationship_v2.sql`, and `db/migrations/0003_database_security_hardening.sql` are explicit, ordered, and idempotent. They create owner/project and project/scan indexes, foreign keys, intentional cascades, migration tracking, versioned verification-evidence fields, and database access hardening. They never reset production data.
+
+All six ShipSeal tables in the public schema have Row Level Security enabled with no permissive policies, so non-owner access is default-deny. Direct table privileges are revoked from `PUBLIC` and, when present, Supabase's `anon`, `authenticated`, and `service_role` roles. ShipSeal does not use Supabase Auth or the Data API for persistence, so no Supabase Auth RLS policies are required. The trusted server-side database owner continues to use direct PostgreSQL access; `FORCE ROW LEVEL SECURITY` is intentionally not enabled.
 
 Local/test setup:
 
@@ -66,7 +68,7 @@ Local/test setup:
 
 Production setup:
 
-1. Provision managed PostgreSQL with encrypted transport and provider-managed storage encryption/backups.
+1. Provision managed PostgreSQL with encrypted transport and provider-managed storage encryption/backups. Keep the Supabase Data API disabled when it is not needed.
 2. Store `SHIPSEAL_APP_ORIGIN`, `DATABASE_URL`, and dedicated account OAuth credentials in Vercel Production server environment settings, never `VITE_*` values.
 3. Apply reviewed migrations before deploying code that depends on them.
 4. Use forward-fix migrations for production; rollback means restoring a verified database backup and the compatible application version, not running a destructive automatic reset.
