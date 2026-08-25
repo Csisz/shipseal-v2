@@ -25,6 +25,11 @@ export {
 } from './repositoryUniverse';
 
 export {
+  repositoryUniverseClusterSemanticStyle,
+  repositoryUniverseSemanticStyle,
+} from './repositoryUniverseSemantics';
+
+export {
   buildRepositoryAtlasModel,
   buildRepositoryKnowledgeModel,
   buildWorkspaceStory,
@@ -150,6 +155,12 @@ export type {
   RepositoryUniverseRelationship,
   RepositoryUniverseSummary,
 } from './repositoryUniverse';
+
+export type {
+  RepositoryUniverseSemanticEmphasis,
+  RepositoryUniverseSemanticStyle,
+  RepositoryUniverseSemanticType,
+} from './repositoryUniverseSemantics';
 
 export type {
   RepositoryTransformationArtifactAction,

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode, RepositoryTransformationProposal, RepositoryTransformationProposedNode, RepositoryTransformationProposalModel, RepositoryUniverseEdge, RepositoryUniverseModel, RepositoryUniverseNode, RepositoryUniversePosition } from '@/lib/workspace';
-import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseVisualPosition, softenClusterColor, blendHex, repositoryUniverseRendererTokens, REPOSITORY_UNIVERSE_CINEMATIC_TOKENS, type RepositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
+import { drawRepositoryUniverseSemanticIcon, repositoryUniverseClusterSemanticStyle, repositoryUniverseSemanticStyle, type RepositoryUniverseSemanticStyle, type RepositoryUniverseSemanticType } from '@/lib/workspace/repositoryUniverseSemantics';
+import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseVisualPosition, softenClusterColor, blendHex, repositoryUniverseLandmarkOpacity, repositoryUniverseRendererTokens, repositoryUniverseSemanticIconVisible, repositoryUniverseSemanticLabelVisible, repositoryUniverseSemanticOpacityMultiplier, repositoryUniverseSemanticZoomLevel, REPOSITORY_UNIVERSE_CINEMATIC_TOKENS, type RepositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
 import type { ShipSealResolvedTheme } from '@/lib/theme';
 
 export interface UniverseCameraState {
@@ -56,8 +57,12 @@ type PointerMode = 'orbit' | 'pan';
 
 interface NodeRenderItem {
   node: RepositoryUniverseNode;
+  semantic: RepositoryUniverseSemanticStyle;
   mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshStandardMaterial>;
+  hitTarget: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
   halo: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+  icon: THREE.Sprite;
+  iconMaterial: THREE.SpriteMaterial;
   label: THREE.Sprite;
   labelMaterial: THREE.SpriteMaterial;
   labelTexture: THREE.CanvasTexture;
@@ -102,6 +107,13 @@ interface LabelCollisionCandidate {
   opacity: number;
   priority: number;
   protected: boolean;
+}
+
+interface ClusterRenderItem {
+  clusterId: string;
+  landmark: THREE.Sprite;
+  material: THREE.SpriteMaterial;
+  texture: THREE.CanvasTexture;
 }
 
 export default function RepositoryUniverse3D({
@@ -289,18 +301,25 @@ export default function RepositoryUniverse3D({
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 8000);
     const raycaster = new THREE.Raycaster();
     raycaster.params.Line.threshold = 3;
+    raycaster.layers.enable(1);
     const pointer = new THREE.Vector2();
     const nodeItems = new Map<string, NodeRenderItem>();
     const edgeItems = new Map<string, EdgeRenderItem>();
+    const clusterItems = new Map<string, ClusterRenderItem>();
     const proposalItems = new Map<string, ProposalRenderItem>();
     const proposalEdgeItems = new Map<string, ProposalEdgeRenderItem>();
     const sphereGeometryCache = new Map<number, THREE.SphereGeometry>();
+    const semanticIconTextureCache = new Map<string, THREE.CanvasTexture>();
     let frameId = 0;
     let disposed = false;
     let pointerMode: PointerMode | null = null;
     let pointerStart = { x: 0, y: 0 };
     let pointerLast = { x: 0, y: 0 };
     let pointerMoved = false;
+    const activeTouchPointers = new Map<number, { x: number; y: number }>();
+    let pinchStartDistance = 0;
+    let pinchStartRadius = 0;
+    let pinchActive = false;
     let hoveredNodeId: string | null = null;
     let hoveredProposalId: string | null = null;
     let userInteractedAt = performance.now();
@@ -376,7 +395,16 @@ export default function RepositoryUniverse3D({
       const source = visualPositionByNodeId.get(edge.source);
       const target = visualPositionByNodeId.get(edge.target);
       if (!source || !target) continue;
-      const material = new THREE.LineBasicMaterial({
+      const material = edge.evidenceType === 'heuristic'
+        ? new THREE.LineDashedMaterial({
+          color: colorForEdge(edge, false, false, visualTokens),
+          transparent: true,
+          opacity: visualTokens.edgeOpacityBase,
+          depthWrite: false,
+          dashSize: 5,
+          gapSize: 7,
+        })
+        : new THREE.LineBasicMaterial({
         color: colorForEdge(edge, false, false, visualTokens),
         transparent: true,
         opacity: visualTokens.edgeOpacityBase,
@@ -384,6 +412,7 @@ export default function RepositoryUniverse3D({
       });
       const geometry = new THREE.BufferGeometry().setFromPoints([source, target]);
       const line = new THREE.Line(geometry, material);
+      if (edge.evidenceType === 'heuristic') line.computeLineDistances();
       edgeItems.set(edge.id, { edge, line });
       scene.add(line);
       addRelatedNode(edge.source, edge.target);
@@ -452,8 +481,28 @@ export default function RepositoryUniverse3D({
       }
     }
 
+    for (const cluster of model.clusters) {
+      if (cluster.id === 'cluster:repository') continue;
+      const semantic = repositoryUniverseClusterSemanticStyle(cluster);
+      const token = repositoryUniverseClusterToken(cluster.id);
+      const position = repositoryUniverseVisualPosition({ id: cluster.id, position: cluster.position }, model.rootNodeId);
+      const { sprite: landmark, material, texture } = clusterLandmarkSprite({
+        label: cluster.label,
+        count: cluster.nodeIds.length,
+        semanticType: semantic.semanticType,
+        color: token.hex,
+        tokens: visualTokens,
+      });
+      landmark.position.set(position.x, position.y + Math.min(26, cluster.radius * 0.12), position.z);
+      landmark.scale.set(84, 23, 1);
+      landmark.renderOrder = 3;
+      scene.add(landmark);
+      clusterItems.set(cluster.id, { clusterId: cluster.id, landmark, material, texture });
+    }
+
     for (const node of model.nodes) {
       const displayLabel = repositoryUniverseNodeDisplayLabel(node);
+      const semantic = repositoryUniverseSemanticStyle(node);
       const baseRadius = nodeRadius(node);
       const position = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
       const material = new THREE.MeshStandardMaterial({
@@ -471,6 +520,14 @@ export default function RepositoryUniverse3D({
       mesh.userData.nodeId = node.id;
       scene.add(mesh);
 
+      const hitRadius = Math.max(baseRadius * 1.35, node.kind === 'repository' ? 11 : node.kind === 'folder' ? 7.4 : 5.4);
+      const hitMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
+      const hitTarget = new THREE.Mesh(sphereFor(hitRadius), hitMaterial);
+      hitTarget.position.copy(position);
+      hitTarget.userData.nodeId = node.id;
+      hitTarget.layers.set(1);
+      scene.add(hitTarget);
+
       const haloMaterial = new THREE.MeshBasicMaterial({
         color: visualTokens.coreGlow,
         transparent: true,
@@ -482,12 +539,31 @@ export default function RepositoryUniverse3D({
       halo.position.copy(mesh.position);
       scene.add(halo);
 
+      const iconTexture = semanticIconTexture({
+        semanticType: semantic.semanticType,
+        color: repositoryUniverseNodeBaseColor(node),
+        tokens: visualTokens,
+        cache: semanticIconTextureCache,
+      });
+      const iconMaterial = new THREE.SpriteMaterial({
+        map: iconTexture,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0,
+      });
+      const icon = new THREE.Sprite(iconMaterial);
+      icon.position.copy(position);
+      const initialIconSize = semantic.emphasis === 'landmark' ? 18 : semantic.emphasis === 'primary' ? 13 : 10;
+      icon.scale.set(initialIconSize, initialIconSize, 1);
+      icon.renderOrder = 4;
+      scene.add(icon);
+
       const { sprite: label, material: labelMaterial, texture } = labelSprite(shortLabel(displayLabel), labelColorForNode(node, theme), theme);
       label.position.set(position.x, position.y + baseRadius + 5, position.z);
       label.scale.set(node.kind === 'repository' ? 70 : 42, node.kind === 'repository' ? 20 : 14, 1);
       scene.add(label);
 
-      nodeItems.set(node.id, { node, mesh, halo, label, labelMaterial, labelTexture: texture, baseRadius, position });
+      nodeItems.set(node.id, { node, semantic, mesh, hitTarget, halo, icon, iconMaterial, label, labelMaterial, labelTexture: texture, baseRadius, position });
     }
 
     const resize = () => {
@@ -633,7 +709,7 @@ export default function RepositoryUniverse3D({
     const intersectEntity = () => {
       raycaster.setFromCamera(pointer, camera);
       const meshes = [
-        ...[...nodeItems.values()].filter(item => item.mesh.visible).map(item => item.mesh),
+        ...[...nodeItems.values()].filter(item => item.hitTarget.visible).map(item => item.hitTarget),
         ...[...proposalItems.values()].filter(item => item.mesh.visible).map(item => item.mesh),
       ];
       const intersect = raycaster.intersectObjects(meshes, false)[0];
@@ -645,6 +721,28 @@ export default function RepositoryUniverse3D({
     };
 
     const handleDragPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === 'touch' && activeTouchPointers.has(event.pointerId)) {
+        activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (activeTouchPointers.size >= 2) {
+          const touches = [...activeTouchPointers.values()];
+          const distance = Math.max(24, Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y));
+          if (!pinchActive) {
+            pinchActive = true;
+            pinchStartDistance = distance;
+            pinchStartRadius = cameraStateRef.current.radius;
+          }
+          pointerMoved = true;
+          pointerMode = null;
+          cancelFocusTransition();
+          publishCamera({
+            ...cameraStateRef.current,
+            radius: pinchStartRadius * (pinchStartDistance / distance),
+          });
+          userInteractedAt = performance.now();
+          event.preventDefault();
+          return;
+        }
+      }
       if (pointerMode) {
         const dx = event.clientX - pointerLast.x;
         const dy = event.clientY - pointerLast.y;
@@ -685,6 +783,12 @@ export default function RepositoryUniverse3D({
       hoveredProposalId = hovered.proposalId || null;
     };
 
+    const handleCanvasPointerLeave = () => {
+      if (pointerMode || pinchActive) return;
+      hoveredNodeId = null;
+      hoveredProposalId = null;
+    };
+
     const cleanupDocumentDrag = () => {
       window.removeEventListener('pointermove', handleDragPointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
@@ -695,9 +799,21 @@ export default function RepositoryUniverse3D({
       if (event.button !== 0 && event.button !== 2) return;
       interruptReveal();
       cancelFocusTransition();
+      hoveredNodeId = null;
+      hoveredProposalId = null;
+      if (event.pointerType === 'touch') {
+        activeTouchPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (activeTouchPointers.size === 2) {
+          const touches = [...activeTouchPointers.values()];
+          pinchStartDistance = Math.max(24, Math.hypot(touches[0].x - touches[1].x, touches[0].y - touches[1].y));
+          pinchStartRadius = cameraStateRef.current.radius;
+          pinchActive = true;
+          pointerMode = null;
+        }
+      }
       setPointer(event);
       canvas.setPointerCapture?.(event.pointerId);
-      pointerMode = event.button === 2 ? 'pan' : 'orbit';
+      if (!pinchActive) pointerMode = event.button === 2 ? 'pan' : 'orbit';
       pointerStart = { x: event.clientX, y: event.clientY };
       pointerLast = pointerStart;
       pointerMoved = false;
@@ -711,8 +827,14 @@ export default function RepositoryUniverse3D({
     function handlePointerUp(event: PointerEvent) {
       const mode = pointerMode;
       pointerMode = null;
-      cleanupDocumentDrag();
-      if (mode === 'orbit' && !pointerMoved) {
+      const endedPinch = pinchActive;
+      if (event.pointerType === 'touch') activeTouchPointers.delete(event.pointerId);
+      if (activeTouchPointers.size < 2) {
+        pinchActive = false;
+        pinchStartDistance = 0;
+      }
+      if (event.pointerType !== 'touch' || activeTouchPointers.size === 0) cleanupDocumentDrag();
+      if (!endedPinch && mode === 'orbit' && !pointerMoved) {
         setPointer(event);
         const { nodeId, proposalId } = intersectEntity();
         if (nodeId) onSelectNodeRef.current(nodeId);
@@ -724,7 +846,15 @@ export default function RepositoryUniverse3D({
     const handleWheel = (event: WheelEvent) => {
       interruptReveal();
       cancelFocusTransition();
-      publishCamera(repositoryUniverseWheelCameraState(cameraStateRef.current, event.deltaY, fullscreenRef.current));
+      setPointer(event);
+      const hovered = intersectEntity();
+      const anchorNode = hovered.nodeId ? nodeItems.get(hovered.nodeId) : undefined;
+      publishCamera(repositoryUniverseWheelCameraState(
+        cameraStateRef.current,
+        event.deltaY,
+        fullscreenRef.current,
+        anchorNode ? { x: anchorNode.position.x, y: anchorNode.position.y, z: anchorNode.position.z } : undefined,
+      ));
       userInteractedAt = performance.now();
       event.preventDefault();
     };
@@ -740,14 +870,7 @@ export default function RepositoryUniverse3D({
       }
       const node = nodeId ? nodeById.get(nodeId) : undefined;
       if (!node) return;
-      const target = visualPositionByNodeId.get(node.id) || visualPositionFor(node.position, node.id === model.rootNodeId);
-      publishCamera({
-        ...cameraStateRef.current,
-        radius: node.kind === 'file' ? 220 : 300,
-        target,
-      }, true);
       onSelectNodeRef.current(node.id);
-      onFocusNodeSettledRef.current?.(node.id);
     };
 
     let selectedRelatedCacheKey = '';
@@ -781,24 +904,37 @@ export default function RepositoryUniverse3D({
       const domain = transformationDomainRef.current;
       const selectedProposal = selectedProposalIdRef.current;
       const excludedProposals = excludedProposalSetRef.current;
-      const selectedRelated = relatedNodeIdsForSelection(selectedId);
+      const pinnedSelectionId = selectedId && selectedId !== model.rootNodeId ? selectedId : undefined;
+      const interactionContextId = hoveredNodeId || pinnedSelectionId;
+      const contextualRelated = relatedNodeIdsForSelection(interactionContextId);
+      const radius = cameraStateRef.current.radius;
+      const zoomLevel = repositoryUniverseSemanticZoomLevel(radius);
 
       for (const item of edgeItems.values()) {
         const { edge, line } = item;
-        const directlySelected = Boolean(selectedId && (edge.source === selectedId || edge.target === selectedId));
+        const directlySelected = Boolean(pinnedSelectionId && (edge.source === pinnedSelectionId || edge.target === pinnedSelectionId));
+        const directlyHovered = Boolean(hoveredNodeId && (edge.source === hoveredNodeId || edge.target === hoveredNodeId));
+        const activeLocalRelationship = directlyHovered || directlySelected;
+        const routeRelationship = routeNodeIds.has(edge.source) && routeNodeIds.has(edge.target);
         const focused = Boolean(focusedCluster && nodeById.get(edge.source)?.clusterId === focusedCluster && nodeById.get(edge.target)?.clusterId === focusedCluster);
         const visible = visibleEdges.has(edge.id);
         line.visible = visible;
         line.material.opacity = !visible
           ? 0
-          : directlySelected
+          : routeRelationship
+            ? visualTokens.edgeOpacitySelected
+          : activeLocalRelationship
             ? edge.evidenceType === 'heuristic' ? visualTokens.edgeOpacitySelectedHeuristic : visualTokens.edgeOpacitySelected
             : focused
               ? visualTokens.edgeOpacityFocused
+              : zoomLevel === 'overview'
+                ? edge.relationship === 'contains' ? visualTokens.edgeOpacityOverviewContains : visualTokens.edgeOpacityOverview
               : edge.relationship === 'contains'
-                ? selectedId || focusedCluster || routeActive ? visualTokens.edgeOpacityContainsQuiet : visualTokens.edgeOpacityContainsBase
-                : selectedId || focusedCluster || routeActive ? visualTokens.edgeOpacityQuiet : visualTokens.edgeOpacityBase;
-        line.material.color.setHex(colorForEdge(edge, directlySelected, focused, visualTokens));
+                ? interactionContextId || focusedCluster || routeActive ? visualTokens.edgeOpacityContainsQuiet : visualTokens.edgeOpacityContainsBase
+                : interactionContextId || focusedCluster || routeActive ? visualTokens.edgeOpacityQuiet : visualTokens.edgeOpacityBase;
+        line.material.color.setHex(routeRelationship
+          ? visualTokens.route
+          : colorForEdge(edge, activeLocalRelationship, focused, visualTokens));
       }
 
       for (const item of proposalEdgeItems.values()) {
@@ -812,24 +948,30 @@ export default function RepositoryUniverse3D({
           : visualTokens.proposal);
       }
 
-      const radius = cameraStateRef.current.radius;
       const focusPulse = reducedMotionRef.current ? 0.5 : (Math.sin(now / 520) + 1) / 2;
       for (const item of nodeItems.values()) {
-        const { node, mesh, halo, label, labelMaterial, baseRadius } = item;
+        const { node, semantic, mesh, hitTarget, halo, icon, iconMaterial, label, labelMaterial, baseRadius } = item;
         const visible = visibleNodes.has(node.id);
-        const selected = node.id === selectedId;
+        const selected = node.id === pinnedSelectionId;
         const hovered = node.id === hoveredNodeId;
         const matched = searchMatches.has(node.id);
         const routeHighlighted = routeNodeIds.has(node.id);
-        const connected = selectedRelated.has(node.id);
+        const connected = contextualRelated.has(node.id);
         const focused = !focusedCluster || node.clusterId === focusedCluster || node.id === model.rootNodeId;
-        const quiet = Boolean((selectedId || routeActive) && !selected && !connected && !matched && !routeHighlighted && node.id !== model.rootNodeId);
+        const quiet = Boolean((interactionContextId || routeActive) && !selected && !hovered && !connected && !matched && !routeHighlighted && node.id !== model.rootNodeId);
         const suppressed = Boolean(focusedCluster && !focused && !selected && !matched && !routeHighlighted);
         const verificationState = verificationNodeStatesRef.current[node.id];
-        const opacity = !visible ? 0 : selected ? 1 : hovered || matched ? 0.99 : routeHighlighted ? 0.99 : connected ? 0.96 : quiet || suppressed ? visualTokens.nodeOpacityQuiet : node.importance === 'background' ? visualTokens.nodeOpacityBackground : visualTokens.nodeOpacityBase;
+        const forcedSemanticIdentity = selected || hovered || matched || routeHighlighted;
+        const contextualSemanticIdentity = connected || Boolean(focusedCluster && focused);
+        const semanticIconVisible = repositoryUniverseSemanticIconVisible(semantic, zoomLevel, forcedSemanticIdentity, contextualSemanticIdentity);
+        const semanticLabelVisible = repositoryUniverseSemanticLabelVisible(semantic, zoomLevel, forcedSemanticIdentity, contextualSemanticIdentity);
+        const semanticOpacityMultiplier = repositoryUniverseSemanticOpacityMultiplier(semantic, zoomLevel, forcedSemanticIdentity, contextualSemanticIdentity, Boolean(interactionContextId));
+        const baseOpacity = selected ? 1 : hovered || matched ? 0.99 : routeHighlighted ? 0.99 : connected ? 0.96 : quiet || suppressed ? visualTokens.nodeOpacityQuiet : node.importance === 'background' ? visualTokens.nodeOpacityBackground : visualTokens.nodeOpacityBase;
+        const opacity = !visible ? 0 : baseOpacity * semanticOpacityMultiplier;
         const scale = selected ? 2.16 + focusPulse * 0.08 : hovered ? 1.62 : matched ? 1.54 : routeHighlighted ? 1.5 : connected ? 1.32 : node.importance === 'primary' ? 1.12 : 1;
 
         mesh.visible = opacity > 0.02;
+        hitTarget.visible = visible && opacity > 0.02;
         mesh.material.opacity = opacity;
         mesh.material.color.setHex(verificationState && !selected ? verificationOverlayColor(verificationState) : colorForNode(node, selected, matched, routeHighlighted, hovered, connected, visualTokens));
         mesh.material.emissive.setHex(verificationState && !selected ? verificationOverlayColor(verificationState) : emissiveForNode(node, selected, matched, routeHighlighted, hovered, visualTokens));
@@ -876,20 +1018,28 @@ export default function RepositoryUniverse3D({
                 : visualTokens.coreGlow);
         halo.scale.setScalar(selected ? 1.58 + focusPulse * 0.08 : routeHighlighted ? 1.3 : verificationState && verificationState !== 'unchanged' ? 1.2 : connected ? 1.16 : 1);
 
-        const labelVisible = visible && shouldRenderLabel(node, {
+        const iconVisible = visible && semanticIconVisible;
+        const iconBaseSize = semantic.emphasis === 'landmark' ? 19 : semantic.emphasis === 'primary' ? 14 : semantic.emphasis === 'supporting' ? 11.5 : 9.5;
+        const iconScale = selected ? 1.72 : hovered ? 1.42 : matched ? 1.34 : routeHighlighted ? 1.3 : connected ? 1.14 : 1;
+        icon.visible = iconVisible;
+        iconMaterial.opacity = !iconVisible ? 0 : selected || hovered || matched ? 1 : routeHighlighted ? 0.98 : connected ? 0.92 : zoomLevel === 'overview' ? 0.9 : 0.82;
+        icon.position.copy(mesh.position);
+        icon.scale.set(iconBaseSize * iconScale, iconBaseSize * iconScale, 1);
+
+        const labelVisible = visible && semanticLabelVisible && shouldRenderLabel(node, {
           selected,
           hovered,
           matched: matched || routeHighlighted,
           connected: connected || routeHighlighted,
           focused,
           focusedClusterId: focusedCluster,
-          hasSelection: Boolean(selectedId),
+          hasSelection: Boolean(interactionContextId),
           cameraRadius: radius,
         });
         label.visible = labelVisible;
         const desiredLabelOpacity = labelVisible ? labelOpacity(node, radius, selected, hovered, matched, connected) : 0;
         labelMaterial.opacity = desiredLabelOpacity;
-        label.position.set(item.position.x, item.position.y + baseRadius * scale + 5, item.position.z);
+        label.position.set(mesh.position.x, mesh.position.y + baseRadius * scale + 5, mesh.position.z);
         const labelScale = labelScaleForNode(node, radius, selected || hovered || matched);
         label.scale.set(labelScale.width, labelScale.height, 1);
         label.lookAt(camera.position);
@@ -909,9 +1059,18 @@ export default function RepositoryUniverse3D({
               importance: node.importance,
               connected,
             }),
-            protected: selected || matched || routeHighlightedForPriority,
+            protected: selected || hovered || matched || routeHighlightedForPriority,
           });
         }
+      }
+
+      for (const item of clusterItems.values()) {
+        const baseOpacity = repositoryUniverseLandmarkOpacity(zoomLevel, visualTokens);
+        const active = item.clusterId === focusedCluster || nodeById.get(interactionContextId || '')?.clusterId === item.clusterId;
+        item.landmark.visible = baseOpacity > 0.01 || active;
+        item.material.opacity = active ? Math.max(baseOpacity, 0.96) : baseOpacity;
+        item.landmark.scale.set(active ? 91 : 84, active ? 25 : 23, 1);
+        item.landmark.lookAt(camera.position);
       }
 
       for (const item of proposalItems.values()) {
@@ -970,7 +1129,8 @@ export default function RepositoryUniverse3D({
       if (!localSettled && (reducedMotionRef.current || !animateInRef.current || elapsed >= INITIAL_APPEARANCE_MS)) {
         finishReveal();
       }
-      if (!reducedMotionRef.current && !rotationPausedRef.current && localSettled && now - userInteractedAt > IDLE_ROTATION_DELAY_MS) {
+      const pinnedSelectionActive = Boolean(selectedNodeIdRef.current && selectedNodeIdRef.current !== model.rootNodeId);
+      if (!reducedMotionRef.current && !rotationPausedRef.current && !pinnedSelectionActive && !hoveredNodeId && routeNodeIdSetRef.current.size === 0 && localSettled && now - userInteractedAt > IDLE_ROTATION_DELAY_MS) {
         const state = cameraStateRef.current;
         cameraStateRef.current = { ...state, theta: state.theta + 0.0007 };
       }
@@ -983,7 +1143,9 @@ export default function RepositoryUniverse3D({
           base.y * startScale + base.y * (1 - startScale) * appearance,
           base.z * startScale + base.z * (1 - startScale) * appearance,
         );
+        item.hitTarget.position.copy(item.mesh.position);
         item.halo.position.copy(item.mesh.position);
+        item.icon.position.copy(item.mesh.position);
         item.label.position.x = item.mesh.position.x;
         item.label.position.z = item.mesh.position.z;
       }
@@ -998,6 +1160,7 @@ export default function RepositoryUniverse3D({
 
     canvas.addEventListener('pointerdown', handlePointerDown);
     canvas.addEventListener('pointermove', handleCanvasPointerMove);
+    canvas.addEventListener('pointerleave', handleCanvasPointerLeave);
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     canvas.addEventListener('dblclick', handleDoubleClick);
     canvas.addEventListener('contextmenu', preventDefault);
@@ -1009,6 +1172,7 @@ export default function RepositoryUniverse3D({
       resizeObserver.disconnect();
       canvas.removeEventListener('pointerdown', handlePointerDown);
       canvas.removeEventListener('pointermove', handleCanvasPointerMove);
+      canvas.removeEventListener('pointerleave', handleCanvasPointerLeave);
       canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('dblclick', handleDoubleClick);
       canvas.removeEventListener('contextmenu', preventDefault);
@@ -1024,6 +1188,8 @@ export default function RepositoryUniverse3D({
       });
       nodeItems.forEach(item => item.labelTexture.dispose());
       proposalItems.forEach(item => item.labelTexture.dispose());
+      clusterItems.forEach(item => item.texture.dispose());
+      semanticIconTextureCache.forEach(texture => texture.dispose());
       sphereGeometryCache.forEach(geometry => geometry.dispose());
       renderer.dispose();
     };
@@ -1048,6 +1214,7 @@ export default function RepositoryUniverse3D({
         data-visible-node-count={visibleNodeIds.length}
         data-visible-edge-count={visibleEdgeIds.length}
         data-route-node-count={routeNodeIds.length}
+        data-semantic-zoom={repositoryUniverseSemanticZoomLevel(cameraState.radius)}
         data-selected-visible={!selectedNodeId || visibleNodeSet.has(selectedNodeId) ? 'true' : 'false'}
         data-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}
@@ -1061,7 +1228,7 @@ export default function RepositoryUniverse3D({
         />
       )}
       <div className="sr-only">
-        Drag to orbit - gentle scroll to zoom - click a node
+        Drag to orbit, scroll or pinch to zoom, and click a node. Search and the Atlas 2D view provide non-visual access to the same repository entities.
       </div>
       <div className="pointer-events-none absolute bottom-4 left-4 rounded-full border border-primary/15 bg-[hsl(var(--universe-surface)/0.58)] px-3 py-1.5 text-[11px] text-muted-foreground shadow-[0_12px_40px_hsl(var(--universe-stage-bg)/0.45)] backdrop-blur-xl">
         {visibleNodeIds.length.toLocaleString()} visible - {model.summary.representedFileNodeCount.toLocaleString()} file nodes - {model.summary.folderNodeCount.toLocaleString()} folders
@@ -1098,11 +1265,22 @@ export function repositoryUniverseWheelCameraState(
   state: UniverseCameraState,
   deltaY: number,
   fullscreen = false,
+  anchor?: RepositoryUniversePosition,
 ): UniverseCameraState {
-  const factor = Math.exp(deltaY * (fullscreen ? 0.0009 : 0.00068));
+  const controlledDelta = Math.max(-140, Math.min(140, deltaY));
+  const factor = Math.exp(controlledDelta * (fullscreen ? 0.00082 : 0.00062));
+  const radius = Math.max(150, Math.min(1500, state.radius * factor));
+  const zoomTowardAnchor = anchor && radius < state.radius
+    ? Math.min(0.2, Math.max(0, 1 - radius / Math.max(1, state.radius)) * 0.72)
+    : 0;
   return {
     ...state,
-    radius: Math.max(150, Math.min(1500, state.radius * factor)),
+    radius,
+    target: zoomTowardAnchor && anchor ? {
+      x: state.target.x + (anchor.x - state.target.x) * zoomTowardAnchor,
+      y: state.target.y + (anchor.y - state.target.y) * zoomTowardAnchor,
+      z: state.target.z + (anchor.z - state.target.z) * zoomTowardAnchor,
+    } : state.target,
   };
 }
 
@@ -1351,6 +1529,110 @@ export function repositoryUniverseNodeDisplayLabel(node: Pick<RepositoryUniverse
   return id || 'Unknown repository entity';
 }
 
+function semanticIconTexture({
+  semanticType,
+  color,
+  tokens,
+  cache,
+}: {
+  semanticType: RepositoryUniverseSemanticType;
+  color: number;
+  tokens: RepositoryUniverseRendererTokens;
+  cache: Map<string, THREE.CanvasTexture>;
+}) {
+  const key = `${tokens.mode}:${semanticType}:${color.toString(16)}`;
+  const existing = cache.get(key);
+  if (existing) return existing;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 128;
+  const context = canvas.getContext('2d');
+  if (context) {
+    const center = 64;
+    const gradient = context.createRadialGradient(center - 12, center - 14, 4, center, center, 51);
+    gradient.addColorStop(0, hexCss(blendHex(tokens.iconSurface, color, tokens.mode === 'light' ? 0.08 : 0.16)));
+    gradient.addColorStop(1, hexCss(tokens.iconSurface));
+    context.beginPath();
+    context.arc(center, center, 49, 0, Math.PI * 2);
+    context.fillStyle = gradient;
+    context.fill();
+    context.lineWidth = 4;
+    context.strokeStyle = hexCss(blendHex(tokens.iconBorder, color, 0.46));
+    context.stroke();
+    context.beginPath();
+    context.arc(center, center, 41, 0, Math.PI * 2);
+    context.lineWidth = 1.5;
+    context.globalAlpha = tokens.mode === 'light' ? 0.28 : 0.36;
+    context.strokeStyle = hexCss(color);
+    context.stroke();
+    context.globalAlpha = 1;
+    context.strokeStyle = hexCss(tokens.iconInk);
+    drawRepositoryUniverseSemanticIcon(context, semanticType, center, center, 54);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  cache.set(key, texture);
+  return texture;
+}
+
+function clusterLandmarkSprite({
+  label,
+  count,
+  semanticType,
+  color,
+  tokens,
+}: {
+  label: string;
+  count: number;
+  semanticType: RepositoryUniverseSemanticType;
+  color: number;
+  tokens: RepositoryUniverseRendererTokens;
+}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 768;
+  canvas.height = 192;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    const centerX = 82;
+    const centerY = 91;
+    const halo = context.createRadialGradient(centerX, centerY, 12, centerX, centerY, 72);
+    halo.addColorStop(0, `${hexCss(color)}52`);
+    halo.addColorStop(0.5, `${hexCss(color)}18`);
+    halo.addColorStop(1, `${hexCss(color)}00`);
+    context.fillStyle = halo;
+    context.fillRect(0, 0, 164, 182);
+    context.beginPath();
+    context.arc(centerX, centerY, 42, 0, Math.PI * 2);
+    context.fillStyle = `${hexCss(tokens.landmarkSurface)}e8`;
+    context.fill();
+    context.lineWidth = 4;
+    context.strokeStyle = hexCss(blendHex(color, tokens.iconBorder, 0.34));
+    context.stroke();
+    context.strokeStyle = hexCss(tokens.landmarkInk);
+    drawRepositoryUniverseSemanticIcon(context, semanticType, centerX, centerY, 46);
+    context.textAlign = 'left';
+    context.textBaseline = 'middle';
+    context.font = '650 38px Inter, system-ui, sans-serif';
+    context.lineWidth = 10;
+    context.strokeStyle = tokens.mode === 'light' ? 'rgba(246,250,249,0.94)' : 'rgba(2,7,16,0.86)';
+    context.strokeText(shortLabel(label), 148, 76, 560);
+    context.fillStyle = hexCss(tokens.landmarkInk);
+    context.fillText(shortLabel(label), 148, 76, 560);
+    context.font = '600 22px Inter, system-ui, sans-serif';
+    context.globalAlpha = 0.72;
+    context.fillText(`${count.toLocaleString()} entities`, 148, 119, 520);
+    context.globalAlpha = 1;
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0 });
+  return { sprite: new THREE.Sprite(material), material, texture };
+}
+
 function labelSprite(label: string, color: string, theme: ShipSealResolvedTheme = 'dark', secondaryLabel?: string) {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -1361,14 +1643,14 @@ function labelSprite(label: string, color: string, theme: ShipSealResolvedTheme 
     context.font = '600 28px Inter, system-ui, sans-serif';
     context.textAlign = 'center';
     context.textBaseline = 'middle';
-    context.fillStyle = theme === 'light' ? 'rgba(255, 253, 248, 0.95)' : 'rgba(5, 9, 20, 0.66)';
-    roundRect(context, 34, secondaryLabel ? 22 : 36, 444, secondaryLabel ? 84 : 56, 24);
-    context.fill();
-    if (theme === 'light') {
-      context.strokeStyle = 'rgba(24, 56, 74, 0.22)';
-      context.lineWidth = 2;
-      context.stroke();
+    if (secondaryLabel) {
+      context.fillStyle = theme === 'light' ? 'rgba(250, 248, 255, 0.88)' : 'rgba(5, 9, 20, 0.72)';
+      roundRect(context, 34, 22, 444, 84, 24);
+      context.fill();
     }
+    context.lineWidth = theme === 'light' ? 9 : 8;
+    context.strokeStyle = theme === 'light' ? 'rgba(248, 251, 250, 0.94)' : 'rgba(2, 6, 15, 0.88)';
+    context.strokeText(label, 256, secondaryLabel ? 51 : 64, 400);
     context.fillStyle = color;
     context.fillText(label, 256, secondaryLabel ? 51 : 64, 400);
     if (secondaryLabel) {
@@ -1380,8 +1662,13 @@ function labelSprite(label: string, color: string, theme: ShipSealResolvedTheme 
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.minFilter = THREE.LinearFilter;
+  texture.colorSpace = THREE.SRGBColorSpace;
   const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false, opacity: 0 });
   return { sprite: new THREE.Sprite(material), material, texture };
+}
+
+function hexCss(value: number) {
+  return `#${value.toString(16).padStart(6, '0')}`;
 }
 
 function applyDeterministicLabelCollisions(
@@ -1391,9 +1678,10 @@ function applyDeterministicLabelCollisions(
   viewportHeight: number,
 ) {
   const accepted: Array<{ left: number; right: number; top: number; bottom: number }> = [];
-  const sorted = [...candidates].sort((first, second) => second.priority - first.priority || first.id.localeCompare(second.id));
-  for (const candidate of sorted) {
-    const projected = candidate.sprite.position.clone().project(camera);
+  const projected = new THREE.Vector3();
+  candidates.sort((first, second) => second.priority - first.priority || first.id.localeCompare(second.id));
+  for (const candidate of candidates) {
+    projected.copy(candidate.sprite.position).project(camera);
     if (projected.z < -1 || projected.z > 1) {
       candidate.sprite.visible = false;
       candidate.material.opacity = 0;

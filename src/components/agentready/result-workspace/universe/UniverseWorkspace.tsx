@@ -87,6 +87,7 @@ import {
 } from '@/lib/workspace';
 import { repositoryUniverseClusterLegend, repositoryUniverseFocusCameraState } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryVerificationNodeOverlayState, UniverseCameraState, UniverseProjectedNodePosition } from '@/components/agentready/RepositoryUniverse3D';
+import { RepositoryUniverseSemanticBadge } from '@/components/agentready/RepositoryUniverseSemanticBadge';
 import type { RepositoryIntelligenceReviewUiSession } from '@/components/agentready/RepositoryIntelligenceReviewPanel';
 import type { RepositoryIntelligenceProviderStatus, RepositoryIntelligenceVerificationBaseline, RepositoryIntelligenceVerificationResult } from '@/lib/repositoryIntelligence';
 import type { RepositoryFutureStageOverlay } from '../futures/futurePathwaysPresentation';
@@ -3647,6 +3648,7 @@ function UniverseInspector({
       <header className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
+            {node && <RepositoryUniverseSemanticBadge node={node} />}
             <Badge variant="outline" className={node?.evidenceType === 'evidence' ? 'border-primary/40 text-primary-glow' : 'border-border/60 text-muted-foreground'}>
               {isRepository ? 'Repository' : node ? evidenceStateLabel(node.evidenceType) : 'Entity'}
             </Badge>

@@ -180,6 +180,25 @@ describe('Repository Universe 3D labels', () => {
     expect(repositoryUniverseWheelCameraState({ ...camera, radius: 1500 }, 1000).radius).toBe(1500);
   });
 
+  it('bounds wheel acceleration and only shifts context toward an explicit zoom-in anchor', () => {
+    const camera = {
+      theta: 0.8,
+      phi: 1.12,
+      radius: 620,
+      target: { x: 0, y: 0, z: 0 },
+    };
+    const anchor = { x: 180, y: 40, z: -120 };
+    const anchoredIn = repositoryUniverseWheelCameraState(camera, -1200, false, anchor);
+    const cappedIn = repositoryUniverseWheelCameraState(camera, -140, false, anchor);
+    const anchoredOut = repositoryUniverseWheelCameraState(camera, 120, false, anchor);
+
+    expect(anchoredIn).toEqual(cappedIn);
+    expect(anchoredIn.target.x).toBeGreaterThan(camera.target.x);
+    expect(anchoredIn.target.y).toBeGreaterThan(camera.target.y);
+    expect(anchoredIn.target.z).toBeLessThan(camera.target.z);
+    expect(anchoredOut.target).toEqual(camera.target);
+  });
+
   it('offsets only the look direction for inspector-aware desktop and mobile framing', () => {
     const camera = {
       theta: 0.8,

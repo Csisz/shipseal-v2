@@ -1,4 +1,5 @@
 import type { RepositoryUniverseCluster, RepositoryUniverseNode, RepositoryUniversePosition } from './repositoryUniverse';
+import { repositoryUniverseSemanticStyle, type RepositoryUniverseSemanticStyle } from './repositoryUniverseSemantics';
 import type { ShipSealResolvedTheme } from '@/lib/theme';
 
 export interface RepositoryUniverseVisualToken {
@@ -14,6 +15,20 @@ export interface RepositoryUniverseCameraFrame {
   radius: number;
   target: RepositoryUniversePosition;
 }
+
+export type RepositoryUniverseSemanticZoomLevel = 'overview' | 'map' | 'detail' | 'evidence';
+
+export interface RepositoryUniverseSemanticVisibilityState {
+  showIcon: boolean;
+  showLabel: boolean;
+  nodeOpacityMultiplier: number;
+}
+
+const REPOSITORY_UNIVERSE_ZOOM_THRESHOLDS = {
+  overview: 720,
+  map: 430,
+  detail: 240,
+} as const;
 
 const REPOSITORY_UNIVERSE_LAYOUT_SPREAD_XZ = 0.96;
 const REPOSITORY_UNIVERSE_LAYOUT_SPREAD_Y = 0.78;
@@ -40,6 +55,11 @@ export const REPOSITORY_UNIVERSE_DARK_TOKENS = {
   repositoryEmissive: 0x0891b2,
   primaryEmissive: 0x2563eb,
   quietEmissive: 0x0b1224,
+  iconSurface: 0x07111f,
+  iconInk: 0xe6fdff,
+  iconBorder: 0x8be9ff,
+  landmarkInk: 0xeafcff,
+  landmarkSurface: 0x07101d,
   proposal: 0x9bdcf3,
   proposalSelected: 0xe0faff,
   starCool: 0xc2ecff,
@@ -81,6 +101,11 @@ export const REPOSITORY_UNIVERSE_DARK_TOKENS = {
   haloOpacityConnected: 0.15,
   haloPulseOpacity: 0.1,
   haloRoutePulseOpacity: 0.04,
+  landmarkOpacityOverview: 0.92,
+  landmarkOpacityMap: 0.68,
+  landmarkOpacityDetail: 0.18,
+  edgeOpacityOverview: 0.035,
+  edgeOpacityOverviewContains: 0.012,
 } as const;
 
 export const REPOSITORY_UNIVERSE_LIGHT_TOKENS = {
@@ -103,6 +128,11 @@ export const REPOSITORY_UNIVERSE_LIGHT_TOKENS = {
   repositoryEmissive: 0x0a5364,
   primaryEmissive: 0x1e4387,
   quietEmissive: 0xaab7bf,
+  iconSurface: 0xf9fbfa,
+  iconInk: 0x143948,
+  iconBorder: 0x176b7b,
+  landmarkInk: 0x18384a,
+  landmarkSurface: 0xf8faf9,
   proposal: 0x54327f,
   proposalSelected: 0x3f226d,
   starCool: 0x667d8d,
@@ -144,6 +174,11 @@ export const REPOSITORY_UNIVERSE_LIGHT_TOKENS = {
   haloOpacityConnected: 0.07,
   haloPulseOpacity: 0.025,
   haloRoutePulseOpacity: 0.02,
+  landmarkOpacityOverview: 0.96,
+  landmarkOpacityMap: 0.74,
+  landmarkOpacityDetail: 0.2,
+  edgeOpacityOverview: 0.09,
+  edgeOpacityOverviewContains: 0.035,
 } as const;
 
 export type RepositoryUniverseRendererTokens = typeof REPOSITORY_UNIVERSE_DARK_TOKENS | typeof REPOSITORY_UNIVERSE_LIGHT_TOKENS;
@@ -153,6 +188,90 @@ export const REPOSITORY_UNIVERSE_CINEMATIC_TOKENS = REPOSITORY_UNIVERSE_DARK_TOK
 
 export function repositoryUniverseRendererTokens(theme: ShipSealResolvedTheme): RepositoryUniverseRendererTokens {
   return theme === 'light' ? REPOSITORY_UNIVERSE_LIGHT_TOKENS : REPOSITORY_UNIVERSE_DARK_TOKENS;
+}
+
+export function repositoryUniverseSemanticZoomLevel(radius: number): RepositoryUniverseSemanticZoomLevel {
+  if (radius >= REPOSITORY_UNIVERSE_ZOOM_THRESHOLDS.overview) return 'overview';
+  if (radius >= REPOSITORY_UNIVERSE_ZOOM_THRESHOLDS.map) return 'map';
+  if (radius >= REPOSITORY_UNIVERSE_ZOOM_THRESHOLDS.detail) return 'detail';
+  return 'evidence';
+}
+
+export function repositoryUniverseSemanticVisibility(
+  node: Pick<RepositoryUniverseNode, 'kind' | 'evidenceType' | 'importance' | 'metadata'>,
+  state: {
+    zoomLevel: RepositoryUniverseSemanticZoomLevel;
+    selected?: boolean;
+    hovered?: boolean;
+    searched?: boolean;
+    route?: boolean;
+    connected?: boolean;
+    focused?: boolean;
+    hasSelection?: boolean;
+    reducedMotion?: boolean;
+  },
+): RepositoryUniverseSemanticVisibilityState {
+  const semantic = repositoryUniverseSemanticStyle(node);
+  const forced = Boolean(state.selected || state.hovered || state.searched || state.route);
+  const contextual = Boolean(state.connected || state.focused);
+  return {
+    showIcon: repositoryUniverseSemanticIconVisible(semantic, state.zoomLevel, forced, contextual),
+    showLabel: repositoryUniverseSemanticLabelVisible(semantic, state.zoomLevel, forced, contextual),
+    nodeOpacityMultiplier: repositoryUniverseSemanticOpacityMultiplier(semantic, state.zoomLevel, forced, contextual, Boolean(state.hasSelection)),
+  };
+}
+
+export function repositoryUniverseSemanticIconVisible(
+  semantic: RepositoryUniverseSemanticStyle,
+  zoomLevel: RepositoryUniverseSemanticZoomLevel,
+  forced: boolean,
+  contextual: boolean,
+) {
+  if (forced) return true;
+  const priority = semantic.emphasis === 'landmark' || semantic.emphasis === 'primary';
+  if (zoomLevel === 'overview') return priority;
+  if (zoomLevel === 'map') return priority || semantic.emphasis === 'supporting' || contextual;
+  if (zoomLevel === 'detail') return semantic.emphasis !== 'background' || contextual;
+  return true;
+}
+
+export function repositoryUniverseSemanticLabelVisible(
+  semantic: RepositoryUniverseSemanticStyle,
+  zoomLevel: RepositoryUniverseSemanticZoomLevel,
+  forced: boolean,
+  contextual: boolean,
+) {
+  if (forced) return true;
+  const priority = semantic.emphasis === 'landmark' || semantic.emphasis === 'primary';
+  if (zoomLevel === 'overview') return semantic.emphasis === 'landmark';
+  if (zoomLevel === 'map') return priority || (contextual && semantic.emphasis !== 'background');
+  if (zoomLevel === 'detail') return semantic.emphasis !== 'background' || contextual;
+  return true;
+}
+
+export function repositoryUniverseSemanticOpacityMultiplier(
+  semantic: RepositoryUniverseSemanticStyle,
+  zoomLevel: RepositoryUniverseSemanticZoomLevel,
+  forced: boolean,
+  contextual: boolean,
+  hasSelection: boolean,
+) {
+  if (forced) return 1;
+
+  if (zoomLevel === 'overview') return semantic.emphasis === 'background' ? 0.42 : semantic.emphasis === 'supporting' ? 0.66 : 1;
+  if (zoomLevel === 'map') return hasSelection && !contextual && semantic.emphasis === 'background' ? 0.5 : semantic.emphasis === 'background' ? 0.72 : 1;
+  if (zoomLevel === 'detail') return hasSelection && !contextual && semantic.emphasis === 'background' ? 0.58 : 1;
+  return hasSelection && !contextual && semantic.emphasis === 'background' ? 0.66 : 1;
+}
+
+export function repositoryUniverseLandmarkOpacity(
+  zoomLevel: RepositoryUniverseSemanticZoomLevel,
+  tokens: RepositoryUniverseRendererTokens,
+) {
+  if (zoomLevel === 'overview') return tokens.landmarkOpacityOverview;
+  if (zoomLevel === 'map') return tokens.landmarkOpacityMap;
+  if (zoomLevel === 'detail') return tokens.landmarkOpacityDetail;
+  return 0;
 }
 
 // Repository Universe visual grammar:
