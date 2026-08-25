@@ -108,14 +108,19 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
 
     expect(screen.getByRole('application', { name: /Neural Repository Futures canvas/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Current repository: shipseal' })).toHaveAttribute('data-neural-role', 'current');
+    expect(screen.getByRole('button', { name: 'Current repository: shipseal' })).toHaveAttribute('data-future-domain', 'architecture');
     const goal = screen.getByRole('button', { name: /Primary future goal: Guided repository futures/i });
     expect(goal).toHaveAttribute('data-future-depth', '3');
+    expect(goal).toHaveAttribute('data-future-domain', 'general');
+    expect(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i })).toHaveAttribute('data-future-domain', 'ai-agent');
+    expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-semantic-zoom');
     expect(screen.getByRole('button', { name: /Required dependency: Human review/i })).toBeInTheDocument();
     expect(container.querySelectorAll('[data-selected-route="true"]').length).toBeGreaterThan(0);
 
     fireEvent.click(goal);
     expect(value.onCandidateFocus).toHaveBeenCalledWith('goal:future');
     expect(value.onTracePin).toHaveBeenCalledWith('goal:future');
+    expect(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).toHaveTextContent('General opportunity');
     expect(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).toHaveTextContent('Proposed, not current');
     expect(goal).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Close neural inspector' }));
@@ -522,7 +527,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
       expect(support).toHaveStyle({ opacity: '0.82' });
     });
     expect(alternate).toHaveAttribute('data-corridor-level', 'unrelated');
-    expect(alternate).toHaveStyle({ opacity: '0.34' });
+    expect(alternate).toHaveStyle({ opacity: '0.58' });
     expect(alternateEvolution).toHaveAttribute('data-label-detail', 'compact');
 
     fireEvent.mouseEnter(alternate);

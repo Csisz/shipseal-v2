@@ -19,9 +19,11 @@ import {
   repositoryFuturesBounds,
   repositoryFuturesCameraLayout,
   repositoryFuturesLod,
+  repositoryFuturesSemanticZoomLevel,
   repositoryFuturesSafeInsets,
   repositoryFuturesSafeViewport,
   revealRepositoryFuturesTarget,
+  wheelRepositoryFuturesCamera,
   zoomRepositoryFuturesCamera,
 } from '@/components/agentready/result-workspace/futures/repositoryFuturesCamera';
 import type { RepositoryFutureStageOverlay } from '@/components/agentready/result-workspace/futures/futurePathwaysPresentation';
@@ -652,6 +654,20 @@ describe('Omega 18.5-V7.2 repository futures camera', () => {
     expect(repositoryFuturesLod(0.5)).toBe('far');
     expect(repositoryFuturesLod(0.9)).toBe('medium');
     expect(repositoryFuturesLod(1.2)).toBe('near');
+    expect(repositoryFuturesSemanticZoomLevel(0.5)).toBe('strategy');
+    expect(repositoryFuturesSemanticZoomLevel(0.8)).toBe('path');
+    expect(repositoryFuturesSemanticZoomLevel(1)).toBe('detail');
+    expect(repositoryFuturesSemanticZoomLevel(1.2)).toBe('implementation');
+  });
+
+  it('bounds wheel acceleration while preserving the requested visual anchor', () => {
+    const camera = { x: 120, y: 80, zoom: 0.8 };
+    const anchor = { x: 540, y: 320 };
+    const bounded = wheelRepositoryFuturesCamera(camera, -160, anchor);
+    const accelerated = wheelRepositoryFuturesCamera(camera, -1200, anchor);
+    expect(accelerated).toEqual(bounded);
+    expect((anchor.x - accelerated.x) / accelerated.zoom).toBeCloseTo((anchor.x - camera.x) / camera.zoom);
+    expect((anchor.y - accelerated.y) / accelerated.zoom).toBeCloseTo((anchor.y - camera.y) / camera.zoom);
   });
 
   it('uses responsive safe insets for desktop, tablet, and mobile inspector occlusion', () => {

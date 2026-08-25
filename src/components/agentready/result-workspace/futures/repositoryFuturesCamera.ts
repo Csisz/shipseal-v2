@@ -31,6 +31,7 @@ export interface RepositoryFuturesWorldBounds {
 }
 
 export type RepositoryFuturesCameraLayout = 'mobile' | 'tablet' | 'desktop';
+export type RepositoryFuturesSemanticZoomLevel = 'strategy' | 'path' | 'detail' | 'implementation';
 
 export const FUTURES_CAMERA_LIMITS = { minimum: 0.44, maximum: 1.45 } as const;
 
@@ -163,6 +164,15 @@ export function zoomRepositoryFuturesCamera(
   };
 }
 
+export function wheelRepositoryFuturesCamera(
+  camera: RepositoryFuturesCamera,
+  deltaY: number,
+  anchor: { x: number; y: number },
+): RepositoryFuturesCamera {
+  const boundedDelta = clamp(deltaY, -160, 160);
+  return zoomRepositoryFuturesCamera(camera, camera.zoom * Math.exp(-boundedDelta * 0.00135), anchor);
+}
+
 export function panRepositoryFuturesCamera(camera: RepositoryFuturesCamera, deltaX: number, deltaY: number) {
   return { ...camera, x: camera.x + deltaX, y: camera.y + deltaY };
 }
@@ -243,4 +253,11 @@ export function repositoryFuturesLod(zoom: number): 'far' | 'medium' | 'near' {
   if (zoom < 0.68) return 'far';
   if (zoom < 1.02) return 'medium';
   return 'near';
+}
+
+export function repositoryFuturesSemanticZoomLevel(zoom: number): RepositoryFuturesSemanticZoomLevel {
+  if (zoom < 0.68) return 'strategy';
+  if (zoom < 0.92) return 'path';
+  if (zoom < 1.18) return 'detail';
+  return 'implementation';
 }

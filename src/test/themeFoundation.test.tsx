@@ -125,7 +125,12 @@ describe('ShipSeal semantic theme foundation', () => {
     expect(css.match(/--futures-atmosphere:/g)).toHaveLength(2);
     expect(css.match(/--futures-node-surface:/g)).toHaveLength(2);
     expect(css.match(/--futures-node-border:/g)).toHaveLength(2);
+    expect(css.match(/--futures-domain-experience:/g)).toHaveLength(2);
+    expect(css.match(/--futures-domain-agent:/g)).toHaveLength(2);
+    expect(css.match(/--futures-domain-security:/g)).toHaveLength(2);
+    expect(css.match(/--futures-domain-general:/g)).toHaveLength(2);
     expect(css).toContain('.futures-neural-stage');
     expect(css).toContain('.future-field-node');
+    expect(css).toContain('.future-semantic-emblem');
   });
 });

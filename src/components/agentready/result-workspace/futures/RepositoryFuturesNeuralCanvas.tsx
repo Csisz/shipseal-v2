@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowDown, ArrowRight, Bookmark, Boxes, Check, FileOutput, Focus, GitBranch, LockKeyhole, Minus, Plus, Route, Sparkles, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowRight, Bookmark, Check, Focus, GitBranch, LockKeyhole, Minus, Plus, Route, ShieldCheck, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import type { RepositoryFutureStageOverlay } from './futurePathwaysPresentation';
 import {
@@ -17,13 +17,22 @@ import {
   panRepositoryFuturesCamera,
   repositoryFuturesBounds,
   repositoryFuturesLod,
+  repositoryFuturesSemanticZoomLevel,
   repositoryFuturesSafeInsets,
   repositoryFuturesSafeViewport,
   revealRepositoryFuturesTarget,
+  wheelRepositoryFuturesCamera,
   zoomRepositoryFuturesCamera,
   type RepositoryFuturesCamera,
 } from './repositoryFuturesCamera';
 import { resolveRepositoryFutureNodeActions, type RepositoryFutureNodeAction } from './repositoryFutureNodeActions';
+import { RepositoryFutureSemanticIcon } from './RepositoryFutureSemanticIcon';
+import {
+  repositoryFutureSemanticStyle,
+  repositoryFuturesSemanticLabelDetail,
+  type RepositoryFutureSemanticStyle,
+  type RepositoryFuturesSemanticLabelDetail,
+} from './repositoryFuturesSemantics';
 
 interface RepositoryFuturesNeuralCanvasProps {
   repositoryName: string;
@@ -32,7 +41,7 @@ interface RepositoryFuturesNeuralCanvasProps {
 
 const DEFAULT_VIEWPORT = { width: 1200, height: 680 };
 const nodeWidths = { repository: 184, candidate: 166, primary: 192, supporting: 178, saved: 156, blocked: 158, dependency: 92, evolution: 132, capability: 108, artifact: 96 } as const;
-type NodeLabelDetail = 'near' | 'title' | 'compact' | 'anchor';
+type NodeLabelDetail = RepositoryFuturesSemanticLabelDetail;
 type NodeCorridorLevel = 'repository' | 'primary' | 'supporting' | 'focused' | 'neighbor' | 'context' | 'unrelated';
 
 export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: RepositoryFuturesNeuralCanvasProps) {
@@ -52,6 +61,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>(() => mobile ? 'vertical' : 'horizontal');
   const model = useMemo(() => buildRepositoryFuturesCanvasModel(repositoryName, overlay, orientation), [orientation, overlay, repositoryName]);
   const nodeById = useMemo(() => new Map(model.nodes.map(node => [node.id, node])), [model.nodes]);
+  const semanticByNodeId = useMemo(() => new Map(model.nodes.map(node => [node.id, repositoryFutureSemanticStyle(node)])), [model.nodes]);
   const [camera, setCamera] = useState(() => fitRepositoryFuturesCamera(DEFAULT_VIEWPORT, model.world));
   const [hoveredId, setHoveredId] = useState<string>();
   const [pinnedId, setPinnedId] = useState<string>();
@@ -65,6 +75,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   const roleByGoalId = useMemo(() => new Map(overlay.candidates.map(candidate => [candidate.goalId, candidate.role])), [overlay.candidates]);
   const trace = useMemo(() => repositoryFuturesTrace(model, activeId), [activeId, model]);
   const lod = repositoryFuturesLod(camera.zoom);
+  const semanticZoom = repositoryFuturesSemanticZoomLevel(camera.zoom);
   const meaningfulBounds = useMemo(() => repositoryFuturesBounds(model.nodes.map(nodeCameraTarget))!, [model.nodes]);
   const selectedPlanNodeIds = useMemo(() => new Set(repositoryFuturesSelectedPlanNodes(model).map(node => node.id)), [model]);
   const selectedPlanNodes = useMemo(() => model.nodes.filter(node => selectedPlanNodeIds.has(node.id)), [model.nodes, selectedPlanNodeIds]);
@@ -114,6 +125,11 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
       cameraTransitionTimerRef.current = setTimeout(() => setCameraTransitioning(false), 220);
     }
   }, [reducedMotion]);
+
+  const cancelCameraTransition = useCallback(() => {
+    if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
+    setCameraTransitioning(false);
+  }, []);
 
   const constrainCamera = useCallback((next: RepositoryFuturesCamera, includeInspector = Boolean(pinnedId)) => (
     constrainRepositoryFuturesCamera(next, getViewport(), meaningfulBounds, getInsets(includeInspector))
@@ -258,9 +274,9 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   };
 
   const zoomAt = useCallback((factor: number, anchor: { x: number; y: number }) => {
-    setCameraTransitioning(false);
+    cancelCameraTransition();
     setCamera(current => constrainCamera(zoomRepositoryFuturesCamera(current, current.zoom * factor, anchor)));
-  }, [constrainCamera]);
+  }, [cancelCameraTransition, constrainCamera]);
 
   const zoomAtCenter = useCallback((factor: number) => {
     const viewport = getViewport();
@@ -275,15 +291,15 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
       event.preventDefault();
       event.stopPropagation();
       const bounds = stage.getBoundingClientRect();
-      setCameraTransitioning(false);
-      setCamera(current => constrainCamera(zoomRepositoryFuturesCamera(current, current.zoom * Math.exp(-event.deltaY * 0.0015), {
+      cancelCameraTransition();
+      setCamera(current => constrainCamera(wheelRepositoryFuturesCamera(current, event.deltaY, {
         x: event.clientX - bounds.left,
         y: event.clientY - bounds.top,
       })));
     };
     stage.addEventListener('wheel', handleWheel, { passive: false });
     return () => stage.removeEventListener('wheel', handleWheel);
-  }, [constrainCamera]);
+  }, [cancelCameraTransition, constrainCamera]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if ((event.target as Element).closest('[data-neural-node], [data-camera-control], [data-futures-mode-owner], [data-neural-inspector]')) return;
@@ -292,7 +308,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
     pointersRef.current.set(event.pointerId, { x: clientX, y: clientY });
     event.preventDefault();
     window.getSelection?.()?.removeAllRanges();
-    setCameraTransitioning(false);
+    cancelCameraTransition();
     setDragging(true);
     event.currentTarget.setPointerCapture?.(event.pointerId);
     dragRef.current = { x: clientX, y: clientY };
@@ -377,6 +393,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         data-camera-y={camera.y.toFixed(2)}
         data-camera-zoom={camera.zoom.toFixed(3)}
         data-camera-lod={lod}
+        data-semantic-zoom={semanticZoom}
         data-disclosure-mode={overlay.mode}
         data-mobile-disclosure={mobile ? 'focused-pan-and-zoom' : 'full-field'}
         data-future-orientation={model.orientation}
@@ -385,6 +402,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
         data-corridor-motion={reducedMotion ? 'static' : 'semantic-transition'}
         data-product-intelligence-state={overlay.productIntelligenceState}
         data-field-density="breathable-layered-neural"
+        data-visual-language="semantic-future-map"
         data-layout-strategy="stable-parent-local-branch-envelopes-with-bounded-relaxation"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
@@ -526,9 +544,9 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                     data-corridor-transition={edge.selected ? reducedMotion ? 'static' : 'semantic-emphasis' : undefined}
                     d={path}
                     fill="none"
-                    stroke={edge.selected ? 'hsl(var(--futures-selected))' : edge.kind === 'requirement' ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-structure))'}
-                    strokeWidth={edge.selected ? 8 : edge.kind === 'requirement' ? 5 : 3}
-                    opacity={Math.max(0.018, opacity * (edge.selected ? 0.13 : 0.08))}
+                    stroke={corridorLevel === 'primary' ? 'hsl(var(--futures-selected))' : edge.kind === 'requirement' || corridorLevel === 'supporting' ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-structure))'}
+                    strokeWidth={corridorLevel === 'primary' ? 8 : corridorLevel === 'supporting' ? 5.5 : edge.kind === 'requirement' ? 4.5 : 3}
+                    opacity={Math.max(0.018, opacity * (corridorLevel === 'primary' ? 0.14 : corridorLevel === 'supporting' ? 0.1 : 0.075))}
                     strokeLinecap="round"
                     className="future-canvas-edge-ambient motion-reduce:transition-none"
                   />
@@ -543,8 +561,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                     data-corridor-transition={edge.selected ? reducedMotion ? 'static' : 'semantic-emphasis' : undefined}
                     d={path}
                     fill="none"
-                    stroke={edge.selected ? 'url(#future-route)' : edge.kind === 'requirement' ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-structure))'}
-                    strokeWidth={edge.selected ? 2.7 : hoverTraced ? edge.kind === 'requirement' ? 2 : 1.55 : edge.kind === 'requirement' ? 1.7 : 1.25}
+                    stroke={corridorLevel === 'primary' ? 'url(#future-route)' : edge.kind === 'requirement' || corridorLevel === 'supporting' ? 'hsl(var(--futures-requirement))' : 'hsl(var(--futures-structure))'}
+                    strokeWidth={corridorLevel === 'primary' ? 2.8 : corridorLevel === 'supporting' ? 2 : hoverTraced ? edge.kind === 'requirement' ? 2 : 1.65 : edge.kind === 'requirement' ? 1.65 : 1.2}
                     strokeDasharray={edge.kind === 'grounding' && !edge.selected ? '4 7' : undefined}
                     opacity={opacity}
                     pathLength="1"
@@ -561,12 +579,13 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
             const traced = !activeId || trace.nodeIds.has(node.id);
             const focused = activeId === node.id;
             const corridorLevel = nodeCorridorLevel(node, activeId, trace.nodeIds, roleByGoalId);
-            const labelDetail = nodeLabelDetail(node, lod, {
+            const labelDetail = nodeLabelDetail(node, semanticZoom, {
               mode: overlay.mode,
               mobile,
               focused,
               corridorLevel,
             });
+            const semantic = semanticByNodeId.get(node.id)!;
             const disclosureDepth = nodeDisclosureDepth(node);
             const disclosureTier = disclosureDepth <= 1 ? 'A' : disclosureDepth === 2 ? 'B' : 'C';
             const showFullTitle = labelDetail === 'title' || labelDetail === 'near';
@@ -579,6 +598,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 data-neural-node={node.kind}
                 data-future-node-id={node.id}
                 data-neural-role={node.role}
+                data-future-domain={semantic.domain}
+                data-future-semantic-entity={semantic.entity}
                 data-enabler-position={node.kind === 'dependency' ? node.role === 'satisfied' ? 'upstream-existing' : 'downstream-required' : undefined}
                 data-future-depth={node.depth}
                 data-presentation-row={node.presentationRow?.index}
@@ -617,22 +638,36 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
                 }}
               >
                 {showFullTitle ? <>
-                  <span className={`flex items-center gap-1.5 font-mono uppercase tracking-[0.16em] opacity-75 ${node.kind === 'dependency' ? 'text-[7px]' : 'text-[8px]'}`}>{nodeIcon(node)}{nodeRoleLabel(node)}</span>
-                  <span className={`mt-1 block font-semibold ${node.kind === 'dependency' ? 'text-[10px] leading-[1.18]' : 'text-[13px] leading-[1.25]'}`}>{node.title}</span>
-                  {showMetadata && <span className="mt-1 block text-[9px] opacity-65">{nodeMetadata(node)}</span>}
+                  <span className="flex items-start gap-2">
+                    <span className="future-semantic-emblem grid size-8 shrink-0 place-items-center rounded-[0.7rem] border border-current/20 bg-background/45 shadow-sm">
+                      <RepositoryFutureSemanticIcon icon={semantic.icon} className="size-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className={`block font-mono uppercase tracking-[0.14em] opacity-80 ${node.kind === 'dependency' ? 'text-[7px]' : 'text-[8px]'}`}>{semantic.shortLabel}</span>
+                      <span className={`mt-1 block font-semibold ${node.kind === 'dependency' ? 'text-[10px] leading-[1.18]' : 'text-[13px] leading-[1.25]'}`}>{node.title}</span>
+                    </span>
+                  </span>
+                  <span className="mt-2 flex items-center gap-1.5 border-t border-current/10 pt-1.5 text-[8px] leading-none opacity-75">
+                    <span className="font-mono uppercase tracking-[0.11em]">{nodeRoleLabel(node)}</span>
+                    {showMetadata && <span className="truncate">· {nodeMetadata(node)}</span>}
+                  </span>
                 </> : showCompactTitle ? (
-                  <span className="block truncate px-0.5 text-center text-[10px] font-semibold leading-none">{node.title}</span>
-                ) : <span aria-hidden="true" className="block h-full w-full rounded-full bg-current opacity-75" />}
+                  <span className="flex items-center gap-1.5 px-0.5 text-[10px] font-semibold leading-none">
+                    <RepositoryFutureSemanticIcon icon={semantic.icon} className="size-3.5 shrink-0" />
+                    <span className="truncate">{node.title}</span>
+                  </span>
+                ) : <span aria-hidden="true" className="future-semantic-anchor grid size-full place-items-center"><RepositoryFutureSemanticIcon icon={semantic.icon} className="size-3" /></span>}
+                <NodeStateSignals node={node} />
               </button>
             );
           })}
         </div>
 
         {hoverNode && hoverPosition && (
-          <NodeHoverCard node={hoverNode} style={hoverPosition} />
+          <NodeHoverCard node={hoverNode} semantic={semanticByNodeId.get(hoverNode.id)!} style={hoverPosition} />
         )}
         {activeNode && (
-          <NeuralInspector inspectorRef={inspectorRef} node={activeNode} overlay={overlay} onClose={clearFocus} />
+          <NeuralInspector inspectorRef={inspectorRef} node={activeNode} semantic={semanticByNodeId.get(activeNode.id)!} overlay={overlay} onClose={clearFocus} />
         )}
         {overlay.notice && <div role="status" aria-live="polite" className="pointer-events-none absolute left-3 top-24 z-30 max-w-[calc(100%-1.5rem)] rounded-xl border border-primary/20 bg-background/85 px-3 py-2 text-xs text-foreground shadow-sm backdrop-blur-md md:bottom-20 md:left-5 md:top-auto md:max-w-sm">{overlay.notice}</div>}
       </div>
@@ -645,7 +680,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay }: Repos
   );
 }
 
-function NodeHoverCard({ node, style }: { node: RepositoryFuturesCanvasNode; style: React.CSSProperties }) {
+function NodeHoverCard({ node, semantic, style }: { node: RepositoryFuturesCanvasNode; semantic: RepositoryFutureSemanticStyle; style: React.CSSProperties }) {
   return (
     <div
       role="tooltip"
@@ -654,11 +689,13 @@ function NodeHoverCard({ node, style }: { node: RepositoryFuturesCanvasNode; sty
       className="future-neural-hover-card pointer-events-none absolute z-50 w-60 -translate-y-1/2 rounded-xl border border-primary/20 bg-background/[0.94] p-3 text-left shadow-[var(--shadow-floating-panel)] backdrop-blur-xl motion-reduce:animate-none"
       style={style}
     >
-      <div className="font-mono text-[9px] uppercase tracking-[0.16em] text-primary">{nodeRoleLabel(node)}</div>
-      <div className="mt-1 font-display text-sm font-semibold leading-tight text-foreground">{node.title}</div>
+      <div className="flex items-start gap-2.5">
+        <span data-future-domain={semantic.domain} className="future-semantic-emblem grid size-9 shrink-0 place-items-center rounded-xl border border-current/20 bg-background/55"><RepositoryFutureSemanticIcon icon={semantic.icon} /></span>
+        <div className="min-w-0"><div className="font-mono text-[9px] uppercase tracking-[0.14em] text-primary">{semantic.shortLabel}</div><div className="mt-1 font-display text-sm font-semibold leading-tight text-foreground">{node.title}</div></div>
+      </div>
       <div className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{nodeHoverSummary(node)}</div>
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-border/35 pt-2 font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
-        <span>{nodeMetadata(node)}</span><span>Click to inspect</span>
+        <span>{nodeRoleLabel(node)} · {nodeMetadata(node)}</span><span>Click to inspect</span>
       </div>
     </div>
   );
@@ -668,7 +705,7 @@ function CameraButton({ label, onClick, children, disabled = false, disabledDesc
   return <button type="button" aria-label={label} title={disabled ? disabledDescription : label} disabled={disabled} onClick={event => { event.stopPropagation(); onClick(); }} className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground hover:bg-primary/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-muted-foreground">{children && <span className="[&>svg]:h-4 [&>svg]:w-4">{children}</span>}</button>;
 }
 
-function NeuralInspector({ inspectorRef, node, overlay, onClose }: { inspectorRef: React.RefObject<HTMLElement>; node: RepositoryFuturesCanvasNode; overlay: RepositoryFutureStageOverlay; onClose: () => void }) {
+function NeuralInspector({ inspectorRef, node, semantic, overlay, onClose }: { inspectorRef: React.RefObject<HTMLElement>; node: RepositoryFuturesCanvasNode; semantic: RepositoryFutureSemanticStyle; overlay: RepositoryFutureStageOverlay; onClose: () => void }) {
   const candidate = node.candidate;
   const dependency = node.dependency;
   const [replacementOpen, setReplacementOpen] = useState(false);
@@ -688,9 +725,12 @@ function NeuralInspector({ inspectorRef, node, overlay, onClose }: { inspectorRe
     if (action.id === 'replace-support') setReplacementOpen(true);
   };
   return (
-    <aside ref={inspectorRef} data-neural-inspector data-testid="neural-futures-inspector" aria-label="Neural Futures inspector" className="absolute inset-x-3 bottom-3 z-40 max-h-[52%] overflow-y-auto rounded-t-[1.35rem] border border-primary/20 bg-background/[0.94] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl md:inset-x-auto md:bottom-5 md:right-5 md:max-h-[calc(100%-6.5rem)] md:w-72 md:rounded-[1.15rem] lg:w-[19rem]">
+    <aside ref={inspectorRef} data-neural-inspector data-testid="neural-futures-inspector" data-future-domain={semantic.domain} aria-label="Neural Futures inspector" className="absolute inset-x-3 bottom-3 z-40 max-h-[52%] overflow-y-auto rounded-t-[1.35rem] border border-primary/25 bg-background/[0.96] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl md:inset-x-auto md:bottom-5 md:right-5 md:max-h-[calc(100%-6.5rem)] md:w-72 md:rounded-[1.15rem] lg:w-[19rem]">
       <div className="flex items-start justify-between gap-3">
-        <div><div className="font-mono text-[9px] uppercase tracking-[0.16em] text-primary">{nodeRoleLabel(node)}</div><h4 className="mt-1 font-display text-lg font-semibold leading-tight">{node.title}</h4></div>
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="future-semantic-emblem grid size-10 shrink-0 place-items-center rounded-xl border border-current/20 bg-background/55"><RepositoryFutureSemanticIcon icon={semantic.icon} className="size-5" /></span>
+          <div className="min-w-0"><div className="font-mono text-[9px] uppercase tracking-[0.14em] text-primary">{semantic.shortLabel}</div><h4 className="mt-1 font-display text-lg font-semibold leading-tight">{node.title}</h4><div className="mt-1 flex flex-wrap gap-1.5 text-[9px] text-muted-foreground"><span>{nodeRoleLabel(node)}</span><span>· {nodeLayerLabel(node)}</span></div></div>
+        </div>
         <button type="button" aria-label="Close neural inspector" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-border/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><X className="h-4 w-4" /></button>
       </div>
       {candidate && <>
@@ -784,6 +824,15 @@ function nodeMetadata(node: RepositoryFuturesCanvasNode) {
   return `${node.dependency?.dependentCount || 0} dependent ${node.dependency?.dependentCount === 1 ? 'goal' : 'goals'}`;
 }
 
+function nodeLayerLabel(node: RepositoryFuturesCanvasNode) {
+  if (node.kind === 'repository') return 'Current state';
+  if (node.kind === 'goal') return `Future depth ${node.depth}`;
+  if (node.kind === 'evolution') return `Generation ${node.depth}`;
+  if (node.kind === 'capability') return 'Capability layer';
+  if (node.kind === 'artifact') return 'Implementation layer';
+  return 'Prerequisite layer';
+}
+
 function nodeHoverSummary(node: RepositoryFuturesCanvasNode) {
   if (node.kind === 'repository') return 'Current scanned repository truth anchoring every proposed direction.';
   if (node.kind === 'dependency') return node.dependency?.rationale || 'A smaller enabling condition required by the connected selected route.';
@@ -793,16 +842,18 @@ function nodeHoverSummary(node: RepositoryFuturesCanvasNode) {
   return node.candidate?.userValue || node.candidate?.rationale || 'A proposed repository-grounded product direction.';
 }
 
-function nodeIcon(node: RepositoryFuturesCanvasNode) {
-  if (node.kind === 'repository') return <GitBranch className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (node.kind === 'dependency') return node.role === 'satisfied' ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (node.kind === 'evolution') return <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (node.kind === 'capability') return <Boxes className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (node.kind === 'artifact') return <FileOutput className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (node.role === 'saved') return <Bookmark className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (node.candidate && ['blocked', 'incompatible'].includes(node.candidate.compatibility)) return <LockKeyhole className="h-3.5 w-3.5" aria-hidden="true" />;
-  if (node.candidate?.compatibility === 'compatible-with-review') return <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />;
-  return <Route className="h-3.5 w-3.5" aria-hidden="true" />;
+function NodeStateSignals({ node }: { node: RepositoryFuturesCanvasNode }) {
+  const saved = node.role === 'saved';
+  const blocked = node.role === 'blocked' || Boolean(node.candidate && ['blocked', 'incompatible'].includes(node.candidate.compatibility));
+  const review = Boolean(node.candidate?.humanReviewRequired || node.dependency?.humanReviewRequired);
+  if (!saved && !blocked && !review) return null;
+  return (
+    <span aria-hidden="true" className="absolute -right-1.5 -top-1.5 flex gap-1">
+      {saved && <span className="grid size-5 place-items-center rounded-full border border-border bg-background text-muted-foreground shadow-sm"><Bookmark className="size-3" /></span>}
+      {blocked && <span className="grid size-5 place-items-center rounded-full border border-border bg-background text-muted-foreground shadow-sm"><LockKeyhole className="size-3" /></span>}
+      {review && !blocked && <span className="grid size-5 place-items-center rounded-full border border-warning/35 bg-background text-warning shadow-sm"><ShieldCheck className="size-3" /></span>}
+    </span>
+  );
 }
 
 function nodeWidth(node: RepositoryFuturesCanvasNode) {
@@ -844,13 +895,12 @@ function nodeCameraTarget(node: RepositoryFuturesCanvasNode) {
 }
 
 function nodeGeometry(node: RepositoryFuturesCanvasNode) {
-  if (node.kind === 'repository') return 'rounded-full border';
-  if (node.kind === 'dependency') return 'rounded-full border';
-  if (node.kind === 'capability') return 'rounded-full border';
-  if (node.kind === 'artifact') return 'rounded-full border';
-  if (node.role === 'primary') return 'rounded-full border-2';
-  if (node.role === 'saved' || node.role === 'blocked') return 'rounded-full border';
-  return 'rounded-full border';
+  if (node.kind === 'repository') return 'rounded-[1.35rem] border';
+  if (node.kind === 'dependency') return 'rounded-xl border';
+  if (node.kind === 'capability' || node.kind === 'artifact') return 'rounded-xl border';
+  if (node.kind === 'evolution') return 'rounded-[0.9rem] border';
+  if (node.role === 'primary') return 'rounded-[1.2rem] border-2';
+  return 'rounded-[1.1rem] border';
 }
 
 function nodeClass(node: RepositoryFuturesCanvasNode, pinned: boolean) {
@@ -896,7 +946,7 @@ function nodeSizeClass(node: RepositoryFuturesCanvasNode, mobile: boolean, detai
 
 function nodeLabelDetail(
   node: RepositoryFuturesCanvasNode,
-  lod: ReturnType<typeof repositoryFuturesLod>,
+  semanticZoom: ReturnType<typeof repositoryFuturesSemanticZoomLevel>,
   context: {
     mode: RepositoryFutureStageOverlay['mode'];
     mobile: boolean;
@@ -904,32 +954,20 @@ function nodeLabelDetail(
     corridorLevel: NodeCorridorLevel;
   },
 ): NodeLabelDetail {
-  if (node.kind === 'repository') return 'near';
   const activeCorridor = ['primary', 'supporting', 'focused', 'neighbor'].includes(context.corridorLevel);
-  if (context.focused) return lod === 'near' ? 'near' : 'title';
-  if (node.kind === 'goal') return lod === 'near' ? 'near' : 'title';
-
-  if (context.mode === 'deep') {
-    if (lod === 'near') return 'near';
-    if (lod === 'medium') return node.depth === 3 ? 'title' : node.kind === 'dependency' ? 'compact' : 'title';
-    if (node.kind === 'evolution' && node.depth === 3) return 'compact';
-    return 'compact';
-  }
-
-  if (context.mobile) {
-    if (node.depth === 3) return activeCorridor && lod !== 'far' ? 'compact' : 'anchor';
-    if (!activeCorridor) return lod === 'near' ? 'compact' : 'anchor';
-    return lod === 'near' ? 'title' : 'compact';
-  }
-
-  if (node.depth === 3) {
-    if (!activeCorridor) return lod === 'near' ? 'compact' : 'anchor';
-    if (lod === 'near') return 'title';
-    return lod === 'medium' ? 'title' : 'compact';
-  }
-  if (node.kind === 'dependency') return activeCorridor ? lod === 'near' ? 'title' : 'compact' : 'anchor';
-  if (!activeCorridor) return lod === 'near' ? 'title' : 'compact';
-  return lod === 'near' ? 'near' : lod === 'medium' ? 'title' : 'compact';
+  const detail = repositoryFuturesSemanticLabelDetail({
+    kind: node.kind,
+    depth: nodeDisclosureDepth(node),
+    zoom: semanticZoom,
+    mode: context.mode,
+    selected: node.selected || node.role === 'primary' || node.role === 'supporting',
+    traced: activeCorridor,
+    focused: context.focused,
+  });
+  if (!context.mobile) return detail;
+  if (node.kind === 'goal' || node.kind === 'repository') return detail;
+  if (detail === 'near') return 'title';
+  return detail;
 }
 
 function nodeCorridorLevel(
@@ -980,8 +1018,8 @@ function nodeOpacity(level: NodeCorridorLevel, depth: RepositoryFuturesCanvasNod
   if (level === 'focused') return 0.96;
   if (level === 'neighbor') return mode === 'quick' ? 0.72 : 0.86;
   if (level === 'unrelated') {
-    if (mode === 'deep') return depth === 3 ? 0.48 : 0.58;
-    return depth === 1 ? 0.34 : depth === 2 ? 0.26 : 0.22;
+    if (mode === 'deep') return depth === 1 ? 0.7 : depth === 3 ? 0.48 : 0.6;
+    return depth === 1 ? 0.58 : depth === 2 ? 0.28 : 0.2;
   }
   if (depth === 1) return 0.94;
   if (mode === 'deep') return depth === 2 ? 0.78 : 0.62;

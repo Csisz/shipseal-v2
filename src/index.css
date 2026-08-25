@@ -145,6 +145,18 @@
     --futures-atmosphere: 252 62% 56%;
     --futures-node-surface: 42 48% 99%;
     --futures-node-border: 216 28% 55%;
+    --futures-domain-experience: 213 68% 40%;
+    --futures-domain-agent: 263 62% 48%;
+    --futures-domain-automation: 190 70% 31%;
+    --futures-domain-security: 155 55% 31%;
+    --futures-domain-data: 224 62% 43%;
+    --futures-domain-growth: 326 54% 43%;
+    --futures-domain-knowledge: 37 70% 36%;
+    --futures-domain-delivery: 20 72% 40%;
+    --futures-domain-collaboration: 276 54% 45%;
+    --futures-domain-quality: 169 58% 31%;
+    --futures-domain-architecture: 205 55% 35%;
+    --futures-domain-general: 218 18% 40%;
     --graph-background: 206 25% 89%;
     --graph-fog: 204 20% 92%;
     --graph-starfield: 210 28% 45%;
@@ -265,6 +277,18 @@
     --futures-atmosphere: 258 74% 64%;
     --futures-node-surface: 228 38% 7%;
     --futures-node-border: 220 22% 42%;
+    --futures-domain-experience: 211 88% 72%;
+    --futures-domain-agent: 266 86% 76%;
+    --futures-domain-automation: 187 78% 61%;
+    --futures-domain-security: 151 68% 60%;
+    --futures-domain-data: 220 86% 72%;
+    --futures-domain-growth: 326 76% 72%;
+    --futures-domain-knowledge: 40 84% 67%;
+    --futures-domain-delivery: 24 84% 68%;
+    --futures-domain-collaboration: 280 72% 74%;
+    --futures-domain-quality: 165 72% 60%;
+    --futures-domain-architecture: 201 75% 68%;
+    --futures-domain-general: 218 24% 70%;
     --graph-background: 230 76% 1.5%;
     --graph-fog: 228 70% 2%;
     --graph-starfield: 205 90% 88%;
@@ -662,8 +686,41 @@
   -webkit-user-select: none;
   background-image:
     radial-gradient(circle at 18% 24%, hsl(var(--futures-atmosphere) / 0.1), transparent 42%),
-    linear-gradient(145deg, hsl(var(--futures-node-surface) / 0.68), hsl(var(--futures-field-surface) / 0.2));
+    linear-gradient(145deg, hsl(var(--futures-node-surface) / 0.94), hsl(var(--futures-field-surface) / 0.72));
+  box-shadow: 0 8px 24px hsl(var(--foreground) / 0.045), inset 0 1px 0 hsl(var(--background) / 0.7);
   backdrop-filter: blur(7px);
+}
+
+.future-semantic-emblem {
+  color: hsl(var(--futures-domain-general));
+}
+
+[data-future-domain='experience'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='experience'] { color: hsl(var(--futures-domain-experience)); }
+[data-future-domain='ai-agent'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='ai-agent'] { color: hsl(var(--futures-domain-agent)); }
+[data-future-domain='automation'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='automation'] { color: hsl(var(--futures-domain-automation)); }
+[data-future-domain='security'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='security'] { color: hsl(var(--futures-domain-security)); }
+[data-future-domain='data'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='data'] { color: hsl(var(--futures-domain-data)); }
+[data-future-domain='growth'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='growth'] { color: hsl(var(--futures-domain-growth)); }
+[data-future-domain='knowledge'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='knowledge'] { color: hsl(var(--futures-domain-knowledge)); }
+[data-future-domain='delivery'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='delivery'] { color: hsl(var(--futures-domain-delivery)); }
+[data-future-domain='collaboration'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='collaboration'] { color: hsl(var(--futures-domain-collaboration)); }
+[data-future-domain='quality'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='quality'] { color: hsl(var(--futures-domain-quality)); }
+[data-future-domain='architecture'] .future-semantic-emblem,
+.future-semantic-emblem[data-future-domain='architecture'] { color: hsl(var(--futures-domain-architecture)); }
+
+.future-semantic-anchor {
+  color: inherit;
+  background: hsl(var(--futures-node-surface) / 0.92);
 }
 
 .futures-neural-stage {
@@ -719,6 +776,16 @@
   clip-path: polygon(8% 50%, 18% 10%, 82% 10%, 92% 50%, 82% 90%, 18% 90%);
   background-image: linear-gradient(145deg, hsl(var(--futures-requirement) / 0.09), hsl(var(--futures-node-surface) / 0.5));
   backdrop-filter: blur(6px);
+}
+
+.future-field-node[data-neural-node='goal'] {
+  border-color: hsl(var(--futures-node-border) / 0.62);
+}
+
+.future-field-node[data-neural-node='goal'][data-neural-role='candidate'] {
+  background-image:
+    radial-gradient(circle at 13% 22%, hsl(var(--futures-atmosphere) / 0.075), transparent 28%),
+    linear-gradient(145deg, hsl(var(--futures-node-surface) / 0.98), hsl(var(--futures-field-surface) / 0.78));
 }
 
 .future-field-node[data-neural-node='evolution'][data-future-depth='2'],
