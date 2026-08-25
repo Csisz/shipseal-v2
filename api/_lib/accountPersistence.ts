@@ -423,6 +423,8 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
     return this.sql.begin(async transaction => {
       const rows = await transaction<Record<string, unknown>[]>`select id from shipseal_users where id = ${userId} and deleted_at is null for update`;
       if (!rows[0]) return false;
+      await transaction`delete from shipseal_ai_operations where owner_user_id = ${userId}`;
+      await transaction`delete from shipseal_entitlements where user_id = ${userId}`;
       await transaction`delete from shipseal_projects where owner_user_id = ${userId}`;
       await transaction`delete from shipseal_sessions where user_id = ${userId}`;
       await transaction`update shipseal_users set email = null, display_name = null, avatar_url = null, provider_subject = 'deleted:' || id, deleted_at = now(), updated_at = now() where id = ${userId}`;

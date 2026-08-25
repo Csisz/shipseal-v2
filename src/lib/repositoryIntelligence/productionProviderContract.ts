@@ -1,6 +1,7 @@
 import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
 import type { RepositoryDeepIntelligenceValidatedResult } from './deepIntelligenceSchema.js';
 import type { RepositoryRateLimitType } from './rateLimitPolicy.js';
+import type { AiUsageDenialCategory } from '../entitlements/contract.js';
 import type {
   RepositoryProductOpportunityRejectionReason,
   RepositoryProductUnderstandingRejectionReason,
@@ -280,7 +281,8 @@ export type RepositoryIntelligenceProviderFailureCategory =
   | 'budget_exceeded'
   | 'redaction_failed'
   | 'configuration_invalid'
-  | 'unknown_provider_error';
+  | 'unknown_provider_error'
+  | AiUsageDenialCategory;
 
 export type RepositoryIntelligenceProviderStatus =
   | { state: 'deterministic'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false }
@@ -336,6 +338,14 @@ export function repositoryFutureFailureMessage(
   category: RepositoryIntelligenceProviderFailureCategory,
   diagnostics?: RepositoryIntelligenceSafeDiagnostics,
 ) {
+  if (category === 'authentication_required') return 'Sign in to start full Repository Futures. Project Universe remains available.';
+  if (category === 'upgrade_required') return 'Full Repository Futures is a paid AI feature. Project Universe and deterministic intelligence remain available.';
+  if (category === 'allowance_exhausted') return 'Your current Deep Analysis allowance has been used. Existing saved and cached results remain available.';
+  if (category === 'entitlement_inactive') return 'Your Repository Futures entitlement is not active. Existing deterministic results remain available.';
+  if (category === 'global_ai_budget_exhausted' || category === 'global_ai_capacity_reached' || category === 'usage_temporarily_unavailable') {
+    return 'ShipSeal AI capacity is temporarily unavailable. This is not an account billing issue; try again later.';
+  }
+  if (category === 'operation_conflict') return 'This Future analysis is already running or cannot be safely repeated. Try again shortly.';
   const operational = diagnostics?.operationalFailureCategory;
   if (operational === 'provider_timeout' || operational === 'browser_timeout' || category === 'request_timeout') {
     return 'Future analysis took longer than expected.';

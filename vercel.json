@@ -6,7 +6,7 @@
   "devCommand": "vite --host 0.0.0.0 --port $PORT",
   "rewrites": [
     {
-      "source": "/api/account/:route(login|callback|session|logout|delete)",
+      "source": "/api/account/:route(login|callback|session|logout|delete|usage)",
       "destination": "/api/account-router?route=:route"
     },
     {

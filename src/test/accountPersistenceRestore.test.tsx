@@ -15,6 +15,13 @@ import SavedScan from '@/pages/SavedScan';
 const user = { id: `usr_${'r'.repeat(24)}`, email: null, displayName: 'Restore User', avatarUrl: null };
 const projectId = `prj_${'p'.repeat(24)}`;
 const scanId = `scn_${'s'.repeat(24)}`;
+const usage = {
+  plan: 'free', entitlementStatus: 'active',
+  deepAnalysis: {
+    limit: 0, used: 0, reserved: 0, remaining: 0,
+    periodStart: '2026-07-01T00:00:00.000Z', periodEnd: '2026-08-01T00:00:00.000Z',
+  },
+};
 
 function json(body: unknown, status = 200) { return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })); }
 
@@ -32,6 +39,7 @@ describe('Omega 18.1 saved scan restoration', () => {
     const fetcher = vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url === '/api/account/session') return json({ user });
+      if (url === '/api/account/usage') return json(usage);
       if (url === `/api/scans/${scanId}`) return json({ scan, snapshot });
       return json({ error: { code: 'not_found', message: 'not found' } }, 404);
     });
@@ -40,7 +48,8 @@ describe('Omega 18.1 saved scan restoration', () => {
     expect(await screen.findByTestId('restored-result')).toHaveTextContent(`Restored ${snapshot.report.repoName}`);
     expect(screen.getByText(/Opened without rescanning, provider execution, or GitHub mutation/i)).toBeInTheDocument();
     const urls = fetcher.mock.calls.map(call => String(call[0]));
-    expect(urls).toEqual(['/api/account/session', `/api/scans/${scanId}`]);
+    expect(urls).toHaveLength(3);
+    expect(urls).toEqual(expect.arrayContaining(['/api/account/session', '/api/account/usage', `/api/scans/${scanId}`]));
     expect(urls.join('\n')).not.toMatch(/repository-intelligence|github-app|archive|scan\/start/);
   });
 

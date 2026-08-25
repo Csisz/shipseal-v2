@@ -23,8 +23,18 @@ const failureStatus: RepositoryIntelligenceProviderStatus = {
   },
 };
 
+const capacityStatus: RepositoryIntelligenceProviderStatus = {
+  state: 'fallback',
+  deepState: 'failed',
+  message: 'ShipSeal AI capacity is temporarily unavailable. This is not an account billing issue; try again later.',
+  retryable: true,
+  category: 'global_ai_capacity_reached',
+  diagnostics: { costEstimate: 'unavailable', failureBoundary: 'provider-http' },
+};
+
 export default function RepositoryFutureRecoveryQa() {
-  const [status, setStatus] = useState<RepositoryIntelligenceProviderStatus>(failureStatus);
+  const [status, setStatus] = useState<RepositoryIntelligenceProviderStatus>(() =>
+    new URLSearchParams(window.location.search).get('omega19State') === 'capacity' ? capacityStatus : failureStatus);
   const [retryCount, setRetryCount] = useState(0);
   const isReady = status.state === 'enhanced';
 

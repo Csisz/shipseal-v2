@@ -5,6 +5,7 @@ import type {
   RepositoryDeepIntelligenceResultPolicyOverride,
   RepositoryDeepIntelligenceValidatedResult,
 } from './deepIntelligenceSchema.js';
+import type { AiUsageDenialCategory } from '../entitlements/contract.js';
 
 export interface RepositoryDeepIntelligenceCapabilities {
   supported: RepositoryDeepIntelligenceCapability[];
@@ -30,7 +31,8 @@ export type RepositoryDeepIntelligenceProviderErrorCode =
   | 'expansion_duplicate_identity_failed'
   | 'invalid_response'
   | 'response_too_large'
-  | 'unknown_provider_error';
+  | 'unknown_provider_error'
+  | AiUsageDenialCategory;
 
 export type RepositoryDeepIntelligenceProviderFailureStage =
   | 'request-preflight'

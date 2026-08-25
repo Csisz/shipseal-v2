@@ -33,6 +33,7 @@ import {
   containsRepositoryProviderSecret,
   providerBoundRepositoryFreeText,
 } from './repositoryDeepIntelligenceSafety.js';
+import { AiUsageDeniedError } from './aiUsage.js';
 import { buildProductStrategistProviderPayload, buildProductStrategistRootProviderPayload } from './repositoryProductStrategistPayload.js';
 import {
   PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION,
@@ -532,6 +533,9 @@ export class OpenAiCompatibleRepositoryDeepIntelligenceProvider implements Repos
         });
         return normalized;
       } catch (error) {
+        if (error instanceof AiUsageDeniedError) {
+          throw new RepositoryDeepIntelligenceProviderError(error.category, error.message, error.retryable, 'provider-http');
+        }
         if (this.options.productStage?.kind === 'expansion' && error instanceof ProductStrategistExpansionValidationError) {
           if (error.category === 'language' && !languageRepairAttempted) {
             languageRepairAttempted = true;

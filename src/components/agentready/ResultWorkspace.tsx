@@ -223,6 +223,9 @@ export function ResultWorkspace({
     || repositoryProductIntelligenceStatus.state === 'enhanced' && Boolean(repositoryProductIntelligence?.opportunities.length);
   const futureTerminalFailure = Boolean(repositoryProductIntelligenceStatus
     && ['fallback', 'cancelled'].includes(repositoryProductIntelligenceStatus.state));
+  const futuresCanRetry = repositoryProductIntelligenceStatus?.state === 'fallback'
+    ? repositoryProductIntelligenceStatus.retryable
+    : repositoryProductIntelligenceStatus?.state === 'cancelled';
 
   useEffect(() => {
     if (futureTerminalFailure) setFutureDegradedAccess(true);
@@ -256,7 +259,7 @@ export function ResultWorkspace({
         opportunityCount={repositoryProductIntelligence?.opportunities.length || 0}
         futuresAvailable={futuresReady}
         futuresStatus={repositoryProductIntelligenceStatus}
-        onRetryFutures={retryRepositoryProductIntelligence ? () => { void retryRepositoryProductIntelligence(); } : undefined}
+        onRetryFutures={retryRepositoryProductIntelligence && futuresCanRetry ? () => { void retryRepositoryProductIntelligence(); } : undefined}
         onSelect={handleEntryViewSelect}
       />
     );

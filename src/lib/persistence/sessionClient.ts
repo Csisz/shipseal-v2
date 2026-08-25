@@ -1,4 +1,5 @@
 import type { PersistedUser, PersistenceApiErrorCode } from './schema';
+import { isAccountAiUsageSummary, type AccountAiUsageSummary } from '../entitlements/contract';
 
 function isUser(value: unknown): value is PersistedUser {
   if (!value || typeof value !== 'object') return false;
@@ -27,4 +28,10 @@ export async function getCurrentUserSession(): Promise<PersistedUser | null> {
 
 export async function logoutCurrentUserSession() {
   await sessionRequest('/api/account/logout', { method: 'POST', body: '{}' });
+}
+
+export async function getCurrentUserAiUsage(): Promise<AccountAiUsageSummary> {
+  const body = await sessionRequest('/api/account/usage');
+  if (!isAccountAiUsageSummary(body)) throw new Error('invalid_usage_response');
+  return body;
 }

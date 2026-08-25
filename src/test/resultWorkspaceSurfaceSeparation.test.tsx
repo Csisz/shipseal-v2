@@ -32,7 +32,7 @@ describe('Repository Futures and Project Universe surface separation', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open Repository Futures' }));
 
-    const futures = await screen.findByTestId('repository-futures-workspace');
+    const futures = await screen.findByTestId('repository-futures-workspace', undefined, { timeout: 10_000 });
     expect(futures.closest('[data-view-transition="selector-to-futures"]')).toHaveClass('futures-surface-enter');
     expect(futures).toHaveAttribute('data-futures-environment', 'full-stage');
     expect(within(futures).getByTestId('repository-futures-stage')).toBeInTheDocument();

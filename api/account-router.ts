@@ -11,6 +11,7 @@ const loaders: Readonly<Record<string, () => Promise<AccountModule>>> = {
   login: () => import('./_routes/account/login.js'),
   logout: () => import('./_routes/account/logout.js'),
   session: () => import('./_routes/account/session.js'),
+  usage: () => import('./_routes/account/usage.js'),
 };
 
 export default async function handler(req: RoutedRequest, res: ServerResponse) {

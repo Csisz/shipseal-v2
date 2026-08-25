@@ -52,6 +52,21 @@ const scan: PersistedScanSummary = {
 let savedSnapshot: unknown;
 let failNextSave = true;
 const originalFetch = window.fetch.bind(window);
+const usageState = new URLSearchParams(window.location.search).get('omega19Usage') || 'available';
+const usage = usageState === 'free'
+  ? {
+    plan: 'free', entitlementStatus: 'active', capabilities: { repositoryFutures: false, executableFuturePlan: true },
+    deepAnalysis: { limit: 0, used: 0, reserved: 0, remaining: 0, periodStart: '2026-08-01T00:00:00.000Z', periodEnd: '2026-09-01T00:00:00.000Z' },
+  }
+  : usageState === 'exhausted'
+    ? {
+      plan: 'pro', entitlementStatus: 'active', capabilities: { repositoryFutures: true, executableFuturePlan: true },
+      deepAnalysis: { limit: 4, used: 4, reserved: 0, remaining: 0, periodStart: '2026-08-01T00:00:00.000Z', periodEnd: '2026-09-01T00:00:00.000Z' },
+    }
+    : {
+      plan: 'pro', entitlementStatus: 'active', capabilities: { repositoryFutures: true, executableFuturePlan: true },
+      deepAnalysis: { limit: 10, used: 3, reserved: 1, remaining: 6, periodStart: '2026-08-01T00:00:00.000Z', periodEnd: '2026-09-01T00:00:00.000Z' },
+    };
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), {
   status,
   headers: { 'Content-Type': 'application/json' },
@@ -62,6 +77,7 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   const path = url.startsWith(window.location.origin) ? new URL(url).pathname + new URL(url).search : url;
   const method = init.method || 'GET';
   if (path === '/api/account/session') return json({ user });
+  if (path === '/api/account/usage') return json(usage);
   if (path === '/api/projects' && method === 'POST') {
     if (failNextSave) {
       failNextSave = false;
@@ -77,4 +93,3 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   if (method === 'DELETE' || (path === '/api/account/delete' && method === 'POST')) return json({ ok: true });
   return originalFetch(input, init);
 };
-

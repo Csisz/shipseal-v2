@@ -476,8 +476,10 @@ async function performRequest(
 
 async function validateResponse(response: Response): Promise<RepositoryIntelligenceProviderApiResponse> {
   const payload = await response.json().catch(() => null) as Partial<RepositoryIntelligenceProviderApiResponse> | null;
-  if (!response.ok || !payload || payload.version !== REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION
-    || !['enhanced', 'stage-enhanced', 'fallback'].includes(payload.state || '')) {
+  const validShipSealPayload = payload?.version === REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION
+    && ['enhanced', 'stage-enhanced', 'fallback'].includes(payload.state || '');
+  if (validShipSealPayload) return payload as RepositoryIntelligenceProviderApiResponse;
+  if (!response.ok || !payload || !validShipSealPayload) {
     const rateLimited = response.status === 429;
     const authenticationFailed = response.status === 401 || response.status === 403;
     const invalidEnvelope = response.ok && !payload;
@@ -567,7 +569,8 @@ function unavailableResponse(): RepositoryIntelligenceProviderApiResponse {
 
 function isRetryableStageFailure(response: RepositoryIntelligenceProviderApiResponse) {
   return response.state === 'fallback' && response.retryable
-    && !['authentication_failed', 'configuration_invalid', 'credentials_missing', 'provider_disabled', 'request_cancelled'].includes(response.category);
+    && !['authentication_failed', 'authentication_required', 'upgrade_required', 'allowance_exhausted', 'entitlement_inactive',
+      'configuration_invalid', 'credentials_missing', 'provider_disabled', 'request_cancelled'].includes(response.category);
 }
 
 function isRateLimitedResponse(

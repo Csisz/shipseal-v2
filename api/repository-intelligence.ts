@@ -37,6 +37,13 @@ import type {
   RepositoryIntelligenceValidationCategory,
   RepositoryIntelligenceValidationReason,
 } from '../src/lib/repositoryIntelligence/productionProviderContract.js';
+import { AI_USAGE_DENIAL_CATEGORIES } from '../src/lib/entitlements/contract.js';
+import {
+  AiUsageAuthorizationService,
+  AiUsageDeniedError,
+  type AuthorizedAiStage,
+} from './_lib/aiUsage.js';
+import { readAccountSession } from './_lib/accountSession.js';
 
 const MAX_BODY_BYTES = 900 * 1024;
 type VercelLikeRequest = IncomingMessage & { body?: unknown };
@@ -60,11 +67,19 @@ export class RepositoryIntelligenceServerStageSingleFlight {
 
 const serverStageSingleFlight = new RepositoryIntelligenceServerStageSingleFlight();
 
+export function buildAuthenticatedStageSingleFlightKey(userId: string, stageAttemptKey?: string) {
+  return stageAttemptKey ? stableContextFingerprint({ userId, stageAttemptKey }) : undefined;
+}
+
 export interface PrepareProductionRepositoryIntelligenceOptions {
   env?: NodeJS.ProcessEnv;
   fetcher?: typeof fetch;
   logger?: ProductionProviderLogger;
   signal?: AbortSignal;
+  aiAuthorization?: {
+    userId: string;
+    service: AiUsageAuthorizationService;
+  };
 }
 
 export async function prepareProductionRepositoryIntelligence(
@@ -179,6 +194,50 @@ export async function prepareProductionRepositoryIntelligence(
       validationCategory: 'request-preflight-rejected',
     }));
   }
+  let authorizedStage: AuthorizedAiStage | undefined;
+  if (options.aiAuthorization) {
+    try {
+      authorizedStage = await options.aiAuthorization.service.authorize(
+        options.aiAuthorization.userId,
+        preparedContext.request,
+        productStage,
+      );
+    } catch (error) {
+      if (error instanceof AiUsageDeniedError) return usageDenialFallback(error);
+      return usageDenialFallback(new AiUsageDeniedError(
+        'usage_temporarily_unavailable',
+        503,
+        true,
+        'AI usage authorization is temporarily unavailable.',
+      ));
+    }
+    if (authorizedStage.cachedResponse) {
+      return {
+        status: 200,
+        body: {
+          ...authorizedStage.cachedResponse,
+          diagnostics: {
+            ...(authorizedStage.cachedResponse.diagnostics || { costEstimate: 'unavailable' as const }),
+            cacheUsed: true,
+          },
+        } as RepositoryIntelligenceProviderApiResponse,
+      };
+    }
+  }
+  const completeAuthorizedStage = async (result: { status: number; body: RepositoryIntelligenceProviderApiResponse }) => {
+    if (!authorizedStage || !options.aiAuthorization) return result;
+    try {
+      await options.aiAuthorization.service.complete(authorizedStage, options.aiAuthorization.userId, result.body);
+      return result;
+    } catch {
+      return usageDenialFallback(new AiUsageDeniedError(
+        'usage_temporarily_unavailable',
+        503,
+        true,
+        'AI usage authorization is temporarily unavailable.',
+      ));
+    }
+  };
   let providerRetryCount = 0;
   let languageRepairCount = 0;
   let providerValidationCategory: RepositoryIntelligenceValidationCategory | undefined;
@@ -188,7 +247,9 @@ export async function prepareProductionRepositoryIntelligence(
   };
   const provider = new OpenAiCompatibleRepositoryDeepIntelligenceProvider({
     config: executionConfig,
-    fetcher: options.fetcher,
+    fetcher: authorizedStage && options.aiAuthorization
+      ? options.aiAuthorization.service.guardProviderFetcher(authorizedStage, options.fetcher)
+      : options.fetcher,
     productStage,
     requestId,
     logger: event => {
@@ -236,7 +297,7 @@ export async function prepareProductionRepositoryIntelligence(
   });
   const startedAt = Date.now();
   if (productStage?.kind === 'expansion') {
-    return executeProductExpansionStage({
+    return completeAuthorizedStage(await executeProductExpansionStage({
       provider,
       request: preparedContext.request,
       stage: productStage,
@@ -270,7 +331,7 @@ export async function prepareProductionRepositoryIntelligence(
         expansionParentCount: productStage.parents.length,
         ...providerResponseDiagnostics,
       }),
-    });
+    }));
   }
   const execution = await runRepositoryDeepIntelligence({
     provider,
@@ -375,7 +436,7 @@ export async function prepareProductionRepositoryIntelligence(
       acceptedRootCount: productStage?.kind === 'roots' ? acceptedProductOpportunityCount : undefined,
       rejectedRootCount: productStage?.kind === 'roots' ? productIntelligence?.rejectedOpportunities.length || 0 : undefined,
     });
-    return {
+    return completeAuthorizedStage({
       status: 200,
       body: {
         version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
@@ -386,7 +447,7 @@ export async function prepareProductionRepositoryIntelligence(
         deepState: warnings ? 'completed-with-warnings' : 'completed',
         diagnostics: enhancedDiagnostics,
       },
-    };
+    });
   }
   if (execution.status === 'completed') {
     const shapeRejectedCount = productValidationDiagnostics?.compactOpportunityShapeRejectedCount
@@ -433,12 +494,12 @@ export async function prepareProductionRepositoryIntelligence(
       operationalFailureCategory: failureDiagnostics.operationalFailureCategory,
       failureBoundary: failureDiagnostics.failureBoundary,
     });
-    return fallback(200, responseShapeFailure ? 'schema_validation_failed' : 'evidence_validation_failed', false, failureDiagnostics);
+    return completeAuthorizedStage(fallback(200, responseShapeFailure ? 'schema_validation_failed' : 'evidence_validation_failed', false, failureDiagnostics));
   }
-  if (execution.status === 'timeout') return fallback(200, 'request_timeout', true, diagnostics);
-  if (execution.status === 'cancelled') return fallback(200, 'request_cancelled', true, diagnostics);
+  if (execution.status === 'timeout') return completeAuthorizedStage(fallback(200, 'request_timeout', true, diagnostics));
+  if (execution.status === 'cancelled') return completeAuthorizedStage(fallback(200, 'request_cancelled', true, diagnostics));
   const category = mapExecutionError(execution.error?.code);
-  return fallback(200, category, execution.error?.retryable === true, diagnostics);
+  return completeAuthorizedStage(fallback(200, category, execution.error?.retryable === true, diagnostics));
 }
 
 export function resolveProductionExecutionPolicy(
@@ -565,6 +626,9 @@ async function executeProductExpansionStage(input: {
 }
 
 function mapExecutionError(code?: string): RepositoryIntelligenceProviderFailureCategory {
+  if (AI_USAGE_DENIAL_CATEGORIES.includes(code as (typeof AI_USAGE_DENIAL_CATEGORIES)[number])) {
+    return code as (typeof AI_USAGE_DENIAL_CATEGORIES)[number];
+  }
   if (code === 'rate_limited' || code === 'provider_unavailable' || code === 'authentication_failed'
     || code === 'response_too_large' || code === 'request_cancelled') return code;
   if (code === 'response-too-large') return 'response_too_large';
@@ -888,8 +952,21 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   const abort = () => controller.abort();
   req.once('aborted', abort);
   try {
+    let session;
+    try { session = await readAccountSession(req); } catch {
+      return sendJson(res, 503, usageDenialFallback(new AiUsageDeniedError(
+        'usage_temporarily_unavailable', 503, true, 'AI usage authorization is temporarily unavailable.',
+      )).body);
+    }
+    if (!session) {
+      return sendJson(res, 401, usageDenialFallback(new AiUsageDeniedError(
+        'authentication_required', 401, false, 'Sign in to start ShipSeal-funded AI analysis.',
+      )).body);
+    }
+    const aiAuthorization = { userId: session.user.id, service: new AiUsageAuthorizationService() };
     const stageAttemptKey = readStageAttemptKey(input);
-    const flight = serverStageSingleFlight.run(stageAttemptKey, () => prepareProductionRepositoryIntelligence(input, { signal: controller.signal }));
+    const singleFlightKey = buildAuthenticatedStageSingleFlightKey(session.user.id, stageAttemptKey);
+    const flight = serverStageSingleFlight.run(singleFlightKey, () => prepareProductionRepositoryIntelligence(input, { signal: controller.signal, aiAuthorization }));
     if (flight.duplicateSuppressed) {
       const metadata = readSafeStageMetadata(input);
       console.info(JSON.stringify({
@@ -906,6 +983,15 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   } finally {
     req.removeListener('aborted', abort);
   }
+}
+
+function usageDenialFallback(error: AiUsageDeniedError): { status: number; body: RepositoryIntelligenceProviderApiResponse } {
+  const result = fallback(error.status, error.category, error.retryable, {
+    costEstimate: 'unavailable',
+    failureBoundary: 'provider-http',
+  });
+  if (result.body.state !== 'fallback') return result;
+  return { ...result, body: { ...result.body, message: error.message } };
 }
 
 function readStageAttemptKey(input: unknown) {

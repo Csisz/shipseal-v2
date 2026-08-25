@@ -21,7 +21,7 @@ describe('hosted deployment configuration', () => {
     expect(config.devCommand).toContain('--port $PORT');
     expect(config.routes).toBeUndefined();
     expect(config.rewrites).toEqual([
-      { source: '/api/account/:route(login|callback|session|logout|delete)', destination: '/api/account-router?route=:route' },
+      { source: '/api/account/:route(login|callback|session|logout|delete|usage)', destination: '/api/account-router?route=:route' },
       { source: '/api/projects/:projectId/scans', destination: '/api/persistence-router?route=project-scans&projectId=:projectId' },
       { source: '/api/projects/:projectId', destination: '/api/persistence-router?route=project&projectId=:projectId' },
       { source: '/api/projects', destination: '/api/persistence-router?route=projects' },

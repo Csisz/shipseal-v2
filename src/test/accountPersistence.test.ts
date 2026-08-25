@@ -213,5 +213,8 @@ describe('Omega 18.1 deletion and safety', () => {
     const envExample = readFileSync('.env.example', 'utf8');
     expect(client).not.toMatch(/DATABASE_URL|CLIENT_SECRET|postgres\(/);
     expect(envExample).not.toMatch(/^VITE_.*(?:SECRET|DATABASE|TOKEN|KEY)=/m);
+    expect(envExample).not.toMatch(/^VITE_SHIPSEAL_AI_/m);
+    expect(envExample).toContain('SHIPSEAL_AI_GLOBAL_PROVIDER_CALL_LIMIT_PER_DAY=');
+    expect(envExample).toContain('SHIPSEAL_AI_GLOBAL_MAX_IN_FLIGHT=');
   });
 });
