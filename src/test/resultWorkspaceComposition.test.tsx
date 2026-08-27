@@ -401,7 +401,7 @@ describe('Result Workspace composition', () => {
     expect(await screen.findByText(/Secondary repository improvements/i)).toBeInTheDocument();
   });
 
-  it('keeps the selector and Futures stage gated while product directions are preparing', async () => {
+  it('opens the selector after a deterministic scan without starting or rendering Future analysis', async () => {
     globalThis.IntersectionObserver = class DeferredIntersectionObserver implements IntersectionObserver {
       readonly root = null;
       readonly rootMargin = '240px 0px';
@@ -413,22 +413,25 @@ describe('Result Workspace composition', () => {
       takeRecords() { return []; }
     } as unknown as typeof IntersectionObserver;
 
-    selectorMockState.view = 'futures';
+    selectorMockState.view = null;
+    const startFutureAnalysis = vi.fn(async () => undefined);
     render(<ResultDashboard
       report={buildSampleReport()}
       history={[]}
       onReset={vi.fn()}
       onClearHistory={vi.fn()}
       repositoryProductIntelligenceStatus={{ state: 'deterministic', message: 'Repository evidence is ready.', retryable: false }}
+      retryRepositoryProductIntelligence={startFutureAnalysis}
     />);
 
-    expect(await screen.findByTestId('repository-formation')).toHaveAttribute('data-formation-stage', 'directions');
+    expect(await screen.findByTestId('post-scan-view-selector')).toBeInTheDocument();
+    expect(screen.queryByTestId('repository-formation')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-futures-workspace')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-canvas')).not.toBeInTheDocument();
     expect(screen.queryByTestId('repository-universe-workspace-stage')).not.toBeInTheDocument();
     expect(screen.queryByTestId('future-pathways-hero-stage')).not.toBeInTheDocument();
     expect(universeMockState.models).toHaveLength(0);
+    expect(startFutureAnalysis).not.toHaveBeenCalled();
   });
 
   it('keeps Product Strategist pending state inside the single formation surface', async () => {

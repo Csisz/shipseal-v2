@@ -170,6 +170,23 @@ describe('premium post-scan view selector', () => {
     expect(screen.getByRole('button', { name: 'Open Repository Futures' })).toBeEnabled();
   });
 
+  it('offers an explicit completion-billed Future action after a free deterministic scan', () => {
+    const start = vi.fn(async () => undefined);
+    render(<ResultWorkspace
+      report={reportWithIdentity('2026-08-11T10:01:40.000Z')}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{ state: 'deterministic', retryable: false, message: 'Repository evidence is ready.' }}
+      retryRepositoryProductIntelligence={start}
+    />);
+
+    expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
+    expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('Uses 1 Deep Analysis when successfully completed');
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Future analysis' }));
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
   it('shows a factual capacity cooldown and disables manual retry until it expires', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);

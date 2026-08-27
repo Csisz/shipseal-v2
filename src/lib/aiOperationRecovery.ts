@@ -1,5 +1,4 @@
 import type { RepositoryProductIntelligenceResult } from './repositoryIntelligence/productIntelligenceSchema.js';
-import { mergeRepositoryProductExpansionResults } from './repositoryIntelligence/stagedProductIntelligence.js';
 import type { AiOperationLookup, AiOperationStatusSnapshot, PersistedRepositoryFutureResult } from './aiOperationRecoveryContract.js';
 export type { AiOperationLookup, AiOperationRecoveryAction, AiOperationStatusSnapshot, PersistedRepositoryFutureResult } from './aiOperationRecoveryContract.js';
 
@@ -40,17 +39,7 @@ export async function getPersistedRepositoryFutureResult(
 export function mergePersistedRepositoryFutureResult(
   persisted: PersistedRepositoryFutureResult,
 ): RepositoryProductIntelligenceResult | null {
-  const rootProduct = persisted.root.result.productIntelligence;
-  if (!rootProduct) return null;
-  if (!persisted.expansions.length) return rootProduct;
-  try {
-    return mergeRepositoryProductExpansionResults(
-      persisted.root.result,
-      persisted.expansions.map(response => response.stageResult),
-    ).productIntelligence || rootProduct;
-  } catch {
-    return rootProduct;
-  }
+  return persisted.complete.result.productIntelligence || null;
 }
 
 function lookupParams(lookup: AiOperationLookup) {

@@ -21,10 +21,15 @@ const securityMigration = migrations[securityMigrationIndex];
 const aiSecurityMigration = migrations[aiSecurityMigrationIndex];
 const billingSecurityMigration = migrations[billingSecurityMigrationIndex];
 const recoveryMigration = migrations[recoveryMigrationIndex];
+const billingIntegrityMigrationFile = '0007_ai_billing_integrity.sql';
+const billingIntegrityMigrationIndex = migrationFiles.indexOf(billingIntegrityMigrationFile);
+if (billingIntegrityMigrationIndex === -1) throw new Error(`${billingIntegrityMigrationFile} is missing.`);
+const billingIntegrityMigration = migrations[billingIntegrityMigrationIndex];
 const accountTables = ['shipseal_users', 'shipseal_sessions', 'shipseal_projects', 'shipseal_scans', 'shipseal_verification_relationships', 'shipseal_schema_migrations'];
 const aiTables = ['shipseal_entitlements', 'shipseal_ai_operations', 'shipseal_ai_operation_stages', 'shipseal_ai_usage_ledger', 'shipseal_ai_budget_windows', 'shipseal_ai_provider_permits'];
+const billingIntegrityTables = ['shipseal_ai_usage_adjustments'];
 const billingTables = ['shipseal_billing_customers', 'shipseal_billing_subscriptions', 'shipseal_billing_events'];
-const requiredTables = [...accountTables, ...aiTables, ...billingTables];
+const requiredTables = [...accountTables, ...aiTables, ...billingIntegrityTables, ...billingTables];
 const normalizedSecurityMigration = securityMigration.replace(/\s+/g, ' ').trim().toLowerCase();
 const rlsTables = [...securityMigration.matchAll(/alter\s+table\s+(?:public\.)?([a-z0-9_]+)\s+enable\s+row\s+level\s+security\s*;/gi)].map(match => match[1]);
 const publicRevoke = securityMigration.match(/revoke\s+all\s+privileges\s+on\s+table([\s\S]*?)from\s+public\s*;/i)?.[1] ?? '';
@@ -121,11 +126,32 @@ for (const column of ['canonical_root_response', 'canonical_root_stage_fingerpri
 if (!/integrity_recovery_attempt_count\s+between\s+0\s+and\s+1/i.test(recoveryMigration)) throw new Error('Integrity recovery must be bounded to one persisted attempt.');
 if (!normalizedRecoveryMigration.includes("values ('0006_durable_ai_recovery') on conflict do nothing")) throw new Error('Durable recovery migration tracking must be idempotent.');
 
+const normalizedBillingIntegrityMigration = billingIntegrityMigration.replace(/\s+/g, ' ').trim().toLowerCase();
+if (/\b(truncate|delete\s+from|disable\s+row\s+level\s+security|grant)\b/i.test(billingIntegrityMigration)) {
+  throw new Error('AI billing-integrity migration must remain additive and preserve default-deny security.');
+}
+for (const column of ['canonical_complete_response', 'canonical_complete_fingerprint', 'complete_contract_version', 'completed_at', 'refunded_user_units', 'reconciliation_outcome', 'reconciled_at']) {
+  if (!normalizedBillingIntegrityMigration.includes(`add column if not exists ${column}`)) throw new Error(`AI billing-integrity column ${column} is missing.`);
+}
+if (!/alter\s+table\s+public\.shipseal_ai_usage_adjustments\s+enable\s+row\s+level\s+security/i.test(billingIntegrityMigration)) throw new Error('AI usage adjustments must enable RLS.');
+if (!/revoke\s+all\s+privileges\s+on\s+table\s+public\.shipseal_ai_usage_adjustments\s+from\s+public/i.test(billingIntegrityMigration)) throw new Error('AI usage adjustments must revoke PUBLIC access.');
+for (const role of ['anon', 'authenticated', 'service_role']) {
+  if (!new RegExp(`['\"]${role}['\"]`, 'i').test(billingIntegrityMigration)) throw new Error(`AI billing-integrity security does not cover ${role}.`);
+}
+if (!normalizedBillingIntegrityMigration.includes("values ('0007_ai_billing_integrity') on conflict do nothing")) throw new Error('AI billing-integrity migration tracking must be idempotent.');
+
 // pg-mem does not implement PostgreSQL RLS, privileges, roles, or PL/pgSQL DO
 // blocks. Validate that production-only contract above, then omit exactly those
 // statements while exercising the remaining migration and schema behavior twice.
 function forPgMem(file, migration) {
-  if (![securityMigrationFile, aiSecurityMigrationFile, billingSecurityMigrationFile].includes(file)) return migration;
+  if (![securityMigrationFile, aiSecurityMigrationFile, billingSecurityMigrationFile, billingIntegrityMigrationFile].includes(file)) return migration;
+  if (file === billingIntegrityMigrationFile) {
+    return migration
+      .replace(/alter\s+table\s+(?:public\.)?[a-z0-9_]+\s+enable\s+row\s+level\s+security\s*;/gi, '')
+      .replace(/revoke\s+all\s+privileges\s+on\s+table[\s\S]*?from\s+public\s*;/i, '')
+      .replace(/do\s+\$shipseal_ai_operation_identity\$[\s\S]*?\$shipseal_ai_operation_identity\$\s*;/i, '')
+      .replace(/do\s+\$shipseal_ai_integrity_security\$[\s\S]*?\$shipseal_ai_integrity_security\$\s*;/i, '');
+  }
   const blockName = file === securityMigrationFile ? 'shipseal_security' : file === aiSecurityMigrationFile ? 'shipseal_ai_security' : 'shipseal_billing_security';
   return migration
     .replace(/alter\s+table\s+(?:public\.)?[a-z0-9_]+\s+enable\s+row\s+level\s+security\s*;/gi, '')

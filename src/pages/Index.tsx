@@ -244,6 +244,18 @@ const Index = () => {
     && (sampleReport || scan.repositoryIntelligenceReview)
     && (futureProviderTerminal || activeFuturePreparationState === 'failed')
   );
+  const accountAwareFuturesStatus: RepositoryIntelligenceProviderStatus = scan.repositoryProductIntelligenceStatus.state === 'deterministic'
+    && !sampleReport
+    && account.status !== 'loading'
+    && (!account.user || account.usage && !account.usage.capabilities.repositoryFutures)
+    ? {
+        state: 'fallback', deepState: 'disabled', retryable: false,
+        category: account.user ? 'upgrade_required' : 'authentication_required',
+        message: account.user
+          ? 'Full Repository Futures is a paid AI feature. Project Universe and deterministic intelligence remain available.'
+          : 'Sign in to start full Repository Futures. Project Universe remains available.',
+      }
+    : scan.repositoryProductIntelligenceStatus;
   const workspaceFuturesStatus: RepositoryIntelligenceProviderStatus = activeFuturePreparationState === 'failed'
     ? {
         state: 'fallback',
@@ -253,7 +265,18 @@ const Index = () => {
         message: 'Some future pathways could not be completed.',
         diagnostics: { costEstimate: 'unavailable', operationalFailureCategory: 'merge_incomplete', failureBoundary: 'staged-merge' },
       }
-    : scan.repositoryProductIntelligenceStatus;
+    : accountAwareFuturesStatus;
+  const accountUserForUsage = account.user;
+  const refreshAccountUsage = account.refreshUsage;
+
+  useEffect(() => {
+    if (!accountUserForUsage) return;
+    const active = scan.repositoryProductIntelligenceStatus.state === 'preparing';
+    void refreshAccountUsage();
+    if (!active) return;
+    const timer = window.setInterval(() => { void refreshAccountUsage(); }, 4_000);
+    return () => window.clearInterval(timer);
+  }, [accountUserForUsage, refreshAccountUsage, scan.repositoryProductIntelligenceStatus.state]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -694,7 +717,7 @@ const Index = () => {
               repositoryProductIntelligence={sampleReport ? null : scan.repositoryProductIntelligence}
               prepareRepositoryIntelligenceEnhancement={sampleReport ? undefined : scan.prepareRepositoryIntelligenceEnhancement}
               repositoryProductIntelligenceStatus={sampleReport ? undefined : workspaceFuturesStatus}
-              retryRepositoryProductIntelligence={sampleReport ? undefined : scan.retryRepositoryProductIntelligence}
+              retryRepositoryProductIntelligence={sampleReport || accountAwareFuturesStatus.state === 'fallback' && ['upgrade_required', 'authentication_required'].includes(accountAwareFuturesStatus.category) ? undefined : scan.retryRepositoryProductIntelligence}
               history={history}
               onReset={reset}
               onClearHistory={handleClearHistory}

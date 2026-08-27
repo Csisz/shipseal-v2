@@ -9,22 +9,44 @@ export type AiOperationRecoveryAction =
   | 'start_new_analysis'
   | 'terminal_failure';
 
+export type AiOperationCompletionState =
+  | 'ready'
+  | 'running'
+  | 'retryable'
+  | 'incomplete'
+  | 'refunded'
+  | 'terminal';
+
 export interface AiOperationStatusSnapshot {
   publicOperationId: string;
   operationState: 'reserved' | 'running' | 'succeeded' | 'retryable_failure' | 'terminal_failure';
   rootStageState: 'missing' | 'authorized' | 'running' | 'succeeded' | 'retryable_failure' | 'terminal_failure';
   retryable: boolean;
+  completionState: AiOperationCompletionState;
   cacheAvailable: boolean;
+  rootCacheAvailable: boolean;
+  completedExpansionCount: number;
+  expectedExpansionCount: number | null;
   leaseExpiresAt: string | null;
-  userUnitState: 'none' | 'reserved' | 'consumed' | 'released';
+  userUnitState: 'none' | 'reserved' | 'consumed' | 'released' | 'refunded';
   recoveryAction: AiOperationRecoveryAction;
   integrityRecoveryAttemptsUsed: number;
+  reconciliationOutcome: 'not-required' | 'reconstructed' | 'refunded' | 'review-required';
 }
 
 export interface PersistedRepositoryFutureResult {
   publicOperationId: string;
-  root: Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }>;
-  expansions: Array<Extract<RepositoryIntelligenceProviderApiResponse, { state: 'stage-enhanced' }>>;
+  complete: Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }>;
+  completionVersion: string;
+  completedAt: string;
+}
+
+export interface AiUsageReconciliationReport {
+  inspected: number;
+  reconstructed: number;
+  refunded: number;
+  reviewRequired: number;
+  unchanged: number;
 }
 
 export interface AiOperationLookup {

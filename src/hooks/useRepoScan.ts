@@ -601,14 +601,32 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           contextBundle,
           evidenceResult: preparation.evidenceResult,
         });
-        let recoveryOperationId: string | undefined;
-        if (options.retry) {
-          const operation = await recoveryModule.getRepositoryFutureOperationStatus({
-            requestFingerprint: request.fingerprint,
-            repositoryIdentity: recoveryModule.repositoryOperationIdentity(request.repository),
+        const operationLookup = {
+          requestFingerprint: request.fingerprint,
+          repositoryIdentity: recoveryModule.repositoryOperationIdentity(request.repository),
+        };
+        const operation = await recoveryModule.getRepositoryFutureOperationStatus(operationLookup).catch(() => null);
+        if (operation?.recoveryAction === 'open_result') {
+          const persisted = await recoveryModule.getPersistedRepositoryFutureResult({
+            ...operationLookup,
+            publicOperationId: operation.publicOperationId,
           }).catch(() => null);
-          recoveryOperationId = operation?.publicOperationId;
-          if (operation?.recoveryAction === 'wait_for_active_lease') {
+          const restored = persisted ? recoveryModule.mergePersistedRepositoryFutureResult(persisted) : null;
+          if (restored) {
+            setState(current => ({
+              ...current,
+              repositoryProductIntelligence: restored,
+              repositoryProductIntelligenceStatus: {
+                state: 'enhanced', deepState: 'completed', retryable: false,
+                message: 'Repository Futures is ready.', providerId: persisted.complete.providerId,
+                modelId: persisted.complete.modelId,
+                diagnostics: { ...persisted.complete.diagnostics, cacheUsed: true, publicOperationId: operation.publicOperationId, operationRecoveryAction: 'open_result' },
+              },
+            }));
+            return;
+          }
+        }
+        if (operation?.recoveryAction === 'wait_for_active_lease') {
             setState(current => ({
               ...current,
               repositoryProductIntelligenceStatus: {
@@ -622,8 +640,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
               },
             }));
             return;
-          }
         }
+        const recoveryOperationId = operation && ['resume_stale_lease', 'retry_stage', 'integrity_recovery'].includes(operation.recoveryAction)
+          ? operation.publicOperationId
+          : undefined;
         const response = await clientModule.requestRepositoryProductIntelligenceStaged(request, {
           signal: controller.signal,
           recoveryOperationId,
@@ -648,7 +668,9 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
                     : 'Understanding the product and finding grounded directions.'
                   : progress.stage === 'expansion'
                     ? `${progress.stageAttempt && progress.stageAttempt > 1 ? 'Retrying one pathway group' : 'Building future pathways'} · ${progress.completedBatches} of ${progress.totalBatches} pathway groups complete.`
-                    : 'Validating and preparing your Future graph.',
+                    : progress.stage === 'merging'
+                      ? 'Validating the complete Future map.'
+                      : 'Saving the completed Future analysis.',
               },
             }));
           },
@@ -673,7 +695,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
               repositoryProductIntelligence: response.result.productIntelligence || null,
               repositoryProductIntelligenceStatus: {
                 state: 'enhanced', deepState: response.deepState,
-                message: 'Validated Product Understanding and Product Opportunities are available.', retryable: false,
+                message: 'Repository Futures is ready.', retryable: false,
                 providerId: response.providerId, modelId: response.modelId, diagnostics: response.diagnostics,
               },
             }));
@@ -694,10 +716,16 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         productRateLimitCooldownUntilRef.current = response.category === 'rate_limited'
           ? response.diagnostics?.rateLimitRetryAt || 0
           : 0;
+        const terminalWithoutCharge = !response.retryable
+          && response.category !== 'allowance_exhausted'
+          && response.category !== 'upgrade_required'
+          && response.category !== 'entitlement_inactive';
         const fallbackStatus: RepositoryIntelligenceProviderStatus = {
           state: 'fallback',
           deepState: response.deepState,
-          message: incompleteExpansion && response.category === 'request_timeout'
+          message: terminalWithoutCharge
+            ? 'Repository Futures could not be completed. Your Deep Analysis allowance was not used.'
+            : incompleteExpansion && response.category === 'request_timeout'
             ? 'Some future pathways took longer than expected.'
             : repositoryFutureFailureMessage(response.category, response.diagnostics),
           retryable: response.retryable,
@@ -740,12 +768,6 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     productRequestPromiseRef.current = requestPromise;
     return requestPromise;
   }, []);
-
-  useEffect(() => {
-    if (state.status !== 'completed' || !state.report || !state.repositoryIntelligenceReview) return;
-    if (state.repositoryProductIntelligenceStatus.state !== 'deterministic') return;
-    void prepareRepositoryProductIntelligence().catch(() => undefined);
-  }, [prepareRepositoryProductIntelligence, state.report, state.repositoryIntelligenceReview, state.repositoryProductIntelligenceStatus.state, state.status]);
 
   const retryRepositoryProductIntelligence = useCallback(
     () => prepareRepositoryProductIntelligence({ retry: true }),

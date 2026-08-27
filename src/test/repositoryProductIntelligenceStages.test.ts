@@ -8,6 +8,7 @@ import {
 import {
   buildRepositoryProductExpansionStages,
   buildRepositoryProductRootStage,
+  mergeRepositoryProductExpansionResults,
 } from '@/lib/repositoryIntelligence/stagedProductIntelligence';
 import { REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, REPOSITORY_PRODUCT_PIPELINE_VERSION } from '@/lib/repositoryIntelligence/productionProviderContract';
 import {
@@ -15,7 +16,10 @@ import {
   normalizeProductStrategistExpansionResponse,
 } from '../../api/_lib/repositoryProductStrategistResponse';
 
-const request = { fingerprint: 'report-fingerprint-v115', locale: 'en' } as RepositoryDeepIntelligenceRequest;
+const request = {
+  fingerprint: 'report-fingerprint-v115', locale: 'en',
+  repository: { name: 'ShipSeal', fullName: 'Csisz/shipseal-v2', sourceType: 'github', ref: 'main' },
+} as unknown as RepositoryDeepIntelligenceRequest;
 const opportunities = Array.from({ length: 7 }, (_, index) => ({
   id: `product-opportunity:${index}`, sourceId: `op-${index}`, title: `Future ${index + 1}`,
   opportunityStatement: `Direction ${index + 1}`, userValue: 'Grounded user value', whyItFits: 'Grounded fit',
@@ -35,8 +39,38 @@ function json(value: unknown) { return new Response(JSON.stringify(value), { sta
 function enhancedRoots() {
   return json({
     version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'enhanced', result: rootResult,
-    providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable' },
+    providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable', publicOperationId: `op_${'f'.repeat(24)}` },
   });
+}
+
+function enhancedComplete() {
+  const stages = buildRepositoryProductExpansionStages(request, rootResult.productIntelligence!);
+  const batches = stages.map(stage => ({
+    pipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION,
+    stage: 'expansion' as const,
+    fingerprint: stage.fingerprint,
+    batchIndex: stage.batchIndex,
+    totalBatches: stage.totalBatches,
+    expansions: stage.parents.map(parent => ({ parentId: parent.id, evolutions: [
+      { sourceId: `${parent.id}-one`, generation: 2 as const, title: 'Adaptive experience', description: 'Grounded evolution.', userValue: 'Better outcomes.' },
+      { sourceId: `${parent.id}-two`, generation: 2 as const, title: 'Guided experience', description: 'Grounded evolution.', userValue: 'Clearer decisions.' },
+      { sourceId: `${parent.id}-three`, parentSourceId: `${parent.id}-one`, generation: 3 as const, title: 'Connected intelligence', description: 'Grounded later evolution.', userValue: 'Coordinated outcomes.' },
+    ] })),
+  }));
+  return json({
+    version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+    state: 'enhanced', result: mergeRepositoryProductExpansionResults(rootResult, batches),
+    providerId: 'fixture', deepState: 'completed', diagnostics: {
+      costEstimate: 'unavailable', publicOperationId: `op_${'f'.repeat(24)}`,
+      expansionBatchCount: stages.length, acceptedSecondGenerationCount: 14, acceptedThirdGenerationCount: 7,
+      stageRetryCount: 1, rateLimitAttempt: 1, retryAfterMs: 20_000, backoffMs: 20_000,
+      rateLimitRecoveryStatus: 'recovered', duplicateSuppressed: true,
+    },
+  });
+}
+
+function isFinalization(body: unknown) {
+  return Boolean(body && typeof body === 'object' && 'productFinalization' in body);
 }
 
 function enhancedBatch(stage: { fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities }) {
@@ -111,7 +145,8 @@ describe('staged Product Intelligence', () => {
   it('retries a temporary root-stage failure once without rebuilding repository understanding', async () => {
     let rootCalls = 0;
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      const body = JSON.parse(String(init?.body)) as { productFinalization?: unknown; productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      if (isFinalization(body)) return enhancedComplete();
       const stage = body.productStage;
       if (stage.kind === 'roots') {
         rootCalls += 1;
@@ -121,7 +156,7 @@ describe('staged Product Intelligence', () => {
         });
         return json({
           version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'enhanced', result: rootResult,
-          providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable' },
+          providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable', publicOperationId: `op_${'f'.repeat(24)}` },
         });
       }
       return json({
@@ -150,7 +185,8 @@ describe('staged Product Intelligence', () => {
     const progress: Array<{ rateLimitRetryAt?: number }> = [];
     let rootCalls = 0;
     const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { stageAttemptKey?: string; productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      const body = JSON.parse(String(init?.body)) as { productFinalization?: unknown; stageAttemptKey?: string; productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      if (isFinalization(body)) return enhancedComplete();
       expect(body.stageAttemptKey).toMatch(/^[a-z0-9]{8,80}$/i);
       const stage = body.productStage;
       calls.push(stage.kind === 'roots' ? 'roots' : `batch-${stage.batchIndex}`);
@@ -178,7 +214,8 @@ describe('staged Product Intelligence', () => {
   it('shares concurrent report-and-stage requests through one active browser call', async () => {
     const calls: string[] = [];
     const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      const body = JSON.parse(String(init?.body)) as { productFinalization?: unknown; productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      if (isFinalization(body)) return enhancedComplete();
       const stage = body.productStage;
       calls.push(stage.kind === 'roots' ? 'roots' : `batch-${stage.batchIndex}`);
       await new Promise(resolve => setTimeout(resolve, 5));
@@ -202,8 +239,9 @@ describe('staged Product Intelligence', () => {
     const recoveryOperationId = `op_${'r'.repeat(24)}`;
     const bodies: Array<{ recoveryOperationId?: string; request: { fingerprint: string }; productStage: { kind: string } }> = [];
     const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as typeof bodies[number] & { productStage: Parameters<typeof enhancedBatch>[0] };
+      const body = JSON.parse(String(init?.body)) as typeof bodies[number] & { productFinalization?: unknown; productStage: Parameters<typeof enhancedBatch>[0] };
       bodies.push(body);
+      if (isFinalization(body)) return enhancedComplete();
       return body.productStage.kind === 'roots' ? enhancedRoots() : enhancedBatch(body.productStage);
     });
     const result = await requestRepositoryProductIntelligenceStaged(request, {
@@ -211,16 +249,17 @@ describe('staged Product Intelligence', () => {
       recoveryOperationId,
     });
     expect(result.state).toBe('enhanced');
-    expect(bodies).toHaveLength(4);
-    expect(bodies.every(body => body.recoveryOperationId === recoveryOperationId)).toBe(true);
-    expect(bodies.every(body => body.request.fingerprint === request.fingerprint)).toBe(true);
+    expect(bodies).toHaveLength(5);
+    expect(bodies.filter(body => body.productStage).every(body => body.recoveryOperationId === recoveryOperationId)).toBe(true);
+    expect(bodies.filter(body => body.productStage).every(body => body.request.fingerprint === request.fingerprint)).toBe(true);
   });
 
   it('reduces expansion recovery to one call, preserves completed work, and suppresses later bursts', async () => {
     let batchOneRateLimited = true;
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      const body = JSON.parse(String(init?.body)) as { productFinalization?: unknown; productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      if (isFinalization(body)) return enhancedComplete();
       const stage = body.productStage;
       calls.push(stage.kind === 'roots' ? 'roots' : `batch-${stage.batchIndex}`);
       if (stage.kind === 'roots') return enhancedRoots();
@@ -254,12 +293,13 @@ describe('staged Product Intelligence', () => {
     let failBatchOne = true;
     const calls: string[] = [];
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
-      const body = JSON.parse(String(init?.body)) as { productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      const body = JSON.parse(String(init?.body)) as { productFinalization?: unknown; productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      if (isFinalization(body)) return enhancedComplete();
       const stage = body.productStage;
       calls.push(stage.kind === 'roots' ? 'roots' : `batch-${stage.batchIndex}`);
       if (stage.kind === 'roots') return json({
         version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'enhanced', result: rootResult,
-        providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable' },
+        providerId: 'fixture', deepState: 'completed', diagnostics: { costEstimate: 'unavailable', publicOperationId: `op_${'f'.repeat(24)}` },
       });
       if (stage.batchIndex === 1 && failBatchOne) return json({
         version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, state: 'fallback', category: 'schema_validation_failed', retryable: true,

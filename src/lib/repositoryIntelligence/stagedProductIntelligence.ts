@@ -1,12 +1,13 @@
-import { stableContextFingerprint } from './contextSelection';
-import type { RepositoryDeepIntelligenceValidatedResult } from './deepIntelligenceSchema';
-import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest';
+import { stableContextFingerprint } from './contextSelection.js';
+import type { RepositoryDeepIntelligenceValidatedResult } from './deepIntelligenceSchema.js';
+import type { RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
 import {
   REPOSITORY_PRODUCT_PIPELINE_VERSION,
   type RepositoryProductExpansionStageResult,
   type RepositoryProductProviderStage,
-} from './productionProviderContract';
-import type { RepositoryProductFutureEvolution, RepositoryProductIntelligenceResult } from './productIntelligenceSchema';
+} from './productionProviderContract.js';
+import type { RepositoryProductFutureEvolution, RepositoryProductIntelligenceResult } from './productIntelligenceSchema.js';
+import { REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION } from './productIntelligenceSchema.js';
 
 export const REPOSITORY_PRODUCT_EXPANSION_BATCH_SIZE = 3;
 export const REPOSITORY_PRODUCT_EXPANSION_CONCURRENCY = 2;
@@ -14,7 +15,7 @@ export const REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS = 42_000;
 export const REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS = 2;
 
 export interface RepositoryProductPipelineProgress {
-  stage: 'roots' | 'expansion' | 'merging';
+  stage: 'roots' | 'expansion' | 'merging' | 'finalizing';
   completedBatches: number;
   totalBatches: number;
   activeBatchIndexes: number[];
@@ -38,6 +39,13 @@ export function buildRepositoryProductExpansionStages(
   request: RepositoryDeepIntelligenceRequest,
   product: RepositoryProductIntelligenceResult,
 ): Extract<RepositoryProductProviderStage, { kind: 'expansion' }>[] {
+  return buildRepositoryProductExpansionStagesForFingerprint(request.fingerprint, product);
+}
+
+export function buildRepositoryProductExpansionStagesForFingerprint(
+  requestFingerprint: string,
+  product: RepositoryProductIntelligenceResult,
+): Extract<RepositoryProductProviderStage, { kind: 'expansion' }>[] {
   const parents = product.opportunities.map(opportunity => ({
     id: opportunity.id,
     title: opportunity.title,
@@ -59,12 +67,44 @@ export function buildRepositoryProductExpansionStages(
       parents: batchParents,
       fingerprint: stableContextFingerprint({
         version: REPOSITORY_PRODUCT_PIPELINE_VERSION,
-        report: request.fingerprint,
+        report: requestFingerprint,
         stage: 'expansion',
         parents: batchParents.map(parent => ({ id: parent.id, evidenceIds: parent.evidenceIds })),
       }),
     };
   });
+}
+
+export function isCompleteRepositoryProductIntelligenceResult(
+  result: unknown,
+  expectedSourceAnalysisFingerprint?: string,
+): result is RepositoryProductIntelligenceResult {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
+  const product = result as Partial<RepositoryProductIntelligenceResult>;
+  if (product.version !== REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION
+    || typeof product.sourceAnalysisFingerprint !== 'string'
+    || expectedSourceAnalysisFingerprint !== undefined && product.sourceAnalysisFingerprint !== expectedSourceAnalysisFingerprint
+    || typeof product.fingerprint !== 'string'
+    || !product.understanding
+    || !Array.isArray(product.opportunities)
+    || product.opportunities.length < 6
+    || product.opportunities.length > 8) return false;
+  const opportunityIds = new Set<string>();
+  const evolutionIds = new Set<string>();
+  for (const opportunity of product.opportunities) {
+    if (!opportunity || typeof opportunity !== 'object' || typeof opportunity.id !== 'string'
+      || opportunityIds.has(opportunity.id) || !Array.isArray(opportunity.futureEvolutions)) return false;
+    opportunityIds.add(opportunity.id);
+    if (opportunity.futureEvolutions.filter(item => item?.generation === 2).length < 2) return false;
+    for (const evolution of opportunity.futureEvolutions) {
+      if (!evolution || ![2, 3].includes(evolution.generation)
+        || typeof evolution.id !== 'string' || typeof evolution.sourceId !== 'string'
+        || typeof evolution.title !== 'string' || typeof evolution.description !== 'string'
+        || typeof evolution.userValue !== 'string' || evolutionIds.has(evolution.id)) return false;
+      evolutionIds.add(evolution.id);
+    }
+  }
+  return true;
 }
 
 export function mergeRepositoryProductExpansionResults(

@@ -7,6 +7,7 @@ import {
   REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION,
   type RepositoryIntelligenceProviderApiResponse,
   type RepositoryIntelligenceProviderFailureCategory,
+  type RepositoryProductFinalizationApiRequest,
   type RepositoryProductExpansionStageResult,
   type RepositoryProductProviderStage,
 } from '../src/lib/repositoryIntelligence/productionProviderContract.js';
@@ -978,6 +979,28 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
         'authentication_required', 401, false, 'Sign in to start ShipSeal-funded AI analysis.',
       )).body);
     }
+    const finalization = readProductFinalization(input);
+    if (hasProductFinalization(input) && !finalization) {
+      return sendJson(res, 400, fallback(400, 'invalid_request', false).body);
+    }
+    if (finalization) {
+      const service = new AiUsageAuthorizationService();
+      try {
+        const body = await service.finalizeRepositoryFutures(session.user.id, {
+          publicOperationId: finalization.publicOperationId,
+          requestFingerprint: finalization.requestFingerprint,
+          repositoryIdentity: finalization.repositoryIdentity,
+        });
+        return sendJson(res, 200, body);
+      } catch (error) {
+        return sendJson(res, error instanceof AiUsageDeniedError ? error.status : 503, usageDenialFallback(
+          error instanceof AiUsageDeniedError ? error : new AiUsageDeniedError(
+            'usage_temporarily_unavailable', 503, true,
+            'Future completion is temporarily unavailable. Your analysis allowance was not consumed.',
+          ),
+        ).body);
+      }
+    }
     const aiAuthorization = { userId: session.user.id, service: new AiUsageAuthorizationService(), recoveryOperationId: readRecoveryOperationId(input) };
     const stageAttemptKey = readStageAttemptKey(input);
     const singleFlightKey = buildAuthenticatedStageSingleFlightKey(session.user.id, stageAttemptKey);
@@ -1020,6 +1043,26 @@ function readRecoveryOperationId(input: unknown) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
   const value = (input as { recoveryOperationId?: unknown }).recoveryOperationId;
   return typeof value === 'string' && /^op_[A-Za-z0-9_-]{20,80}$/.test(value) ? value : undefined;
+}
+
+function readProductFinalization(input: unknown): RepositoryProductFinalizationApiRequest['productFinalization'] | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)
+    || (input as { version?: unknown }).version !== REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION) return null;
+  const value = (input as { productFinalization?: unknown }).productFinalization;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.kind !== 'complete-repository-futures'
+    || typeof candidate.publicOperationId !== 'string'
+    || !/^op_[A-Za-z0-9_-]{20,80}$/.test(candidate.publicOperationId)
+    || typeof candidate.requestFingerprint !== 'string'
+    || !/^[a-z0-9]{8,128}$/i.test(candidate.requestFingerprint)
+    || typeof candidate.repositoryIdentity !== 'string'
+    || !/^(?:github|upload):[A-Za-z0-9_./-]{1,220}$/i.test(candidate.repositoryIdentity)) return null;
+  return candidate as unknown as RepositoryProductFinalizationApiRequest['productFinalization'];
+}
+
+function hasProductFinalization(input: unknown) {
+  return Boolean(input && typeof input === 'object' && !Array.isArray(input) && 'productFinalization' in input);
 }
 
 function withDuplicateSuppressed(

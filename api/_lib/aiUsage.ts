@@ -3,11 +3,17 @@ import postgres, { type JSONValue, type Sql, type TransactionSql } from 'postgre
 import { stableContextFingerprint } from '../../src/lib/repositoryIntelligence/contextSelection.js';
 import {
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+  REPOSITORY_PRODUCT_COMPLETE_CONTRACT_VERSION,
   REPOSITORY_PRODUCT_PIPELINE_VERSION,
   REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION,
   type RepositoryIntelligenceProviderApiResponse,
   type RepositoryProductProviderStage,
 } from '../../src/lib/repositoryIntelligence/productionProviderContract.js';
+import {
+  buildRepositoryProductExpansionStagesForFingerprint,
+  isCompleteRepositoryProductIntelligenceResult,
+  mergeRepositoryProductExpansionResults,
+} from '../../src/lib/repositoryIntelligence/stagedProductIntelligence.js';
 import type { RepositoryDeepIntelligenceRequest } from '../../src/lib/repositoryIntelligence/deepIntelligenceRequest.js';
 import type {
   AccountAiUsageSummary,
@@ -20,6 +26,7 @@ import type {
 import { validateAccountDatabaseUrl } from './authConfig.js';
 import type {
   AiOperationLookup,
+  AiUsageReconciliationReport,
   AiOperationStatusSnapshot,
   PersistedRepositoryFutureResult,
 } from '../../src/lib/aiOperationRecoveryContract.js';
@@ -70,6 +77,12 @@ interface CompleteAiStageInput {
   maximumStageAttempts: number;
 }
 
+interface FinalizeRepositoryFuturesInput {
+  userId: string;
+  lookup: AiOperationLookup;
+  now: Date;
+}
+
 interface AcquireProviderPermitInput {
   authorization: AuthorizedAiStage;
   now: Date;
@@ -88,10 +101,12 @@ export interface AiUsageStore extends EntitlementStore {
   getUsageSummary(userId: string, now: Date): Promise<AccountAiUsageSummary>;
   authorizeStage(input: AuthorizeAiStageInput): Promise<AuthorizedAiStage>;
   completeStage(input: CompleteAiStageInput): Promise<void>;
+  finalizeRepositoryFutures(input: FinalizeRepositoryFuturesInput): Promise<Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }>>;
+  reconcileBillingIntegrity(userId: string, now: Date): Promise<AiUsageReconciliationReport>;
   acquireProviderPermit(input: AcquireProviderPermitInput): Promise<ProviderPermit>;
   releaseProviderPermit(permit: ProviderPermit, now: Date): Promise<void>;
   getOperationStatus(userId: string, lookup: AiOperationLookup, now: Date): Promise<AiOperationStatusSnapshot | null>;
-  getOperationResult(userId: string, lookup: AiOperationLookup): Promise<PersistedRepositoryFutureResult | null>;
+  getOperationResult(userId: string, lookup: AiOperationLookup, now: Date): Promise<PersistedRepositoryFutureResult | null>;
   close?(): Promise<void>;
 }
 
@@ -176,7 +191,15 @@ export class AiUsageAuthorizationService {
   }
 
   async getOperationResult(userId: string, lookup: AiOperationLookup) {
-    return this.store.getOperationResult(userId, lookup);
+    return this.store.getOperationResult(userId, lookup, this.now());
+  }
+
+  async finalizeRepositoryFutures(userId: string, lookup: AiOperationLookup) {
+    return this.store.finalizeRepositoryFutures({ userId, lookup, now: this.now() });
+  }
+
+  async reconcileBillingIntegrity(userId: string) {
+    return this.store.reconcileBillingIntegrity(userId, this.now());
   }
 
   async authorize(
@@ -270,9 +293,10 @@ export class PostgresAiUsageStore implements AiUsageStore {
   async getUsageSummary(userId: string, now: Date): Promise<AccountAiUsageSummary> {
     return this.sql.begin(async transaction => {
       const entitlement = await this.resolveEntitlement(transaction, userId, now, false);
+      await this.reconcileHistoricalOperations(transaction, userId, now);
       const [usage] = await transaction<Record<string, unknown>[]>`
         select
-          coalesce(sum(consumed_user_units), 0)::integer as used,
+          coalesce(sum(consumed_user_units - refunded_user_units), 0)::integer as used,
           coalesce(sum(reserved_user_units), 0)::integer as reserved
         from public.shipseal_ai_operations
         where owner_user_id = ${userId}
@@ -312,45 +336,170 @@ export class PostgresAiUsageStore implements AiUsageStore {
 
   async getOperationStatus(userId: string, lookup: AiOperationLookup, now: Date): Promise<AiOperationStatusSnapshot | null> {
     return this.sql.begin(async transaction => {
+      await this.reconcileHistoricalOperations(transaction, userId, now);
       const operation = await this.findOwnedOperation(transaction, userId, lookup, false);
       if (!operation) return null;
-      const root = await this.latestRootStage(transaction, String(operation.id), false);
-      return mapOperationStatus(operation, root, now);
+      const stages = await transaction<Record<string, unknown>[]>`
+        select * from public.shipseal_ai_operation_stages
+        where operation_id = ${String(operation.id)} order by created_at asc
+      `;
+      return mapOperationStatus(operation, stages, now);
     });
   }
 
-  async getOperationResult(userId: string, lookup: AiOperationLookup): Promise<PersistedRepositoryFutureResult | null> {
+  async getOperationResult(userId: string, lookup: AiOperationLookup, now: Date): Promise<PersistedRepositoryFutureResult | null> {
     return this.sql.begin(async transaction => {
+      await this.reconcileHistoricalOperations(transaction, userId, now);
       const operation = await this.findOwnedOperation(transaction, userId, lookup, false);
       if (!operation) return null;
-      const canonical = reusableRootResponse(operation.canonical_root_response)
-        || reusableRootResponse((await this.latestReusableRootStage(transaction, String(operation.id), false))?.cached_response);
-      if (!canonical) return null;
-      const expansionRows = await transaction<Record<string, unknown>[]>`
-        select cached_response from public.shipseal_ai_operation_stages
-        where operation_id = ${String(operation.id)} and stage_kind = 'expansion'
-          and state = 'succeeded' and cached_response is not null
-        order by succeeded_at asc nulls last, created_at asc
-      `;
-      const expansions = expansionRows
-        .map(row => row.cached_response)
-        .filter(isReusableExpansionResponse);
+      const complete = reusableCompleteResponse(operation.canonical_complete_response, String(operation.request_fingerprint));
+      if (!complete || !operation.completed_at || operation.refunded_user_units) return null;
       return {
         publicOperationId: String(operation.public_operation_id),
-        root: canonical,
-        expansions,
+        complete,
+        completionVersion: String(operation.complete_contract_version || REPOSITORY_PRODUCT_COMPLETE_CONTRACT_VERSION),
+        completedAt: asIsoDate(operation.completed_at),
       };
     });
   }
 
+  async reconcileBillingIntegrity(userId: string, now: Date): Promise<AiUsageReconciliationReport> {
+    return this.sql.begin(transaction => this.reconcileHistoricalOperations(transaction, userId, now));
+  }
+
+  async finalizeRepositoryFutures(input: FinalizeRepositoryFuturesInput) {
+    const outcome = await this.sql.begin(async transaction => {
+      const operation = await this.findOwnedOperation(transaction, input.userId, input.lookup, true);
+      if (!operation || operation.operation_kind !== 'repository_futures') {
+        throw operationConflict(false, 'The Future analysis operation is unavailable for this account.', { operationRecoveryAction: 'terminal_failure' });
+      }
+      if (input.lookup.requestFingerprint !== String(operation.request_fingerprint)
+        || input.lookup.repositoryIdentity !== String(operation.repository_identity)) {
+        throw operationConflict(false, 'The Future completion identity does not match the authorized analysis.', {
+          publicOperationId: String(operation.public_operation_id), operationRecoveryAction: 'terminal_failure',
+        });
+      }
+      const existing = reusableCompleteResponse(operation.canonical_complete_response, String(operation.request_fingerprint));
+      if (existing && Number(operation.refunded_user_units || 0) === 0) return { response: existing } as const;
+      if (Number(operation.refunded_user_units || 0) === 1) {
+        throw operationConflict(true, 'The incomplete historical analysis was refunded. Start a new Future analysis.', {
+          publicOperationId: String(operation.public_operation_id), operationRecoveryAction: 'start_new_analysis',
+        });
+      }
+      if (Number(operation.reserved_user_units || 0) !== 1 && Number(operation.consumed_user_units || 0) !== 1) {
+        throw operationConflict(false, 'The Future analysis has no authorized billing reservation.', {
+          publicOperationId: String(operation.public_operation_id), operationRecoveryAction: 'terminal_failure',
+        });
+      }
+      const reconstruction = await reconstructCompleteFuture(transaction, operation);
+      if (reconstruction.state === 'incomplete') {
+        throw operationConflict(true, 'Future pathway groups are not complete yet.', {
+          publicOperationId: String(operation.public_operation_id), operationRecoveryAction: 'retry_stage',
+        });
+      }
+      if (reconstruction.state === 'ambiguous') {
+        await this.releaseRootReservation(transaction, operation, input.userId, 'complete-future-validation-failed', input.now);
+        return {
+          error: operationConflict(false, 'Repository Futures could not be completed. Your Deep Analysis allowance was not used.', {
+            publicOperationId: String(operation.public_operation_id), operationRecoveryAction: 'terminal_failure',
+          }),
+        } as const;
+      }
+      await persistCompleteFuture(transaction, operation, reconstruction.response, input.now);
+      if (Number(operation.reserved_user_units) === 1) {
+        await this.insertLedger(transaction, input.userId, String(operation.id), 'consumption', -1, 1, 'validated-complete-future-result', input.now);
+      }
+      return { response: reconstruction.response } as const;
+    });
+    if ('error' in outcome) throw outcome.error;
+    return outcome.response;
+  }
+
+  private async reconcileHistoricalOperations(
+    transaction: TransactionSql,
+    userId: string,
+    now: Date,
+  ): Promise<AiUsageReconciliationReport> {
+    const report: AiUsageReconciliationReport = {
+      inspected: 0,
+      reconstructed: 0,
+      refunded: 0,
+      reviewRequired: 0,
+      unchanged: 0,
+    };
+    const operations = await transaction<Record<string, unknown>[]>`
+      select * from public.shipseal_ai_operations
+      where owner_user_id = ${userId}
+        and operation_kind = 'repository_futures'
+        and consumed_user_units = 1
+        and refunded_user_units = 0
+      order by created_at asc
+      for update
+    `;
+    for (const operation of operations) {
+      report.inspected += 1;
+      const complete = reusableCompleteResponse(
+        operation.canonical_complete_response,
+        String(operation.request_fingerprint),
+      );
+      if (complete && operation.completed_at) {
+        report.unchanged += 1;
+        if (!operation.reconciliation_outcome) {
+          await transaction`
+            update public.shipseal_ai_operations set
+              reconciliation_outcome = 'not-required', reconciled_at = ${now.toISOString()},
+              updated_at = ${now.toISOString()}
+            where id = ${String(operation.id)}
+          `;
+        }
+        continue;
+      }
+      const reconstruction = await reconstructCompleteFuture(transaction, operation);
+      if (reconstruction.state === 'complete') {
+        await persistCompleteFuture(transaction, operation, reconstruction.response, now, 'reconstructed');
+        report.reconstructed += 1;
+        continue;
+      }
+      if (reconstruction.state === 'ambiguous') {
+        await transaction`
+          update public.shipseal_ai_operations set
+            reconciliation_outcome = 'review-required', reconciled_at = ${now.toISOString()},
+            updated_at = ${now.toISOString()}
+          where id = ${String(operation.id)}
+        `;
+        report.reviewRequired += 1;
+        continue;
+      }
+      await transaction`
+        insert into public.shipseal_ai_usage_adjustments (
+          id, owner_user_id, operation_id, entry_kind, user_unit_delta, reason, created_at
+        ) values (
+          ${createAiId('adj')}, ${userId}, ${String(operation.id)}, 'refund', -1,
+          'historical-incomplete-repository-futures', ${now.toISOString()}
+        ) on conflict (operation_id, entry_kind) do nothing
+      `;
+      await transaction`
+        update public.shipseal_ai_operations set
+          refunded_user_units = 1, reserved_user_units = 0, state = 'terminal_failure',
+          terminal_failure_category = 'historical-incomplete-future-refunded',
+          reconciliation_outcome = 'refunded', reconciled_at = ${now.toISOString()},
+          released_at = coalesce(released_at, ${now.toISOString()}), updated_at = ${now.toISOString()}
+        where id = ${String(operation.id)} and refunded_user_units = 0
+      `;
+      report.refunded += 1;
+    }
+    return report;
+  }
+
   async authorizeStage(input: AuthorizeAiStageInput): Promise<AuthorizedAiStage> {
-    return this.sql.begin(async transaction => {
+    const outcome = await this.sql.begin(async transaction => {
+      await this.reconcileHistoricalOperations(transaction, input.userId, input.now);
       const requestedRecoveryRows = input.recoveryOperationId && /^op_[A-Za-z0-9_-]{20,80}$/.test(input.recoveryOperationId)
         ? await transaction<Record<string, unknown>[]>`
           select * from public.shipseal_ai_operations
           where owner_user_id = ${input.userId} and public_operation_id = ${input.recoveryOperationId}
             and operation_kind = ${input.operationKind} and repository_identity = ${input.repositoryIdentity}
-            and (state = 'succeeded' or consumed_user_units = 1)
+            and refunded_user_units = 0 and state <> 'terminal_failure'
           limit 1 for update
         `
         : [];
@@ -364,7 +513,8 @@ export class PostgresAiUsageStore implements AiUsageStore {
         where owner_user_id = ${input.userId}
           and operation_kind = ${input.operationKind}
           and logical_analysis_fingerprint = ${input.logicalAnalysisFingerprint}
-        limit 1 for update
+          and state <> 'terminal_failure'
+        order by created_at desc limit 1 for update
       `;
       const existingOperation = existingOperationRows[0];
       let operation = existingOperation;
@@ -384,7 +534,8 @@ export class PostgresAiUsageStore implements AiUsageStore {
           where owner_user_id = ${input.userId}
             and operation_kind = ${input.operationKind}
             and logical_analysis_fingerprint = ${input.logicalAnalysisFingerprint}
-          limit 1 for update
+            and state <> 'terminal_failure'
+          order by created_at desc limit 1 for update
         `;
         operation = repeated[0];
         if (operation) {
@@ -406,7 +557,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
             and repository_identity = ${input.repositoryIdentity}
             and request_fingerprint = ${input.requestFingerprint}
             and execution_profile = ${input.executionProfile}
-            and (state = 'succeeded' or consumed_user_units = 1)
+            and state <> 'terminal_failure' and refunded_user_units = 0
           order by succeeded_at desc nulls last, created_at desc
           limit 1 for update
         `;
@@ -424,7 +575,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
         if (input.reserveUserUnit) {
           const [usage] = await transaction<Record<string, unknown>[]>`
             select
-              coalesce(sum(consumed_user_units), 0)::integer as used,
+              coalesce(sum(consumed_user_units - refunded_user_units), 0)::integer as used,
               coalesce(sum(reserved_user_units), 0)::integer as reserved
             from public.shipseal_ai_operations
             where owner_user_id = ${input.userId}
@@ -463,9 +614,6 @@ export class PostgresAiUsageStore implements AiUsageStore {
       if (operation.state === 'succeeded' && input.stageKind === 'roots') {
         return this.authorizeIntegrityRecovery(transaction, operation, input);
       }
-      if (input.stageKind === 'expansion' && operation.state !== 'succeeded') {
-        throw operationConflict(true, 'Future expansion is waiting for the authorized root analysis.');
-      }
       if (input.stageKind === 'expansion') {
         await assertExpansionBelongsToValidatedRoot(transaction, operationIdFor(operation), input.requestFingerprint, input.productStage);
       }
@@ -493,8 +641,12 @@ export class PostgresAiUsageStore implements AiUsageStore {
         operationLeaseExpiresAt: asIsoDate(stage.lease_expires_at),
       });
       if (stage.state === 'terminal_failure' || Number(stage.attempt_count) >= input.maximumStageAttempts) {
-        if (input.stageKind === 'roots') await this.releaseRootReservation(transaction, operation, input.userId, 'stage-attempt-limit', input.now);
-        throw operationConflict(false, 'This analysis stage reached its provider-attempt limit.');
+        await this.releaseRootReservation(transaction, operation, input.userId, 'stage-attempt-limit', input.now);
+        return {
+          billingIntegrityDenial: operationConflict(false, 'This analysis stage reached its provider-attempt limit.', {
+            publicOperationId: String(operation.public_operation_id), operationRecoveryAction: 'terminal_failure',
+          }),
+        } as const;
       }
       const leaseId = createAiId('lease');
       const [authorizedStage] = await transaction<Record<string, unknown>[]>`
@@ -505,12 +657,14 @@ export class PostgresAiUsageStore implements AiUsageStore {
       `;
       await transaction`
         update public.shipseal_ai_operations set
-          state = case when state = 'succeeded' then state else 'running' end,
+          state = 'running',
           last_attempt_at = ${input.now.toISOString()}, updated_at = ${input.now.toISOString()}
         where id = ${operationId}
       `;
       return mapAuthorization(operation, authorizedStage, leaseId);
     });
+    if ('billingIntegrityDenial' in outcome) throw outcome.billingIntegrityDenial;
+    return outcome;
   }
 
   async completeStage(input: CompleteAiStageInput) {
@@ -552,15 +706,10 @@ export class PostgresAiUsageStore implements AiUsageStore {
                 updated_at = ${input.now.toISOString()}
               where id = ${input.authorization.operationId}
             `;
-          }
-          if (Number(operation.reserved_user_units) === 1) {
             await transaction`
-              update public.shipseal_ai_operations set
-                state = 'succeeded', reserved_user_units = 0, consumed_user_units = 1,
-                succeeded_at = ${input.now.toISOString()}, updated_at = ${input.now.toISOString()}
+              update public.shipseal_ai_operations set state = 'running', updated_at = ${input.now.toISOString()}
               where id = ${input.authorization.operationId}
             `;
-            await this.insertLedger(transaction, input.userId, input.authorization.operationId, 'consumption', -1, 1, 'validated-root-result', input.now);
           } else {
             await transaction`
               update public.shipseal_ai_operations set state = 'succeeded', succeeded_at = ${input.now.toISOString()}, updated_at = ${input.now.toISOString()}
@@ -590,7 +739,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
           updated_at = ${input.now.toISOString()}
         where id = ${input.authorization.stageId}
       `;
-      if (input.authorization.stageKind === 'roots') {
+      if (input.authorization.stageKind === 'roots' || input.authorization.stageKind === 'expansion') {
         if (input.authorization.integrityRecovery) return;
         if (terminal) {
           await this.releaseRootReservation(
@@ -761,7 +910,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
     operation: Record<string, unknown>,
     input: AuthorizeAiStageInput,
   ): Promise<AuthorizedAiStage | null> {
-    if (input.stageKind !== 'roots' || operation.state !== 'succeeded') return null;
+    if (input.stageKind !== 'roots' || operation.state === 'terminal_failure') return null;
     const canonical = reusableRootResponse(operation.canonical_root_response);
     if (canonical) {
       return {
@@ -882,7 +1031,10 @@ export class PostgresAiUsageStore implements AiUsageStore {
         select * from public.shipseal_ai_operations
         where owner_user_id = ${userId} and operation_kind = 'repository_futures'
           and repository_identity = ${repositoryIdentity} and request_fingerprint = ${requestFingerprint}
-        order by created_at desc limit 1 ${suffix}
+        order by
+          (canonical_complete_response is not null and refunded_user_units = 0) desc,
+          (state <> 'terminal_failure') desc,
+          created_at desc limit 1 ${suffix}
       `)[0];
     }
     if (repositoryIdentity) {
@@ -890,14 +1042,20 @@ export class PostgresAiUsageStore implements AiUsageStore {
         select * from public.shipseal_ai_operations
         where owner_user_id = ${userId} and operation_kind = 'repository_futures'
           and repository_identity = ${repositoryIdentity}
-        order by succeeded_at desc nulls last, created_at desc limit 1 ${suffix}
+        order by
+          (canonical_complete_response is not null and refunded_user_units = 0) desc,
+          (state <> 'terminal_failure') desc,
+          succeeded_at desc nulls last, created_at desc limit 1 ${suffix}
       `)[0];
     }
     return (await transaction<Record<string, unknown>[]>`
       select * from public.shipseal_ai_operations
       where owner_user_id = ${userId} and operation_kind = 'repository_futures'
         and request_fingerprint = ${requestFingerprint!}
-      order by created_at desc limit 1 ${suffix}
+      order by
+        (canonical_complete_response is not null and refunded_user_units = 0) desc,
+        (state <> 'terminal_failure') desc,
+        created_at desc limit 1 ${suffix}
     `)[0];
   }
 
@@ -1102,36 +1260,197 @@ function isReusableExpansionResponse(value: unknown): value is Extract<Repositor
     && Boolean(response.stageResult && Array.isArray(response.stageResult.expansions));
 }
 
+export type CompleteFutureReconstruction =
+  | { state: 'complete'; response: Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }> }
+  | { state: 'incomplete' }
+  | { state: 'ambiguous' };
+
+function reusableCompleteResponse(
+  value: unknown,
+  requestFingerprint: string,
+): Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }> | null {
+  const response = reusableRootResponse(value);
+  return response && isCompleteRepositoryProductIntelligenceResult(
+    response.result.productIntelligence,
+    requestFingerprint,
+  ) ? response : null;
+}
+
+async function reconstructCompleteFuture(
+  transaction: TransactionSql,
+  operation: Record<string, unknown>,
+): Promise<CompleteFutureReconstruction> {
+  const stages = await transaction<Record<string, unknown>[]>`
+    select * from public.shipseal_ai_operation_stages
+    where operation_id = ${String(operation.id)}
+    order by created_at asc
+  `;
+  return reconstructCompleteFutureFromRecords(operation, stages);
+}
+
+export function reconstructCompleteFutureFromRecords(
+  operation: Record<string, unknown>,
+  stages: Record<string, unknown>[],
+): CompleteFutureReconstruction {
+  const requestFingerprint = String(operation.request_fingerprint);
+  const persistedComplete = reusableCompleteResponse(operation.canonical_complete_response, requestFingerprint);
+  if (persistedComplete) return { state: 'complete', response: persistedComplete };
+
+  const rootCandidates = [
+    operation.canonical_root_response,
+    ...stages.filter(stage => stage.stage_kind === 'roots' && stage.state === 'succeeded')
+      .map(stage => stage.cached_response),
+  ];
+  const root = rootCandidates.map(reusableRootResponse).find(Boolean) || null;
+  if (!root?.result.productIntelligence) return { state: 'incomplete' };
+
+  const expectedStages = buildRepositoryProductExpansionStagesForFingerprint(
+    requestFingerprint,
+    root.result.productIntelligence,
+  );
+  const batches = [];
+  for (const expected of expectedStages) {
+    const matching = stages.find(stage => stage.stage_kind === 'expansion'
+      && stage.stage_fingerprint === expected.fingerprint
+      && stage.state === 'succeeded'
+      && isReusableExpansionResponse(stage.cached_response));
+    if (!matching || !isReusableExpansionResponse(matching.cached_response)) return { state: 'incomplete' };
+    const stageResult = matching.cached_response.stageResult;
+    if (stageResult.fingerprint !== expected.fingerprint
+      || stageResult.batchIndex !== expected.batchIndex
+      || stageResult.totalBatches !== expected.totalBatches
+      || !sameStringSet(stageResult.expansions.map(item => item.parentId), expected.parents.map(parent => parent.id))) {
+      return { state: 'ambiguous' };
+    }
+    batches.push(stageResult);
+  }
+  try {
+    const mergedResult = mergeRepositoryProductExpansionResults(root.result, batches);
+    if (!isCompleteRepositoryProductIntelligenceResult(mergedResult.productIntelligence, requestFingerprint)) {
+      return { state: 'ambiguous' };
+    }
+    return {
+      state: 'complete',
+      response: {
+        ...root,
+        result: mergedResult,
+        diagnostics: {
+          ...root.diagnostics,
+          cacheUsed: stages.some(stage => stage.cached_response != null),
+          expansionBatchCount: expectedStages.length,
+          acceptedSecondGenerationCount: mergedResult.productIntelligence?.opportunities
+            .flatMap(opportunity => opportunity.futureEvolutions)
+            .filter(evolution => evolution.generation === 2).length,
+          acceptedThirdGenerationCount: mergedResult.productIntelligence?.opportunities
+            .flatMap(opportunity => opportunity.futureEvolutions)
+            .filter(evolution => evolution.generation === 3).length,
+        },
+      },
+    };
+  } catch {
+    return { state: 'ambiguous' };
+  }
+}
+
+async function persistCompleteFuture(
+  transaction: TransactionSql,
+  operation: Record<string, unknown>,
+  response: Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }>,
+  now: Date,
+  reconciliationOutcome: 'not-required' | 'reconstructed' = 'not-required',
+) {
+  const finalFingerprint = response.result.productIntelligence?.fingerprint || response.result.fingerprint;
+  await transaction`
+    update public.shipseal_ai_operations set
+      canonical_complete_response = ${transaction.json(asJson(response))},
+      canonical_complete_fingerprint = ${finalFingerprint},
+      complete_contract_version = ${REPOSITORY_PRODUCT_COMPLETE_CONTRACT_VERSION},
+      completed_at = coalesce(completed_at, ${now.toISOString()}),
+      state = 'succeeded', reserved_user_units = 0, consumed_user_units = 1,
+      succeeded_at = coalesce(succeeded_at, ${now.toISOString()}),
+      reconciliation_outcome = ${reconciliationOutcome}, reconciled_at = ${now.toISOString()},
+      terminal_failure_category = null, released_at = null, updated_at = ${now.toISOString()}
+    where id = ${String(operation.id)}
+  `;
+}
+
+function sameStringSet(left: string[], right: string[]) {
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return sortedLeft.length === sortedRight.length
+    && sortedLeft.every((value, index) => value === sortedRight[index]);
+}
+
 function mapOperationStatus(
   operation: Record<string, unknown>,
-  root: Record<string, unknown> | undefined,
+  stages: Record<string, unknown>[],
   now: Date,
 ): AiOperationStatusSnapshot {
-  const cacheAvailable = Boolean(reusableRootResponse(operation.canonical_root_response)
-    || reusableRootResponse(root?.cached_response));
-  const leaseExpiresAt = root?.lease_expires_at ? asIsoDate(root.lease_expires_at) : null;
-  const activeLease = root?.state === 'running' && leaseExpiresAt !== null && Date.parse(leaseExpiresAt) > now.getTime();
+  const root = stages.filter(stage => stage.stage_kind === 'roots')
+    .sort((left, right) => String(right.updated_at).localeCompare(String(left.updated_at)))[0];
+  const rootResponse = reusableRootResponse(operation.canonical_root_response)
+    || reusableRootResponse(root?.cached_response);
+  const rootCacheAvailable = Boolean(rootResponse);
+  const cacheAvailable = Boolean(reusableCompleteResponse(
+    operation.canonical_complete_response,
+    String(operation.request_fingerprint),
+  ) && operation.completed_at && Number(operation.refunded_user_units || 0) === 0);
+  const expectedExpansionCount = rootResponse?.result.productIntelligence
+    ? buildRepositoryProductExpansionStagesForFingerprint(
+      String(operation.request_fingerprint),
+      rootResponse.result.productIntelligence,
+    ).length
+    : null;
+  const completedExpansionCount = stages.filter(stage => stage.stage_kind === 'expansion'
+    && stage.state === 'succeeded' && isReusableExpansionResponse(stage.cached_response)).length;
+  const runningStages = stages.filter(stage => stage.state === 'running');
+  const activeStage = runningStages.find(stage => stage.lease_expires_at
+    && new Date(String(stage.lease_expires_at)).getTime() > now.getTime());
+  const staleStage = runningStages.find(stage => !stage.lease_expires_at
+    || new Date(String(stage.lease_expires_at)).getTime() <= now.getTime());
+  const retryableStage = stages.find(stage => stage.state === 'retryable_failure');
+  const leaseExpiresAt = activeStage?.lease_expires_at ? asIsoDate(activeStage.lease_expires_at) : null;
   const consumed = Number(operation.consumed_user_units) === 1;
+  const refunded = Number(operation.refunded_user_units) === 1;
   const reserved = Number(operation.reserved_user_units) === 1;
   const released = Boolean(operation.released_at);
   let recoveryAction: AiOperationStatusSnapshot['recoveryAction'];
   if (cacheAvailable) recoveryAction = 'open_result';
-  else if (activeLease) recoveryAction = 'wait_for_active_lease';
-  else if (root?.state === 'running') recoveryAction = 'resume_stale_lease';
-  else if (root?.state === 'retryable_failure') recoveryAction = 'retry_stage';
-  else if (operation.state === 'succeeded' && consumed && Number(operation.integrity_recovery_attempt_count) < 1) recoveryAction = 'integrity_recovery';
-  else if (operation.state === 'terminal_failure' || (Number(operation.integrity_recovery_attempt_count) >= 1 && consumed)) recoveryAction = 'terminal_failure';
+  else if (refunded) recoveryAction = 'start_new_analysis';
+  else if (activeStage) recoveryAction = 'wait_for_active_lease';
+  else if (staleStage) recoveryAction = 'resume_stale_lease';
+  else if (retryableStage) recoveryAction = 'retry_stage';
+  else if (reserved && rootCacheAvailable) recoveryAction = 'retry_stage';
+  else if (operation.state === 'terminal_failure') recoveryAction = 'terminal_failure';
   else recoveryAction = 'start_new_analysis';
+  const completionState: AiOperationStatusSnapshot['completionState'] = cacheAvailable
+    ? 'ready'
+    : refunded
+      ? 'refunded'
+      : activeStage
+        ? 'running'
+        : staleStage || retryableStage
+          ? 'retryable'
+          : rootCacheAvailable || completedExpansionCount > 0
+            ? 'incomplete'
+            : operation.state === 'terminal_failure'
+              ? 'terminal'
+              : 'incomplete';
   return {
     publicOperationId: String(operation.public_operation_id),
     operationState: operation.state as AiOperationStatusSnapshot['operationState'],
     rootStageState: root?.state as AiOperationStatusSnapshot['rootStageState'] || 'missing',
-    retryable: ['resume_stale_lease', 'retry_stage', 'integrity_recovery', 'start_new_analysis'].includes(recoveryAction),
+    retryable: ['resume_stale_lease', 'retry_stage', 'start_new_analysis'].includes(recoveryAction),
+    completionState,
     cacheAvailable,
+    rootCacheAvailable,
+    completedExpansionCount,
+    expectedExpansionCount,
     leaseExpiresAt,
-    userUnitState: consumed ? 'consumed' : reserved ? 'reserved' : released ? 'released' : 'none',
+    userUnitState: refunded ? 'refunded' : consumed ? 'consumed' : reserved ? 'reserved' : released ? 'released' : 'none',
     recoveryAction,
     integrityRecoveryAttemptsUsed: Number(operation.integrity_recovery_attempt_count || 0),
+    reconciliationOutcome: (operation.reconciliation_outcome || 'not-required') as AiOperationStatusSnapshot['reconciliationOutcome'],
   };
 }
 

@@ -227,6 +227,7 @@ export function ResultWorkspace({
   const futuresCanRetry = repositoryProductIntelligenceStatus?.state === 'fallback'
     ? repositoryProductIntelligenceStatus.retryable
     : repositoryProductIntelligenceStatus?.state === 'cancelled';
+  const futuresCanStart = repositoryProductIntelligenceStatus?.state === 'deterministic';
 
   useEffect(() => {
     if (billingFutureFocusConsumed.current || !futuresReady || typeof window === 'undefined') return;
@@ -246,7 +247,7 @@ export function ResultWorkspace({
     if (effectiveEntryView === 'futures' && !futuresReady) setEntryView(null);
   }, [effectiveEntryView, futuresReady]);
 
-  const selectorReady = futuresReady || futureDegradedAccess || futureTerminalFailure;
+  const selectorReady = futuresReady || futuresCanStart || futureDegradedAccess || futureTerminalFailure;
 
   if (!effectiveEntryView && !selectorReady) {
     const terminalFailure = ['fallback', 'cancelled'].includes(repositoryProductIntelligenceStatus.state);
@@ -270,7 +271,7 @@ export function ResultWorkspace({
         opportunityCount={repositoryProductIntelligence?.opportunities.length || 0}
         futuresAvailable={futuresReady}
         futuresStatus={repositoryProductIntelligenceStatus}
-        onRetryFutures={retryRepositoryProductIntelligence && futuresCanRetry ? () => { void retryRepositoryProductIntelligence(); } : undefined}
+        onRetryFutures={retryRepositoryProductIntelligence && (futuresCanRetry || futuresCanStart) ? () => { void retryRepositoryProductIntelligence(); } : undefined}
         onSelect={handleEntryViewSelect}
       />
     );

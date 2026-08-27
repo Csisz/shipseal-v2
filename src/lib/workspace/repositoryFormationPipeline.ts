@@ -46,8 +46,9 @@ export function resolveRepositoryFormationPhase({
       : 'reading';
   }
   if (!repositoryIntelligenceReady) return 'understanding';
+  if (productStatus.state === 'deterministic') return 'ready';
   if (!productIntelligenceReady) {
-    return productStatus.state === 'preparing' && (productStatus.productStage === 'expansion' || productStatus.productStage === 'merging')
+    return productStatus.state === 'preparing' && (productStatus.productStage === 'expansion' || productStatus.productStage === 'merging' || productStatus.productStage === 'finalizing')
       ? 'pathways'
       : 'directions';
   }

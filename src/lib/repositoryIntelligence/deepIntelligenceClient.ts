@@ -13,7 +13,6 @@ import {
   buildRepositoryProductExpansionStages,
   buildRepositoryProductRootStage,
   mapWithBoundedConcurrency,
-  mergeRepositoryProductExpansionResults,
   type RepositoryProductPipelineProgress,
 } from './stagedProductIntelligence';
 
@@ -231,67 +230,10 @@ export async function requestRepositoryProductIntelligenceStaged(
       : invalidStageResponse('Some future pathways could not be completed.', failed.stage);
   }
   options.onProgress?.({ stage: 'merging', completedBatches: stages.length, totalBatches: stages.length, activeBatchIndexes: [], stageAttempt: 1 });
-  try {
-    const stageResults = responses.map(item => (item.response as Extract<RepositoryIntelligenceProviderApiResponse, { state: 'stage-enhanced' }>).stageResult);
-    const result = mergeRepositoryProductExpansionResults(roots.result, stageResults);
-    const secondGeneration = stageResults.flatMap(batch => batch.expansions.flatMap(item => item.evolutions)).filter(item => item.generation === 2).length;
-    const thirdGeneration = stageResults.flatMap(batch => batch.expansions.flatMap(item => item.evolutions)).filter(item => item.generation === 3).length;
-    const diagnostics = aggregateStagedDiagnostics(roots, responses.map(item => item.response as Extract<RepositoryIntelligenceProviderApiResponse, { state: 'stage-enhanced' }>), secondGeneration, thirdGeneration);
-    return { ...roots, result, diagnostics };
-  } catch {
-    return {
-      ...invalidStageResponse('Validated pathway groups could not be merged.', rootsStage),
-      diagnostics: {
-        ...invalidStageResponse('Validated pathway groups could not be merged.', rootsStage).diagnostics,
-        operationalFailureCategory: 'merge_incomplete',
-        failureBoundary: 'staged-merge',
-      },
-    };
-  }
-}
-
-function aggregateStagedDiagnostics(
-  roots: Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }>,
-  batches: Extract<RepositoryIntelligenceProviderApiResponse, { state: 'stage-enhanced' }>[],
-  secondGeneration: number,
-  thirdGeneration: number,
-) {
-  const all = [roots.diagnostics, ...batches.map(batch => batch.diagnostics)];
-  const latestRateLimit = [...all].reverse().find(item => item.rateLimitAttempt);
-  const sum = (key: 'providerRequestBytes' | 'providerPromptTokens' | 'providerCompletionTokens' | 'providerReasoningTokens' | 'providerTotalTokens' | 'outputBytes' | 'durationMs' | 'retryCount' | 'languageRepairCount' | 'stageRetryCount') => all.reduce((total, item) => total + (item[key] || 0), 0);
-  return {
-    ...roots.diagnostics,
-    productStage: 'expansion' as const,
-    expansionBatchCount: batches.length,
-    acceptedSecondGenerationCount: secondGeneration,
-    acceptedThirdGenerationCount: thirdGeneration,
-    providerRequestBytes: sum('providerRequestBytes'),
-    providerPromptTokens: sum('providerPromptTokens'),
-    providerCompletionTokens: sum('providerCompletionTokens'),
-    providerReasoningTokens: sum('providerReasoningTokens'),
-    providerTotalTokens: sum('providerTotalTokens'),
-    outputBytes: sum('outputBytes'),
-    durationMs: sum('durationMs'),
-    retryCount: sum('retryCount'),
-    languageRepairCount: sum('languageRepairCount'),
-    stageRetryCount: sum('stageRetryCount'),
-    ...(latestRateLimit ? {
-      rateLimitAttempt: latestRateLimit.rateLimitAttempt,
-      retryAfterMs: latestRateLimit.retryAfterMs,
-      backoffMs: latestRateLimit.backoffMs,
-      rateLimitRetryAt: latestRateLimit.rateLimitRetryAt,
-      rateLimitResetRequestsMs: latestRateLimit.rateLimitResetRequestsMs,
-      rateLimitResetTokensMs: latestRateLimit.rateLimitResetTokensMs,
-      rateLimitRemainingRequests: latestRateLimit.rateLimitRemainingRequests,
-      rateLimitRemainingTokens: latestRateLimit.rateLimitRemainingTokens,
-      rateLimitLimitRequests: latestRateLimit.rateLimitLimitRequests,
-      rateLimitLimitTokens: latestRateLimit.rateLimitLimitTokens,
-      rateLimitType: latestRateLimit.rateLimitType,
-      expansionConcurrencyAtRetry: latestRateLimit.expansionConcurrencyAtRetry,
-      rateLimitRecoveryStatus: latestRateLimit.rateLimitRecoveryStatus,
-    } : {}),
-    duplicateSuppressed: all.some(item => item.duplicateSuppressed),
-  };
+  const publicOperationId = roots.diagnostics.publicOperationId;
+  if (!publicOperationId) return invalidStageResponse('Future completion identity was unavailable.', rootsStage);
+  options.onProgress?.({ stage: 'finalizing', completedBatches: stages.length, totalBatches: stages.length, activeBatchIndexes: [], stageAttempt: 1 });
+  return performProductFinalizationRequest(request, publicOperationId, options);
 }
 
 async function performProductStageRequest(
@@ -313,6 +255,35 @@ async function performProductStageRequest(
   });
   activeProductStages.set(flightKey, operation);
   return operation;
+}
+
+async function performProductFinalizationRequest(
+  request: RepositoryDeepIntelligenceRequest,
+  publicOperationId: string,
+  options: ProductStageRequestOptions,
+) {
+  const repositoryIdentity = request.repository.fullName
+    ? `github:${request.repository.fullName.toLowerCase()}`
+    : `upload:${request.repository.name.trim().toLowerCase()}`;
+  try {
+    const response = await (options.fetcher || fetch)('/api/repository-intelligence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+        productFinalization: {
+          kind: 'complete-repository-futures',
+          publicOperationId,
+          requestFingerprint: request.fingerprint,
+          repositoryIdentity,
+        },
+      }),
+      signal: options.signal,
+    });
+    return await validateResponse(response);
+  } catch {
+    return unavailableResponse();
+  }
 }
 
 async function waitForRateLimitRetry<T extends RepositoryIntelligenceProviderApiResponse>(

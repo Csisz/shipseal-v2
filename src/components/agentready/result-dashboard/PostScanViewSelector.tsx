@@ -34,11 +34,14 @@ export function PostScanViewSelector({
   const cooldownSeconds = useCooldownSeconds(rateLimitRetryAt);
   const rateLimitWaiting = Boolean(rateLimitRetryAt && cooldownSeconds > 0);
   const upgradeRequired = futuresStatus?.state === 'fallback' && futuresStatus.category === 'upgrade_required';
+  const analysisNotStarted = futuresStatus?.state === 'deterministic';
   const recoveryAction = futuresStatus && 'diagnostics' in futuresStatus
     ? futuresStatus.diagnostics?.operationRecoveryAction
     : undefined;
   const operationActive = recoveryAction === 'wait_for_active_lease';
-  const retryLabel = recoveryAction === 'open_result'
+  const retryLabel = analysisNotStarted
+    ? 'Generate Future analysis'
+    : recoveryAction === 'open_result'
     ? 'Open Repository Futures'
     : recoveryAction === 'resume_stale_lease'
       || recoveryAction === 'retry_stage'
@@ -82,11 +85,13 @@ export function PostScanViewSelector({
           <aside className="mx-auto mb-5 flex w-full max-w-3xl flex-col items-start gap-3 rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-4 text-left sm:flex-row sm:items-center sm:justify-between" role="status" data-testid="futures-degraded-status">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="text-sm font-medium text-foreground">{upgradeRequired ? 'Repository Futures' : 'Project Universe is ready'}</div>
-                {upgradeRequired && <Badge variant="secondary">Pro feature</Badge>}
+                <div className="text-sm font-medium text-foreground">{upgradeRequired || analysisNotStarted ? 'Repository Futures' : 'Project Universe is ready'}</div>
+                {(upgradeRequired || analysisNotStarted) && <Badge variant="secondary">Pro AI analysis</Badge>}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {upgradeRequired
+                {analysisNotStarted
+                  ? 'Project Universe is ready. Generate an evidence-backed Future Path when you choose. Uses 1 Deep Analysis when successfully completed.'
+                  : upgradeRequired
                   ? 'Discover validated product directions, implementation pathways and executable plans. Project Universe and deterministic intelligence remain available on Free.'
                   : futuresRetrying
                   ? `${futuresStatus?.message || 'Future analysis is retrying in the background.'}${rateLimitWaiting ? ` Retrying in ${cooldownSeconds} seconds.` : ''} You can explore the repository now.`
@@ -127,11 +132,11 @@ export function PostScanViewSelector({
             index="02"
             overline="Projected state"
             title="Repository Futures"
-            description={futuresAvailable ? 'Explore product directions, future pathways and what this project could become.' : upgradeRequired ? 'Discover validated product directions, implementation pathways and executable plans with Pro.' : 'Validated Product Futures are unavailable until Future analysis completes successfully.'}
-            action={futuresAvailable ? 'Open Repository Futures' : upgradeRequired ? 'Upgrade to Pro above' : futuresRetrying ? 'Future analysis in progress' : 'Repository Futures unavailable'}
+            description={futuresAvailable ? 'Explore product directions, future pathways and what this project could become.' : analysisNotStarted ? 'Generate validated product directions, implementation pathways and an executable Future Path when you are ready.' : upgradeRequired ? 'Discover validated product directions, implementation pathways and executable plans with Pro.' : 'Validated Product Futures are unavailable until Future analysis completes successfully.'}
+            action={futuresAvailable ? 'Open Repository Futures' : analysisNotStarted ? 'Generate Future analysis above' : upgradeRequired ? 'Upgrade to Pro above' : futuresRetrying ? 'Future analysis in progress' : 'Repository Futures unavailable'}
             metadata={futuresAvailable
               ? [opportunityCount ? `${opportunityCount.toLocaleString()} product directions` : 'Evidence-led directions', 'Neural future pathways']
-              : upgradeRequired ? ['Pro feature', 'Evidence-backed AI'] : ['No incomplete Futures shown', futuresRetrying ? rateLimitWaiting ? 'Capacity cooldown' : 'Analysis retrying' : rateLimitWaiting ? 'Retry cooling down' : 'Retry available']}
+              : analysisNotStarted ? ['Explicit start', 'Charged only on completion'] : upgradeRequired ? ['Pro feature', 'Evidence-backed AI'] : ['No incomplete Futures shown', futuresRetrying ? rateLimitWaiting ? 'Capacity cooldown' : 'Analysis retrying' : rateLimitWaiting ? 'Retry cooling down' : 'Retry available']}
             motif={<FuturesMotif />}
             onSelect={onSelect}
             onKeyDown={activateFromKeyboard}

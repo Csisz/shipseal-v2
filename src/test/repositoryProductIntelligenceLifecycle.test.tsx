@@ -106,18 +106,19 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     });
   });
 
-  it('starts above the selector gate exactly once per report and reaches enhanced', async () => {
+  it('keeps deterministic scans free and starts Product Intelligence only after explicit user intent', async () => {
     let resolveRequest!: (value: ReturnType<typeof enhancedResponse>) => void;
     lifecycleMocks.request.mockImplementation(() => new Promise(resolve => { resolveRequest = resolve; }));
     const { result, rerender } = renderHook(() => useRepoScan());
 
     await act(async () => { await result.current.startScan(new File(['zip'], 'fixture.zip')); });
-    await waitFor(() => expect(lifecycleMocks.request).toHaveBeenCalledTimes(1), { timeout: 10_000 });
-    expect(result.current.repositoryProductIntelligenceStatus.state).toBe('preparing');
+    expect(lifecycleMocks.request).not.toHaveBeenCalled();
+    expect(result.current.repositoryProductIntelligenceStatus.state).toBe('deterministic');
 
     rerender();
     act(() => { void result.current.prepareRepositoryProductIntelligence(); });
-    expect(lifecycleMocks.request).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(lifecycleMocks.request).toHaveBeenCalledTimes(1));
+    expect(result.current.repositoryProductIntelligenceStatus.state).toBe('preparing');
 
     await act(async () => { resolveRequest(enhancedResponse()); });
     await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus.state).toBe('enhanced'));
@@ -129,7 +130,10 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     });
     lifecycleMocks.request.mockResolvedValueOnce(enhancedResponse());
     await act(async () => { await result.current.startScan(new File(['zip'], 'second.zip')); });
-    await waitFor(() => expect(lifecycleMocks.request).toHaveBeenCalledTimes(2));
+    expect(lifecycleMocks.request).toHaveBeenCalledTimes(1);
+    expect(result.current.repositoryProductIntelligenceStatus.state).toBe('deterministic');
+    await act(async () => { await result.current.prepareRepositoryProductIntelligence(); });
+    expect(lifecycleMocks.request).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus.state).toBe('enhanced'));
   });
 
@@ -137,6 +141,7 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     lifecycleMocks.request.mockRejectedValueOnce(new Error('provider exploded'));
     const first = renderHook(() => useRepoScan());
     await act(async () => { await first.result.current.startScan(new File(['zip'], 'exception.zip')); });
+    await act(async () => { await first.result.current.prepareRepositoryProductIntelligence(); });
     await waitFor(() => expect(first.result.current.repositoryProductIntelligenceStatus.state).toBe('fallback'));
     expect(first.result.current.repositoryProductIntelligenceStatus).toMatchObject({ retryable: true, category: 'provider_unavailable' });
     first.unmount();
@@ -144,6 +149,7 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     lifecycleMocks.request.mockResolvedValueOnce(timeoutResponse());
     const second = renderHook(() => useRepoScan());
     await act(async () => { await second.result.current.startScan(new File(['zip'], 'timeout.zip')); });
+    await act(async () => { await second.result.current.prepareRepositoryProductIntelligence(); });
     await waitFor(() => expect(second.result.current.repositoryProductIntelligenceStatus).toMatchObject({ state: 'fallback', category: 'request_timeout' }));
     expect(second.result.current.repositoryProductIntelligenceStatus.message).toBe('Future analysis took longer than expected.');
   });
@@ -156,6 +162,7 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     const { result } = renderHook(() => useRepoScan());
 
     await act(async () => { await result.current.startScan(new File(['zip'], 'cancel.zip')); });
+    act(() => { void result.current.prepareRepositoryProductIntelligence(); });
     await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus.state).toBe('preparing'));
     act(() => result.current.cancelRepositoryProductIntelligence());
     await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus.state).toBe('cancelled'));
@@ -173,6 +180,7 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     const { result } = renderHook(() => useRepoScan());
 
     await act(async () => { await result.current.startScan(new File(['zip'], 'rate-limit.zip')); });
+    await act(async () => { await result.current.prepareRepositoryProductIntelligence(); });
     await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus).toMatchObject({ state: 'fallback', category: 'rate_limited' }));
     await act(async () => {
       await Promise.all([

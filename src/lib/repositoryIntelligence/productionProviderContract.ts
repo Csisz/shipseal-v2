@@ -10,6 +10,7 @@ import type {
 export const REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION = 'shipseal.repository-intelligence-provider-api.v1' as const;
 export const REPOSITORY_PRODUCT_PIPELINE_VERSION = 'shipseal.repository-product-pipeline.v1' as const;
 export const REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION = 'shipseal.repository-product-roots.v2' as const;
+export const REPOSITORY_PRODUCT_COMPLETE_CONTRACT_VERSION = 'shipseal.repository-product-complete.v1' as const;
 
 export interface RepositoryProductExpansionParent {
   id: string;
@@ -289,7 +290,7 @@ export type RepositoryIntelligenceProviderFailureCategory =
 
 export type RepositoryIntelligenceProviderStatus =
   | { state: 'deterministic'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false }
-  | { state: 'preparing'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; productStage?: 'roots' | 'expansion' | 'merging'; completedBatches?: number; totalBatches?: number; activeBatchIndexes?: number[]; rateLimitRetryAt?: number; rateLimitAttempt?: number }
+  | { state: 'preparing'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; productStage?: 'roots' | 'expansion' | 'merging' | 'finalizing'; completedBatches?: number; totalBatches?: number; activeBatchIndexes?: number[]; rateLimitRetryAt?: number; rateLimitAttempt?: number }
   | { state: 'enhanced'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; providerId: string; modelId?: string; diagnostics?: RepositoryIntelligenceSafeDiagnostics; insights?: RepositoryIntelligenceDeepInsightSummary[] }
   | { state: 'fallback'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: boolean; category: RepositoryIntelligenceProviderFailureCategory; diagnostics?: RepositoryIntelligenceSafeDiagnostics }
   | { state: 'cancelled'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: true; category: 'request_cancelled'; diagnostics?: RepositoryIntelligenceSafeDiagnostics };
@@ -299,6 +300,16 @@ export interface RepositoryIntelligenceProviderApiRequest {
   request: RepositoryDeepIntelligenceRequest;
   productStage?: RepositoryProductProviderStage;
   stageAttemptKey?: string;
+}
+
+export interface RepositoryProductFinalizationApiRequest {
+  version: typeof REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION;
+  productFinalization: {
+    kind: 'complete-repository-futures';
+    publicOperationId: string;
+    requestFingerprint: string;
+    repositoryIdentity: string;
+  };
 }
 
 export type RepositoryIntelligenceProviderApiResponse =
@@ -356,7 +367,10 @@ export function repositoryFutureFailureMessage(
       || diagnostics?.operationRecoveryAction === 'integrity_recovery') {
       return 'ShipSeal can safely resume this Future analysis.';
     }
-    return 'This Future analysis cannot be resumed safely. Start again after the repository changes.';
+    if (diagnostics?.operationRecoveryAction === 'start_new_analysis') {
+      return 'The incomplete analysis was returned to your allowance. You can start a new Future analysis.';
+    }
+    return 'Repository Futures could not be completed. Your Deep Analysis allowance was not used.';
   }
   const operational = diagnostics?.operationalFailureCategory;
   if (operational === 'provider_timeout' || operational === 'browser_timeout' || category === 'request_timeout') {
