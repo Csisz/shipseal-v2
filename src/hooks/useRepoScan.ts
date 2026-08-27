@@ -287,7 +287,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
       const localToGitHubStepIndex = [2, 3, 4, 5, 6];
       const report = await localScanEngine.scan(
-        { preparedEvidence: imported.scanInput, mode: 'github-public', source: { ...imported.source, ...sourceOverride }, signal: controller.signal },
+        { preparedEvidence: imported.scanInput, mode: 'github-public', source: { ...imported.scanInput.source, ...sourceOverride }, signal: controller.signal },
         {
           onStepStart: (step, index) => {
             if (scanTokenRef.current !== token) return;
@@ -398,7 +398,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       setState(current => ({ ...current, progress: 30 }));
 
       const report = await localScanEngine.scan(
-        { preparedEvidence: imported.scanInput, mode: 'github-public', source: imported.source, signal: controller.signal },
+        { preparedEvidence: imported.scanInput, mode: 'github-public', source: imported.scanInput.source, signal: controller.signal },
         {
           onStepStart: (step, index) => {
             if (scanTokenRef.current !== token) return;

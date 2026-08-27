@@ -1,14 +1,21 @@
+import { generateKeyPairSync } from 'node:crypto';
 import JSZip from 'jszip';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { acquireGitHubRepositoryEvidence } from '../../api/repository-evidence';
 import { buildReport } from '@/lib/readiness';
 import { selectRepositoryEvidence } from '@/lib/repositoryEvidence';
+import { LocalScanEngine } from '@/lib/scanEngine';
 import { scanZipFile } from '@/lib/scanner';
 import { createEmptyScanSummary } from '@/lib/scannerLimits';
 
 const COMMIT_SHA = 'a'.repeat(40);
 const TREE_SHA = 'b'.repeat(40);
 const BLOB_SHA = 'c'.repeat(40);
+const ORIGINAL_ENV = process.env;
+
+afterEach(() => {
+  process.env = ORIGINAL_ENV;
+});
 
 describe('scalable repository evidence', () => {
   it('selects high-value evidence deterministically and distributes a monorepo budget across areas', () => {
@@ -45,11 +52,61 @@ describe('scalable repository evidence', () => {
       { source: 'public-github', owner: 'Csisz', repo: 'large-repo', ref: 'main' },
       { fetcher: fetcher as typeof fetch },
     );
-    expect(result.input.scanSummary).toMatchObject({ scanMode: 'bounded', discoveredFiles: 6002 });
-    expect(result.input.files.length).toBeLessThan(400);
-    expect(result.input.scanSummary?.analyzedTextFiles).toBeGreaterThan(1);
+    expect(result.scanInput.scanSummary).toMatchObject({ scanMode: 'bounded', discoveredFiles: 6002 });
+    expect(result.scanInput.files.length).toBeLessThan(400);
+    expect(result.scanInput.scanSummary?.analyzedTextFiles).toBeGreaterThan(1);
     expect(calls.some(url => /zipball|codeload|github-archive/.test(url))).toBe(false);
     expect(calls.filter(url => url.includes('/git/blobs/')).length).toBeLessThanOrEqual(320);
+  });
+
+  it('keeps connected GitHub App intake on installation-authenticated selective evidence through report creation', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    process.env = {
+      ...ORIGINAL_ENV,
+      GITHUB_APP_ID: '999',
+      GITHUB_APP_PRIVATE_KEY: privateKey.export({ type: 'pkcs1', format: 'pem' }).toString(),
+    };
+    const calls: Array<{ url: string; authorization: string }> = [];
+    const fetcher = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      const authorization = new Headers(init?.headers).get('authorization') || '';
+      calls.push({ url, authorization });
+      if (url.endsWith('/app/installations/12345/access_tokens')) {
+        expect(init?.method).toBe('POST');
+        expect(authorization).toMatch(/^Bearer [^.]+\.[^.]+\.[^.]+$/);
+        return json({ token: 'installation-token' }, 201);
+      }
+      expect(authorization).toBe('Bearer installation-token');
+      if (url.includes('/commits/')) return json({ sha: COMMIT_SHA, commit: { tree: { sha: TREE_SHA } } });
+      if (url.includes('/git/trees/')) return json({ truncated: false, tree: [
+        { path: 'README.md', type: 'blob', sha: BLOB_SHA, size: 20 },
+        { path: 'package.json', type: 'blob', sha: 'd'.repeat(40), size: 40 },
+        { path: 'src/index.ts', type: 'blob', sha: 'e'.repeat(40), size: 30 },
+      ] });
+      if (url.includes('/git/blobs/')) return json({
+        encoding: 'base64',
+        content: Buffer.from(url.endsWith(BLOB_SHA) ? '# Cantu' : 'export const ready = true;').toString('base64'),
+      });
+      return json({ message: 'not found' }, 404);
+    });
+
+    const acquired = await acquireGitHubRepositoryEvidence(
+      { source: 'github-app', installationId: '12345', owner: 'Csisz', repo: 'Cantu', ref: 'main' },
+      { fetcher: fetcher as typeof fetch },
+    );
+    const report = await new LocalScanEngine().scan({
+      preparedEvidence: acquired.scanInput,
+      mode: 'github-public',
+      source: acquired.scanInput.source,
+    });
+
+    expect(acquired.commitSha).toBe(COMMIT_SHA);
+    expect(acquired.scanInput.scanSummary?.sourceCommitSha).toBe(COMMIT_SHA);
+    expect(acquired.scanInput.source).toMatchObject({ sourceType: 'github-app', githubInstallationId: '12345' });
+    expect(report.repoName).toBe('Csisz/Cantu');
+    expect(report.scanSummary.sourceCommitSha).toBe(COMMIT_SHA);
+    expect(calls.some(call => /archive|zipball|codeload/i.test(call.url))).toBe(false);
+    expect(calls.filter(call => call.url.includes('/git/blobs/')).length).toBeGreaterThan(0);
   });
 
   it('prunes generated/vendor content before GitHub blob reads', async () => {
@@ -68,7 +125,7 @@ describe('scalable repository evidence', () => {
       { source: 'public-github', owner: 'Csisz', repo: 'generated-heavy' },
       { fetcher: fetcher as typeof fetch },
     );
-    expect(result.input.scanSummary?.generatedVendorFilesIgnored).toBe(2);
+    expect(result.scanInput.scanSummary?.generatedVendorFilesIgnored).toBe(2);
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 
@@ -98,9 +155,9 @@ describe('scalable repository evidence', () => {
       { fetcher: fetcher as typeof fetch },
     );
 
-    expect(result.input.scanSummary).toMatchObject({ discoveryComplete: true, discoveredFiles: 2 });
+    expect(result.scanInput.scanSummary).toMatchObject({ discoveryComplete: true, discoveredFiles: 2 });
     expect(calls.some(url => url.endsWith(`/git/trees/${generatedTreeSha}`))).toBe(false);
-    expect(Object.keys(result.input.textContents)).toEqual(expect.arrayContaining(['README.md', 'apps/index.ts']));
+    expect(Object.keys(result.scanInput.textContents)).toEqual(expect.arrayContaining(['README.md', 'apps/index.ts']));
   });
 
   it('reads a large local ZIP selectively without calling whole-file arrayBuffer', async () => {
@@ -146,9 +203,9 @@ describe('scalable repository evidence', () => {
   });
 });
 
-function json(body: unknown) {
+function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'application/json', 'X-RateLimit-Remaining': '4000' },
   });
 }

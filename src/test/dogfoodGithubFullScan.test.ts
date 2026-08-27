@@ -130,9 +130,9 @@ describe('live GitHub full-scan dogfood', () => {
   liveDogfood('scans https://github.com/Csisz/shipseal-v2 through the public GitHub import path', async () => {
     const imported = await acquireGitHubRepositoryEvidence({ source: 'public-github', owner: 'Csisz', repo: 'shipseal-v2', ref: 'HEAD' });
     const report = await new LocalScanEngine().scan({
-      preparedEvidence: imported.input,
+      preparedEvidence: imported.scanInput,
       mode: 'github-public',
-      source: imported.input.source,
+      source: imported.scanInput.source,
     });
     const scoreJson = buildScoreJson(report);
 

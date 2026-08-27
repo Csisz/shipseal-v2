@@ -1,6 +1,12 @@
 import { SCANNER_LIMITS } from '../scannerLimits';
-import type { RepoScanInput, ScanSourceMetadata } from '../types';
+import type { ScanSourceMetadata } from '../types';
 import { parseGitHubUrl } from './githubUrl';
+import {
+  isRepositoryEvidenceApiFailure,
+  validateRepositoryEvidenceApiSuccess,
+  type RepositoryEvidenceApiFailureCategory,
+  type RepositoryEvidenceApiSuccess,
+} from './repositoryEvidenceApiContract';
 
 export type GitHubImportErrorCategory =
   | 'invalid-url'
@@ -9,6 +15,11 @@ export type GitHubImportErrorCategory =
   | 'repo-not-found'
   | 'branch-ref-not-found'
   | 'zip-too-large'
+  | 'repository-evidence-permission-denied'
+  | 'repository-evidence-rate-limited'
+  | 'repository-evidence-service-unavailable'
+  | 'repository-evidence-contract-error'
+  | 'repository-evidence-budget-reached'
   | 'unknown-import-error';
 
 export type GitHubImportStrategy = 'proxy-first' | 'direct-browser-codeload' | 'same-origin-proxy';
@@ -38,11 +49,13 @@ export interface GitHubAppArchiveImportInput {
   ref?: string;
 }
 
-export interface ImportedGitHubEvidence {
-  scanInput: RepoScanInput;
-  source: ScanSourceMetadata;
-  commitSha: string;
-  requestCount: number;
+export type ImportedGitHubEvidence = RepositoryEvidenceApiSuccess;
+
+export interface RepositoryEvidenceTransportDiagnostics {
+  httpStatus: number;
+  contentType: string;
+  responseCategory: 'non_json_response' | 'invalid_json' | 'contract_validation_failed' | 'api_failure';
+  contractReason?: string;
 }
 
 export const GITHUB_ZIP_FALLBACK_MESSAGE = 'Download the repository as ZIP from GitHub and upload it manually.';
@@ -52,17 +65,20 @@ export class GitHubImportError extends Error {
   category: GitHubImportErrorCategory;
   fallbackMessage: string;
   diagnostics?: Partial<NonNullable<ScanSourceMetadata['archiveDiagnostics']>>;
+  repositoryEvidenceDiagnostics?: RepositoryEvidenceTransportDiagnostics;
 
   constructor(
     message = GITHUB_ZIP_FALLBACK_MESSAGE,
     category: GitHubImportErrorCategory = 'unknown-import-error',
-    diagnostics?: Partial<NonNullable<ScanSourceMetadata['archiveDiagnostics']>>
+    diagnostics?: Partial<NonNullable<ScanSourceMetadata['archiveDiagnostics']>>,
+    repositoryEvidenceDiagnostics?: RepositoryEvidenceTransportDiagnostics,
   ) {
     super(message);
     this.name = 'GitHubImportError';
     this.category = category;
     this.fallbackMessage = GITHUB_ZIP_FALLBACK_MESSAGE;
     this.diagnostics = diagnostics;
+    this.repositoryEvidenceDiagnostics = repositoryEvidenceDiagnostics;
   }
 }
 
@@ -329,14 +345,81 @@ async function requestRepositoryEvidence(body: Record<string, string>, signal?: 
     });
   } catch (error) {
     if (signal?.aborted) throw error;
-    throw new GitHubImportError('GitHub repository indexing is temporarily unavailable. Try again shortly.', 'network-cors-blocked');
+    throw new GitHubImportError('ShipSeal repository indexing is temporarily unavailable. Please retry.', 'repository-evidence-service-unavailable');
   }
-  const payload = await response.json().catch(() => ({})) as Partial<ImportedGitHubEvidence> & { error?: string };
-  if (!response.ok || !payload.scanInput || !payload.commitSha) {
-    const category: GitHubImportErrorCategory = response.status === 404 ? 'repo-not-found' : 'unknown-import-error';
-    throw new GitHubImportError(payload.error || `GitHub repository indexing failed with HTTP ${response.status}.`, category);
+  const contentType = response.headers.get('content-type') || '';
+  if (!isJsonContentType(contentType)) {
+    if (response.ok) throw repositoryEvidenceContractError(response.status, contentType, 'non_json_response');
+    throw new GitHubImportError(
+      'ShipSeal repository indexing is temporarily unavailable. Please retry.',
+      'repository-evidence-service-unavailable',
+      undefined,
+      { httpStatus: response.status, contentType, responseCategory: 'non_json_response' },
+    );
   }
-  return payload as ImportedGitHubEvidence;
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    if (response.ok) throw repositoryEvidenceContractError(response.status, contentType, 'invalid_json');
+    throw new GitHubImportError(
+      'ShipSeal repository indexing is temporarily unavailable. Please retry.',
+      'repository-evidence-service-unavailable',
+      undefined,
+      { httpStatus: response.status, contentType, responseCategory: 'invalid_json' },
+    );
+  }
+  if (!response.ok) {
+    const failure = isRepositoryEvidenceApiFailure(payload) ? payload : undefined;
+    throw repositoryEvidenceApiError(response.status, contentType, failure?.category, failure?.error);
+  }
+  const validated = validateRepositoryEvidenceApiSuccess(payload);
+  if (validated.valid === false) {
+    throw repositoryEvidenceContractError(response.status, contentType, 'contract_validation_failed', validated.reason);
+  }
+  return validated.value;
+}
+
+function isJsonContentType(value: string) {
+  return /^application\/(?:json|[a-z0-9._-]+\+json)(?:\s*;|$)/i.test(value.trim());
+}
+
+function repositoryEvidenceContractError(
+  httpStatus: number,
+  contentType: string,
+  responseCategory: RepositoryEvidenceTransportDiagnostics['responseCategory'],
+  contractReason?: string,
+) {
+  return new GitHubImportError(
+    'ShipSeal received an unexpected repository-index response. Please retry.',
+    'repository-evidence-contract-error',
+    undefined,
+    { httpStatus, contentType, responseCategory, ...(contractReason ? { contractReason } : {}) },
+  );
+}
+
+function repositoryEvidenceApiError(
+  httpStatus: number,
+  contentType: string,
+  category?: RepositoryEvidenceApiFailureCategory,
+  serverMessage?: string,
+) {
+  const mapped: Record<RepositoryEvidenceApiFailureCategory, { category: GitHubImportErrorCategory; message: string }> = {
+    repository_not_found: { category: 'repo-not-found', message: 'Repository or ref was not found.' },
+    permission_denied: { category: 'repository-evidence-permission-denied', message: 'GitHub denied access to this repository or ref.' },
+    rate_limited: { category: 'repository-evidence-rate-limited', message: 'GitHub repository indexing is temporarily rate-limited. Please retry later.' },
+    service_unavailable: { category: 'repository-evidence-service-unavailable', message: 'ShipSeal repository indexing is temporarily unavailable. Please retry.' },
+    contract_error: { category: 'repository-evidence-contract-error', message: 'ShipSeal received an unexpected repository-index response. Please retry.' },
+    safety_budget_reached: { category: 'repository-evidence-budget-reached', message: 'Repository indexing reached its safe operational budget.' },
+    invalid_request: { category: 'unknown-import-error', message: 'Repository indexing request was invalid.' },
+  };
+  const selected = category ? mapped[category] : undefined;
+  return new GitHubImportError(
+    selected?.message || serverMessage || 'ShipSeal repository indexing is temporarily unavailable. Please retry.',
+    selected?.category || (httpStatus === 404 ? 'repo-not-found' : 'repository-evidence-service-unavailable'),
+    undefined,
+    { httpStatus, contentType, responseCategory: 'api_failure' },
+  );
 }
 
 function bytesToSignature(bytes: Uint8Array) {

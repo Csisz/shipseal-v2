@@ -1,12 +1,18 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createGitHubInstallationClient } from './_lib/githubAppClient.js';
+import { GitHubAppApiError, GitHubAppNotConfiguredError } from './_lib/githubAppTypes.js';
 import {
   finalizeRepositoryEvidence,
   selectRepositoryEvidence,
   type DiscoveredRepositoryEntry,
 } from '../src/lib/repositoryEvidence.js';
+import type {
+  RepositoryEvidenceApiFailure,
+  RepositoryEvidenceApiFailureCategory,
+  RepositoryEvidenceApiSuccess,
+} from '../src/lib/github/repositoryEvidenceApiContract.js';
 import { isGeneratedOrVendorPath } from '../src/lib/scannerLimits.js';
-import type { RepoScanInput, ScanSourceMetadata } from '../src/lib/types.js';
+import type { ScanSourceMetadata } from '../src/lib/types.js';
 
 const MAX_BODY_BYTES = 8 * 1024;
 const MAX_TREE_REQUESTS = 160;
@@ -34,10 +40,17 @@ interface GitHubJsonClient {
   get<T>(path: string, signal: AbortSignal): Promise<{ data: T; headers: Headers }>;
 }
 
-export interface GitHubEvidenceAcquisition {
-  input: RepoScanInput;
-  commitSha: string;
-  requestCount: number;
+export type GitHubEvidenceAcquisition = RepositoryEvidenceApiSuccess;
+
+class RepositoryEvidenceSourceError extends Error {
+  constructor(
+    public readonly category: RepositoryEvidenceApiFailureCategory,
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RepositoryEvidenceSourceError';
+  }
 }
 
 export async function acquireGitHubRepositoryEvidence(
@@ -113,11 +126,11 @@ export async function acquireGitHubRepositoryEvidence(
       githubInstallationId: request.installationId,
       sourceUrl: `https://github.com/${request.owner}/${request.repo}/tree/${commitSha}`,
     };
-    const input = finalizeRepositoryEvidence(`${request.owner}/${request.repo}`, source, selection, textContents);
-    input.scanSummary!.sourceCommitSha = commitSha;
-    input.scanSummary!.sourceRequestCount = requestCount;
-    input.scanSummary!.sourceRateLimitRemaining = rateLimitRemaining;
-    return { input, commitSha, requestCount };
+    const scanInput = finalizeRepositoryEvidence(`${request.owner}/${request.repo}`, source, selection, textContents);
+    scanInput.scanSummary!.sourceCommitSha = commitSha;
+    scanInput.scanSummary!.sourceRequestCount = requestCount;
+    scanInput.scanSummary!.sourceRateLimitRemaining = rateLimitRemaining;
+    return { scanInput, commitSha, requestCount };
   } finally {
     options.signal?.removeEventListener('abort', forwardAbort);
   }
@@ -186,10 +199,12 @@ async function installationJsonClient(installationId: string, fetcher?: typeof f
 }
 
 function githubResponseError(response: Response) {
-  if (response.status === 429 || response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0') return new Error('GitHub request capacity is temporarily unavailable. Try again after the rate limit resets.');
-  if (response.status === 403) return new Error('GitHub denied access to this repository or ref.');
-  if (response.status === 404) return new Error('Repository or ref was not found, or is not accessible.');
-  return new Error(`GitHub repository indexing failed with HTTP ${response.status}.`);
+  if (response.status === 429 || response.status === 403 && response.headers.get('x-ratelimit-remaining') === '0') {
+    return new RepositoryEvidenceSourceError('rate_limited', 429, 'GitHub request capacity is temporarily unavailable. Try again after the rate limit resets.');
+  }
+  if (response.status === 403) return new RepositoryEvidenceSourceError('permission_denied', 403, 'GitHub denied access to this repository or ref.');
+  if (response.status === 404) return new RepositoryEvidenceSourceError('repository_not_found', 404, 'Repository or ref was not found, or is not accessible.');
+  return new RepositoryEvidenceSourceError('service_unavailable', 502, `GitHub repository indexing failed with HTTP ${response.status}.`);
 }
 
 function requiredSha(value: unknown, label: string) {
@@ -242,8 +257,34 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     sendJson(res, 200, result);
   } catch (error) {
     if (controller.signal.aborted) return;
-    const message = error instanceof Error ? error.message : 'Repository evidence acquisition failed.';
-    const status = /invalid|too large|safety|exceeds/i.test(message) ? 400 : /not found|not accessible/i.test(message) ? 404 : /capacity|rate limit/i.test(message) ? 429 : 502;
-    sendJson(res, status, { error: message });
+    const failure = repositoryEvidenceFailure(error);
+    sendJson(res, failure.status, failure.payload);
   }
+}
+
+function repositoryEvidenceFailure(error: unknown): { status: number; payload: RepositoryEvidenceApiFailure } {
+  if (error instanceof RepositoryEvidenceSourceError) {
+    return { status: error.status, payload: { error: error.message, category: error.category } };
+  }
+  if (error instanceof GitHubAppApiError) {
+    const category: RepositoryEvidenceApiFailureCategory = error.status === 404
+      ? 'repository_not_found'
+      : error.status === 403
+        ? 'permission_denied'
+        : error.status === 429
+          ? 'rate_limited'
+          : 'service_unavailable';
+    return { status: error.status >= 400 && error.status <= 599 ? error.status : 502, payload: { error: error.message, category } };
+  }
+  if (error instanceof GitHubAppNotConfiguredError) {
+    return { status: 503, payload: { error: 'Repository evidence service is not configured.', category: 'service_unavailable' } };
+  }
+  const message = error instanceof Error ? error.message : 'Repository evidence acquisition failed.';
+  if (/request safety budget|selected-file budget|readable-byte budget/i.test(message)) {
+    return { status: 422, payload: { error: message, category: 'safety_budget_reached' } };
+  }
+  if (/invalid|too large|exceeds/i.test(message)) {
+    return { status: 400, payload: { error: message, category: 'invalid_request' } };
+  }
+  return { status: 502, payload: { error: 'Repository evidence acquisition failed.', category: 'service_unavailable' } };
 }

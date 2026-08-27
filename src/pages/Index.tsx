@@ -118,6 +118,16 @@ function importErrorTitle(category?: string | null) {
       return 'Branch or ref not found';
     case 'zip-too-large':
       return 'Repository ZIP too large';
+    case 'repository-evidence-permission-denied':
+      return 'Repository access denied';
+    case 'repository-evidence-rate-limited':
+      return 'GitHub indexing temporarily busy';
+    case 'repository-evidence-service-unavailable':
+      return 'Repository indexing unavailable';
+    case 'repository-evidence-contract-error':
+      return 'Unexpected repository-index response';
+    case 'repository-evidence-budget-reached':
+      return 'Repository indexing budget reached';
     default:
       return 'Import blocked';
   }

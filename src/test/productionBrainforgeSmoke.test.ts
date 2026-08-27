@@ -25,8 +25,8 @@ describe.runIf(smokeEnabled)('production brainforge smoke', () => {
       body: JSON.stringify({ source: 'public-github', owner: 'Csisz', repo: 'brainforge', ref: 'main' }),
     });
     expect(evidenceResponse.ok).toBe(true);
-    const evidencePayload = await evidenceResponse.json() as { input: import('../lib/types').RepoScanInput };
-    const scanInput = evidencePayload.input;
+    const evidencePayload = await evidenceResponse.json() as { scanInput: import('../lib/types').RepoScanInput };
+    const scanInput = evidencePayload.scanInput;
     const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);
     const contextBundle = prepareRepositoryProductStrategistContext({ scanInput, evidenceResult });
     const request = buildRepositoryProductStrategistRequest({ contextBundle, evidenceResult });
