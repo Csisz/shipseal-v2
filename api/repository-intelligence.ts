@@ -79,6 +79,7 @@ export interface PrepareProductionRepositoryIntelligenceOptions {
   aiAuthorization?: {
     userId: string;
     service: AiUsageAuthorizationService;
+    recoveryOperationId?: string;
   };
 }
 
@@ -201,6 +202,7 @@ export async function prepareProductionRepositoryIntelligence(
         options.aiAuthorization.userId,
         preparedContext.request,
         productStage,
+        options.aiAuthorization.recoveryOperationId,
       );
     } catch (error) {
       if (error instanceof AiUsageDeniedError) return usageDenialFallback(error);
@@ -219,6 +221,8 @@ export async function prepareProductionRepositoryIntelligence(
           diagnostics: {
             ...(authorizedStage.cachedResponse.diagnostics || { costEstimate: 'unavailable' as const }),
             cacheUsed: true,
+            publicOperationId: authorizedStage.publicOperationId,
+            operationRecoveryAction: 'open_result',
           },
         } as RepositoryIntelligenceProviderApiResponse,
       };
@@ -226,9 +230,20 @@ export async function prepareProductionRepositoryIntelligence(
   }
   const completeAuthorizedStage = async (result: { status: number; body: RepositoryIntelligenceProviderApiResponse }) => {
     if (!authorizedStage || !options.aiAuthorization) return result;
+    const durableResult = {
+      ...result,
+      body: {
+        ...result.body,
+        diagnostics: {
+          ...(result.body.diagnostics || { costEstimate: 'unavailable' as const }),
+          publicOperationId: authorizedStage.publicOperationId,
+          ...(authorizedStage.integrityRecovery ? { operationRecoveryAction: 'integrity_recovery' as const } : {}),
+        },
+      } as RepositoryIntelligenceProviderApiResponse,
+    };
     try {
-      await options.aiAuthorization.service.complete(authorizedStage, options.aiAuthorization.userId, result.body);
-      return result;
+      await options.aiAuthorization.service.complete(authorizedStage, options.aiAuthorization.userId, durableResult.body);
+      return durableResult;
     } catch {
       return usageDenialFallback(new AiUsageDeniedError(
         'usage_temporarily_unavailable',
@@ -963,7 +978,7 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
         'authentication_required', 401, false, 'Sign in to start ShipSeal-funded AI analysis.',
       )).body);
     }
-    const aiAuthorization = { userId: session.user.id, service: new AiUsageAuthorizationService() };
+    const aiAuthorization = { userId: session.user.id, service: new AiUsageAuthorizationService(), recoveryOperationId: readRecoveryOperationId(input) };
     const stageAttemptKey = readStageAttemptKey(input);
     const singleFlightKey = buildAuthenticatedStageSingleFlightKey(session.user.id, stageAttemptKey);
     const flight = serverStageSingleFlight.run(singleFlightKey, () => prepareProductionRepositoryIntelligence(input, { signal: controller.signal, aiAuthorization }));
@@ -989,6 +1004,7 @@ function usageDenialFallback(error: AiUsageDeniedError): { status: number; body:
   const result = fallback(error.status, error.category, error.retryable, {
     costEstimate: 'unavailable',
     failureBoundary: 'provider-http',
+    ...error.diagnostics,
   });
   if (result.body.state !== 'fallback') return result;
   return { ...result, body: { ...result.body, message: error.message } };
@@ -998,6 +1014,12 @@ function readStageAttemptKey(input: unknown) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
   const value = (input as { stageAttemptKey?: unknown }).stageAttemptKey;
   return typeof value === 'string' && /^[a-z0-9]{8,80}$/i.test(value) ? value : undefined;
+}
+
+function readRecoveryOperationId(input: unknown) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const value = (input as { recoveryOperationId?: unknown }).recoveryOperationId;
+  return typeof value === 'string' && /^op_[A-Za-z0-9_-]{20,80}$/.test(value) ? value : undefined;
 }
 
 function withDuplicateSuppressed(

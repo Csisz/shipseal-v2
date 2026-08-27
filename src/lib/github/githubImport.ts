@@ -1,5 +1,5 @@
 import { SCANNER_LIMITS } from '../scannerLimits';
-import type { ScanSourceMetadata } from '../types';
+import type { RepoScanInput, ScanSourceMetadata } from '../types';
 import { parseGitHubUrl } from './githubUrl';
 
 export type GitHubImportErrorCategory =
@@ -36,6 +36,13 @@ export interface GitHubAppArchiveImportInput {
   owner: string;
   repo: string;
   ref?: string;
+}
+
+export interface ImportedGitHubEvidence {
+  scanInput: RepoScanInput;
+  source: ScanSourceMetadata;
+  commitSha: string;
+  requestCount: number;
 }
 
 export const GITHUB_ZIP_FALLBACK_MESSAGE = 'Download the repository as ZIP from GitHub and upload it manually.';
@@ -202,6 +209,13 @@ function step(callbacks: GitHubImportCallbacks, index: number, progress: number,
   callbacks.onProgress?.(progress);
 }
 
+function evidenceStep(callbacks: GitHubImportCallbacks, index: number, progress: number, complete = false) {
+  const label = index === 0 ? 'Connecting to GitHub' : 'Resolving immutable commit';
+  if (complete) callbacks.onStepComplete?.(label, index);
+  else callbacks.onStepStart?.(label, index);
+  callbacks.onProgress?.(progress);
+}
+
 export async function importPublicGitHubRepo(input: GitHubImportInput, callbacks: GitHubImportCallbacks = {}): Promise<ImportedGitHubRepo> {
   step(callbacks, 0, 5);
   let parsed: ReturnType<typeof parseGitHubUrl>;
@@ -271,6 +285,58 @@ export async function importGitHubAppRepoArchive(input: GitHubAppArchiveImportIn
       archiveDiagnostics,
     },
   };
+}
+
+export async function importPublicGitHubEvidence(
+  input: GitHubImportInput & { signal?: AbortSignal },
+  callbacks: GitHubImportCallbacks = {},
+): Promise<ImportedGitHubEvidence> {
+  evidenceStep(callbacks, 0, 5);
+  let parsed: ReturnType<typeof parseGitHubUrl>;
+  try {
+    parsed = parseGitHubUrl(input.url);
+  } catch (error) {
+    throw new GitHubImportError(error instanceof Error ? error.message : 'Enter a valid public GitHub repository URL.', classifyParseError(error));
+  }
+  const branch = input.branch?.trim() || parsed.branch;
+  evidenceStep(callbacks, 0, 12, true);
+  evidenceStep(callbacks, 1, 18);
+  const result = await requestRepositoryEvidence({
+    source: 'public-github', owner: parsed.owner, repo: parsed.repo, ref: branch || 'HEAD',
+  }, input.signal);
+  evidenceStep(callbacks, 1, 30, true);
+  return result;
+}
+
+export async function importGitHubAppEvidence(
+  input: GitHubAppArchiveImportInput & { signal?: AbortSignal },
+): Promise<ImportedGitHubEvidence> {
+  return requestRepositoryEvidence({
+    source: 'github-app', installationId: input.installationId,
+    owner: input.owner, repo: input.repo, ref: input.ref || 'HEAD',
+  }, input.signal);
+}
+
+async function requestRepositoryEvidence(body: Record<string, string>, signal?: AbortSignal): Promise<ImportedGitHubEvidence> {
+  let response: Response;
+  try {
+    response = await fetch('/api/repository-evidence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    throw new GitHubImportError('GitHub repository indexing is temporarily unavailable. Try again shortly.', 'network-cors-blocked');
+  }
+  const payload = await response.json().catch(() => ({})) as Partial<ImportedGitHubEvidence> & { error?: string };
+  if (!response.ok || !payload.scanInput || !payload.commitSha) {
+    const category: GitHubImportErrorCategory = response.status === 404 ? 'repo-not-found' : 'unknown-import-error';
+    throw new GitHubImportError(payload.error || `GitHub repository indexing failed with HTTP ${response.status}.`, category);
+  }
+  return payload as ImportedGitHubEvidence;
 }
 
 function bytesToSignature(bytes: Uint8Array) {

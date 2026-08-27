@@ -394,6 +394,9 @@ export function selectRepositoryIntelligenceContext({
   const limitations = sortedUnique([
     ...evidenceResult.limitations,
     ...(scanInput.scanSummary?.limited ? [scanInput.scanSummary.limitationReason || 'The source scan was limited.'] : []),
+    ...(scanInput.scanSummary?.scanMode === 'bounded'
+      ? [`Repository discovery covered ${(scanInput.scanSummary.discoveredFiles ?? scanInput.scanSummary.totalFilesFound).toLocaleString()} files; provider context is a deterministic ${(scanInput.scanSummary.analyzedTextFiles ?? scanInput.scanSummary.filesAnalyzed).toLocaleString()}-file evidence subset under ${scanInput.scanSummary.selectionPolicyVersion || 'the active evidence policy'}. Unobserved content must not be treated as confirmed missing.`]
+      : []),
     ...(uncoveredAreas.some(area => area.reason === 'budget') ? ['Configured context limits left evidence-backed repository areas uncovered.'] : []),
     ...(candidates.some(candidate => candidate.contentAvailability === 'excluded-generated') ? ['Generated and vendor files were excluded from context selection.'] : []),
     ...(candidates.some(candidate => candidate.contentAvailability === 'excluded-binary') ? ['Binary files were excluded from context selection.'] : []),

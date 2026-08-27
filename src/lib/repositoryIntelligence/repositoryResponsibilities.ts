@@ -134,6 +134,9 @@ export function buildRepositoryIntelligenceEvidence(input: RepoScanInput): Repos
   if (normalizedInput.scanSummary?.limited) {
     modelLimitations.add(normalizedInput.scanSummary.limitationReason || 'The scan was limited; repository evidence is incomplete.');
   }
+  if (normalizedInput.scanSummary?.scanMode === 'bounded') {
+    modelLimitations.add(`Repository evidence is a deterministic bounded selection (${normalizedInput.scanSummary.selectionPolicyVersion}); omitted files are unobserved, not confirmed missing.`);
+  }
   for (const warning of normalizedInput.scanSummary?.warnings || []) modelLimitations.add(warning);
   for (const record of files.filter(item => item.extractionState === 'parse-failed')) {
     modelLimitations.add(`Parser fallback used for ${record.path}.`);

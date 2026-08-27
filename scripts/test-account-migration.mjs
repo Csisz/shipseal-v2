@@ -13,10 +13,14 @@ if (aiSecurityMigrationIndex === -1) throw new Error(`${aiSecurityMigrationFile}
 const billingSecurityMigrationFile = '0005_billing.sql';
 const billingSecurityMigrationIndex = migrationFiles.indexOf(billingSecurityMigrationFile);
 if (billingSecurityMigrationIndex === -1) throw new Error(`${billingSecurityMigrationFile} is missing.`);
+const recoveryMigrationFile = '0006_durable_ai_recovery.sql';
+const recoveryMigrationIndex = migrationFiles.indexOf(recoveryMigrationFile);
+if (recoveryMigrationIndex === -1) throw new Error(`${recoveryMigrationFile} is missing.`);
 
 const securityMigration = migrations[securityMigrationIndex];
 const aiSecurityMigration = migrations[aiSecurityMigrationIndex];
 const billingSecurityMigration = migrations[billingSecurityMigrationIndex];
+const recoveryMigration = migrations[recoveryMigrationIndex];
 const accountTables = ['shipseal_users', 'shipseal_sessions', 'shipseal_projects', 'shipseal_scans', 'shipseal_verification_relationships', 'shipseal_schema_migrations'];
 const aiTables = ['shipseal_entitlements', 'shipseal_ai_operations', 'shipseal_ai_operation_stages', 'shipseal_ai_usage_ledger', 'shipseal_ai_budget_windows', 'shipseal_ai_provider_permits'];
 const billingTables = ['shipseal_billing_customers', 'shipseal_billing_subscriptions', 'shipseal_billing_events'];
@@ -106,6 +110,16 @@ if (!normalizedBillingSecurityMigration.includes("values ('0005_billing') on con
   throw new Error('Billing migration tracking must be idempotent.');
 }
 if (!/event_id\s+text\s+primary\s+key/i.test(billingSecurityMigration)) throw new Error('Stripe event idempotency storage is missing.');
+
+const normalizedRecoveryMigration = recoveryMigration.replace(/\s+/g, ' ').trim().toLowerCase();
+if (/\b(truncate|delete\s+from|disable\s+row\s+level\s+security|grant)\b/i.test(recoveryMigration)) {
+  throw new Error('Durable recovery migration must remain additive and preserve default-deny security.');
+}
+for (const column of ['canonical_root_response', 'canonical_root_stage_fingerprint', 'integrity_recovery_attempt_count', 'integrity_recovery_started_at', 'integrity_recovered_at']) {
+  if (!normalizedRecoveryMigration.includes(`add column if not exists ${column}`)) throw new Error(`Durable recovery column ${column} is missing.`);
+}
+if (!/integrity_recovery_attempt_count\s+between\s+0\s+and\s+1/i.test(recoveryMigration)) throw new Error('Integrity recovery must be bounded to one persisted attempt.');
+if (!normalizedRecoveryMigration.includes("values ('0006_durable_ai_recovery') on conflict do nothing")) throw new Error('Durable recovery migration tracking must be idempotent.');
 
 // pg-mem does not implement PostgreSQL RLS, privileges, roles, or PL/pgSQL DO
 // blocks. Validate that production-only contract above, then omit exactly those

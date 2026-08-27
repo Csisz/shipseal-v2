@@ -96,6 +96,7 @@ export function levelFromScore(score: number): ReadinessLevel {
 }
 
 export function scoreRepo(input: RepoScanInput, stack: DetectedStack): ScoringResult {
+  const absenceUnconfirmed = input.scanSummary?.discoveryComplete === false;
   const paths = new Set(input.files.filter(f => !f.isDir).map(f => f.path));
   const lower = new Set([...paths].map(p => p.toLowerCase()));
   const has = (p: string) => paths.has(p);
@@ -220,19 +221,28 @@ export function scoreRepo(input: RepoScanInput, stack: DetectedStack): ScoringRe
     ], 10);
 
   const categories = [c1, c2, c3, c4, c5, c6];
-  const score = Math.min(100, Math.round(categories.reduce((a, c) => a + c.earned, 0)));
+  if (absenceUnconfirmed) {
+    for (const scoredCategory of categories) {
+      for (const scoredItem of scoredCategory.items) {
+        if (!scoredItem.passed) scoredItem.observed = false;
+      }
+    }
+  }
+  const observedMaximum = categories.flatMap(c => c.items).reduce((sum, scoredItem) => sum + (scoredItem.observed === false ? 0 : scoredItem.points), 0);
+  const observedEarned = categories.flatMap(c => c.items).reduce((sum, scoredItem) => sum + (scoredItem.observed === false ? 0 : scoredItem.earned), 0);
+  const score = observedMaximum > 0 ? Math.min(100, Math.round(observedEarned / observedMaximum * 100)) : 0;
 
   // -------- Blockers --------
   const blockers: CriticalBlocker[] = [];
-  if (!hasStackConfig) blockers.push({ id: 'no_stack', title: 'No recognizable stack or config file', detail: 'ShipSeal could not detect a package.json, pyproject.toml, go.mod, or similar manifest.' });
-  if (!hasBuild && !hasTests && !hasLint) blockers.push({ id: 'no_build_test_lint', title: 'No build / test / lint signals', detail: 'Agents have nothing to run to verify their changes.' });
+  if (!absenceUnconfirmed && !hasStackConfig) blockers.push({ id: 'no_stack', title: 'No recognizable stack or config file', detail: 'ShipSeal could not detect a package.json, pyproject.toml, go.mod, or similar manifest.' });
+  if (!absenceUnconfirmed && !hasBuild && !hasTests && !hasLint) blockers.push({ id: 'no_build_test_lint', title: 'No build / test / lint signals', detail: 'Agents have nothing to run to verify their changes.' });
   if (secretFiles.length > 0) blockers.push({ id: 'secrets', title: 'Suspicious secret files found', detail: `Detected: ${secretFiles.slice(0,5).join(', ')}. Remove these before exposing the repo to any agent.` });
-  if (heavyGenerated) blockers.push({ id: 'generated_heavy', title: 'Repository dominated by generated/vendor files', detail: 'Strip node_modules/dist/build before scanning to keep agent context small.' });
-  if (!generatableContext && !hasAgents) blockers.push({ id: 'no_agent_context', title: 'Not enough context to generate AGENTS.md', detail: 'Add a README and a stack manifest so ShipSeal can synthesize agent instructions.' });
+  if (!absenceUnconfirmed && heavyGenerated) blockers.push({ id: 'generated_heavy', title: 'Repository dominated by generated/vendor files', detail: 'Strip node_modules/dist/build before scanning to keep agent context small.' });
+  if (!absenceUnconfirmed && !generatableContext && !hasAgents) blockers.push({ id: 'no_agent_context', title: 'Not enough context to generate AGENTS.md', detail: 'Add a README and a stack manifest so ShipSeal can synthesize agent instructions.' });
 
   // -------- Improvements --------
   const improvements: Improvement[] = [];
-  categories.forEach(c => c.items.filter(i => !i.passed).forEach(i =>
+  categories.forEach(c => c.items.filter(i => !i.passed && !absenceUnconfirmed).forEach(i =>
     improvements.push({
       id: `${c.id}.${i.id}`,
       title: i.label,

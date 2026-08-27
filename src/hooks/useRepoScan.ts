@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { GITHUB_APP_SCAN_STEPS, GITHUB_PUBLIC_SCAN_STEPS, localScanEngine, ScanCancelledError, SCAN_ENGINE_STEPS } from '@/lib/scanEngine';
-import { GitHubImportError, importGitHubAppRepoArchive, importPublicGitHubRepo } from '@/lib/github/githubImport';
+import { GitHubImportError, importGitHubAppEvidence, importPublicGitHubEvidence } from '@/lib/github/githubImport';
 import type { GitHubImportErrorCategory } from '@/lib/github/types';
 import type { ReadinessReport, RepoScanInput, ScanSourceMetadata, ScanSummary } from '@/lib/types';
 import type {
@@ -270,8 +270,8 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
     let verificationPromise: Promise<PreparedRepositoryIntelligenceVerification> | null = null;
 
     try {
-      const imported = await importPublicGitHubRepo(
-        { url, branch },
+      const imported = await importPublicGitHubEvidence(
+        { url, branch, signal: controller.signal },
         {
           onStepStart: (step, index) => {
             if (scanTokenRef.current !== token) return;
@@ -285,11 +285,9 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
       );
 
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
-      setState(current => ({ ...current, selectedFile: imported.file }));
-
-      const localToGitHubStepIndex = [2, 3, 4];
+      const localToGitHubStepIndex = [2, 3, 4, 5, 6];
       const report = await localScanEngine.scan(
-        { file: imported.file, mode: 'github-public', source: { ...imported.source, ...sourceOverride }, signal: controller.signal },
+        { preparedEvidence: imported.scanInput, mode: 'github-public', source: { ...imported.source, ...sourceOverride }, signal: controller.signal },
         {
           onStepStart: (step, index) => {
             if (scanTokenRef.current !== token) return;
@@ -395,16 +393,16 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
 
     try {
       setState(current => ({ ...current, currentStep: GITHUB_APP_SCAN_STEPS[1], currentStepIndex: 1, progress: 12 }));
-      const imported = await importGitHubAppRepoArchive(input);
+      const imported = await importGitHubAppEvidence({ ...input, signal: controller.signal });
       if (scanTokenRef.current !== token || controller.signal.aborted) return null;
-      setState(current => ({ ...current, selectedFile: imported.file, progress: 30 }));
+      setState(current => ({ ...current, progress: 30 }));
 
       const report = await localScanEngine.scan(
-        { file: imported.file, mode: 'github-public', source: imported.source, signal: controller.signal },
+        { preparedEvidence: imported.scanInput, mode: 'github-public', source: imported.source, signal: controller.signal },
         {
           onStepStart: (step, index) => {
             if (scanTokenRef.current !== token) return;
-            const adjustedIndex = [2, 3, 4][index] ?? GITHUB_APP_SCAN_STEPS.length - 1;
+            const adjustedIndex = [2, 3, 4, 5, 6][index] ?? GITHUB_APP_SCAN_STEPS.length - 1;
             setState(current => ({
               ...current,
               currentStep: GITHUB_APP_SCAN_STEPS[adjustedIndex] || step,
@@ -590,9 +588,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
         },
       }));
       try {
-        const [productModule, clientModule] = await Promise.all([
+        const [productModule, clientModule, recoveryModule] = await Promise.all([
           import('@/lib/repositoryIntelligence/productStrategistContext'),
           import('@/lib/repositoryIntelligence/deepIntelligenceClient'),
+          import('@/lib/aiOperationRecovery'),
         ]);
         const contextBundle = productModule.prepareRepositoryProductStrategistContext({
           scanInput,
@@ -602,8 +601,32 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           contextBundle,
           evidenceResult: preparation.evidenceResult,
         });
+        let recoveryOperationId: string | undefined;
+        if (options.retry) {
+          const operation = await recoveryModule.getRepositoryFutureOperationStatus({
+            requestFingerprint: request.fingerprint,
+            repositoryIdentity: recoveryModule.repositoryOperationIdentity(request.repository),
+          }).catch(() => null);
+          recoveryOperationId = operation?.publicOperationId;
+          if (operation?.recoveryAction === 'wait_for_active_lease') {
+            setState(current => ({
+              ...current,
+              repositoryProductIntelligenceStatus: {
+                state: 'fallback', deepState: 'failed', category: 'operation_conflict', retryable: true,
+                message: 'Future analysis is already running.',
+                diagnostics: {
+                  costEstimate: 'unavailable', publicOperationId: operation.publicOperationId,
+                  operationRecoveryAction: operation.recoveryAction,
+                  ...(operation.leaseExpiresAt ? { operationLeaseExpiresAt: operation.leaseExpiresAt } : {}),
+                },
+              },
+            }));
+            return;
+          }
+        }
         const response = await clientModule.requestRepositoryProductIntelligenceStaged(request, {
           signal: controller.signal,
+          recoveryOperationId,
           onProgress: progress => {
             if (scanTokenRef.current !== token || productRequestIdentityRef.current !== requestIdentity || controller.signal.aborted) return;
             if (progress.rateLimitRetryAt) productRateLimitCooldownUntilRef.current = progress.rateLimitRetryAt;

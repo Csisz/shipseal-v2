@@ -554,7 +554,9 @@ function repositoryIdentity(scanInput: RepoScanInput): RepositoryIntelligenceCon
     name: scanInput.repoName,
     sourceType: scanInput.source?.sourceType,
     fullName: owner && repo ? `${owner}/${repo}` : undefined,
-    ref: scanInput.source?.githubBranch || scanInput.source?.githubDefaultBranch,
+    ref: scanInput.scanSummary?.sourceCommitSha
+      || scanInput.source?.githubBranch
+      || scanInput.source?.githubDefaultBranch,
   };
 }
 

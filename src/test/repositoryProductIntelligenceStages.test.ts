@@ -198,6 +198,24 @@ describe('staged Product Intelligence', () => {
     if (duplicate.state === 'enhanced') expect(duplicate.diagnostics.duplicateSuppressed).toBe(true);
   });
 
+  it('carries an owner-scoped recovery operation ID outside the immutable analysis fingerprint', async () => {
+    const recoveryOperationId = `op_${'r'.repeat(24)}`;
+    const bodies: Array<{ recoveryOperationId?: string; request: { fingerprint: string }; productStage: { kind: string } }> = [];
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as typeof bodies[number] & { productStage: Parameters<typeof enhancedBatch>[0] };
+      bodies.push(body);
+      return body.productStage.kind === 'roots' ? enhancedRoots() : enhancedBatch(body.productStage);
+    });
+    const result = await requestRepositoryProductIntelligenceStaged(request, {
+      fetcher: fetcher as typeof fetch,
+      recoveryOperationId,
+    });
+    expect(result.state).toBe('enhanced');
+    expect(bodies).toHaveLength(4);
+    expect(bodies.every(body => body.recoveryOperationId === recoveryOperationId)).toBe(true);
+    expect(bodies.every(body => body.request.fingerprint === request.fingerprint)).toBe(true);
+  });
+
   it('reduces expansion recovery to one call, preserves completed work, and suppresses later bursts', async () => {
     let batchOneRateLimited = true;
     const calls: string[] = [];

@@ -31,6 +31,7 @@ interface ProductStageRequestOptions {
   random?: () => number;
   now?: () => number;
   wait?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
+  recoveryOperationId?: string;
 }
 
 /**
@@ -422,7 +423,7 @@ function waitForDelay(delayMs: number, signal?: AbortSignal) {
 
 async function performRequest(
   request: RepositoryDeepIntelligenceRequest,
-  options: { signal?: AbortSignal; fetcher?: typeof fetch; timeoutMs?: number },
+  options: { signal?: AbortSignal; fetcher?: typeof fetch; timeoutMs?: number; recoveryOperationId?: string },
   productStage?: RepositoryProductProviderStage,
   stageAttemptKey?: string,
 ): Promise<RepositoryIntelligenceProviderApiResponse> {
@@ -441,7 +442,7 @@ async function performRequest(
   const requestPromise = (options.fetcher || fetch)('/api/repository-intelligence', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request, ...(productStage ? { productStage } : {}), ...(stageAttemptKey ? { stageAttemptKey } : {}) }),
+    body: JSON.stringify({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request, ...(productStage ? { productStage } : {}), ...(stageAttemptKey ? { stageAttemptKey } : {}), ...(options.recoveryOperationId ? { recoveryOperationId: options.recoveryOperationId } : {}) }),
     signal: controller.signal,
   }).then(validateResponse).catch(() => {
     if (timedOut) return timeoutResponse();

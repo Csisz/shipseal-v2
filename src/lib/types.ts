@@ -11,7 +11,7 @@ export interface RepoFileSummary {
 }
 
 export interface ScanSummary {
-  scanMode: 'full' | 'limited-fallback';
+  scanMode: 'full' | 'bounded' | 'limited-fallback';
   limited: boolean;
   limitationReason?: string;
   archiveDiagnostics?: {
@@ -31,6 +31,21 @@ export interface ScanSummary {
     topLevelFolders?: string[];
   };
   totalFilesFound: number;
+  discoveryComplete?: boolean;
+  discoveredFiles?: number;
+  discoveredDirectories?: number;
+  eligibleTextFiles?: number;
+  selectedTextFiles?: number;
+  analyzedTextFiles?: number;
+  analyzedTextBytes?: number;
+  oversizedTextFilesIgnored?: number;
+  budgetExcludedFiles?: number;
+  boundedReasons?: string[];
+  selectionPolicyVersion?: string;
+  representedFiles?: number;
+  sourceCommitSha?: string;
+  sourceRequestCount?: number;
+  sourceRateLimitRemaining?: number;
   filesAnalyzed: number;
   filesIgnored: number;
   generatedVendorFilesIgnored: number;
@@ -45,6 +60,11 @@ export interface ScanSummary {
     maxTotalReadableTextBytes: number;
     maxPathLength: number;
     maxGeneratedFolderDepth: number;
+    maxArchiveEntryCount?: number;
+    maxDeclaredUncompressedBytes?: number;
+    maxArchiveEntryUncompressedBytes?: number;
+    maxCompressionRatio?: number;
+    maxSelectedTextFiles?: number;
   };
 }
 
@@ -186,6 +206,10 @@ export interface ScanEvidence {
   };
   warningCount: number;
   limitedScan: boolean;
+  scanMode?: ScanSummary['scanMode'];
+  discoveryComplete?: boolean;
+  selectedTextFileCount?: number;
+  budgetExcludedFileCount?: number;
   limitationReason?: string;
 }
 
@@ -195,6 +219,7 @@ export interface ScoreItem {
   points: number;
   earned: number;
   passed: boolean;
+  observed?: boolean;
 }
 
 export interface ScoreCategory {

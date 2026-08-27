@@ -105,6 +105,7 @@ describe('production server-function recovery', () => {
       'api/github-app-router.ts',
       'api/github-archive.ts',
       'api/persistence-router.ts',
+      'api/repository-evidence.ts',
       'api/repository-intelligence.ts',
     ]);
   });

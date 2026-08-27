@@ -34,6 +34,17 @@ export function PostScanViewSelector({
   const cooldownSeconds = useCooldownSeconds(rateLimitRetryAt);
   const rateLimitWaiting = Boolean(rateLimitRetryAt && cooldownSeconds > 0);
   const upgradeRequired = futuresStatus?.state === 'fallback' && futuresStatus.category === 'upgrade_required';
+  const recoveryAction = futuresStatus && 'diagnostics' in futuresStatus
+    ? futuresStatus.diagnostics?.operationRecoveryAction
+    : undefined;
+  const operationActive = recoveryAction === 'wait_for_active_lease';
+  const retryLabel = recoveryAction === 'open_result'
+    ? 'Open Repository Futures'
+    : recoveryAction === 'resume_stale_lease'
+      || recoveryAction === 'retry_stage'
+      || recoveryAction === 'integrity_recovery'
+      ? 'Resume Future analysis'
+      : 'Retry Future analysis';
 
   useEffect(() => {
     rootRef.current?.focus({ preventScroll: true });
@@ -90,8 +101,8 @@ export function PostScanViewSelector({
               )}
             </div>
             {onRetryFutures && (
-              <Button type="button" size="sm" variant="outline" onClick={onRetryFutures} disabled={futuresRetrying || rateLimitWaiting} className="shrink-0">
-                {futuresRetrying ? 'Retrying Future analysis…' : rateLimitWaiting ? `Retry available in ${cooldownSeconds}s` : 'Retry Future analysis'}
+              <Button type="button" size="sm" variant="outline" onClick={onRetryFutures} disabled={futuresRetrying || rateLimitWaiting || operationActive} className="shrink-0">
+                {futuresRetrying ? 'Resuming Future analysis…' : rateLimitWaiting ? `Retry available in ${cooldownSeconds}s` : operationActive ? 'Future analysis running' : retryLabel}
               </Button>
             )}
             {upgradeRequired && <UpgradeToProButton size="sm" />}

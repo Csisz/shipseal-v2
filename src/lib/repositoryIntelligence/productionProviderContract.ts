@@ -252,6 +252,9 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   stageAttemptKey?: string;
   expansionConcurrencyAtRetry?: number;
   rateLimitRecoveryStatus?: 'waiting' | 'recovered' | 'exhausted' | 'action-required';
+  publicOperationId?: string;
+  operationRecoveryAction?: import('../aiOperationRecoveryContract.js').AiOperationRecoveryAction;
+  operationLeaseExpiresAt?: string;
 }
 
 export interface RepositoryIntelligenceDeepInsightSummary {
@@ -343,9 +346,18 @@ export function repositoryFutureFailureMessage(
   if (category === 'allowance_exhausted') return 'Your current Deep Analysis allowance has been used. Existing saved and cached results remain available.';
   if (category === 'entitlement_inactive') return 'Your Repository Futures entitlement is not active. Existing deterministic results remain available.';
   if (category === 'global_ai_budget_exhausted' || category === 'global_ai_capacity_reached' || category === 'usage_temporarily_unavailable') {
-    return 'ShipSeal AI capacity is temporarily unavailable. This is not an account billing issue; try again later.';
+    return 'ShipSeal AI capacity is temporarily unavailable. This is not an account billing issue, and your analysis allowance was not charged again; try again later.';
   }
-  if (category === 'operation_conflict') return 'This Future analysis is already running or cannot be safely repeated. Try again shortly.';
+  if (category === 'operation_conflict') {
+    if (diagnostics?.operationRecoveryAction === 'wait_for_active_lease') return 'Future analysis is already running.';
+    if (diagnostics?.operationRecoveryAction === 'open_result') return 'Your Future analysis is ready.';
+    if (diagnostics?.operationRecoveryAction === 'resume_stale_lease'
+      || diagnostics?.operationRecoveryAction === 'retry_stage'
+      || diagnostics?.operationRecoveryAction === 'integrity_recovery') {
+      return 'ShipSeal can safely resume this Future analysis.';
+    }
+    return 'This Future analysis cannot be resumed safely. Start again after the repository changes.';
+  }
   const operational = diagnostics?.operationalFailureCategory;
   if (operational === 'provider_timeout' || operational === 'browser_timeout' || category === 'request_timeout') {
     return 'Future analysis took longer than expected.';

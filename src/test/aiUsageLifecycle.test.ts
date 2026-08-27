@@ -36,6 +36,7 @@ interface FixtureStage {
   providerCalls: number;
   state: 'running' | 'retryable_failure' | 'terminal_failure' | 'succeeded';
   cached?: RepositoryIntelligenceProviderApiResponse;
+  integrityRecovery?: boolean;
 }
 
 interface FixtureOperation {
@@ -47,6 +48,7 @@ interface FixtureOperation {
   consumed: number;
   state: 'running' | 'retryable_failure' | 'terminal_failure' | 'succeeded';
   stages: Map<string, FixtureStage>;
+  integrityRecoveryAttempts: number;
 }
 
 class TransactionalFixtureAiUsageStore implements AiUsageStore {
@@ -97,14 +99,57 @@ class TransactionalFixtureAiUsageStore implements AiUsageStore {
     };
   }
 
+  async getOperationStatus(userId: string, lookup: { publicOperationId?: string }) {
+    const operation = [...this.operations.values()].find(candidate =>
+      candidate.ownerUserId === userId
+      && (!lookup.publicOperationId || candidate.publicId === lookup.publicOperationId),
+    );
+    if (!operation) return null;
+    const root = [...operation.stages.values()].find(stage => stage.kind === 'roots' || stage.kind === 'analysis');
+    const cacheAvailable = Boolean(root?.state === 'succeeded' && root.cached);
+    return {
+      publicOperationId: operation.publicId,
+      operationState: operation.state,
+      rootStageState: root?.state || 'missing' as const,
+      retryable: root?.state === 'retryable_failure',
+      cacheAvailable,
+      leaseExpiresAt: undefined,
+      userUnitState: operation.consumed ? 'consumed' as const : operation.reserved ? 'reserved' as const : 'released' as const,
+      recoveryAction: cacheAvailable ? 'open_result' as const : operation.state === 'succeeded' ? 'integrity_recovery' as const : 'retry_stage' as const,
+      integrityRecoveryAttemptsUsed: operation.integrityRecoveryAttempts,
+    };
+  }
+
+  async getOperationResult(userId: string, lookup: { publicOperationId?: string }) {
+    const operation = [...this.operations.values()].find(candidate =>
+      candidate.ownerUserId === userId
+      && (!lookup.publicOperationId || candidate.publicId === lookup.publicOperationId),
+    );
+    const root = operation && [...operation.stages.values()].find(stage =>
+      (stage.kind === 'roots' || stage.kind === 'analysis') && stage.state === 'succeeded' && stage.cached?.state === 'enhanced',
+    );
+    if (!operation || !root || root.cached?.state !== 'enhanced') return null;
+    return { publicOperationId: operation.publicId, root: root.cached, expansions: [] };
+  }
+
   authorizeStage(input: AuthorizeInput) {
     return this.locked(() => {
       const key = `${input.userId}:${input.logicalAnalysisFingerprint}`;
-      let operation = this.operations.get(key);
+      const requestedRecovery = input.recoveryOperationId
+        ? [...this.operations.values()].find(candidate => candidate.publicId === input.recoveryOperationId)
+        : undefined;
+      if (input.recoveryOperationId && requestedRecovery?.ownerUserId !== input.userId) {
+        throw conflict('Recovery operation is unavailable for this account.');
+      }
+      let operation = requestedRecovery || this.operations.get(key);
       const cachedStage = operation?.stages.get(input.stageFingerprint);
       if (cachedStage?.state === 'succeeded' && cachedStage.cached) {
         return authorization(operation!, cachedStage, cachedStage.cached);
       }
+      const compatibleRoot = operation?.state === 'succeeded' && input.stageKind === 'roots'
+        ? [...operation.stages.values()].find(stage => stage.kind === 'roots' && stage.state === 'succeeded' && stage.cached)
+        : undefined;
+      if (operation && compatibleRoot?.cached) return authorization(operation, compatibleRoot, compatibleRoot.cached);
       const entitlement = this.entitlements.get(input.userId) || freeEntitlement(input.userId);
       if (!['active', 'trialing'].includes(entitlement.status)) {
         throw new AiUsageDeniedError('entitlement_inactive', 403, false, 'inactive');
@@ -130,10 +175,28 @@ class TransactionalFixtureAiUsageStore implements AiUsageStore {
           consumed: 0,
           state: 'running',
           stages: new Map(),
+          integrityRecoveryAttempts: 0,
         };
         this.operations.set(key, operation);
       }
       if (input.stageKind === 'expansion' && operation.state !== 'succeeded') throw conflict('Root is not ready.');
+      if (input.stageKind === 'roots' && operation.state === 'succeeded' && operation.consumed === 1) {
+        if (operation.integrityRecoveryAttempts >= 1) throw conflict('Integrity recovery already used.');
+        operation.integrityRecoveryAttempts += 1;
+        this.stageSequence += 1;
+        const recovery: FixtureStage = {
+          id: `ast_${this.stageSequence}`,
+          kind: 'roots',
+          fingerprint: `integrity-${operation.publicId}`,
+          leaseId: `lease_integrity_${operation.publicId}`,
+          attemptCount: 1,
+          providerCalls: 0,
+          state: 'running',
+          integrityRecovery: true,
+        };
+        operation.stages.set(recovery.fingerprint, recovery);
+        return authorization(operation, recovery);
+      }
       let stage = operation.stages.get(input.stageFingerprint);
       if (stage?.state === 'running') throw conflict('Stage is already running.');
       if (stage?.state === 'terminal_failure') throw conflict('Stage is terminal.');
@@ -174,11 +237,13 @@ class TransactionalFixtureAiUsageStore implements AiUsageStore {
       }
       if (input.response.retryable) {
         stage.state = 'retryable_failure';
-        operation.state = 'retryable_failure';
+        if (!stage.integrityRecovery) operation.state = 'retryable_failure';
       } else {
         stage.state = 'terminal_failure';
-        operation.reserved = 0;
-        operation.state = 'terminal_failure';
+        if (!stage.integrityRecovery) {
+          operation.reserved = 0;
+          operation.state = 'terminal_failure';
+        }
       }
     });
   }
@@ -290,6 +355,7 @@ function authorization(operation: FixtureOperation, stage: FixtureStage, cachedR
     stageFingerprint: stage.fingerprint,
     leaseId: stage.leaseId,
     stageAttemptCount: stage.attemptCount,
+    ...(stage.integrityRecovery ? { integrityRecovery: true } : {}),
     ...(cachedResponse ? { cachedResponse } : {}),
   };
 }
@@ -403,6 +469,57 @@ describe('Omega 19.1 transactional Deep Analysis lifecycle', () => {
     expect((await service.getUsageSummary('paid')).deepAnalysis).toMatchObject({ used: 1, reserved: 0 });
   });
 
+  it('restores a consumed durable root through the owner-scoped result contract after reload', async () => {
+    const store = new TransactionalFixtureAiUsageStore();
+    store.setEntitlement('paid', 10);
+    const firstInstance = new AiUsageAuthorizationService(store, ENV, () => NOW);
+    const input = request('reload-durable-root');
+    const root = await firstInstance.authorize('paid', input, roots(input));
+    await firstInstance.complete(root, 'paid', enhanced());
+
+    const reloadedInstance = new AiUsageAuthorizationService(store, ENV, () => NOW);
+    const status = await reloadedInstance.getOperationStatus('paid', { publicOperationId: root.publicOperationId });
+    const persisted = await reloadedInstance.getOperationResult('paid', { publicOperationId: root.publicOperationId });
+    expect(status).toMatchObject({ cacheAvailable: true, recoveryAction: 'open_result', userUnitState: 'consumed' });
+    expect(persisted?.root.state).toBe('enhanced');
+    expect((await reloadedInstance.getUsageSummary('paid')).deepAnalysis).toMatchObject({ limit: 10, used: 1, reserved: 0, remaining: 9 });
+    await expect(reloadedInstance.getOperationResult('another-user', { publicOperationId: root.publicOperationId })).resolves.toBeNull();
+  });
+
+  it('allows one zero-unit integrity recovery when a consumed success lost its root cache', async () => {
+    const store = new TransactionalFixtureAiUsageStore();
+    store.setEntitlement('paid', 2);
+    const service = new AiUsageAuthorizationService(store, ENV, () => NOW);
+    const input = request('integrity-recovery');
+    const first = await service.authorize('paid', input, roots(input));
+    await service.complete(first, 'paid', enhanced());
+    store.operationFor('paid', input)!.stages.get(first.stageFingerprint)!.cached = undefined;
+
+    const recovery = await service.authorize('paid', input, roots(input));
+    expect(recovery).toMatchObject({ operationId: first.operationId, integrityRecovery: true });
+    expect((await service.getUsageSummary('paid')).deepAnalysis).toMatchObject({ used: 1, reserved: 0 });
+    await service.complete(recovery, 'paid', enhanced());
+    const restored = await service.authorize('paid', input, roots(input));
+    expect(restored.cachedResponse?.state).toBe('enhanced');
+    expect((await service.getUsageSummary('paid')).deepAnalysis).toMatchObject({ used: 1, reserved: 0 });
+  });
+
+  it('does not permit repeated provider generations after integrity recovery is spent', async () => {
+    const store = new TransactionalFixtureAiUsageStore();
+    store.setEntitlement('paid', 2);
+    const service = new AiUsageAuthorizationService(store, ENV, () => NOW);
+    const input = request('integrity-abuse');
+    const first = await service.authorize('paid', input, roots(input));
+    await service.complete(first, 'paid', enhanced());
+    store.operationFor('paid', input)!.stages.get(first.stageFingerprint)!.cached = undefined;
+    const recovery = await service.authorize('paid', input, roots(input));
+    await service.guardProviderFetcher(recovery, vi.fn(async () => new Response('{}')) as typeof fetch)('https://api.openai.test');
+    await service.complete(recovery, 'paid', fallback(true));
+    await expect(service.authorize('paid', input, roots(input))).rejects.toMatchObject({ category: 'operation_conflict' });
+    expect(store.providerCallCount).toBe(1);
+    expect((await service.getUsageSummary('paid')).deepAnalysis).toMatchObject({ used: 1, reserved: 0 });
+  });
+
   it('denies an exhausted allowance before a provider permit can be requested', async () => {
     const store = new TransactionalFixtureAiUsageStore();
     store.setEntitlement('paid', 0);
@@ -436,6 +553,22 @@ describe('Omega 19.1 transactional Deep Analysis lifecycle', () => {
     await service.complete(root, 'owner-a', enhanced());
     await expect(service.authorize('owner-b', input, expansion(input, 0))).rejects.toMatchObject({ category: 'operation_conflict' });
     expect(store.operationFor('owner-b', input)).toBeUndefined();
+  });
+
+  it('does not let another owner claim an explicit integrity-recovery operation id', async () => {
+    const store = new TransactionalFixtureAiUsageStore();
+    store.setEntitlement('owner-a', 1);
+    store.setEntitlement('owner-b', 1);
+    const service = new AiUsageAuthorizationService(store, ENV, () => NOW);
+    const input = request('owned-integrity-recovery');
+    const root = await service.authorize('owner-a', input, roots(input));
+    await service.complete(root, 'owner-a', enhanced());
+    store.operationFor('owner-a', input)!.stages.get(root.stageFingerprint)!.cached = undefined;
+
+    await expect(service.authorize('owner-b', input, roots(input), root.publicOperationId))
+      .rejects.toMatchObject({ category: 'operation_conflict' });
+    expect(store.operationFor('owner-b', input)).toBeUndefined();
+    expect((await service.getUsageSummary('owner-b')).deepAnalysis).toMatchObject({ used: 0, reserved: 0 });
   });
 });
 

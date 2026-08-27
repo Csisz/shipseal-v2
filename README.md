@@ -59,20 +59,20 @@ For the full manual checklist, see [ShipSeal Demo Validation](docs/demo/SHIPSEAL
 
 ## Public GitHub Import
 
-ShipSeal supports best-effort public GitHub repository import in the browser. Supported examples include `https://github.com/Csisz/shipseal`, `https://github.com/Csisz/shipseal.git`, and `github.com/Csisz/shipseal`. Optional branch input is available when a known public branch should be scanned.
+ShipSeal supports selective public and GitHub App repository evidence import. Supported examples include `https://github.com/Csisz/shipseal`, `https://github.com/Csisz/shipseal.git`, and `github.com/Csisz/shipseal`. Optional branch input is available when a known public branch should be scanned.
 
-Local mode: ZIP upload is recommended. Direct GitHub ZIP import can be blocked by browser CORS or network restrictions because the app is trying to fetch GitHub's archive from the browser. If import is blocked, download the repository as ZIP from GitHub and upload it manually.
+Hosted GitHub scans resolve the requested ref to an immutable commit, discover the repository tree, select deterministic high-value evidence, and fetch only selected blobs. Normal connected scans do not download or buffer a repository archive. Large repositories complete as bounded scans when their eligible evidence exceeds the safe selection budget.
 
-Hosted Vercel mode uses the same-origin proxy endpoint first: `/api/github-archive?owner=Csisz&repo=shipseal&ref=main`. If that proxy fails, the frontend can try direct codeload as a fallback, then shows the ZIP upload fallback if browser restrictions block the download. See [GitHub Import Proxy Plan](docs/implementation/GITHUB_IMPORT_PROXY_PLAN.md) for the serverless shape and security notes.
+Local ZIP mode remains browser-local and non-executing. It uses the ZIP central directory for random-access discovery and selectively decompresses evidence rather than allocating a whole-archive buffer. Unsafe paths, special entries, encrypted entries, extreme compression ratios, and other archive-bomb signals are rejected.
 
-Public GitHub repositories can be scanned through public URL import. A configured GitHub App can also return selected repository metadata and use server-side installation tokens for archive download and Readiness PR creation. Without GitHub App server env, the connected repo UI stays honest and reports that listing is not configured.
+Public GitHub repositories can be scanned through public URL import. A configured GitHub App can also return selected repository metadata and use server-side installation tokens for commit-bound tree/blob indexing and Readiness PR creation. Without GitHub App server env, the connected repo UI stays honest and reports that listing is not configured.
 
 Privacy note: uploaded ZIP scanning stays local/browser-side. ShipSeal does not execute uploaded code.
 
 Recommended demo path:
 
-1. Download the repository as ZIP from GitHub.
-2. Upload the ZIP to ShipSeal.
+1. Connect or paste a GitHub repository, or choose a local ZIP.
+2. Review the full/bounded coverage disclosure.
 3. Generate the Delivery Pack.
 4. Open the HTML report and save it as PDF from the browser.
 
@@ -85,7 +85,7 @@ npm run build
 npm run dev
 ```
 
-For Vercel, use `npm run build` and publish the `dist` directory; the minimal serverless endpoints under `api/` are included for public GitHub archive imports, temporary-token Create Readiness PR, GitHub App repository listing/archive/PR MVP endpoints, and optional contact requests in hosted demos. No environment variables are required for the core scan/export demo.
+For Vercel, use `npm run build` and publish the `dist` directory; the serverless endpoints under `api/` include selective repository evidence import, account/billing state, Repository Futures, and GitHub App repository/PR operations. Public GitHub API capacity is intentionally bounded; configured GitHub App installation access is preferred for private and larger connected repositories.
 
 For Netlify/static-only hosting, the app still works with ZIP upload and sample project flow, but the Vercel API endpoint is not available unless an equivalent same-origin function is implemented. See [Hosted Demo Readiness](docs/demo/HOSTED_DEMO_READINESS.md) for the full deployment and validation checklist.
 

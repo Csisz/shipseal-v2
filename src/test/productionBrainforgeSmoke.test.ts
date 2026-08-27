@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { scanZipFile } from '../lib/scanner';
 import {
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
   buildRepositoryIntelligenceEvidence,
@@ -20,22 +19,14 @@ const productionOrigin = process.env.SHIPSEAL_PRODUCTION_ORIGIN || 'https://www.
 
 describe.runIf(smokeEnabled)('production brainforge smoke', () => {
   it('accepts real roots and starts a real expansion batch', async () => {
-    const archiveResponse = await fetch(`${productionOrigin}/api/github-archive?owner=Csisz&repo=brainforge&ref=main`);
-    expect(archiveResponse.ok).toBe(true);
-    const archiveBytes = await archiveResponse.arrayBuffer();
-    const archiveFile = new File([archiveBytes], 'Csisz-brainforge-main.zip', { type: 'application/zip' });
-    Object.defineProperty(archiveFile, 'arrayBuffer', {
-      value: () => Promise.resolve(archiveBytes.slice(0)),
+    const evidenceResponse = await fetch(`${productionOrigin}/api/repository-evidence`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'public-github', owner: 'Csisz', repo: 'brainforge', ref: 'main' }),
     });
-    const source = {
-      sourceType: 'github-url' as const,
-      githubOwner: 'Csisz',
-      githubRepo: 'brainforge',
-      githubBranch: 'main',
-      sourceUrl: 'https://github.com/Csisz/brainforge/tree/main',
-    };
-    const scanned = await scanZipFile(archiveFile, source);
-    const scanInput = { ...scanned, repoName: 'Csisz/brainforge', source };
+    expect(evidenceResponse.ok).toBe(true);
+    const evidencePayload = await evidenceResponse.json() as { input: import('../lib/types').RepoScanInput };
+    const scanInput = evidencePayload.input;
     const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);
     const contextBundle = prepareRepositoryProductStrategistContext({ scanInput, evidenceResult });
     const request = buildRepositoryProductStrategistRequest({ contextBundle, evidenceResult });

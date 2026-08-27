@@ -48,7 +48,9 @@ export function buildReport(input: RepoScanInput): ReadinessReport {
   }
   const readiness = evaluateReadiness(scoring.score, scoring.blockers);
   const summary = buildRepositorySummary(normalizedInput, stack);
-  const fileCount = normalizedInput.files.filter(f => !f.isDir).length;
+  const fileCount = normalizedInput.scanSummary?.discoveredFiles
+    || normalizedInput.scanSummary?.totalFilesFound
+    || normalizedInput.files.filter(f => !f.isDir).length;
   const totalSizeBytes = normalizedInput.files.reduce((a, f) => a + (f.size || 0), 0);
   const scanSummary = normalizedInput.scanSummary || {
     ...createEmptyScanSummary(),
@@ -198,7 +200,9 @@ function buildScanEvidence(input: RepoScanInput, stack: ReturnType<typeof detect
   return {
     sourceType: evidenceSourceType(input),
     repositoryFullName: repositoryFullName(input),
-    branchOrRef: input.source?.githubBranch || input.source?.githubDefaultBranch,
+    branchOrRef: input.scanSummary?.sourceCommitSha
+      || input.source?.githubBranch
+      || input.source?.githubDefaultBranch,
     discoveredFileCount: scanSummary.totalFilesFound,
     analyzedFileCount: scanSummary.filesAnalyzed,
     ignoredFileCount: scanSummary.filesIgnored,
@@ -210,6 +214,10 @@ function buildScanEvidence(input: RepoScanInput, stack: ReturnType<typeof detect
     keyFilesFound: keyFilesFound(input.files),
     warningCount: scanSummary.warnings.length,
     limitedScan: scanSummary.limited || scanSummary.scanMode === 'limited-fallback',
+    scanMode: scanSummary.scanMode,
+    discoveryComplete: scanSummary.discoveryComplete,
+    selectedTextFileCount: scanSummary.selectedTextFiles,
+    budgetExcludedFileCount: scanSummary.budgetExcludedFiles,
     ...(scanSummary.limited || scanSummary.scanMode === 'limited-fallback'
       ? { limitationReason: scanSummary.limitationReason || scanSummary.warnings[0] || 'Repository scan was limited.' }
       : {}),

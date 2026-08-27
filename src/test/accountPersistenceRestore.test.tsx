@@ -48,9 +48,11 @@ describe('Omega 18.1 saved scan restoration', () => {
     expect(await screen.findByTestId('restored-result')).toHaveTextContent(`Restored ${snapshot.report.repoName}`);
     expect(screen.getByText(/Opened without rescanning, provider execution, or GitHub mutation/i)).toBeInTheDocument();
     const urls = fetcher.mock.calls.map(call => String(call[0]));
-    expect(urls).toHaveLength(3);
+    expect(urls).toHaveLength(5);
     expect(urls).toEqual(expect.arrayContaining(['/api/account/session', '/api/account/usage', `/api/scans/${scanId}`]));
-    expect(urls.join('\n')).not.toMatch(/repository-intelligence|github-app|archive|scan\/start/);
+    expect(urls.some(url => url.startsWith('/api/account/ai-operation-result?'))).toBe(true);
+    expect(urls.some(url => url.startsWith('/api/account/ai-operation-status?'))).toBe(true);
+    expect(urls.join('\n')).not.toMatch(/\/api\/repository-intelligence|github-app|archive|scan\/start/);
   });
 
   it('shows a safe unsupported-data state instead of rendering malformed history', async () => {

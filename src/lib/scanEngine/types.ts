@@ -6,7 +6,8 @@ export type ScannerLimits = typeof SCANNER_LIMITS;
 export type ScanMode = 'local' | 'github-public';
 
 export interface ScanInput {
-  file: File;
+  file?: File;
+  preparedEvidence?: RepoScanInput;
   mode: ScanMode;
   source?: ScanSourceMetadata;
   limits?: Partial<ScannerLimits>;
@@ -29,14 +30,16 @@ export interface ScanEngine {
 }
 
 export const SCAN_ENGINE_STEPS = [
-  'Reading repository',
-  'Building repository intelligence',
-  'Preparing workspace',
+  'Indexing repository',
+  'Classifying structure',
+  'Selecting relevant evidence',
+  'Reading selected files',
+  'Building repository model',
 ] as const;
 
 export const GITHUB_PUBLIC_SCAN_STEPS = [
   'Connecting to GitHub',
-  'Downloading repository archive',
+  'Resolving immutable commit',
   ...SCAN_ENGINE_STEPS,
 ] as const;
 

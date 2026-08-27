@@ -195,6 +195,7 @@ export function ScanEvidencePanel({ report }: { report: ReadinessReport }) {
     ...evidence.topFrameworks,
     ...evidence.topLanguages.filter(language => !evidence.topFrameworks.includes(language)),
   ].slice(0, 5);
+  const bounded = evidence.scanMode === 'bounded';
 
   return (
     <div className="glass rounded-2xl p-6">
@@ -204,7 +205,7 @@ export function ScanEvidencePanel({ report }: { report: ReadinessReport }) {
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-display font-semibold">Scan evidence</h3>
             <Badge variant="outline" className={evidence.limitedScan ? 'border-warning/60 text-warning' : 'border-success/40 text-success'}>
-              {evidence.limitedScan ? 'Limited scan' : 'Full archive scan'}
+              {evidence.limitedScan ? 'Limited fallback' : bounded ? 'Bounded evidence scan' : 'Full evidence scan'}
             </Badge>
             <Badge variant="outline" className="border-primary/40 text-primary-glow">
               {displayEvidenceSource(evidence.sourceType)}
@@ -220,7 +221,7 @@ export function ScanEvidencePanel({ report }: { report: ReadinessReport }) {
         <SafetyMetric label="Repository" value={evidence.repositoryFullName} />
         <SafetyMetric label="Branch / ref" value={evidence.branchOrRef || 'default'} />
         <SafetyMetric label="Scanned at" value={new Date(report.scannedAt).toLocaleString()} />
-        <SafetyMetric label="Archive size" value={evidence.approximateArchiveSizeBytes ? formatFileSize(evidence.approximateArchiveSizeBytes) : 'Not reported'} />
+        <SafetyMetric label="Archive size" value={evidence.sourceType === 'zip' ? evidence.approximateArchiveSizeBytes ? formatFileSize(evidence.approximateArchiveSizeBytes) : 'Not reported' : 'Not used'} />
         <SafetyMetric label="Files discovered" value={evidence.discoveredFileCount.toLocaleString()} />
         <SafetyMetric label="Files analyzed" value={evidence.analyzedFileCount.toLocaleString()} />
         <SafetyMetric label="Files ignored" value={evidence.ignoredFileCount.toLocaleString()} />
@@ -243,7 +244,7 @@ export function ScanEvidencePanel({ report }: { report: ReadinessReport }) {
           <div className="flex flex-wrap gap-2">
             {keySignals.map(signal => (
               <Badge key={signal.label} variant="outline" className={signal.found ? 'border-success/40 text-success' : 'border-border/60 text-muted-foreground'}>
-                {signal.found ? 'Found' : 'Missing'}: {signal.label}
+                {signal.found ? 'Found' : evidence.discoveryComplete === false ? 'Not observed' : 'Missing'}: {signal.label}
               </Badge>
             ))}
           </div>
@@ -253,6 +254,11 @@ export function ScanEvidencePanel({ report }: { report: ReadinessReport }) {
       {evidence.limitedScan && evidence.limitationReason && (
         <div className="mt-4 rounded-lg border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning">
           {evidence.limitationReason}
+        </div>
+      )}
+      {bounded && (
+        <div className="mt-4 rounded-lg border border-primary/25 bg-primary/[0.06] px-4 py-3 text-sm text-foreground/85">
+          ShipSeal analyzed {evidence.selectedTextFileCount?.toLocaleString() || evidence.analyzedFileCount.toLocaleString()} selected evidence files and omitted {(evidence.budgetExcludedFileCount || 0).toLocaleString()} lower-priority eligible files within the safe budget.
         </div>
       )}
     </div>

@@ -14,7 +14,7 @@ export function validateZipUpload(file: UploadValidationFile): UploadValidationR
   }
 
   if (file.size > SCANNER_LIMITS.maxZipSizeBytes) {
-    return { valid: false, error: 'ZIP file is too large. ShipSeal accepts repository ZIP files up to 25 MB in this local prototype.' };
+    return { valid: false, error: 'ZIP file is too large. It exceeds ShipSeal’s 2 GB local archive safety ceiling.' };
   }
 
   return { valid: true };

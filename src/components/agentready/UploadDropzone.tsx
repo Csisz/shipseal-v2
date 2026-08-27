@@ -308,9 +308,9 @@ export function UploadDropzone({
             <Upload className="h-6 w-6 text-primary-glow" />
           </div>
           <div className="font-display text-lg font-semibold">Drop your repository ZIP here</div>
-          <div className="text-sm text-muted-foreground mt-1.5">or click to browse - max 25 MB, .zip only</div>
+          <div className="text-sm text-muted-foreground mt-1.5">or click to browse - up to 2 GB, .zip only</div>
           <div className="text-xs text-muted-foreground/70 mt-4 max-w-md">
-            ShipSeal does not execute uploaded code. Scanning runs in your browser on structure and metadata only.
+            ShipSeal does not execute uploaded code. Browser-local indexing reads only selected repository evidence.
           </div>
           <div className="mt-4 rounded-lg border border-border/60 bg-secondary/25 px-3 py-2 text-xs text-muted-foreground">
             Choosing a valid repository ZIP starts the scan immediately.

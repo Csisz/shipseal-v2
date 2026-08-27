@@ -6,6 +6,8 @@ type AccountHandler = (req: RoutedRequest, res: ServerResponse) => Promise<void>
 type AccountModule = { default: AccountHandler };
 
 const loaders: Readonly<Record<string, () => Promise<AccountModule>>> = {
+  'ai-operation-result': () => import('./_routes/account/ai-operation-result.js'),
+  'ai-operation-status': () => import('./_routes/account/ai-operation-status.js'),
   callback: () => import('./_routes/account/callback.js'),
   delete: () => import('./_routes/account/delete.js'),
   login: () => import('./_routes/account/login.js'),

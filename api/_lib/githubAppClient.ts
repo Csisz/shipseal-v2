@@ -9,12 +9,12 @@ export class GitHubInstallationClient {
     private readonly fetcher: typeof fetch = fetch
   ) {}
 
-  async getJson<T>(path: string, options: { optional404?: boolean } = {}) {
+  async getJson<T>(path: string, options: { optional404?: boolean; signal?: AbortSignal } = {}) {
     const response = await this.requestJson<T>('GET', path, undefined, options);
     return response.data;
   }
 
-  async getJsonWithHeaders<T>(path: string, options: { optional404?: boolean } = {}) {
+  async getJsonWithHeaders<T>(path: string, options: { optional404?: boolean; signal?: AbortSignal } = {}) {
     return this.requestJson<T>('GET', path, undefined, options);
   }
 
@@ -42,7 +42,7 @@ export class GitHubInstallationClient {
     return response;
   }
 
-  private async requestJson<T>(method: string, path: string, body?: unknown, options: { optional404?: boolean } = {}) {
+  private async requestJson<T>(method: string, path: string, body?: unknown, options: { optional404?: boolean; signal?: AbortSignal } = {}) {
     const response = await this.fetcher(`${this.apiBaseUrl}${path}`, {
       method,
       headers: {
@@ -52,6 +52,7 @@ export class GitHubInstallationClient {
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
+      signal: options.signal,
     });
 
     if (options.optional404 && response.status === 404) return { data: null as T, headers: response.headers };

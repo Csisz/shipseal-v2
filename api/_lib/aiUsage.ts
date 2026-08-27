@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import postgres, { type JSONValue, type Sql, type TransactionSql } from 'postgres';
 import { stableContextFingerprint } from '../../src/lib/repositoryIntelligence/contextSelection.js';
 import {
+  REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
   REPOSITORY_PRODUCT_PIPELINE_VERSION,
   REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION,
   type RepositoryIntelligenceProviderApiResponse,
@@ -17,6 +18,11 @@ import type {
   ShipSealPlan,
 } from '../../src/lib/entitlements/contract.js';
 import { validateAccountDatabaseUrl } from './authConfig.js';
+import type {
+  AiOperationLookup,
+  AiOperationStatusSnapshot,
+  PersistedRepositoryFutureResult,
+} from '../../src/lib/aiOperationRecoveryContract.js';
 
 export type AiOperationKind = 'repository_futures' | 'repository_deep_intelligence';
 export type AiStageKind = 'analysis' | 'roots' | 'expansion';
@@ -33,6 +39,7 @@ export interface AuthorizedAiStage {
   stageFingerprint: string;
   leaseId: string;
   stageAttemptCount: number;
+  integrityRecovery?: boolean;
   cachedResponse?: RepositoryIntelligenceProviderApiResponse;
 }
 
@@ -51,6 +58,7 @@ interface AuthorizeAiStageInput {
   now: Date;
   leaseExpiresAt: Date;
   maximumStageAttempts: number;
+  recoveryOperationId?: string;
 }
 
 interface CompleteAiStageInput {
@@ -82,6 +90,8 @@ export interface AiUsageStore extends EntitlementStore {
   completeStage(input: CompleteAiStageInput): Promise<void>;
   acquireProviderPermit(input: AcquireProviderPermitInput): Promise<ProviderPermit>;
   releaseProviderPermit(permit: ProviderPermit, now: Date): Promise<void>;
+  getOperationStatus(userId: string, lookup: AiOperationLookup, now: Date): Promise<AiOperationStatusSnapshot | null>;
+  getOperationResult(userId: string, lookup: AiOperationLookup): Promise<PersistedRepositoryFutureResult | null>;
   close?(): Promise<void>;
 }
 
@@ -91,6 +101,11 @@ export class AiUsageDeniedError extends Error {
     public readonly status: number,
     public readonly retryable: boolean,
     message: string,
+    public readonly diagnostics?: {
+      publicOperationId?: string;
+      operationRecoveryAction?: AiOperationStatusSnapshot['recoveryAction'];
+      operationLeaseExpiresAt?: string;
+    },
   ) {
     super(message);
     this.name = 'AiUsageDeniedError';
@@ -156,10 +171,19 @@ export class AiUsageAuthorizationService {
     return this.store.getUsageSummary(userId, this.now());
   }
 
+  async getOperationStatus(userId: string, lookup: AiOperationLookup) {
+    return this.store.getOperationStatus(userId, lookup, this.now());
+  }
+
+  async getOperationResult(userId: string, lookup: AiOperationLookup) {
+    return this.store.getOperationResult(userId, lookup);
+  }
+
   async authorize(
     userId: string,
     request: RepositoryDeepIntelligenceRequest,
     productStage?: RepositoryProductProviderStage,
+    recoveryOperationId?: string,
   ): Promise<AuthorizedAiStage> {
     const maximumStageAttempts = boundedPositiveInteger(this.env.SHIPSEAL_AI_MAX_STAGE_ATTEMPTS, 2, 1, 10) || 2;
     const stageLeaseTtlMs = (boundedPositiveInteger(this.env.SHIPSEAL_AI_STAGE_LEASE_TTL_SECONDS, 180, 30, 900) || 180) * 1_000;
@@ -183,6 +207,7 @@ export class AiUsageAuthorizationService {
       now,
       leaseExpiresAt: new Date(now.getTime() + stageLeaseTtlMs),
       maximumStageAttempts,
+      recoveryOperationId,
     });
   }
 
@@ -285,9 +310,56 @@ export class PostgresAiUsageStore implements AiUsageStore {
     });
   }
 
+  async getOperationStatus(userId: string, lookup: AiOperationLookup, now: Date): Promise<AiOperationStatusSnapshot | null> {
+    return this.sql.begin(async transaction => {
+      const operation = await this.findOwnedOperation(transaction, userId, lookup, false);
+      if (!operation) return null;
+      const root = await this.latestRootStage(transaction, String(operation.id), false);
+      return mapOperationStatus(operation, root, now);
+    });
+  }
+
+  async getOperationResult(userId: string, lookup: AiOperationLookup): Promise<PersistedRepositoryFutureResult | null> {
+    return this.sql.begin(async transaction => {
+      const operation = await this.findOwnedOperation(transaction, userId, lookup, false);
+      if (!operation) return null;
+      const canonical = reusableRootResponse(operation.canonical_root_response)
+        || reusableRootResponse((await this.latestReusableRootStage(transaction, String(operation.id), false))?.cached_response);
+      if (!canonical) return null;
+      const expansionRows = await transaction<Record<string, unknown>[]>`
+        select cached_response from public.shipseal_ai_operation_stages
+        where operation_id = ${String(operation.id)} and stage_kind = 'expansion'
+          and state = 'succeeded' and cached_response is not null
+        order by succeeded_at asc nulls last, created_at asc
+      `;
+      const expansions = expansionRows
+        .map(row => row.cached_response)
+        .filter(isReusableExpansionResponse);
+      return {
+        publicOperationId: String(operation.public_operation_id),
+        root: canonical,
+        expansions,
+      };
+    });
+  }
+
   async authorizeStage(input: AuthorizeAiStageInput): Promise<AuthorizedAiStage> {
     return this.sql.begin(async transaction => {
-      const existingOperationRows = await transaction<Record<string, unknown>[]>`
+      const requestedRecoveryRows = input.recoveryOperationId && /^op_[A-Za-z0-9_-]{20,80}$/.test(input.recoveryOperationId)
+        ? await transaction<Record<string, unknown>[]>`
+          select * from public.shipseal_ai_operations
+          where owner_user_id = ${input.userId} and public_operation_id = ${input.recoveryOperationId}
+            and operation_kind = ${input.operationKind} and repository_identity = ${input.repositoryIdentity}
+            and (state = 'succeeded' or consumed_user_units = 1)
+          limit 1 for update
+        `
+        : [];
+      if (input.recoveryOperationId && requestedRecoveryRows.length === 0) {
+        throw operationConflict(false, 'The requested Future recovery operation is unavailable for this account.', {
+          operationRecoveryAction: 'terminal_failure',
+        });
+      }
+      const existingOperationRows = requestedRecoveryRows.length ? requestedRecoveryRows : await transaction<Record<string, unknown>[]>`
         select * from public.shipseal_ai_operations
         where owner_user_id = ${input.userId}
           and operation_kind = ${input.operationKind}
@@ -299,6 +371,8 @@ export class PostgresAiUsageStore implements AiUsageStore {
       if (existingOperation) {
         const cached = await this.cachedStage(transaction, String(existingOperation.id), input.stageFingerprint);
         if (cached) return cached;
+        const reusable = await this.recoverReusableRoot(transaction, existingOperation, input);
+        if (reusable) return reusable;
       }
 
       const entitlement = await this.resolveEntitlement(transaction, input.userId, input.now, true);
@@ -316,6 +390,32 @@ export class PostgresAiUsageStore implements AiUsageStore {
         if (operation) {
           const cached = await this.cachedStage(transaction, String(operation.id), input.stageFingerprint);
           if (cached) return cached;
+          const reusable = await this.recoverReusableRoot(transaction, operation, input);
+          if (reusable) return reusable;
+        }
+      }
+
+      // Pipeline/stage presentation versions may evolve while the immutable
+      // repository request remains the same. A previously consumed compatible
+      // operation remains the billing and recovery authority across deploys.
+      if (!operation && input.stageKind === 'roots') {
+        const compatibleRows = await transaction<Record<string, unknown>[]>`
+          select * from public.shipseal_ai_operations
+          where owner_user_id = ${input.userId}
+            and operation_kind = ${input.operationKind}
+            and repository_identity = ${input.repositoryIdentity}
+            and request_fingerprint = ${input.requestFingerprint}
+            and execution_profile = ${input.executionProfile}
+            and (state = 'succeeded' or consumed_user_units = 1)
+          order by succeeded_at desc nulls last, created_at desc
+          limit 1 for update
+        `;
+        operation = compatibleRows[0];
+        if (operation) {
+          const cached = await this.cachedStage(transaction, String(operation.id), input.stageFingerprint);
+          if (cached) return cached;
+          const reusable = await this.recoverReusableRoot(transaction, operation, input);
+          if (reusable) return reusable;
         }
       }
 
@@ -355,13 +455,13 @@ export class PostgresAiUsageStore implements AiUsageStore {
         }
       }
 
-      if (String(operation.request_fingerprint) !== input.requestFingerprint
+      if ((!input.recoveryOperationId && String(operation.request_fingerprint) !== input.requestFingerprint)
         || String(operation.repository_identity) !== input.repositoryIdentity) {
         throw operationConflict(false, 'The logical analysis identity conflicts with an existing operation.');
       }
       if (operation.state === 'terminal_failure') throw operationConflict(false, 'This analysis reached a terminal failure and cannot create another provider attempt.');
       if (operation.state === 'succeeded' && input.stageKind === 'roots') {
-        throw operationConflict(true, 'The analysis already succeeded, but its reusable result is temporarily unavailable.');
+        return this.authorizeIntegrityRecovery(transaction, operation, input);
       }
       if (input.stageKind === 'expansion' && operation.state !== 'succeeded') {
         throw operationConflict(true, 'Future expansion is waiting for the authorized root analysis.');
@@ -387,7 +487,11 @@ export class PostgresAiUsageStore implements AiUsageStore {
       if (!stage) throw temporaryUsageError();
       if (stage.state === 'succeeded' && stage.cached_response) return mapCachedAuthorization(operation, stage);
       const leaseActive = stage.state === 'running' && stage.lease_expires_at && new Date(String(stage.lease_expires_at)).getTime() > input.now.getTime();
-      if (leaseActive) throw operationConflict(true, 'This analysis stage is already running.');
+      if (leaseActive) throw operationConflict(true, 'This analysis stage is already running.', {
+        publicOperationId: String(operation.public_operation_id),
+        operationRecoveryAction: 'wait_for_active_lease',
+        operationLeaseExpiresAt: asIsoDate(stage.lease_expires_at),
+      });
       if (stage.state === 'terminal_failure' || Number(stage.attempt_count) >= input.maximumStageAttempts) {
         if (input.stageKind === 'roots') await this.releaseRootReservation(transaction, operation, input.userId, 'stage-attempt-limit', input.now);
         throw operationConflict(false, 'This analysis stage reached its provider-attempt limit.');
@@ -424,7 +528,11 @@ export class PostgresAiUsageStore implements AiUsageStore {
       `;
       const stage = stageRows[0];
       if (!operation || !stage || stage.lease_id !== input.authorization.leaseId) return;
-      const success = input.response.state === 'enhanced' || input.response.state === 'stage-enhanced';
+      const success = input.authorization.stageKind === 'expansion'
+        ? input.response.state === 'stage-enhanced'
+        : input.authorization.stageKind === 'roots'
+          ? Boolean(reusableRootResponse(input.response))
+          : input.response.state === 'enhanced';
       if (success) {
         await transaction`
           update public.shipseal_ai_operation_stages set
@@ -434,6 +542,17 @@ export class PostgresAiUsageStore implements AiUsageStore {
           where id = ${input.authorization.stageId}
         `;
         if (input.authorization.stageKind === 'roots' || input.authorization.stageKind === 'analysis') {
+          if (input.authorization.stageKind === 'roots') {
+            await transaction`
+              update public.shipseal_ai_operations set
+                canonical_root_response = ${transaction.json(asJson(input.response))},
+                canonical_root_stage_fingerprint = ${input.authorization.stageFingerprint},
+                canonical_root_contract_version = ${REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION},
+                integrity_recovered_at = case when ${Boolean(input.authorization.integrityRecovery)} then ${input.now.toISOString()} else integrity_recovered_at end,
+                updated_at = ${input.now.toISOString()}
+              where id = ${input.authorization.operationId}
+            `;
+          }
           if (Number(operation.reserved_user_units) === 1) {
             await transaction`
               update public.shipseal_ai_operations set
@@ -472,6 +591,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
         where id = ${input.authorization.stageId}
       `;
       if (input.authorization.stageKind === 'roots') {
+        if (input.authorization.integrityRecovery) return;
         if (terminal) {
           await this.releaseRootReservation(
             transaction,
@@ -636,6 +756,171 @@ export class PostgresAiUsageStore implements AiUsageStore {
     return mapCachedAuthorization(operation, rows[0]);
   }
 
+  private async recoverReusableRoot(
+    transaction: TransactionSql,
+    operation: Record<string, unknown>,
+    input: AuthorizeAiStageInput,
+  ): Promise<AuthorizedAiStage | null> {
+    if (input.stageKind !== 'roots' || operation.state !== 'succeeded') return null;
+    const canonical = reusableRootResponse(operation.canonical_root_response);
+    if (canonical) {
+      return {
+        operationId: String(operation.id),
+        publicOperationId: String(operation.public_operation_id),
+        stageId: `canonical_${String(operation.id)}`,
+        stageKind: 'roots',
+        stageFingerprint: String(operation.canonical_root_stage_fingerprint || input.stageFingerprint),
+        leaseId: '',
+        stageAttemptCount: 0,
+        cachedResponse: canonical,
+      };
+    }
+    const compatible = await this.latestReusableRootStage(transaction, String(operation.id), true);
+    const response = reusableRootResponse(compatible?.cached_response);
+    if (!compatible || !response) return null;
+    await transaction`
+      update public.shipseal_ai_operations set
+        canonical_root_response = ${transaction.json(asJson(response))},
+        canonical_root_stage_fingerprint = ${String(compatible.stage_fingerprint)},
+        canonical_root_contract_version = ${REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION},
+        integrity_recovered_at = coalesce(integrity_recovered_at, ${input.now.toISOString()}),
+        updated_at = ${input.now.toISOString()}
+      where id = ${String(operation.id)}
+    `;
+    return mapCachedAuthorization(operation, compatible);
+  }
+
+  private async authorizeIntegrityRecovery(
+    transaction: TransactionSql,
+    operation: Record<string, unknown>,
+    input: AuthorizeAiStageInput,
+  ): Promise<AuthorizedAiStage> {
+    if (Number(operation.consumed_user_units) !== 1) {
+      throw operationConflict(false, 'The succeeded analysis does not have a recoverable paid result.', {
+        publicOperationId: String(operation.public_operation_id),
+        operationRecoveryAction: 'terminal_failure',
+      });
+    }
+    const recoveryFingerprint = stableContextFingerprint({
+      version: 'shipseal.ai-integrity-recovery.v1',
+      operationId: String(operation.id),
+      requestedRootFingerprint: input.stageFingerprint,
+    });
+    let recovery = (await transaction<Record<string, unknown>[]>`
+      select * from public.shipseal_ai_operation_stages
+      where operation_id = ${String(operation.id)} and integrity_recovery = true
+      limit 1 for update
+    `)[0];
+    if (recovery) {
+      const active = recovery.state === 'running' && recovery.lease_expires_at
+        && new Date(String(recovery.lease_expires_at)).getTime() > input.now.getTime();
+      if (active) {
+        throw operationConflict(true, 'Integrity recovery is already running.', {
+          publicOperationId: String(operation.public_operation_id),
+          operationRecoveryAction: 'wait_for_active_lease',
+          operationLeaseExpiresAt: asIsoDate(recovery.lease_expires_at),
+        });
+      }
+      if (Number(recovery.provider_call_count) > 0 || recovery.state === 'terminal_failure' || recovery.state === 'succeeded') {
+        throw operationConflict(false, 'The bounded integrity recovery attempt has already been used.', {
+          publicOperationId: String(operation.public_operation_id),
+          operationRecoveryAction: 'terminal_failure',
+        });
+      }
+    } else {
+      if (Number(operation.integrity_recovery_attempt_count) >= 1) {
+        throw operationConflict(false, 'The bounded integrity recovery attempt has already been used.', {
+          publicOperationId: String(operation.public_operation_id),
+          operationRecoveryAction: 'terminal_failure',
+        });
+      }
+      [recovery] = await transaction<Record<string, unknown>[]>`
+        insert into public.shipseal_ai_operation_stages (
+          id, operation_id, stage_kind, stage_fingerprint, state, integrity_recovery, created_at, updated_at
+        ) values (
+          ${createAiId('ast')}, ${String(operation.id)}, 'roots', ${recoveryFingerprint}, 'authorized', true,
+          ${input.now.toISOString()}, ${input.now.toISOString()}
+        ) returning *
+      `;
+      await transaction`
+        update public.shipseal_ai_operations set
+          integrity_recovery_attempt_count = 1,
+          integrity_recovery_started_at = ${input.now.toISOString()},
+          updated_at = ${input.now.toISOString()}
+        where id = ${String(operation.id)}
+      `;
+    }
+    const leaseId = createAiId('lease');
+    const [authorized] = await transaction<Record<string, unknown>[]>`
+      update public.shipseal_ai_operation_stages set
+        state = 'running', attempt_count = attempt_count + 1, lease_id = ${leaseId},
+        lease_expires_at = ${input.leaseExpiresAt.toISOString()}, updated_at = ${input.now.toISOString()}
+      where id = ${String(recovery.id)} returning *
+    `;
+    return { ...mapAuthorization(operation, authorized, leaseId), integrityRecovery: true };
+  }
+
+  private async findOwnedOperation(
+    transaction: TransactionSql,
+    userId: string,
+    lookup: AiOperationLookup,
+    lock: boolean,
+  ) {
+    const suffix = lock ? transaction.unsafe('for update') : transaction.unsafe('');
+    if (lookup.publicOperationId && /^op_[A-Za-z0-9_-]{20,80}$/.test(lookup.publicOperationId)) {
+      return (await transaction<Record<string, unknown>[]>`
+        select * from public.shipseal_ai_operations
+        where owner_user_id = ${userId} and public_operation_id = ${lookup.publicOperationId}
+        limit 1 ${suffix}
+      `)[0];
+    }
+    const repositoryIdentity = validRepositoryLookupIdentity(lookup.repositoryIdentity);
+    const requestFingerprint = validFingerprint(lookup.requestFingerprint);
+    if (!repositoryIdentity && !requestFingerprint) return undefined;
+    if (repositoryIdentity && requestFingerprint) {
+      return (await transaction<Record<string, unknown>[]>`
+        select * from public.shipseal_ai_operations
+        where owner_user_id = ${userId} and operation_kind = 'repository_futures'
+          and repository_identity = ${repositoryIdentity} and request_fingerprint = ${requestFingerprint}
+        order by created_at desc limit 1 ${suffix}
+      `)[0];
+    }
+    if (repositoryIdentity) {
+      return (await transaction<Record<string, unknown>[]>`
+        select * from public.shipseal_ai_operations
+        where owner_user_id = ${userId} and operation_kind = 'repository_futures'
+          and repository_identity = ${repositoryIdentity}
+        order by succeeded_at desc nulls last, created_at desc limit 1 ${suffix}
+      `)[0];
+    }
+    return (await transaction<Record<string, unknown>[]>`
+      select * from public.shipseal_ai_operations
+      where owner_user_id = ${userId} and operation_kind = 'repository_futures'
+        and request_fingerprint = ${requestFingerprint!}
+      order by created_at desc limit 1 ${suffix}
+    `)[0];
+  }
+
+  private async latestRootStage(transaction: TransactionSql, operationId: string, lock: boolean) {
+    const suffix = lock ? transaction.unsafe('for update') : transaction.unsafe('');
+    return (await transaction<Record<string, unknown>[]>`
+      select * from public.shipseal_ai_operation_stages
+      where operation_id = ${operationId} and stage_kind = 'roots'
+      order by integrity_recovery desc, updated_at desc limit 1 ${suffix}
+    `)[0];
+  }
+
+  private async latestReusableRootStage(transaction: TransactionSql, operationId: string, lock: boolean) {
+    const suffix = lock ? transaction.unsafe('for update') : transaction.unsafe('');
+    const rows = await transaction<Record<string, unknown>[]>`
+      select * from public.shipseal_ai_operation_stages
+      where operation_id = ${operationId} and stage_kind = 'roots'
+        and state = 'succeeded' and cached_response is not null
+      order by succeeded_at desc nulls last, updated_at desc ${suffix}
+    `;
+    return rows.find(row => reusableRootResponse(row.cached_response));
+  }
+
   private async resolveOwnedProjectId(transaction: TransactionSql, userId: string, repositoryIdentity: string) {
     const rows = await transaction<Record<string, unknown>[]>`
       select id from public.shipseal_projects
@@ -690,11 +975,16 @@ async function assertExpansionBelongsToValidatedRoot(
     stage: 'roots',
   });
   const rows = await transaction<Record<string, unknown>[]>`
-    select cached_response from public.shipseal_ai_operation_stages
-    where operation_id = ${operationId} and stage_fingerprint = ${rootFingerprint} and state = 'succeeded'
+    select s.cached_response, o.canonical_root_response
+    from public.shipseal_ai_operations o
+    left join public.shipseal_ai_operation_stages s
+      on s.operation_id = o.id and s.stage_fingerprint = ${rootFingerprint} and s.state = 'succeeded'
+    where o.id = ${operationId}
     limit 1
   `;
-  const response = rows[0]?.cached_response as RepositoryIntelligenceProviderApiResponse | undefined;
+  const response = reusableRootResponse(rows[0]?.cached_response)
+    || reusableRootResponse(rows[0]?.canonical_root_response)
+    || undefined;
   const opportunities = response?.state === 'enhanced' ? response.result.productIntelligence?.opportunities : undefined;
   if (!opportunities?.length) throw operationConflict(true, 'Validated Future roots are not available for this expansion.');
   const expectedTotalBatches = Math.ceil(opportunities.length / 3);
@@ -757,6 +1047,7 @@ function mapAuthorization(operation: Record<string, unknown>, stage: Record<stri
     stageFingerprint: String(stage.stage_fingerprint),
     leaseId,
     stageAttemptCount: Number(stage.attempt_count),
+    integrityRecovery: Boolean(stage.integrity_recovery),
   };
 }
 
@@ -793,6 +1084,65 @@ function asJson(value: unknown): JSONValue {
   return JSON.parse(JSON.stringify(value)) as JSONValue;
 }
 
+function reusableRootResponse(value: unknown): Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const response = value as Partial<Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }>>;
+  const opportunities = response.state === 'enhanced' ? response.result?.productIntelligence?.opportunities : undefined;
+  return response.version === REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION
+    && Array.isArray(opportunities) && opportunities.length >= 6 && opportunities.length <= 8
+    ? response as Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }>
+    : null;
+}
+
+function isReusableExpansionResponse(value: unknown): value is Extract<RepositoryIntelligenceProviderApiResponse, { state: 'stage-enhanced' }> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const response = value as Partial<Extract<RepositoryIntelligenceProviderApiResponse, { state: 'stage-enhanced' }>>;
+  return response.version === REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION
+    && response.state === 'stage-enhanced'
+    && Boolean(response.stageResult && Array.isArray(response.stageResult.expansions));
+}
+
+function mapOperationStatus(
+  operation: Record<string, unknown>,
+  root: Record<string, unknown> | undefined,
+  now: Date,
+): AiOperationStatusSnapshot {
+  const cacheAvailable = Boolean(reusableRootResponse(operation.canonical_root_response)
+    || reusableRootResponse(root?.cached_response));
+  const leaseExpiresAt = root?.lease_expires_at ? asIsoDate(root.lease_expires_at) : null;
+  const activeLease = root?.state === 'running' && leaseExpiresAt !== null && Date.parse(leaseExpiresAt) > now.getTime();
+  const consumed = Number(operation.consumed_user_units) === 1;
+  const reserved = Number(operation.reserved_user_units) === 1;
+  const released = Boolean(operation.released_at);
+  let recoveryAction: AiOperationStatusSnapshot['recoveryAction'];
+  if (cacheAvailable) recoveryAction = 'open_result';
+  else if (activeLease) recoveryAction = 'wait_for_active_lease';
+  else if (root?.state === 'running') recoveryAction = 'resume_stale_lease';
+  else if (root?.state === 'retryable_failure') recoveryAction = 'retry_stage';
+  else if (operation.state === 'succeeded' && consumed && Number(operation.integrity_recovery_attempt_count) < 1) recoveryAction = 'integrity_recovery';
+  else if (operation.state === 'terminal_failure' || (Number(operation.integrity_recovery_attempt_count) >= 1 && consumed)) recoveryAction = 'terminal_failure';
+  else recoveryAction = 'start_new_analysis';
+  return {
+    publicOperationId: String(operation.public_operation_id),
+    operationState: operation.state as AiOperationStatusSnapshot['operationState'],
+    rootStageState: root?.state as AiOperationStatusSnapshot['rootStageState'] || 'missing',
+    retryable: ['resume_stale_lease', 'retry_stage', 'integrity_recovery', 'start_new_analysis'].includes(recoveryAction),
+    cacheAvailable,
+    leaseExpiresAt,
+    userUnitState: consumed ? 'consumed' : reserved ? 'reserved' : released ? 'released' : 'none',
+    recoveryAction,
+    integrityRecoveryAttemptsUsed: Number(operation.integrity_recovery_attempt_count || 0),
+  };
+}
+
+function validFingerprint(value: string | undefined) {
+  return value && /^[a-z0-9]{8,128}$/i.test(value) ? value : undefined;
+}
+
+function validRepositoryLookupIdentity(value: string | undefined) {
+  return value && /^(?:github|upload):[A-Za-z0-9_./-]{1,220}$/i.test(value) ? value.toLowerCase() : undefined;
+}
+
 function createAiId(prefix: string) {
   return `${prefix}_${randomBytes(18).toString('base64url')}`;
 }
@@ -804,8 +1154,8 @@ function boundedPositiveInteger(value: string | undefined, fallback: number | un
   return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : undefined;
 }
 
-function operationConflict(retryable: boolean, message: string) {
-  return new AiUsageDeniedError('operation_conflict', 409, retryable, message);
+function operationConflict(retryable: boolean, message: string, diagnostics?: AiUsageDeniedError['diagnostics']) {
+  return new AiUsageDeniedError('operation_conflict', 409, retryable, message, diagnostics);
 }
 
 function temporaryUsageError() {

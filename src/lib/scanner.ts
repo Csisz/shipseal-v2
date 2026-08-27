@@ -1,13 +1,11 @@
 import type { RepoFileSummary, RepoScanInput, ScanSummary } from './types';
-import { loadJSZip } from './jszipLoader';
+import { Reader, TextWriter, ZipReader, type FileEntry } from '@zip.js/zip.js';
+import { finalizeRepositoryEvidence, selectRepositoryEvidence } from './repositoryEvidence';
 import {
   SCANNER_LIMITS,
   ScannerValidationError,
   createEmptyScanSummary,
-  generatedFolderName,
   getUnsafeZipPathReason,
-  isBinaryLikePath,
-  isGeneratedOrVendorPath,
   normalizeZipPath,
 } from './scannerLimits';
 
@@ -25,45 +23,6 @@ export class ArchiveParseError extends Error {
   }
 }
 
-type ZipEntryWithSize = {
-  name: string;
-  dir: boolean;
-  async: (type: 'string') => Promise<string>;
-  _data?: {
-    uncompressedSize?: number;
-  };
-};
-
-const TEXT_CONFIG_FILES = [
-  'package.json', 'tsconfig.json', 'vite.config.ts', 'vite.config.js',
-  'next.config.js', 'next.config.mjs', 'next.config.ts',
-  'requirements.txt', 'pyproject.toml', 'pom.xml', 'build.gradle',
-  'go.mod', 'Cargo.toml', 'composer.json', 'Gemfile',
-  'Makefile', 'makefile', 'tox.ini', 'noxfile.py',
-  'README.md', 'readme.md', 'README', 'CONTRIBUTING.md',
-  'AGENTS.md', 'CLAUDE.md', '.cursorrules', 'CODEOWNERS',
-  '.cursor/rules',
-  '.env.example', '.gitignore', '.eslintrc', '.eslintrc.json',
-];
-
-const TEXT_EXT_RE = /\.(md|json|ya?ml|toml|txt|gitignore|env\.example|cursorrules)$/i;
-const JS_TS_SOURCE_EXT_RE = /\.(?:[cm]?[jt]sx?)$/i;
-
-function isReadableRepositoryText(path: string): boolean {
-  const base = path.split('/').pop() || '';
-  if (path === '.cursor/rules' || path.startsWith('.cursor/rules/')) return true;
-  if (TEXT_CONFIG_FILES.includes(base)) return true;
-  if (JS_TS_SOURCE_EXT_RE.test(base)) return true;
-  if (TEXT_EXT_RE.test(base)) return true;
-  if (path.includes('.github/workflows/')) return true;
-  return false;
-}
-
-function summarizeLargeRepo(summary: ScanSummary) {
-  if (summary.filesIgnored > 0) {
-    summary.warnings.push('Large or generated repository content was safely ignored. ShipSeal analyzed repository structure plus a safe readable-text subset.');
-  }
-}
 
 function sourceInputKind(file: File, source?: RepoScanInput['source']): ArchiveDiagnostics['inputKind'] {
   if (source?.sourceType === 'github-url' || source?.sourceType === 'github-public' || source?.sourceType === 'github-app') return 'github-zipball';
@@ -108,6 +67,21 @@ async function readBlobBytes(blob: Blob) {
     return new Response(blob).arrayBuffer();
   }
   throw new Error('Could not read archive bytes.');
+}
+
+class RandomAccessBlobReader extends Reader<Blob> {
+  constructor(private readonly blob: Blob) {
+    super(blob);
+    this.size = blob.size;
+  }
+
+  async init() {
+    this.size = this.blob.size;
+  }
+
+  async readUint8Array(index: number, length: number) {
+    return new Uint8Array(await readBlobBytes(this.blob.slice(index, index + length)));
+  }
 }
 
 function inspectArchiveBytes(file: File, raw: ArrayBuffer, source?: RepoScanInput['source']): ArchiveDiagnostics {
@@ -191,113 +165,93 @@ function topLevelFoldersFor(paths: string[]) {
 }
 
 /**
- * Scan a ZIP file in-browser using JSZip.
- * We only read filenames + small text config files. We never execute code.
+ * Index a local ZIP through its central directory and decompress only selected
+ * evidence. BlobReader uses random-access Blob slices, so archive size does not
+ * become an equivalent browser ArrayBuffer. Imported code is never extracted or executed.
  */
-export async function scanZipFile(file: File, source?: RepoScanInput['source']): Promise<RepoScanInput> {
+export async function scanZipFile(file: File, source?: RepoScanInput['source'], signal?: AbortSignal): Promise<RepoScanInput> {
   if (file.size > SCANNER_LIMITS.maxZipSizeBytes) {
-    throw new ScannerValidationError('ZIP file is too large. ShipSeal accepts repository ZIP files up to 25 MB in this local prototype.');
+    throw new ScannerValidationError('ZIP file is too large. It exceeds ShipSeal’s 2 GB local archive safety ceiling.');
   }
 
-  const raw = typeof file.arrayBuffer === 'function'
-    ? await file.arrayBuffer()
-    : await readBlobBytes(file);
+  const raw = await readBlobBytes(file.slice(0, 64));
   const archiveDiagnostics = inspectArchiveBytes(file, raw, source);
   assertZipDiagnostics(archiveDiagnostics);
+  if (signal?.aborted) throw new DOMException('Scan cancelled', 'AbortError');
 
-  const JSZip = await loadJSZip();
-  let zip: Awaited<ReturnType<typeof JSZip.loadAsync>>;
+  const zip = new ZipReader(new RandomAccessBlobReader(file), { checkSignature: true, strictness: 'strict' });
+  let entries: Awaited<ReturnType<typeof zip.getEntries>>;
   try {
-    zip = await JSZip.loadAsync(raw);
+  try {
+    entries = await zip.getEntries();
   } catch (error) {
     throw new ArchiveParseError('ZIP parser could not read this archive.', {
       ...archiveDiagnostics,
       parseError: error instanceof Error ? error.name : 'UnknownError',
     });
   }
-  const entries = Object.values(zip.files) as ZipEntryWithSize[];
-  const fileEntries = entries.filter(entry => !entry.dir);
+  const fileEntries = entries.filter((entry): entry is FileEntry => 'getData' in entry);
   archiveDiagnostics.zipEntryCount = entries.length;
-  archiveDiagnostics.topLevelFolders = topLevelFoldersFor(entries.map(entry => entry.name));
+  archiveDiagnostics.topLevelFolders = topLevelFoldersFor(entries.map(entry => entry.filename));
 
-  if (fileEntries.length > SCANNER_LIMITS.maxFileCount) {
-    throw new ScannerValidationError(`Repository contains too many files for local prototype scanning. Limit: ${SCANNER_LIMITS.maxFileCount.toLocaleString()} files.`);
+  if (entries.length > SCANNER_LIMITS.maxArchiveEntryCount) {
+    throw new ScannerValidationError(`ZIP contains more than ${SCANNER_LIMITS.maxArchiveEntryCount.toLocaleString()} entries, exceeding the archive safety ceiling.`);
   }
 
   for (const entry of entries) {
-    const unsafeReason = getUnsafeZipPathReason(entry.name);
-    if (unsafeReason) {
-      throw new ScannerValidationError(unsafeReason);
+    const unsafeReason = getUnsafeZipPathReason(entry.filename);
+    if (unsafeReason) throw new ScannerValidationError(unsafeReason);
+    if (entry.symlink) throw new ScannerValidationError('ZIP contains symbolic links, which ShipSeal does not accept as repository evidence.');
+    if (entry.encrypted) throw new ScannerValidationError('Encrypted ZIP entries cannot be safely inspected.');
+    const unixType = (entry.externalFileAttributes >>> 16) & 0xf000;
+    if (unixType && ![0x4000, 0x8000].includes(unixType)) throw new ScannerValidationError('ZIP contains a special filesystem entry that cannot be used as repository evidence.');
+  }
+
+  const totalDeclaredBytes = fileEntries.reduce((sum, entry) => sum + entry.uncompressedSize, 0);
+  if (totalDeclaredBytes > SCANNER_LIMITS.maxDeclaredUncompressedBytes) {
+    throw new ScannerValidationError('ZIP declared uncompressed size exceeds ShipSeal’s 10 GB archive safety ceiling.');
+  }
+  if (totalDeclaredBytes > 1024 * 1024 && totalDeclaredBytes / Math.max(1, file.size) > SCANNER_LIMITS.maxCompressionRatio) {
+    throw new ScannerValidationError('ZIP has a suspicious aggregate compression ratio and was rejected safely.');
+  }
+  for (const entry of fileEntries) {
+    if (entry.uncompressedSize > SCANNER_LIMITS.maxArchiveEntryUncompressedBytes) {
+      throw new ScannerValidationError('ZIP contains an entry larger than ShipSeal’s 512 MB per-entry safety ceiling.');
+    }
+    const compressed = Math.max(1, entry.compressedSize);
+    if (entry.uncompressedSize > 1024 * 1024 && entry.uncompressedSize / compressed > SCANNER_LIMITS.maxCompressionRatio) {
+      throw new ScannerValidationError('ZIP contains a suspicious compression ratio and was rejected safely.');
     }
   }
 
-  const files: RepoFileSummary[] = [];
+  const normalizedNames = stripArchiveRoots(entries.map(entry => entry.filename));
+  const normalizedEntryPaths = new Map(entries.map((entry, index) => [entry, normalizedNames[index] || '']));
+  const discovered = entries
+    .map(entry => ({
+      path: normalizedEntryPaths.get(entry) || '',
+      size: entry.directory ? 0 : entry.uncompressedSize,
+      isDir: entry.directory,
+    }))
+    .filter(entry => entry.path && !isMetadataArchivePath(entry.path));
+  const selection = selectRepositoryEvidence(discovered);
+  selection.summary.archiveDiagnostics = archiveDiagnostics;
+  const selectedPaths = new Set(selection.selected.map(entry => entry.path));
   const textContents: Record<string, string> = {};
-  const summary = createEmptyScanSummary();
-  summary.archiveDiagnostics = archiveDiagnostics;
-  summary.totalFilesFound = fileEntries.length;
-  const normalizedNames = stripArchiveRoots(entries.map(entry => entry.name));
-  const normalizedEntryPaths = new Map(entries.map((entry, index) => [entry.name, normalizedNames[index] || '']));
-
-  for (const entry of entries) {
-    const path = normalizedEntryPaths.get(entry.name) || '';
-    if (!path) continue;
-    if (isMetadataArchivePath(path)) continue;
-
-    if (entry.dir) {
-      files.push({ path, size: 0, isDir: true });
-      continue;
-    }
-
-    const size = entry._data?.uncompressedSize ?? 0;
-    const generatedFolder = generatedFolderName(path);
-    const generated = isGeneratedOrVendorPath(path);
-    const binary = isBinaryLikePath(path);
-    let ignoredReason: RepoFileSummary['ignoredReason'] | undefined;
-
-    if (generated) {
-      ignoredReason = 'generated-vendor';
-      summary.generatedVendorFilesIgnored += 1;
-      if (generatedFolder && !summary.ignoredGeneratedFolders.includes(generatedFolder)) {
-        summary.ignoredGeneratedFolders.push(generatedFolder);
-      }
-    } else if (binary) {
-      ignoredReason = 'binary';
-      summary.binaryFilesIgnored += 1;
-    } else if (isReadableRepositoryText(path) && size > SCANNER_LIMITS.maxReadableTextFileSizeBytes) {
-      ignoredReason = 'too-large-text';
-    }
-
-    const ignored = !!ignoredReason;
-    if (ignored) {
-      summary.filesIgnored += 1;
-    } else {
-      summary.filesAnalyzed += 1;
-    }
-
-    files.push({ path, size, isDir: false, ignored, ignoredReason });
-
-    if (!ignored && isReadableRepositoryText(path)) {
-      try {
-        const txt = await entry.async('string');
-        const readableBytes = txt.length;
-        if (summary.readableTextBytesAnalyzed + readableBytes > SCANNER_LIMITS.maxTotalReadableTextBytes) {
-          throw new ScannerValidationError('Repository contains too much readable text for local prototype scanning. Remove generated docs or large text artifacts and try again.');
-        }
-        textContents[path] = txt;
-        summary.readableTextBytesAnalyzed += readableBytes;
-      } catch (error) {
-        if (error instanceof ScannerValidationError) throw error;
-        summary.warnings.push(`Could not read ${path} as text; it was skipped.`);
-      }
+  for (const entry of fileEntries) {
+    if (signal?.aborted) throw new DOMException('Scan cancelled', 'AbortError');
+    const path = normalizedEntryPaths.get(entry) || '';
+    if (!selectedPaths.has(path)) continue;
+    try {
+      textContents[path] = await entry.getData(new TextWriter(), { checkSignature: true });
+    } catch {
+      selection.summary.warnings.push(`Could not read ${path} as text; it was skipped.`);
     }
   }
-
-  summarizeLargeRepo(summary);
-
   const repoName = file.name.replace(/\.zip$/i, '') || 'repository';
-
-  return { files, textContents, repoName, scanSummary: summary };
+  return finalizeRepositoryEvidence(repoName, source || { sourceType: 'zip-upload' }, selection, textContents);
+  } finally {
+    await zip.close().catch(() => undefined);
+  }
 }
 
 /**

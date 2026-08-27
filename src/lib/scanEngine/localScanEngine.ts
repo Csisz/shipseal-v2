@@ -40,14 +40,15 @@ export class LocalScanEngine implements ScanEngine {
     };
 
     try {
-      const validation = validateZipUpload(input.file);
-      if (!validation.valid) {
-        throw new ScannerValidationError(validation.error || 'This file cannot be scanned.');
+      if (!input.preparedEvidence && !input.file) throw new ScannerValidationError('Repository evidence is missing.');
+      if (input.file) {
+        const validation = validateZipUpload(input.file);
+        if (!validation.valid) throw new ScannerValidationError(validation.error || 'This file cannot be scanned.');
       }
 
       await runStep(0, async () => {
         try {
-          scanInput = await scanZipFile(input.file, input.source);
+          scanInput = input.preparedEvidence || await scanZipFile(input.file!, input.source, input.signal);
           scanInput.source = input.source || {
             sourceType: input.mode === 'github-public' ? 'github-url' : 'zip-upload',
           };
@@ -61,6 +62,7 @@ export class LocalScanEngine implements ScanEngine {
           callbacks.onWarning?.(error instanceof ArchiveParseError
             ? `${LIMITED_SCAN_WARNING} Archive classification: ${error.diagnostics.inputKind}.`
             : LIMITED_SCAN_WARNING);
+          if (!input.file) throw error;
           scanInput = fallbackScan(input.file, error instanceof ArchiveParseError ? error.diagnostics : undefined);
           scanInput.source = input.source || {
             sourceType: input.mode === 'github-public' ? 'github-url' : 'zip-upload',
@@ -71,12 +73,12 @@ export class LocalScanEngine implements ScanEngine {
         }
       });
 
-      await runStep(1, () => {
+      await runStep(1);
+      await runStep(2);
+      await runStep(3);
+      await runStep(4, () => {
         if (!scanInput) throw new Error('Scan input was not prepared.');
         report = buildReport(scanInput);
-      });
-      await runStep(2, () => {
-        if (!scanInput) throw new Error('Scan input was not prepared.');
         if (scanInput.scanSummary) callbacks.onScanSummary?.(scanInput.scanSummary);
         callbacks.onScanInput?.(scanInput);
       });

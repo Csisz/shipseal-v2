@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import JSZip from 'jszip';
-import { importPublicGitHubRepo } from '@/lib/github/githubImport';
+import { acquireGitHubRepositoryEvidence } from '../../api/repository-evidence';
 import { LocalScanEngine } from '@/lib/scanEngine';
 import { buildAgentPackZipBlob, buildRepoContextPackJson, buildScoreJson } from '@/lib/exports';
 import { generateClientReportHtml } from '@/lib/report';
@@ -128,15 +128,16 @@ const liveDogfood = process.env.SHIPSEAL_LIVE_DOGFOOD === '1' ? it : it.skip;
 
 describe('live GitHub full-scan dogfood', () => {
   liveDogfood('scans https://github.com/Csisz/shipseal-v2 through the public GitHub import path', async () => {
-    const imported = await importPublicGitHubRepo({ url: 'https://github.com/Csisz/shipseal-v2' });
+    const imported = await acquireGitHubRepositoryEvidence({ source: 'public-github', owner: 'Csisz', repo: 'shipseal-v2', ref: 'HEAD' });
     const report = await new LocalScanEngine().scan({
-      file: imported.file,
+      preparedEvidence: imported.input,
       mode: 'github-public',
-      source: imported.source,
+      source: imported.input.source,
     });
     const scoreJson = buildScoreJson(report);
 
-    expectFullScanReport(report);
+    expect(['full', 'bounded']).toContain(scoreJson.scanSummary.scanMode);
+    expect(scoreJson.scanSummary.limited).toBe(false);
     console.log('ShipSeal live dogfood scan', {
       totalFilesFound: scoreJson.scanSummary.totalFilesFound,
       filesAnalyzed: scoreJson.scanSummary.filesAnalyzed,
@@ -146,8 +147,8 @@ describe('live GitHub full-scan dogfood', () => {
     expect(scoreJson.scanSummary.totalFilesFound).toBeGreaterThan(20);
     expect(scoreJson.scanSummary.filesAnalyzed).toBeGreaterThan(10);
     expect(scoreJson.scanSummary.readableTextBytesAnalyzed).toBeGreaterThan(1000);
-    expect(scoreJson.scanSummary.archiveDiagnostics?.startsWithZipMagic).toBe(true);
-    expect(scoreJson.scanSummary.archiveDiagnostics?.contentKind).toBe('zip');
+    expect(scoreJson.scanSummary.sourceCommitSha).toMatch(/^[a-f0-9]{40}$/i);
+    expect(scoreJson.scanSummary.sourceRequestCount).toBeGreaterThan(2);
     expect(scoreJson.detectedStack.frameworks).toEqual(expect.arrayContaining(['React', 'Vite']));
     expect(scoreJson.detectedStack.languages).toContain('TypeScript');
   }, 30000);
