@@ -1,13 +1,17 @@
-import { ArrowRight, CheckCircle2, ChevronDown, Code2, FileCheck2, Lock, Mail, Network, ScanLine, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Check, CheckCircle2, ChevronDown, Code2, FileCheck2, Lock, Mail, Network, ScanLine, ShieldCheck } from 'lucide-react';
 import type { FormEvent, ReactNode } from 'react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { SHIPSEAL_VERSION } from '@/lib/version';
 import { PackageCards } from './PackageCards';
 import { RepositoryIntelligencePreview } from './landing/RepositoryIntelligencePreview';
 import { Reveal } from './landing/Reveal';
+import { UpgradeToProButton } from '@/components/billing/BillingActionButton';
+import { formatMonthlyPlanPrice, PUBLIC_BILLING_CATALOG } from '@/lib/billing/catalog';
 
 interface Props {
   onSampleReport: () => void;
@@ -149,17 +153,32 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
 
       <section id="pricing" className="container scroll-mt-20 py-16 md:py-24">
         <Reveal className="mx-auto max-w-3xl text-center">
-          <Eyebrow>Pricing direction</Eyebrow>
-          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">Start with one repository.</h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">Payment is not enabled in this MVP. Commercial packages remain clearly marked.</p>
+          <Eyebrow>Simple pricing</Eyebrow>
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">Map the repository for free. Explore its futures with Pro.</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">Pro includes a bounded monthly Deep Analysis allowance. ShipSeal never promises unlimited AI usage.</p>
         </Reveal>
-        <div className="mx-auto mt-10 grid max-w-5xl gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mx-auto mt-10 grid max-w-4xl gap-4 md:grid-cols-2">
           {PRICING.map(item => (
-            <div key={item.name} className={`rounded-2xl border p-5 ${item.featured ? 'border-primary/45 bg-primary/10 shadow-sm shadow-primary/10' : 'border-border/55 bg-secondary/10'}`}>
-              <div className="font-display text-lg font-semibold">{item.name}</div>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.description}</p>
-              <div className="mt-5 text-xs font-medium text-primary-glow">{item.status}</div>
-            </div>
+            <Card key={item.name} className="h-full">
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex flex-col gap-1">
+                    <CardTitle>{item.name}</CardTitle>
+                    <CardDescription>{item.description}</CardDescription>
+                  </div>
+                  {item.featured && <Badge>Pro</Badge>}
+                </div>
+                <div className="pt-3 font-display text-3xl font-semibold">{item.price}</div>
+              </CardHeader>
+              <CardContent>
+                <ul className="flex flex-col gap-3 text-sm">
+                  {item.features.map(feature => <li key={feature} className="flex items-start gap-2"><Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" /><span>{feature}</span></li>)}
+                </ul>
+              </CardContent>
+              <CardFooter>
+                {item.id === 'pro' ? <UpgradeToProButton size="lg" returnTo="/#pricing" label="Upgrade to Pro" /> : <Button size="lg" variant="outline" onClick={onScrollScan}>Scan a repository</Button>}
+              </CardFooter>
+            </Card>
           ))}
         </div>
       </section>
@@ -239,11 +258,28 @@ function TrustPanel({ title, text }: { title: string; text: string }) {
 }
 
 const PRICING = [
-  { name: 'Free Demo', description: 'Explore ShipSeal with a sample and repository scan.', status: 'Available now' },
-  { name: 'Builder', description: 'Optimize one repository and prepare focused outputs.', status: 'Coming soon', featured: true },
-  { name: 'AI Workspace Pro', description: 'Support a deeper AI development workflow.', status: 'Coming soon' },
-  { name: 'Agency / White-label', description: 'Prepare repository intelligence across client work.', status: 'Request access' },
-];
+  {
+    id: 'free',
+    name: 'Free',
+    description: 'Understand what exists in a repository.',
+    price: formatMonthlyPlanPrice('free'),
+    featured: false,
+    features: ['Repository scanning', 'Deterministic Repository Intelligence', 'Project Universe', 'Saved projects'],
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    description: 'Explore evidence-backed product directions and executable paths.',
+    price: formatMonthlyPlanPrice('pro'),
+    featured: true,
+    features: [
+      'Everything in Free',
+      'Repository Futures',
+      'Executable Future Plans',
+      `${PUBLIC_BILLING_CATALOG.pro.deepAnalysisLimit} Deep Analyses per billing period`,
+    ],
+  },
+] as const;
 
 function ContactDisclosure() {
   const [open, setOpen] = useState(false);

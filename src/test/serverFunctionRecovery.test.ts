@@ -100,6 +100,7 @@ describe('production server-function recovery', () => {
     expect(config.files).toEqual([
       'api/account-router.ts',
       'api/audit-request.ts',
+      'api/billing-router.ts',
       'api/create-readiness-pr.ts',
       'api/github-app-router.ts',
       'api/github-archive.ts',

@@ -226,4 +226,15 @@ describe('premium post-scan view selector', () => {
       vi.useRealTimers();
     }
   });
+
+  it('opens Repository Futures when a verified checkout return carries the safe internal focus hint', async () => {
+    window.history.pushState({}, '', '/projects/prj_safe/scans/scn_safe?open=futures');
+    try {
+      renderWorkspace(reportWithIdentity('2026-08-11T10:03:00.000Z'));
+      expect(await screen.findByTestId('futures-experience')).toBeInTheDocument();
+      expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
 });

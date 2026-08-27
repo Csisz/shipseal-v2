@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { PersistedUser } from '@/lib/persistence/schema';
 import { getCurrentUserAiUsage, getCurrentUserSession, logoutCurrentUserSession } from '@/lib/persistence/sessionClient';
 import type { AccountAiUsageSummary } from '@/lib/entitlements/contract';
@@ -10,6 +10,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [availabilityMessage, setAvailabilityMessage] = useState('');
   const [usage, setUsage] = useState<AccountAiUsageSummary | null>(null);
   const [usageStatus, setUsageStatus] = useState<AccountContextValue['usageStatus']>('idle');
+  const lastResumeRefresh = useRef(0);
   const refreshUsage = useCallback(async () => {
     setUsageStatus('loading');
     try { setUsage(await getCurrentUserAiUsage()); setUsageStatus('ready'); }
@@ -46,6 +47,19 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
   }, [refresh]);
+  useEffect(() => {
+    const resume = () => {
+      if (!user || document.visibilityState === 'hidden' || Date.now() - lastResumeRefresh.current < 15_000) return;
+      lastResumeRefresh.current = Date.now();
+      void refreshUsage();
+    };
+    window.addEventListener('focus', resume);
+    document.addEventListener('visibilitychange', resume);
+    return () => {
+      window.removeEventListener('focus', resume);
+      document.removeEventListener('visibilitychange', resume);
+    };
+  }, [refreshUsage, user]);
 
   const beginSignIn = useCallback(() => {
     setAvailabilityMessage('');

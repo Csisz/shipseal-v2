@@ -52,11 +52,11 @@ describe('ShipSeal landing', () => {
 
     expect(screen.getByRole('heading', { name: /Never execute imported code/i })).toBeInTheDocument();
     expect(screen.getByText(/This is not legal advice or compliance certification/i)).toBeInTheDocument();
-    expect(screen.getByText('Free Demo')).toBeInTheDocument();
-    expect(screen.getByText('Builder')).toBeInTheDocument();
-    expect(screen.getByText('AI Workspace Pro')).toBeInTheDocument();
-    expect(screen.getByText('Agency / White-label')).toBeInTheDocument();
-    expect(screen.getAllByText('Coming soon')).toHaveLength(2);
+    expect(screen.getByRole('heading', { name: 'Free' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Pro' })).toBeInTheDocument();
+    expect(screen.getByText('$19/month')).toBeInTheDocument();
+    expect(screen.getByText('10 Deep Analyses per billing period')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in to upgrade' })).toBeEnabled();
     expect(screen.queryByText(/founder/i)).not.toBeInTheDocument();
 
     expect(container.querySelectorAll('section').length).toBeLessThanOrEqual(8);

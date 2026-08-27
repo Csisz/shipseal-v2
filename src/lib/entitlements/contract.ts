@@ -45,6 +45,12 @@ export interface AccountAiUsageSummary {
     periodStart: string;
     periodEnd: string;
   };
+  billing?: {
+    customerPortalAvailable: boolean;
+    cancelAtPeriodEnd: boolean;
+    stripeStatus: string | null;
+    currentPeriodEnd: string | null;
+  };
 }
 
 export function isAccountAiUsageSummary(value: unknown): value is AccountAiUsageSummary {
@@ -52,6 +58,7 @@ export function isAccountAiUsageSummary(value: unknown): value is AccountAiUsage
   const summary = value as Partial<AccountAiUsageSummary>;
   const usage = summary.deepAnalysis;
   const capabilities = summary.capabilities;
+  const billing = summary.billing;
   return SHIPSEAL_PLANS.includes(summary.plan as ShipSealPlan)
     && ENTITLEMENT_STATUSES.includes(summary.entitlementStatus as EntitlementStatus)
     && Boolean(capabilities)
@@ -60,7 +67,13 @@ export function isAccountAiUsageSummary(value: unknown): value is AccountAiUsage
     && Boolean(usage)
     && [usage?.limit, usage?.used, usage?.reserved, usage?.remaining].every(item => Number.isInteger(item) && Number(item) >= 0)
     && isIsoDate(usage?.periodStart)
-    && isIsoDate(usage?.periodEnd);
+    && isIsoDate(usage?.periodEnd)
+    && (billing === undefined || (
+      typeof billing.customerPortalAvailable === 'boolean'
+      && typeof billing.cancelAtPeriodEnd === 'boolean'
+      && (billing.stripeStatus === null || typeof billing.stripeStatus === 'string')
+      && (billing.currentPeriodEnd === null || isIsoDate(billing.currentPeriodEnd))
+    ));
 }
 
 function isIsoDate(value: unknown) {

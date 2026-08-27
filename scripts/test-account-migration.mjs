@@ -10,12 +10,17 @@ if (securityMigrationIndex === -1) throw new Error(`${securityMigrationFile} is 
 const aiSecurityMigrationFile = '0004_entitlements_ai_usage.sql';
 const aiSecurityMigrationIndex = migrationFiles.indexOf(aiSecurityMigrationFile);
 if (aiSecurityMigrationIndex === -1) throw new Error(`${aiSecurityMigrationFile} is missing.`);
+const billingSecurityMigrationFile = '0005_billing.sql';
+const billingSecurityMigrationIndex = migrationFiles.indexOf(billingSecurityMigrationFile);
+if (billingSecurityMigrationIndex === -1) throw new Error(`${billingSecurityMigrationFile} is missing.`);
 
 const securityMigration = migrations[securityMigrationIndex];
 const aiSecurityMigration = migrations[aiSecurityMigrationIndex];
+const billingSecurityMigration = migrations[billingSecurityMigrationIndex];
 const accountTables = ['shipseal_users', 'shipseal_sessions', 'shipseal_projects', 'shipseal_scans', 'shipseal_verification_relationships', 'shipseal_schema_migrations'];
 const aiTables = ['shipseal_entitlements', 'shipseal_ai_operations', 'shipseal_ai_operation_stages', 'shipseal_ai_usage_ledger', 'shipseal_ai_budget_windows', 'shipseal_ai_provider_permits'];
-const requiredTables = [...accountTables, ...aiTables];
+const billingTables = ['shipseal_billing_customers', 'shipseal_billing_subscriptions', 'shipseal_billing_events'];
+const requiredTables = [...accountTables, ...aiTables, ...billingTables];
 const normalizedSecurityMigration = securityMigration.replace(/\s+/g, ' ').trim().toLowerCase();
 const rlsTables = [...securityMigration.matchAll(/alter\s+table\s+(?:public\.)?([a-z0-9_]+)\s+enable\s+row\s+level\s+security\s*;/gi)].map(match => match[1]);
 const publicRevoke = securityMigration.match(/revoke\s+all\s+privileges\s+on\s+table([\s\S]*?)from\s+public\s*;/i)?.[1] ?? '';
@@ -77,12 +82,37 @@ if (!/reserved_user_units\s*\+\s*consumed_user_units\s*<=\s*1/i.test(aiSecurityM
   throw new Error('One logical AI operation must never hold more than one user-facing unit.');
 }
 
+const normalizedBillingSecurityMigration = billingSecurityMigration.replace(/\s+/g, ' ').trim().toLowerCase();
+const billingRlsTables = [...billingSecurityMigration.matchAll(/alter\s+table\s+(?:public\.)?([a-z0-9_]+)\s+enable\s+row\s+level\s+security\s*;/gi)].map(match => match[1]);
+const billingPublicRevoke = billingSecurityMigration.match(/revoke\s+all\s+privileges\s+on\s+table([\s\S]*?)from\s+public\s*;/i)?.[1] ?? '';
+const billingConditionalRevoke = billingSecurityMigration.match(/execute\s+format\(\s*'([^']+)'/i)?.[1] ?? '';
+if (new Set(billingRlsTables).size !== billingTables.length || billingTables.some(table => !billingRlsTables.includes(table))) {
+  throw new Error('Billing migration must enable RLS on every billing table exactly once.');
+}
+if (/force\s+row\s+level\s+security|create\s+policy|alter\s+policy|\bgrant\b/i.test(billingSecurityMigration)) {
+  throw new Error('Billing migration must preserve the server-owner/default-deny security posture.');
+}
+if (/\b(drop|truncate|delete\s+from|disable\s+row\s+level\s+security)\b/i.test(billingSecurityMigration)) {
+  throw new Error('Billing migration must remain forward-only and non-destructive.');
+}
+for (const table of billingTables) {
+  if (!new RegExp(`(?:public\\.)?${table}\\b`, 'i').test(billingPublicRevoke)) throw new Error(`Billing PUBLIC revocation is missing ${table}.`);
+  if (!new RegExp(`public\\.${table}\\b`, 'i').test(billingConditionalRevoke)) throw new Error(`Billing conditional role revocation is missing ${table}.`);
+}
+for (const role of ['anon', 'authenticated', 'service_role']) {
+  if (!new RegExp(`['\"]${role}['\"]`, 'i').test(billingSecurityMigration)) throw new Error(`Billing security migration does not cover ${role}.`);
+}
+if (!normalizedBillingSecurityMigration.includes("values ('0005_billing') on conflict do nothing")) {
+  throw new Error('Billing migration tracking must be idempotent.');
+}
+if (!/event_id\s+text\s+primary\s+key/i.test(billingSecurityMigration)) throw new Error('Stripe event idempotency storage is missing.');
+
 // pg-mem does not implement PostgreSQL RLS, privileges, roles, or PL/pgSQL DO
 // blocks. Validate that production-only contract above, then omit exactly those
 // statements while exercising the remaining migration and schema behavior twice.
 function forPgMem(file, migration) {
-  if (![securityMigrationFile, aiSecurityMigrationFile].includes(file)) return migration;
-  const blockName = file === securityMigrationFile ? 'shipseal_security' : 'shipseal_ai_security';
+  if (![securityMigrationFile, aiSecurityMigrationFile, billingSecurityMigrationFile].includes(file)) return migration;
+  const blockName = file === securityMigrationFile ? 'shipseal_security' : file === aiSecurityMigrationFile ? 'shipseal_ai_security' : 'shipseal_billing_security';
   return migration
     .replace(/alter\s+table\s+(?:public\.)?[a-z0-9_]+\s+enable\s+row\s+level\s+security\s*;/gi, '')
     .replace(/revoke\s+all\s+privileges\s+on\s+table[\s\S]*?from\s+public\s*;/i, '')
@@ -160,9 +190,22 @@ db.public.none(`
     'ai-permit-security-test', '2026-08-24', 'ai-operation-security-test', 'ai-stage-security-test',
     'acquired', now(), now() + interval '3 minutes'
   );
+  insert into shipseal_billing_customers(user_id, stripe_customer_id)
+  values ('security-test-user', 'cus_security_test');
+  insert into shipseal_billing_subscriptions(
+    user_id, stripe_subscription_id, stripe_customer_id, stripe_price_id, status,
+    subscription_created_at, current_period_start, current_period_end, cancel_at_period_end, latest_event_created
+  ) values (
+    'security-test-user', 'sub_security_test', 'cus_security_test', 'price_security_test', 'active',
+    now(), now(), now() + interval '30 days', false, 1777000000
+  );
+  insert into shipseal_billing_events(event_id, event_type, user_id, stripe_created_at)
+  values ('evt_security_test', 'customer.subscription.updated', 'security-test-user', 1777000000);
 `);
 const operation = db.public.one("select reserved_user_units, consumed_user_units from shipseal_ai_operations where id = 'ai-operation-security-test'");
 if (operation.reserved_user_units !== 1 || operation.consumed_user_units !== 0) throw new Error('AI usage operation constraints are not operational.');
+const billingSubscription = db.public.one("select status, latest_event_created from shipseal_billing_subscriptions where user_id = 'security-test-user'");
+if (billingSubscription.status !== 'active' || Number(billingSubscription.latest_event_created) !== 1777000000) throw new Error('Billing persistence constraints are not operational.');
 try {
   db.public.none(`
     insert into shipseal_ai_operations(

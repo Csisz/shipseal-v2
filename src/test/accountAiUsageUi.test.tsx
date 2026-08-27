@@ -34,7 +34,7 @@ describe('Omega 19.1 account AI usage UI', () => {
   it('shows the server allowance without exposing operational provider limits', () => {
     render(<AccountContext.Provider value={accountValue()}><AccountUsageCard /></AccountContext.Provider>);
     expect(screen.getByTestId('account-ai-usage')).toHaveTextContent('Pro');
-    expect(screen.getByText('6')).toBeInTheDocument();
+    expect(screen.getByText('6 of 10')).toBeInTheDocument();
     expect(screen.getByText('3 used · 1 in progress')).toBeInTheDocument();
     expect(screen.queryByText(/provider call|in-flight|global budget/i)).not.toBeInTheDocument();
   });
@@ -57,8 +57,8 @@ describe('Omega 19.1 account AI usage UI', () => {
     });
     render(<AccountContext.Provider value={free}><AccountUsageCard /></AccountContext.Provider>);
     expect(screen.getByText('Free')).toBeInTheDocument();
-    expect(screen.getByText(/deterministic scanning and Project Universe remain available/i)).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /checkout|upgrade/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/deterministic Repository Intelligence, Project Universe and saved projects remain available/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upgrade to Pro' })).toBeEnabled();
   });
 
   it('explains an exhausted paid allowance without suggesting a rescan or checkout', () => {
@@ -78,8 +78,29 @@ describe('Omega 19.1 account AI usage UI', () => {
       },
     });
     render(<AccountContext.Provider value={exhausted}><AccountUsageCard /></AccountContext.Provider>);
-    expect(screen.getByText(/current Deep Analysis allowance is used/i)).toBeInTheDocument();
+    expect(screen.getByText(/Monthly Deep Analysis allowance used/i)).toBeInTheDocument();
     expect(screen.getByText(/saved and cached results remain available/i)).toBeInTheDocument();
-    expect(screen.queryByText(/rescan|checkout/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /upgrade/i })).not.toBeInTheDocument();
+  });
+
+  it('shows Portal management and a deliberate payment issue state for billing Pro', () => {
+    const pastDue = accountValue({
+      usage: {
+        plan: 'pro',
+        entitlementStatus: 'past_due',
+        capabilities: { repositoryFutures: true, executableFuturePlan: true },
+        deepAnalysis: {
+          limit: 10, used: 2, reserved: 0, remaining: 8,
+          periodStart: '2026-08-01T00:00:00.000Z', periodEnd: '2026-09-01T00:00:00.000Z',
+        },
+        billing: {
+          customerPortalAvailable: true, cancelAtPeriodEnd: false, stripeStatus: 'past_due', currentPeriodEnd: '2026-09-01T00:00:00.000Z',
+        },
+      },
+    });
+    render(<AccountContext.Provider value={pastDue}><AccountUsageCard /></AccountContext.Provider>);
+    expect(screen.getByText(/payment issue/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Manage subscription' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /upgrade/i })).not.toBeInTheDocument();
   });
 });

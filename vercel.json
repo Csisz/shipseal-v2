@@ -10,6 +10,10 @@
       "destination": "/api/account-router?route=:route"
     },
     {
+      "source": "/api/billing/:route(create-checkout-session|create-portal-session|webhook)",
+      "destination": "/api/billing-router?route=:route"
+    },
+    {
       "source": "/api/projects/:projectId/scans",
       "destination": "/api/persistence-router?route=project-scans&projectId=:projectId"
     },

@@ -13,6 +13,7 @@ const Projects = lazy(() => import('./pages/Projects.tsx'));
 const Project = lazy(() => import('./pages/Project.tsx'));
 const SavedScan = lazy(() => import('./pages/SavedScan.tsx'));
 const AccountComplete = lazy(() => import('./pages/AccountComplete.tsx'));
+const PaymentSuccess = lazy(() => import('./pages/PaymentSuccess.tsx'));
 const Privacy = lazy(() => import('./pages/Privacy.tsx'));
 const Security = lazy(() => import('./pages/Security.tsx'));
 const NotFound = lazy(() => import('./pages/NotFound.tsx'));
@@ -34,6 +35,7 @@ const App = () => (
                 <Route path="/projects/:projectId" element={<Project />} />
                 <Route path="/projects/:projectId/scans/:scanId" element={<SavedScan />} />
                 <Route path="/account/complete" element={<AccountComplete />} />
+                <Route path="/payment/success" element={<PaymentSuccess />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/security" element={<Security />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

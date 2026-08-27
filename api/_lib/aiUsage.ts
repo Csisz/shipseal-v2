@@ -256,6 +256,13 @@ export class PostgresAiUsageStore implements AiUsageStore {
       `;
       const used = Number(usage?.used || 0);
       const reserved = Number(usage?.reserved || 0);
+      const [billing] = await transaction<Record<string, unknown>[]>`
+        select c.stripe_customer_id, s.status, s.cancel_at_period_end, s.current_period_end
+        from public.shipseal_billing_customers c
+        left join public.shipseal_billing_subscriptions s on s.user_id = c.user_id
+        where c.user_id = ${userId}
+        limit 1
+      `;
       return {
         plan: entitlement.plan,
         entitlementStatus: entitlement.status,
@@ -267,6 +274,12 @@ export class PostgresAiUsageStore implements AiUsageStore {
           remaining: Math.max(0, entitlement.deepAnalysisLimit - used - reserved),
           periodStart: entitlement.periodStart,
           periodEnd: entitlement.periodEnd,
+        },
+        billing: {
+          customerPortalAvailable: Boolean(billing?.stripe_customer_id),
+          cancelAtPeriodEnd: Boolean(billing?.cancel_at_period_end),
+          stripeStatus: billing?.status ? String(billing.status) : null,
+          currentPeriodEnd: billing?.current_period_end ? asIsoDate(billing.current_period_end) : null,
         },
       };
     });

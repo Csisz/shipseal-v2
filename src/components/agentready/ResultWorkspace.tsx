@@ -123,6 +123,7 @@ export function ResultWorkspace({
   const [prCreated, setPrCreated] = useState(false);
   const [workspaceReportIdentity, setWorkspaceReportIdentity] = useState(reportIdentity);
   const [futureDegradedAccess, setFutureDegradedAccess] = useState(false);
+  const billingFutureFocusConsumed = useRef(false);
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
@@ -226,6 +227,16 @@ export function ResultWorkspace({
   const futuresCanRetry = repositoryProductIntelligenceStatus?.state === 'fallback'
     ? repositoryProductIntelligenceStatus.retryable
     : repositoryProductIntelligenceStatus?.state === 'cancelled';
+
+  useEffect(() => {
+    if (billingFutureFocusConsumed.current || !futuresReady || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('open') !== 'futures') return;
+    billingFutureFocusConsumed.current = true;
+    setEntryView('futures');
+    setPendingDashboardFocus(null);
+    handleResultChapterChange('improve');
+  }, [futuresReady, handleResultChapterChange]);
 
   useEffect(() => {
     if (futureTerminalFailure) setFutureDegradedAccess(true);
