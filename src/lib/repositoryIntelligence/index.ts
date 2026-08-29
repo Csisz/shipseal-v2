@@ -54,6 +54,11 @@ export {
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
   repositoryFutureFailureMessage,
 } from './productionProviderContract';
+export { resolveRepositoryFutureAvailability } from './futureAvailability';
+export type {
+  RepositoryFutureAvailability,
+  RepositoryFutureAvailabilityOperationState,
+} from './futureAvailability';
 
 export {
   DEFAULT_REPOSITORY_INTELLIGENCE_ARTIFACT_POLICY,

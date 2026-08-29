@@ -42,6 +42,14 @@ export function mergePersistedRepositoryFutureResult(
   return persisted.complete.result.productIntelligence || null;
 }
 
+export function selectRepositoryFutureRecoveryOperationId(
+  operation: Pick<AiOperationStatusSnapshot, 'publicOperationId' | 'recoveryAction'> | null | undefined,
+): string | undefined {
+  return operation && ['resume_stale_lease', 'retry_stage', 'integrity_recovery'].includes(operation.recoveryAction)
+    ? operation.publicOperationId
+    : undefined;
+}
+
 function lookupParams(lookup: AiOperationLookup) {
   const params = new URLSearchParams();
   if (lookup.publicOperationId) params.set('publicOperationId', lookup.publicOperationId);

@@ -14,7 +14,12 @@ import {
   type RepositoryIntelligenceProviderStatus,
   type RepositoryProductIntelligenceResult,
 } from '@/lib/repositoryIntelligence';
-import { getPersistedRepositoryFutureResult, getRepositoryFutureOperationStatus, mergePersistedRepositoryFutureResult } from '@/lib/aiOperationRecovery';
+import {
+  getPersistedRepositoryFutureResult,
+  getRepositoryFutureOperationStatus,
+  mergePersistedRepositoryFutureResult,
+  selectRepositoryFutureRecoveryOperationId,
+} from '@/lib/aiOperationRecovery';
 
 const ResultDashboard = lazy(() => import('@/components/agentready/ResultDashboard').then(module => ({ default: module.ResultDashboard })));
 
@@ -28,7 +33,10 @@ export default function SavedScan() {
   const [verification, setVerification] = useState<PersistedVerificationRelationship | null>(null);
   const [error, setError] = useState('');
   const [productIntelligence, setProductIntelligence] = useState<RepositoryProductIntelligenceResult | null>(null);
-  const [productStatus, setProductStatus] = useState<RepositoryIntelligenceProviderStatus | undefined>();
+  const [productStatus, setProductStatus] = useState<RepositoryIntelligenceProviderStatus>({
+    state: 'preparing', deepState: 'pending', retryable: false,
+    message: 'Checking for a saved Future analysis.',
+  });
   useEffect(() => {
     if (!account.user) return;
     let active = true;
@@ -44,17 +52,32 @@ export default function SavedScan() {
         if (!active) return;
         if (!persisted) {
           void getRepositoryFutureOperationStatus({ repositoryIdentity }).then(operation => {
-            if (!active || !operation) return;
+            if (!active) return;
+            if (!operation) {
+              setProductStatus({
+                state: 'deterministic', deepState: 'disabled', retryable: false,
+                message: 'Repository evidence is ready for an explicit Future analysis.',
+              });
+              return;
+            }
             setProductStatus({
               state: 'fallback', deepState: 'failed', category: 'operation_conflict', retryable: operation.retryable,
               message: repositoryFutureFailureMessage('operation_conflict', { costEstimate: 'unavailable', operationRecoveryAction: operation.recoveryAction }),
               diagnostics: {
                 costEstimate: 'unavailable', publicOperationId: operation.publicOperationId,
                 operationRecoveryAction: operation.recoveryAction,
+                operationCompletionState: operation.completionState,
+                operationUserUnitState: operation.userUnitState,
                 ...(operation.leaseExpiresAt ? { operationLeaseExpiresAt: operation.leaseExpiresAt } : {}),
               },
             });
-          }).catch(() => undefined);
+          }).catch(() => {
+            if (!active) return;
+            setProductStatus({
+              state: 'fallback', deepState: 'failed', category: 'usage_temporarily_unavailable', retryable: true,
+              message: 'Saved Future analysis status is temporarily unavailable.',
+            });
+          });
           return;
         }
         const restored = mergePersistedRepositoryFutureResult(persisted);
@@ -66,7 +89,13 @@ export default function SavedScan() {
           modelId: persisted.complete.modelId,
           diagnostics: { ...persisted.complete.diagnostics, cacheUsed: true, publicOperationId: persisted.publicOperationId, operationRecoveryAction: 'open_result' },
         });
-      }).catch(() => undefined);
+      }).catch(() => {
+        if (!active) return;
+        setProductStatus({
+          state: 'fallback', deepState: 'failed', category: 'usage_temporarily_unavailable', retryable: true,
+          message: 'Saved Future analysis status is temporarily unavailable.',
+        });
+      });
     }).catch(() => { if (active) setError('This saved scan is unavailable, corrupt, or uses an unsupported data version.'); });
     return () => { active = false; };
   }, [account.user, projectId, scanId]);
@@ -89,9 +118,9 @@ export default function SavedScan() {
       const contextBundle = prepareRepositoryProductStrategistContext({ scanInput: imported.scanInput, evidenceResult });
       const request = buildRepositoryProductStrategistRequest({ contextBundle, evidenceResult });
       const recoveryAction = productStatus && 'diagnostics' in productStatus ? productStatus.diagnostics?.operationRecoveryAction : undefined;
-      const recoveryOperationId = productStatus && 'diagnostics' in productStatus
-        && recoveryAction && ['resume_stale_lease', 'retry_stage', 'integrity_recovery'].includes(recoveryAction)
-        ? productStatus.diagnostics?.publicOperationId
+      const publicOperationId = productStatus && 'diagnostics' in productStatus ? productStatus.diagnostics?.publicOperationId : undefined;
+      const recoveryOperationId = publicOperationId && recoveryAction
+        ? selectRepositoryFutureRecoveryOperationId({ publicOperationId, recoveryAction })
         : undefined;
       const response = await requestRepositoryProductIntelligenceStaged(request, { recoveryOperationId });
       if (response.state === 'enhanced' && response.result.productIntelligence) {

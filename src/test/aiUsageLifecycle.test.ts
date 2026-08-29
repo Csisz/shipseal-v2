@@ -114,7 +114,7 @@ class TransactionalFixtureAiUsageStore implements AiUsageStore {
       publicOperationId: operation.publicId,
       operationState: operation.state,
       rootStageState: root?.state || 'missing' as const,
-      retryable: root?.state === 'retryable_failure' || Boolean(operation.refunded),
+      retryable: root?.state === 'retryable_failure',
       completionState: completeAvailable ? 'ready' as const : operation.refunded ? 'refunded' as const : operation.state === 'running' ? 'running' as const : 'incomplete' as const,
       cacheAvailable: completeAvailable,
       rootCacheAvailable: cacheAvailable,
@@ -170,10 +170,17 @@ class TransactionalFixtureAiUsageStore implements AiUsageStore {
       const requestedRecovery = input.recoveryOperationId
         ? [...this.operations.values()].find(candidate => candidate.publicId === input.recoveryOperationId)
         : undefined;
-      if (input.recoveryOperationId && requestedRecovery?.ownerUserId !== input.userId) {
+      if (input.recoveryOperationId && (
+        requestedRecovery?.ownerUserId !== input.userId
+        || requestedRecovery.refunded > 0
+        || requestedRecovery.state === 'terminal_failure'
+      )) {
         throw conflict('Recovery operation is unavailable for this account.');
       }
-      let operation = requestedRecovery || this.operations.get(key);
+      const currentOperation = this.operations.get(key);
+      let operation = requestedRecovery || (currentOperation?.refunded === 0 && currentOperation.state !== 'terminal_failure'
+        ? currentOperation
+        : undefined);
       const cachedStage = operation?.stages.get(input.stageFingerprint);
       if (cachedStage?.state === 'succeeded' && cachedStage.cached) {
         return authorization(operation!, cachedStage, cachedStage.cached);
@@ -193,7 +200,7 @@ class TransactionalFixtureAiUsageStore implements AiUsageStore {
         if (input.stageKind === 'expansion') throw conflict('Expansion has no owned root.');
         const committed = [...this.operations.values()]
           .filter(candidate => candidate.ownerUserId === input.userId)
-          .reduce((sum, candidate) => sum + candidate.reserved + candidate.consumed, 0);
+          .reduce((sum, candidate) => sum + candidate.reserved + candidate.consumed - candidate.refunded, 0);
         if (input.reserveUserUnit && committed >= entitlement.deepAnalysisLimit) {
           throw new AiUsageDeniedError('allowance_exhausted', 429, false, 'exhausted');
         }
@@ -557,6 +564,35 @@ describe('Omega 19.1 transactional Deep Analysis lifecycle', () => {
     expect(repeated).toMatchObject({ inspected: 0, refunded: 0 });
     expect(store.providerCallCount).toBe(0);
     expect((await service.getUsageSummary('paid')).deepAnalysis).toMatchObject({ used: 0, reserved: 0 });
+  });
+
+  it('starts a new owned operation after refund without attaching to the historical operation', async () => {
+    const store = new TransactionalFixtureAiUsageStore();
+    store.setEntitlement('paid', 2);
+    const service = new AiUsageAuthorizationService(store, ENV, () => NOW);
+    const input = request('refunded-new-analysis');
+    const first = await service.authorize('paid', input, roots(input));
+    await service.complete(first, 'paid', enhanced());
+    const historical = store.operationFor('paid', input)!;
+    historical.consumed = 1; historical.reserved = 0; historical.state = 'succeeded';
+    historical.stages.get(first.stageFingerprint)!.cached = undefined;
+    await service.reconcileBillingIntegrity('paid');
+
+    const status = await service.getOperationStatus('paid', { publicOperationId: first.publicOperationId });
+    expect(status).toMatchObject({
+      completionState: 'refunded', userUnitState: 'refunded',
+      recoveryAction: 'start_new_analysis', retryable: false,
+    });
+
+    const next = await service.authorize('paid', input, roots(input));
+    expect(next.publicOperationId).not.toBe(first.publicOperationId);
+    expect(historical).toMatchObject({ publicId: first.publicOperationId, refunded: 1, consumed: 1, state: 'terminal_failure' });
+    expect((await service.getUsageSummary('paid')).deepAnalysis).toMatchObject({ used: 0, reserved: 1, remaining: 1 });
+
+    const outbound = vi.fn(async () => new Response('{}'));
+    await service.guardProviderFetcher(next, outbound as typeof fetch)('https://api.openai.test');
+    expect(outbound).toHaveBeenCalledTimes(1);
+    await expect(service.authorize('paid', input, roots(input), first.publicOperationId)).rejects.toMatchObject({ category: 'operation_conflict' });
   });
 
   it('denies an exhausted allowance before a provider permit can be requested', async () => {

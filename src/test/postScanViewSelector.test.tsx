@@ -187,6 +187,39 @@ describe('premium post-scan view selector', () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 
+  it('returns a refunded historical analysis to the clean explicit-start state', () => {
+    const start = vi.fn(async () => undefined);
+    render(<ResultWorkspace
+      report={reportWithIdentity('2026-08-11T10:01:42.000Z')}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{
+        state: 'fallback', deepState: 'failed', category: 'operation_conflict', retryable: false,
+        message: 'This Future analysis cannot be resumed safely. Start again after the repository changes.',
+        diagnostics: {
+          costEstimate: 'unavailable',
+          publicOperationId: `op_${'r'.repeat(24)}`,
+          operationCompletionState: 'refunded',
+          operationUserUnitState: 'refunded',
+          operationRecoveryAction: 'start_new_analysis',
+        },
+      }}
+      retryRepositoryProductIntelligence={start}
+    />);
+
+    const state = screen.getByTestId('futures-degraded-status');
+    expect(state).toHaveAttribute('data-future-availability', 'startable');
+    expect(state).toHaveTextContent('A previous incomplete analysis was returned to your allowance');
+    expect(state).toHaveTextContent('Uses 1 Deep Analysis when successfully completed');
+    expect(state).not.toHaveTextContent('cannot be resumed safely');
+    expect(state).not.toHaveTextContent('repository changes');
+    expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Generate Future analysis above' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Future analysis' }));
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
   it('shows a factual capacity cooldown and disables manual retry until it expires', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);

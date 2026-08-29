@@ -255,6 +255,8 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   rateLimitRecoveryStatus?: 'waiting' | 'recovered' | 'exhausted' | 'action-required';
   publicOperationId?: string;
   operationRecoveryAction?: import('../aiOperationRecoveryContract.js').AiOperationRecoveryAction;
+  operationCompletionState?: import('../aiOperationRecoveryContract.js').AiOperationCompletionState;
+  operationUserUnitState?: import('../aiOperationRecoveryContract.js').AiOperationStatusSnapshot['userUnitState'];
   operationLeaseExpiresAt?: string;
 }
 

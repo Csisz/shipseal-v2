@@ -514,6 +514,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
           and operation_kind = ${input.operationKind}
           and logical_analysis_fingerprint = ${input.logicalAnalysisFingerprint}
           and state <> 'terminal_failure'
+          and refunded_user_units = 0
         order by created_at desc limit 1 for update
       `;
       const existingOperation = existingOperationRows[0];
@@ -535,6 +536,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
             and operation_kind = ${input.operationKind}
             and logical_analysis_fingerprint = ${input.logicalAnalysisFingerprint}
             and state <> 'terminal_failure'
+            and refunded_user_units = 0
           order by created_at desc limit 1 for update
         `;
         operation = repeated[0];
@@ -1440,7 +1442,7 @@ function mapOperationStatus(
     publicOperationId: String(operation.public_operation_id),
     operationState: operation.state as AiOperationStatusSnapshot['operationState'],
     rootStageState: root?.state as AiOperationStatusSnapshot['rootStageState'] || 'missing',
-    retryable: ['resume_stale_lease', 'retry_stage', 'start_new_analysis'].includes(recoveryAction),
+    retryable: ['resume_stale_lease', 'retry_stage', 'integrity_recovery'].includes(recoveryAction),
     completionState,
     cacheAvailable,
     rootCacheAvailable,

@@ -641,9 +641,7 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
             }));
             return;
         }
-        const recoveryOperationId = operation && ['resume_stale_lease', 'retry_stage', 'integrity_recovery'].includes(operation.recoveryAction)
-          ? operation.publicOperationId
-          : undefined;
+        const recoveryOperationId = recoveryModule.selectRepositoryFutureRecoveryOperationId(operation);
         const response = await clientModule.requestRepositoryProductIntelligenceStaged(request, {
           signal: controller.signal,
           recoveryOperationId,
