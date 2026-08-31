@@ -631,6 +631,7 @@ describe('production Repository Intelligence provider', () => {
     expect(validation).toMatchObject({ valid: true });
 
     const focusedPolicy = resolveProductionExecutionPolicy(request, config.policy);
+    expect(focusedPolicy.timeoutMs).toBe(80_000);
     const focused = prepareProductionDeepIntelligenceContext({
       request,
       policy: focusedPolicy,

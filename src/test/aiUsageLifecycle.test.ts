@@ -388,6 +388,18 @@ function fallback(retryable: boolean): RepositoryIntelligenceProviderApiResponse
   };
 }
 
+function timeoutFallback(): RepositoryIntelligenceProviderApiResponse {
+  return {
+    version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+    state: 'fallback', category: 'request_timeout', retryable: true,
+    message: 'Provider deadline reached.', deepState: 'timed-out',
+    diagnostics: {
+      costEstimate: 'unavailable', providerTimedOut: true,
+      operationalFailureCategory: 'provider_timeout', failureBoundary: 'provider-generation',
+    },
+  };
+}
+
 function authorization(operation: FixtureOperation, stage: FixtureStage, cachedResponse?: RepositoryIntelligenceProviderApiResponse): AuthorizedAiStage {
   return {
     operationId: operation.id,
@@ -547,6 +559,29 @@ describe('Omega 19.1 transactional Deep Analysis lifecycle', () => {
     const report = await service.reconcileBillingIntegrity('paid');
     expect(report).toMatchObject({ inspected: 1, refunded: 1 });
     expect((await service.getUsageSummary('paid')).deepAnalysis).toMatchObject({ used: 0, reserved: 0, remaining: 2 });
+  });
+
+  it('clears a timed-out stage lease and resumes the same reserved operation', async () => {
+    const store = new TransactionalFixtureAiUsageStore();
+    store.setEntitlement('paid', 10);
+    const service = new AiUsageAuthorizationService(store, ENV, () => NOW);
+    const input = request('timeout-resume');
+    const first = await service.authorize('paid', input, roots(input));
+    await service.complete(first, 'paid', timeoutFallback());
+
+    const status = await service.getOperationStatus('paid', { publicOperationId: first.publicOperationId });
+    expect(status).toMatchObject({
+      recoveryAction: 'retry_stage', userUnitState: 'reserved', retryable: true,
+    });
+    expect((await service.getUsageSummary('paid')).deepAnalysis)
+      .toMatchObject({ used: 0, reserved: 1, remaining: 9 });
+
+    const resumed = await service.authorize('paid', input, roots(input), { recoveryOperationId: first.publicOperationId });
+    expect(resumed.operationId).toBe(first.operationId);
+    expect(resumed.stageAttemptCount).toBe(2);
+    await service.complete(resumed, 'paid', enhanced());
+    expect((await service.getUsageSummary('paid')).deepAnalysis)
+      .toMatchObject({ used: 0, reserved: 1, remaining: 9 });
   });
 
   it('makes historical refunds idempotent and does not create free provider retries', async () => {

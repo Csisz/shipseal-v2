@@ -19,6 +19,9 @@ describe('hosted deployment configuration', () => {
     expect(config.devCommand).toContain('vite');
     expect(config.devCommand).toContain('--host 0.0.0.0');
     expect(config.devCommand).toContain('--port $PORT');
+    expect(config.functions).toEqual({
+      'api/repository-intelligence.ts': { maxDuration: 120 },
+    });
     expect(config.routes).toBeUndefined();
     expect(config.rewrites).toEqual([
       { source: '/api/account/:route(login|callback|session|logout|delete|usage|ai-operation-status|ai-operation-result)', destination: '/api/account-router?route=:route' },

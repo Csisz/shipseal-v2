@@ -2,6 +2,7 @@ import type { RepoScanInput } from '../types.js';
 import type { RepositoryIntelligenceEvidenceModel, RepositoryResponsibility } from './evidence.js';
 import { prepareRepositoryIntelligenceContext, type RepositoryIntelligenceContextBundle } from './contextPreparation.js';
 import { stableContextFingerprint } from './contextSelection.js';
+import { REPOSITORY_FUTURES_TIMING } from './productFuturesTiming.js';
 import { buildRepositoryDeepIntelligenceRequest, type RepositoryDeepIntelligenceRequest } from './deepIntelligenceRequest.js';
 
 export const PRODUCT_STRATEGIST_CONTEXT_POLICY_VERSION = 'shipseal.product-strategist-context-policy.v1' as const;
@@ -20,7 +21,7 @@ export const PRODUCT_STRATEGIST_CONTEXT_POLICY = Object.freeze({
   maximumRequestBytes: 160_000,
   maximumProviderBodyBytes: 60_000,
   maximumOutputTokens: 4_000,
-  timeoutMs: 45_000,
+  timeoutMs: REPOSITORY_FUTURES_TIMING.rootProviderTimeoutMs,
 });
 
 const PRODUCT_RESPONSIBILITY_WEIGHT: Partial<Record<RepositoryResponsibility, number>> = {

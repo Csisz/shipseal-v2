@@ -156,6 +156,13 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   actualOutputTokens?: number;
   outputBytes?: number;
   durationMs?: number;
+  elapsedMs?: number;
+  configuredProviderTimeoutMs?: number;
+  clientDeadlineMs?: number;
+  serverlessDeadlineMs?: number;
+  stageAttempt?: number;
+  completedBatchCount?: number;
+  totalBatchCount?: number;
   retryCount?: number;
   languageRepairCount?: number;
   selectedFiles?: number;
@@ -390,7 +397,10 @@ export function repositoryFutureFailureMessage(
   }
   const operational = diagnostics?.operationalFailureCategory;
   if (operational === 'provider_timeout' || operational === 'browser_timeout' || category === 'request_timeout') {
-    return 'Future analysis took longer than expected.';
+    return diagnostics?.operationRecoveryAction === 'retry_stage'
+      || diagnostics?.operationRecoveryAction === 'resume_stale_lease'
+      ? 'ShipSeal can safely resume this Future analysis. Completed stages remain saved.'
+      : 'Future analysis took longer than expected.';
   }
   if (operational === 'provider_unavailable' || operational === 'provider_rate_limited'
     || category === 'provider_unavailable' || category === 'rate_limited') {

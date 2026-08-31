@@ -58,7 +58,7 @@ describe('unified repository formation experience', () => {
       expect(document.querySelector('.repository-formation-active-trace')).toBeInTheDocument();
       expect(document.querySelector('.repository-formation-orbit')).toBeInTheDocument();
       act(() => vi.advanceTimersByTime(8_000));
-      expect(screen.getByTestId('formation-long-running')).toHaveTextContent(/Still analysing/i);
+      expect(screen.getByTestId('formation-long-running')).toHaveTextContent(/Still working on product directions/i);
 
       rerender(<RepositoryFormation repositoryName="fixture" stage="directions" title="Forming repository intelligence" action="" failure={{ message: 'Future analysis is taking longer than expected.', onRetry }} />);
       expect(document.querySelector('.repository-formation-active-trace')).not.toBeInTheDocument();

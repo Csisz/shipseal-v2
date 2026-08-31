@@ -305,6 +305,14 @@ export {
   productContextScore,
 } from './productStrategistContext';
 
+export {
+  REPOSITORY_FUTURES_TIMING,
+  repositoryProductClientTimeoutMs,
+  repositoryProductProviderTimeoutMs,
+  validateRepositoryFuturesTimingPolicy,
+} from './productFuturesTiming';
+export type { RepositoryProductTimedStage } from './productFuturesTiming';
+
 export type {
   RepositoryIntelligenceArtifactVerification,
   RepositoryIntelligenceArtifactVerificationState,

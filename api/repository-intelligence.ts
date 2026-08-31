@@ -28,6 +28,10 @@ import {
 } from './_lib/repositoryDeepIntelligenceContext.js';
 import { stableContextFingerprint } from '../src/lib/repositoryIntelligence/contextSelection.js';
 import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../src/lib/repositoryIntelligence/productStrategistContext.js';
+import {
+  REPOSITORY_FUTURES_TIMING,
+  repositoryProductProviderTimeoutMs,
+} from '../src/lib/repositoryIntelligence/productFuturesTiming.js';
 import { buildRepositoryProductRootStageForFingerprint } from '../src/lib/repositoryIntelligence/stagedProductIntelligence.js';
 import type { RepositoryDeepIntelligenceRequest } from '../src/lib/repositoryIntelligence/deepIntelligenceRequest.js';
 import type { ProductionProviderPolicy } from './_lib/repositoryDeepIntelligenceProvider.js';
@@ -126,9 +130,15 @@ export async function prepareProductionRepositoryIntelligence(
   const stageAttemptKey = readStageAttemptKey(input);
   const requestId = createOperationalRequestId(productStage?.fingerprint || requestValidation.request.fingerprint, productStage?.kind);
   const executionPolicy = resolveProductionExecutionPolicy(requestValidation.request, config.policy);
+  const timedProductStage = requestValidation.request.executionProfile === 'product-strategist'
+    ? productStage?.kind || 'roots'
+    : undefined;
+  const configuredProviderTimeoutMs = timedProductStage
+    ? repositoryProductProviderTimeoutMs(timedProductStage)
+    : executionPolicy.timeoutMs;
   const executionConfig = {
     ...config,
-    policy: productStage ? { ...executionPolicy, timeoutMs: Math.min(executionPolicy.timeoutMs, 35_000) } : executionPolicy,
+    policy: { ...executionPolicy, timeoutMs: configuredProviderTimeoutMs },
   };
   const preparedContext = prepareProductionDeepIntelligenceContext({
     request: requestValidation.request,
@@ -143,6 +153,11 @@ export async function prepareProductionRepositoryIntelligence(
   const fingerprintDiagnostics = {
     analysisFingerprint,
     providerTransmissionFingerprint,
+    ...(timedProductStage ? {
+      configuredProviderTimeoutMs,
+      clientDeadlineMs: REPOSITORY_FUTURES_TIMING.browserStageTimeoutMs,
+      serverlessDeadlineMs: REPOSITORY_FUTURES_TIMING.functionMaxDurationMs,
+    } : {}),
   } satisfies Partial<RepositoryIntelligenceSafeDiagnostics>;
   const outboundValidation = validatePreparedProductionProviderRequest(preparedContext, executionPolicy);
   if ('reason' in outboundValidation) {
@@ -241,6 +256,7 @@ export async function prepareProductionRepositoryIntelligence(
             ...fingerprintDiagnostics,
             cacheUsed: true,
             publicOperationId: authorizedStage.publicOperationId,
+            stageAttempt: authorizedStage.stageAttemptCount,
             operationRecoveryAction: 'open_result',
           },
         } as RepositoryIntelligenceProviderApiResponse,
@@ -257,13 +273,13 @@ export async function prepareProductionRepositoryIntelligence(
           ...(result.body.diagnostics || { costEstimate: 'unavailable' as const }),
           ...fingerprintDiagnostics,
           publicOperationId: authorizedStage.publicOperationId,
+          stageAttempt: authorizedStage.stageAttemptCount,
           ...(authorizedStage.integrityRecovery ? { operationRecoveryAction: 'integrity_recovery' as const } : {}),
         },
       } as RepositoryIntelligenceProviderApiResponse,
     };
     try {
       await options.aiAuthorization.service.complete(authorizedStage, options.aiAuthorization.userId, durableResult.body);
-      return durableResult;
     } catch {
       return usageDenialFallback(new AiUsageDeniedError(
         'usage_temporarily_unavailable',
@@ -272,6 +288,26 @@ export async function prepareProductionRepositoryIntelligence(
         'AI usage authorization is temporarily unavailable.',
       ), fingerprintDiagnostics);
     }
+    const operation = await options.aiAuthorization.service.getOperationStatus(
+      options.aiAuthorization.userId,
+      { publicOperationId: authorizedStage.publicOperationId },
+    ).catch(() => null);
+    if (!operation) return durableResult;
+    return {
+      ...durableResult,
+      body: {
+        ...durableResult.body,
+        diagnostics: {
+          ...(durableResult.body.diagnostics || { costEstimate: 'unavailable' as const }),
+          operationRecoveryAction: operation.recoveryAction,
+          operationCompletionState: operation.completionState,
+          operationUserUnitState: operation.userUnitState,
+          completedBatchCount: operation.completedExpansionCount,
+          ...(operation.expectedExpansionCount === null ? {} : { totalBatchCount: operation.expectedExpansionCount }),
+          ...(operation.leaseExpiresAt ? { operationLeaseExpiresAt: operation.leaseExpiresAt } : {}),
+        },
+      } as RepositoryIntelligenceProviderApiResponse,
+    };
   };
   let providerRetryCount = 0;
   let languageRepairCount = 0;
@@ -353,6 +389,7 @@ export async function prepareProductionRepositoryIntelligence(
         contextVersion: preparedContext.request.transmission?.contextVersion || preparedContext.request.selectionPolicyVersion,
         redactionVersion: preparedContext.request.transmission?.redactionVersion,
         retryCount: providerRetryCount,
+        stageAttempt: authorizedStage?.stageAttemptCount,
         languageRepairCount,
         executionProfile: providerMeasurement.executionProfile,
         providerRequestBytes: providerMeasurement.providerRequestBytes,
@@ -395,6 +432,8 @@ export async function prepareProductionRepositoryIntelligence(
     contextVersion: preparedContext.request.transmission?.contextVersion || preparedContext.request.selectionPolicyVersion,
     redactionVersion: preparedContext.request.transmission?.redactionVersion,
     durationMs,
+    elapsedMs: durationMs,
+    stageAttempt: authorizedStage?.stageAttemptCount,
     retryCount: providerRetryCount,
     languageRepairCount,
     validationCategory: providerValidationCategory || validationCategoryForExecution(execution),
@@ -556,7 +595,7 @@ export function resolveProductionExecutionPolicy(
     maximumContextCharacters: Math.min(configured.maximumContextCharacters, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumContextBytes),
     maximumRequestBytes: Math.min(configured.maximumRequestBytes, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumRequestBytes),
     maximumOutputTokens: Math.min(configured.maximumOutputTokens, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumOutputTokens),
-    timeoutMs: Math.min(configured.timeoutMs, PRODUCT_STRATEGIST_CONTEXT_POLICY.timeoutMs),
+    timeoutMs: REPOSITORY_FUTURES_TIMING.rootProviderTimeoutMs,
   };
 }
 
@@ -616,7 +655,8 @@ async function executeProductExpansionStage(input: {
       || result.fingerprint !== input.stage.fingerprint || result.batchIndex !== input.stage.batchIndex
       || result.totalBatches !== input.stage.totalBatches || !Array.isArray(result.expansions)
       || result.expansions.length !== input.stage.parents.length) {
-      const diagnostics = { ...input.diagnostics(), durationMs: Date.now() - startedAt, schemaValidationFailureCount: 1, operationalFailureCategory: 'expansion_schema_failed' as const, failureBoundary: 'schema-validation' as const };
+      const elapsedMs = Date.now() - startedAt;
+      const diagnostics = { ...input.diagnostics(), durationMs: elapsedMs, elapsedMs, schemaValidationFailureCount: 1, operationalFailureCategory: 'expansion_schema_failed' as const, failureBoundary: 'schema-validation' as const };
       logExpansionValidation(input, 'failure', diagnostics, 0, 0);
       return fallback(200, 'schema_validation_failed', true, diagnostics);
     }
@@ -624,13 +664,16 @@ async function executeProductExpansionStage(input: {
     const thirdGeneration = result.expansions.flatMap(item => item.evolutions || []).filter(item => item.generation === 3).length;
     if (result.expansions.some(item => !input.stage.parents.some(parent => parent.id === item.parentId)
       || item.evolutions.filter(evolution => evolution.generation === 2).length < 2)) {
-      const diagnostics = { ...input.diagnostics(), durationMs: Date.now() - startedAt, schemaValidationFailureCount: 1, operationalFailureCategory: 'expansion_schema_failed' as const, failureBoundary: 'schema-validation' as const };
+      const elapsedMs = Date.now() - startedAt;
+      const diagnostics = { ...input.diagnostics(), durationMs: elapsedMs, elapsedMs, schemaValidationFailureCount: 1, operationalFailureCategory: 'expansion_schema_failed' as const, failureBoundary: 'schema-validation' as const };
       logExpansionValidation(input, 'failure', diagnostics, secondGeneration, thirdGeneration);
       return fallback(200, 'schema_validation_failed', true, diagnostics);
     }
+    const elapsedMs = Math.max(0, Date.now() - startedAt);
     const diagnostics = {
       ...input.diagnostics(),
-      durationMs: Math.max(0, Date.now() - startedAt),
+      durationMs: elapsedMs,
+      elapsedMs,
       outputBytes: Buffer.byteLength(JSON.stringify(result), 'utf8'),
       acceptedSecondGenerationCount: secondGeneration,
       acceptedThirdGenerationCount: thirdGeneration,
@@ -653,9 +696,11 @@ async function executeProductExpansionStage(input: {
     const category = timedOut ? 'request_timeout' : cancelled ? 'request_cancelled'
       : error instanceof RepositoryDeepIntelligenceProviderError ? mapExecutionError(error.code) : 'unknown_provider_error';
     const operational = operationalFailureForProviderCategory(category, error);
+    const elapsedMs = Math.max(0, Date.now() - startedAt);
     return fallback(200, category, category !== 'authentication_failed', {
       ...input.diagnostics(),
-      durationMs: Math.max(0, Date.now() - startedAt),
+      durationMs: elapsedMs,
+      elapsedMs,
       providerTimedOut: timedOut,
       ...operational,
     });

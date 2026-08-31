@@ -231,6 +231,68 @@ describe('staged Product Intelligence', () => {
     if (result.state === 'enhanced') expect(result.diagnostics.stageRetryCount).toBe(1);
   });
 
+  it('returns a provider timeout for explicit resume instead of exhausting the second stage attempt immediately', async () => {
+    const fetcher = vi.fn(async () => json({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      state: 'fallback', category: 'request_timeout', retryable: true,
+      message: 'Provider deadline reached.', deepState: 'timed-out',
+      diagnostics: {
+        costEstimate: 'unavailable', operationalFailureCategory: 'provider_timeout',
+        failureBoundary: 'provider-generation', operationRecoveryAction: 'retry_stage',
+      },
+    }));
+
+    const result = await requestRepositoryProductIntelligenceStaged(request, { fetcher: fetcher as typeof fetch });
+
+    expect(result).toMatchObject({
+      state: 'fallback', category: 'request_timeout', retryable: true,
+      diagnostics: { operationRecoveryAction: 'retry_stage' },
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('resumes only a timed-out expansion while retaining successful roots and pathway groups', async () => {
+    const calls = { roots: 0, batches: [0, 0, 0], finalization: 0 };
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as {
+        productFinalization?: unknown;
+        productStage?: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities };
+      };
+      if (isFinalization(body)) {
+        calls.finalization += 1;
+        return enhancedComplete();
+      }
+      const stage = body.productStage!;
+      if (stage.kind === 'roots') {
+        calls.roots += 1;
+        return enhancedRoots();
+      }
+      calls.batches[stage.batchIndex!] += 1;
+      if (stage.batchIndex === 1 && calls.batches[1] === 1) {
+        return json({
+          version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+          state: 'fallback', category: 'request_timeout', retryable: true,
+          message: 'Provider deadline reached.', deepState: 'timed-out',
+          diagnostics: {
+            costEstimate: 'unavailable', productStage: 'expansion',
+            expansionBatchIndex: 1, expansionBatchCount: 3,
+            operationalFailureCategory: 'provider_timeout', failureBoundary: 'provider-generation',
+            operationRecoveryAction: 'retry_stage',
+          },
+        });
+      }
+      return enhancedBatch(stage);
+    }));
+
+    const first = await requestRepositoryProductIntelligenceStaged(request);
+    expect(first).toMatchObject({ state: 'fallback', category: 'request_timeout' });
+    expect(calls).toMatchObject({ roots: 1, batches: [1, 1, 1], finalization: 0 });
+
+    const resumed = await requestRepositoryProductIntelligenceStaged(request);
+    expect(resumed.state).toBe('enhanced');
+    expect(calls).toEqual({ roots: 1, batches: [1, 2, 1], finalization: 1 });
+  });
+
   it('waits for Retry-After and performs only one stage-owned 429 retry', async () => {
     const calls: string[] = [];
     const waits: number[] = [];

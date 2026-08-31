@@ -723,8 +723,8 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           deepState: response.deepState,
           message: terminalWithoutCharge
             ? 'Repository Futures could not be completed. Your Deep Analysis allowance was not used.'
-            : incompleteExpansion && response.category === 'request_timeout'
-            ? 'Some future pathways took longer than expected.'
+            : response.category === 'request_timeout'
+            ? 'ShipSeal can safely resume this Future analysis. Completed stages remain saved.'
             : repositoryFutureFailureMessage(response.category, response.diagnostics),
           retryable: response.retryable,
           category: response.category,

@@ -4,6 +4,11 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "devCommand": "vite --host 0.0.0.0 --port $PORT",
+  "functions": {
+    "api/repository-intelligence.ts": {
+      "maxDuration": 120
+    }
+  },
   "rewrites": [
     {
       "source": "/api/account/:route(login|callback|session|logout|delete|usage|ai-operation-status|ai-operation-result)",

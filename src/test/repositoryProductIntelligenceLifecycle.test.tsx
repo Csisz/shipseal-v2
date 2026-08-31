@@ -77,6 +77,10 @@ function timeoutResponse() {
     retryable: true,
     message: 'Future analysis is taking longer than expected.',
     deepState: 'timed-out',
+    diagnostics: {
+      costEstimate: 'unavailable', operationalFailureCategory: 'provider_timeout',
+      failureBoundary: 'provider-generation', operationRecoveryAction: 'retry_stage',
+    },
   };
 }
 
@@ -151,7 +155,8 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     await act(async () => { await second.result.current.startScan(new File(['zip'], 'timeout.zip')); });
     await act(async () => { await second.result.current.prepareRepositoryProductIntelligence(); });
     await waitFor(() => expect(second.result.current.repositoryProductIntelligenceStatus).toMatchObject({ state: 'fallback', category: 'request_timeout' }));
-    expect(second.result.current.repositoryProductIntelligenceStatus.message).toBe('Future analysis took longer than expected.');
+    expect(second.result.current.repositoryProductIntelligenceStatus.message)
+      .toBe('ShipSeal can safely resume this Future analysis. Completed stages remain saved.');
   });
 
   it('terminates cancellation and issues a new provider request on retry', async () => {

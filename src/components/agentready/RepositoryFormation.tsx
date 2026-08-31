@@ -133,11 +133,11 @@ export function RepositoryFormation({
         </ol>
 
         {showLongRunningMessage && !failure && (
-          <p className="mt-4 text-xs text-muted-foreground" data-testid="formation-long-running">{stage === 'pathways' ? 'Still expanding future pathways… Completed groups remain safely retained.' : 'Still analysing… ShipSeal is waiting for the current provider response.'}</p>
+          <p className="mt-4 text-xs text-muted-foreground" data-testid="formation-long-running">{stage === 'pathways' ? 'Still expanding future pathways… Completed groups remain safely retained.' : 'Still working on product directions… ShipSeal is waiting for the current provider response.'}</p>
         )}
         {failure && (
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            {failure.onRetry && <Button type="button" onClick={failure.onRetry}>{failure.message.includes('pathways') ? 'Retry incomplete pathways' : 'Retry Future analysis'}</Button>}
+            {failure.onRetry && <Button type="button" onClick={failure.onRetry}>{/resume/i.test(failure.message) ? 'Resume Future analysis' : failure.message.includes('pathways') ? 'Retry incomplete pathways' : 'Retry Future analysis'}</Button>}
             {failure.onReturn && <Button type="button" variant="outline" onClick={failure.onReturn}>Choose another source</Button>}
           </div>
         )}

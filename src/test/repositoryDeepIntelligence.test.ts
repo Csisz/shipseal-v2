@@ -13,6 +13,7 @@ import {
   type RepositoryDeepIntelligenceRequest,
   type RepositoryIntelligenceContextBundle,
   type RepositoryIntelligenceEvidenceModel,
+  repositoryProductProviderTimeoutMs,
 } from '@/lib/repositoryIntelligence';
 import { FixtureRepositoryDeepIntelligenceProvider } from '@/lib/repositoryIntelligence/deepIntelligenceFixtureProvider';
 import type { RepoFileSummary, RepoScanInput } from '@/lib/types';
@@ -243,6 +244,34 @@ describe('provider execution boundary', () => {
       });
       controller.abort();
       expect((await cancelled).status).toBe('cancelled');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('allows healthy Product Futures latency beyond the former 35-second cap while keeping finite stage deadlines', async () => {
+    vi.useFakeTimers();
+    try {
+      const { request } = preparedFixture();
+      const payload = response(request, [finding(request)]);
+      for (const stage of ['roots', 'expansion'] as const) {
+        const deadline = repositoryProductProviderTimeoutMs(stage);
+        const healthy = runRepositoryDeepIntelligence({
+          provider: new FixtureRepositoryDeepIntelligenceProvider({ delayMs: 36_000, response: payload }),
+          request,
+          timeoutMs: deadline,
+        });
+        await vi.advanceTimersByTimeAsync(36_000);
+        expect((await healthy).status).toBe('completed');
+
+        const timedOut = runRepositoryDeepIntelligence({
+          provider: new FixtureRepositoryDeepIntelligenceProvider({ delayMs: deadline + 1, response: payload }),
+          request,
+          timeoutMs: deadline,
+        });
+        await vi.advanceTimersByTimeAsync(deadline);
+        expect((await timedOut).status).toBe('timeout');
+      }
     } finally {
       vi.useRealTimers();
     }

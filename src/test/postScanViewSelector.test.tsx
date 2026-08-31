@@ -122,8 +122,11 @@ describe('premium post-scan view selector', () => {
       deepState: 'timed-out' as const,
       category: 'request_timeout' as const,
       retryable: true as const,
-      message: 'Future analysis took longer than expected.',
-      diagnostics: { costEstimate: 'unavailable' as const, requestId: 'ri-roots-safe-reference', operationalFailureCategory: 'provider_timeout' as const },
+      message: 'ShipSeal can safely resume this Future analysis. Completed stages remain saved.',
+      diagnostics: {
+        costEstimate: 'unavailable' as const, requestId: 'ri-roots-safe-reference',
+        operationalFailureCategory: 'provider_timeout' as const, operationRecoveryAction: 'retry_stage' as const,
+      },
     };
     const { rerender } = render(<ResultWorkspace
       report={report}
@@ -138,7 +141,7 @@ describe('premium post-scan view selector', () => {
     expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Repository Futures unavailable' })).toBeDisabled();
     expect(screen.queryByTestId('futures-experience')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Retry Future analysis' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resume Future analysis' }));
     expect(retry).toHaveBeenCalledTimes(1);
     expect(onReset).not.toHaveBeenCalled();
 

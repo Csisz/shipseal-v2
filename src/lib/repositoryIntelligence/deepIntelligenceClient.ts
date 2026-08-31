@@ -9,12 +9,12 @@ import { calculateRepositoryRateLimitBackoffMs } from './rateLimitPolicy';
 import {
   REPOSITORY_PRODUCT_EXPANSION_CONCURRENCY,
   REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS,
-  REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS,
   buildRepositoryProductExpansionStages,
   buildRepositoryProductRootStage,
   mapWithBoundedConcurrency,
   type RepositoryProductPipelineProgress,
 } from './stagedProductIntelligence';
+import { repositoryProductClientTimeoutMs } from './productFuturesTiming';
 
 const activeEnhancements = new Map<string, Promise<RepositoryIntelligenceProviderApiResponse>>();
 const completedEnhancements = new Map<string, RepositoryIntelligenceProviderApiResponse>();
@@ -33,11 +33,6 @@ interface ProductStageRequestOptions {
   recoveryOperationId?: string;
 }
 
-/**
- * The provider is bounded to 45 seconds for Product Strategist requests. Keep a
- * slightly wider browser deadline so normal server validation can finish while
- * still guaranteeing that a lost proxy response cannot leave the UI pending.
- */
 export const REPOSITORY_INTELLIGENCE_CLIENT_TIMEOUT_MS = 55_000;
 
 export class RepositoryIntelligenceEnhancementSingleFlight {
@@ -92,7 +87,7 @@ export async function requestRepositoryProductIntelligenceStaged(
     let rootFailure: RepositoryIntelligenceProviderApiResponse | undefined;
     for (let attempt = 1; attempt <= REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS; attempt += 1) {
       options.onProgress?.({ stage: 'roots', completedBatches: 0, totalBatches: 0, activeBatchIndexes: [], stageAttempt: attempt });
-      let response = await performProductStageRequest(request, { ...options, timeoutMs: options.timeoutMs ?? REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS }, rootsStage, attempt);
+      let response = await performProductStageRequest(request, { ...options, timeoutMs: options.timeoutMs ?? repositoryProductClientTimeoutMs() }, rootsStage, attempt);
       if (attempt > 1 && isRateLimitedResponse(rootFailure) && response.state === 'enhanced') {
         response = withRateLimitRecovery(response, rootFailure.diagnostics, 'recovered');
       }
@@ -160,7 +155,7 @@ export async function requestRepositoryProductIntelligenceStaged(
       options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [...active].sort(), stageAttempt: attempt });
       response = withStageRetryCount(await performProductStageRequest(
         request,
-        { ...options, timeoutMs: options.timeoutMs ?? REPOSITORY_PRODUCT_STAGE_CLIENT_TIMEOUT_MS },
+        { ...options, timeoutMs: options.timeoutMs ?? repositoryProductClientTimeoutMs() },
         stage,
         attempt,
       ), attempt - 1);
@@ -226,7 +221,7 @@ export async function requestRepositoryProductIntelligenceStaged(
   if (failed) {
     const response = failed.response;
     return response.state === 'fallback'
-      ? { ...response, message: response.category === 'request_timeout' ? 'Some future pathways took longer than expected.' : 'Some future pathways could not be completed.', diagnostics: { ...response.diagnostics, productStage: 'expansion', stageFingerprint: failed.stage.fingerprint, expansionBatchIndex: failed.stage.batchIndex, expansionBatchCount: failed.stage.totalBatches } }
+      ? { ...response, message: response.category === 'request_timeout' ? 'ShipSeal can safely resume this Future analysis.' : 'Some future pathways could not be completed.', diagnostics: { ...response.diagnostics, productStage: 'expansion', stageFingerprint: failed.stage.fingerprint, expansionBatchIndex: failed.stage.batchIndex, expansionBatchCount: failed.stage.totalBatches, completedBatchCount: completed, totalBatchCount: stages.length } }
       : invalidStageResponse('Some future pathways could not be completed.', failed.stage);
   }
   options.onProgress?.({ stage: 'merging', completedBatches: stages.length, totalBatches: stages.length, activeBatchIndexes: [], stageAttempt: 1 });
@@ -416,7 +411,7 @@ async function performRequest(
     body: JSON.stringify({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request, ...(productStage ? { productStage } : {}), ...(stageAttemptKey ? { stageAttemptKey } : {}), ...(options.recoveryOperationId ? { recoveryOperationId: options.recoveryOperationId } : {}) }),
     signal: controller.signal,
   }).then(validateResponse).catch(() => {
-    if (timedOut) return timeoutResponse();
+    if (timedOut) return timeoutResponse(timeoutMs);
     if (cancelled || options.signal?.aborted) return cancelledResponse();
     return unavailableResponse();
   });
@@ -426,7 +421,7 @@ async function performRequest(
     timeoutHandle = setTimeout(() => {
       timedOut = true;
       controller.abort();
-      resolve(timeoutResponse());
+      resolve(timeoutResponse(timeoutMs));
     }, Math.max(1, timeoutMs));
   });
   let cancellationListener: (() => void) | undefined;
@@ -473,7 +468,7 @@ async function validateResponse(response: Response): Promise<RepositoryIntellige
   return payload as RepositoryIntelligenceProviderApiResponse;
 }
 
-function timeoutResponse(): RepositoryIntelligenceProviderApiResponse {
+function timeoutResponse(clientDeadlineMs: number): RepositoryIntelligenceProviderApiResponse {
   return {
     version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
     state: 'fallback',
@@ -484,6 +479,7 @@ function timeoutResponse(): RepositoryIntelligenceProviderApiResponse {
     diagnostics: {
       costEstimate: 'unavailable',
       browserTimedOut: true,
+      clientDeadlineMs,
       operationalFailureCategory: 'browser_timeout',
       failureBoundary: 'browser-network',
     },
@@ -541,6 +537,10 @@ function unavailableResponse(): RepositoryIntelligenceProviderApiResponse {
 
 function isRetryableStageFailure(response: RepositoryIntelligenceProviderApiResponse) {
   return response.state === 'fallback' && response.retryable
+    // A provider timeout is resumed by explicit user intent. Retrying it
+    // immediately would spend the bounded second stage attempt before the user
+    // can recover the persisted operation.
+    && response.category !== 'request_timeout'
     && !['authentication_failed', 'authentication_required', 'upgrade_required', 'allowance_exhausted', 'entitlement_inactive',
       'configuration_invalid', 'credentials_missing', 'provider_disabled', 'request_cancelled'].includes(response.category);
 }
