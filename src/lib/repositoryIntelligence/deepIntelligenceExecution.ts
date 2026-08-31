@@ -17,6 +17,7 @@ type ProviderOutcome =
 export async function runRepositoryDeepIntelligence({
   provider,
   request,
+  analysisFingerprint,
   signal,
   timeoutMs,
   policy: policyOverride,
@@ -74,6 +75,7 @@ export async function runRepositoryDeepIntelligence({
     }
     const validation = validateRepositoryDeepIntelligenceResponse({
       request,
+      analysisFingerprint,
       rawResponse: outcome.value,
       expectedProviderId: provider.providerId,
       policy,

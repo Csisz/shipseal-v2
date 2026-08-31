@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import repositoryIntelligenceHandler, { buildAuthenticatedStageSingleFlightKey } from '../../api/repository-intelligence';
+import repositoryIntelligenceHandler, {
+  buildAuthenticatedStageSingleFlightKey,
+  prepareProductionRepositoryIntelligence,
+} from '../../api/repository-intelligence';
 import usageHandler from '../../api/_routes/account/usage';
 import {
   AiUsageAuthorizationService,
@@ -121,6 +124,95 @@ describe('Omega 19.1 logical AI usage authorization', () => {
     expect(calls[0].logicalAnalysisFingerprint).toBe(calls[1].logicalAnalysisFingerprint);
     expect(calls[0]).toMatchObject({ stageKind: 'roots', reserveUserUnit: true });
     expect(calls[1]).toMatchObject({ stageKind: 'expansion', reserveUserUnit: false });
+  });
+
+  it('keeps the original analysis fingerprint authoritative when provider preparation changes transmission identity', async () => {
+    const originalRequest = requestFixture();
+    const analysisFingerprint = originalRequest.fingerprint;
+    const providerRequest = { ...originalRequest, fingerprint: 'prepared-provider-transmission-fingerprint' };
+    const store = fakeStore();
+    const service = new AiUsageAuthorizationService(store, {}, () => now);
+    const productStage = {
+      kind: 'roots' as const,
+      fingerprint: stableContextFingerprint({
+        version: REPOSITORY_PRODUCT_PIPELINE_VERSION,
+        report: analysisFingerprint,
+        stage: 'roots',
+      }),
+    };
+
+    await service.authorize('usr_owner_a', providerRequest, productStage, { analysisFingerprint });
+
+    expect(store.authorizeStage).toHaveBeenCalledWith(expect.objectContaining({
+      analysisFingerprint,
+      providerTransmissionFingerprint: providerRequest.fingerprint,
+      stageFingerprint: productStage.fingerprint,
+    }));
+    expect(buildLogicalAiOperationIdentity('usr_owner_a', providerRequest, analysisFingerprint))
+      .toEqual(buildLogicalAiOperationIdentity('usr_owner_a', originalRequest));
+  });
+
+  it('reports pre-provider expansion ownership conflicts at the authorization boundary with zero provider fetches', async () => {
+    const evidenceResult = buildRepositoryIntelligenceEvidence(SAMPLE_PROJECT_REPO_INPUT);
+    const contextBundle = prepareRepositoryProductStrategistContext({ scanInput: SAMPLE_PROJECT_REPO_INPUT, evidenceResult });
+    const request = buildRepositoryProductStrategistRequest({ contextBundle, evidenceResult });
+    const productStage = {
+      kind: 'roots' as const,
+      fingerprint: stableContextFingerprint({
+        version: REPOSITORY_PRODUCT_PIPELINE_VERSION,
+        report: request.fingerprint,
+        stage: 'roots',
+      }),
+    };
+    const service = new AiUsageAuthorizationService(fakeStore({
+      authorizeStage: vi.fn(async input => {
+        throw new AiUsageDeniedError(
+          'operation_conflict',
+          409,
+          false,
+          'Future expansion does not match the validated root analysis.',
+          {
+            analysisFingerprint: input.analysisFingerprint,
+            providerTransmissionFingerprint: input.providerTransmissionFingerprint,
+            operationalFailureCategory: 'expansion_stage_ownership_failed',
+            failureBoundary: 'stage-ownership-validation',
+            stageOwnershipFailureReason: 'stage-fingerprint-mismatch',
+          },
+        );
+      }),
+    }), {}, () => now);
+    const outbound = vi.fn();
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, {
+      env: {
+        SHIPSEAL_DEEP_INTELLIGENCE_ENABLED: 'true',
+        SHIPSEAL_DEEP_INTELLIGENCE_MODEL: 'fixture-model',
+        SHIPSEAL_DEEP_INTELLIGENCE_API_KEY: 'fixture-key',
+      },
+      fetcher: outbound as typeof fetch,
+      logger: vi.fn(),
+      aiAuthorization: { userId: 'usr_owner_a', service },
+    });
+
+    expect(result).toMatchObject({
+      status: 409,
+      body: {
+        state: 'fallback',
+        category: 'operation_conflict',
+        diagnostics: {
+          analysisFingerprint: request.fingerprint,
+          providerTransmissionFingerprint: expect.not.stringMatching(new RegExp(`^${request.fingerprint}$`)),
+          operationalFailureCategory: 'expansion_stage_ownership_failed',
+          failureBoundary: 'stage-ownership-validation',
+          stageOwnershipFailureReason: 'stage-fingerprint-mismatch',
+        },
+      },
+    });
+    expect(outbound).not.toHaveBeenCalled();
   });
 
   it('acquires and releases one persisted permit around every actual provider fetch', async () => {

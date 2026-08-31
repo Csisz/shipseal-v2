@@ -28,6 +28,7 @@ import {
 } from './_lib/repositoryDeepIntelligenceContext.js';
 import { stableContextFingerprint } from '../src/lib/repositoryIntelligence/contextSelection.js';
 import { PRODUCT_STRATEGIST_CONTEXT_POLICY } from '../src/lib/repositoryIntelligence/productStrategistContext.js';
+import { buildRepositoryProductRootStageForFingerprint } from '../src/lib/repositoryIntelligence/stagedProductIntelligence.js';
 import type { RepositoryDeepIntelligenceRequest } from '../src/lib/repositoryIntelligence/deepIntelligenceRequest.js';
 import type { ProductionProviderPolicy } from './_lib/repositoryDeepIntelligenceProvider.js';
 import { buildProductStrategistProviderPayload } from './_lib/repositoryProductStrategistPayload.js';
@@ -119,6 +120,9 @@ export async function prepareProductionRepositoryIntelligence(
   );
   if (!productStageValidation.valid) return fallback(400, 'invalid_request', false);
   const productStage = productStageValidation.stage;
+  // Product pipeline identity is established by the validated ShipSeal request.
+  // Provider preparation is allowed to produce a different transmission fingerprint.
+  const analysisFingerprint = requestValidation.request.fingerprint;
   const stageAttemptKey = readStageAttemptKey(input);
   const requestId = createOperationalRequestId(productStage?.fingerprint || requestValidation.request.fingerprint, productStage?.kind);
   const executionPolicy = resolveProductionExecutionPolicy(requestValidation.request, config.policy);
@@ -135,6 +139,11 @@ export async function prepareProductionRepositoryIntelligence(
     const category = preparedContext.state === 'budget-exceeded' ? 'budget_exceeded' : 'redaction_failed';
     return fallback(200, category, false, diagnosticsFor(preparedContext.budget, preparedContext.redaction));
   }
+  const providerTransmissionFingerprint = preparedContext.request.fingerprint;
+  const fingerprintDiagnostics = {
+    analysisFingerprint,
+    providerTransmissionFingerprint,
+  } satisfies Partial<RepositoryIntelligenceSafeDiagnostics>;
   const outboundValidation = validatePreparedProductionProviderRequest(preparedContext, executionPolicy);
   if ('reason' in outboundValidation) {
     logger({
@@ -152,6 +161,7 @@ export async function prepareProductionRepositoryIntelligence(
       inputTokenEstimate: preparedContext.budget.estimatedInputTokens,
     });
     return fallback(200, 'schema_validation_failed', false, diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
+      ...fingerprintDiagnostics,
       requestId,
       providerType: config.provider,
       promptVersion: preparedContext.request.promptContractVersion,
@@ -169,6 +179,7 @@ export async function prepareProductionRepositoryIntelligence(
     const productPayload = buildProductStrategistProviderPayload(preparedContext.request);
     if (!productPayload.evidenceIndex.length) {
       return fallback(200, 'evidence_validation_failed', false, diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
+        ...fingerprintDiagnostics,
         requestId,
         requestFingerprint: productStage?.fingerprint || preparedContext.request.fingerprint,
         executionProfile: 'product-strategist',
@@ -192,6 +203,7 @@ export async function prepareProductionRepositoryIntelligence(
     providerMeasurement = measureProductionProviderBody(preparedContext.request, executionConfig, providerBody);
   } catch {
     return fallback(200, 'schema_validation_failed', false, diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
+      ...fingerprintDiagnostics,
       executionProfile: preparedContext.request.executionProfile,
       validationCategory: 'request-preflight-rejected',
     }));
@@ -203,16 +215,21 @@ export async function prepareProductionRepositoryIntelligence(
         options.aiAuthorization.userId,
         preparedContext.request,
         productStage,
-        options.aiAuthorization.recoveryOperationId,
+        {
+          analysisFingerprint: preparedContext.request.executionProfile === 'product-strategist'
+            ? analysisFingerprint
+            : undefined,
+          recoveryOperationId: options.aiAuthorization.recoveryOperationId,
+        },
       );
     } catch (error) {
-      if (error instanceof AiUsageDeniedError) return usageDenialFallback(error);
+      if (error instanceof AiUsageDeniedError) return usageDenialFallback(error, fingerprintDiagnostics);
       return usageDenialFallback(new AiUsageDeniedError(
         'usage_temporarily_unavailable',
         503,
         true,
         'AI usage authorization is temporarily unavailable.',
-      ));
+      ), fingerprintDiagnostics);
     }
     if (authorizedStage.cachedResponse) {
       return {
@@ -221,6 +238,7 @@ export async function prepareProductionRepositoryIntelligence(
           ...authorizedStage.cachedResponse,
           diagnostics: {
             ...(authorizedStage.cachedResponse.diagnostics || { costEstimate: 'unavailable' as const }),
+            ...fingerprintDiagnostics,
             cacheUsed: true,
             publicOperationId: authorizedStage.publicOperationId,
             operationRecoveryAction: 'open_result',
@@ -237,6 +255,7 @@ export async function prepareProductionRepositoryIntelligence(
         ...result.body,
         diagnostics: {
           ...(result.body.diagnostics || { costEstimate: 'unavailable' as const }),
+          ...fingerprintDiagnostics,
           publicOperationId: authorizedStage.publicOperationId,
           ...(authorizedStage.integrityRecovery ? { operationRecoveryAction: 'integrity_recovery' as const } : {}),
         },
@@ -251,7 +270,7 @@ export async function prepareProductionRepositoryIntelligence(
         503,
         true,
         'AI usage authorization is temporarily unavailable.',
-      ));
+      ), fingerprintDiagnostics);
     }
   };
   let providerRetryCount = 0;
@@ -324,6 +343,7 @@ export async function prepareProductionRepositoryIntelligence(
       logger,
       requestId,
       diagnostics: () => diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
+        ...fingerprintDiagnostics,
         requestId,
         requestFingerprint: productStage.fingerprint,
         reportIdentityHash: stableContextFingerprint(preparedContext.request.repository),
@@ -352,6 +372,9 @@ export async function prepareProductionRepositoryIntelligence(
   const execution = await runRepositoryDeepIntelligence({
     provider,
     request: preparedContext.request,
+    analysisFingerprint: preparedContext.request.executionProfile === 'product-strategist'
+      ? analysisFingerprint
+      : undefined,
     signal: options.signal,
     timeoutMs: executionConfig.policy.timeoutMs,
   });
@@ -362,6 +385,7 @@ export async function prepareProductionRepositoryIntelligence(
   const acceptedProductOpportunityCount = productIntelligence?.opportunities.length || 0;
   const operationalFailure = operationalFailureForExecution(execution, productStage);
   const diagnostics = diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
+    ...fingerprintDiagnostics,
     requestId,
     requestFingerprint: productStage?.fingerprint || preparedContext.request.fingerprint,
     reportIdentityHash: stableContextFingerprint(preparedContext.request.repository),
@@ -544,7 +568,7 @@ function validateProductStage(
   if (request.executionProfile !== 'product-strategist' || !input || typeof input !== 'object' || Array.isArray(input)) return { valid: false };
   const stage = input as Partial<RepositoryProductProviderStage>;
   if (stage.kind === 'roots' && typeof stage.fingerprint === 'string') {
-    const expected = stableContextFingerprint({ version: REPOSITORY_PRODUCT_PIPELINE_VERSION, report: request.fingerprint, stage: 'roots' });
+    const expected = buildRepositoryProductRootStageForFingerprint(request.fingerprint).fingerprint;
     return stage.fingerprint === expected ? { valid: true, stage: stage as RepositoryProductProviderStage } : { valid: false };
   }
   if (stage.kind !== 'expansion' || typeof stage.fingerprint !== 'string'
@@ -1023,10 +1047,14 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   }
 }
 
-function usageDenialFallback(error: AiUsageDeniedError): { status: number; body: RepositoryIntelligenceProviderApiResponse } {
+function usageDenialFallback(
+  error: AiUsageDeniedError,
+  diagnostics: Partial<RepositoryIntelligenceSafeDiagnostics> = {},
+): { status: number; body: RepositoryIntelligenceProviderApiResponse } {
   const result = fallback(error.status, error.category, error.retryable, {
     costEstimate: 'unavailable',
-    failureBoundary: 'provider-http',
+    ...diagnostics,
+    failureBoundary: 'authorization',
     ...error.diagnostics,
   });
   if (result.body.state !== 'fallback') return result;

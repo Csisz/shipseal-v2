@@ -551,6 +551,9 @@ describe('production Repository Intelligence provider', () => {
       result: { productIntelligence: { opportunities: expect.any(Array) } },
     });
     if (result.body.state === 'enhanced') {
+      expect(result.body.result.productIntelligence?.sourceAnalysisFingerprint).toBe(request.fingerprint);
+      expect(result.body.diagnostics.analysisFingerprint).toBe(request.fingerprint);
+      expect(result.body.diagnostics.providerTransmissionFingerprint).not.toBe(request.fingerprint);
       expect(result.body.result.productIntelligence?.opportunities).toHaveLength(opportunityCount);
       expect(result.body.result.productIntelligence?.opportunities.every(opportunity => opportunity.futureEvolutions.length === 0)).toBe(true);
       expect(new Set(result.body.result.productIntelligence?.opportunities.map(opportunity => opportunity.sourceId)).size).toBe(opportunityCount);
@@ -635,6 +638,7 @@ describe('production Repository Intelligence provider', () => {
     });
     expect(focused.state).toBe('ready');
     if (focused.state !== 'ready') return;
+    expect(focused.request.fingerprint).not.toBe(request.fingerprint);
     expect(focused.request.contextItems.length).toBeLessThanOrEqual(12);
     expect(focused.budget.estimatedInputTokens).toBeLessThanOrEqual(35_000);
     expect(focused.budget.estimatedInputTokens).toBeLessThan(prepared.budget.estimatedInputTokens);
@@ -694,9 +698,14 @@ describe('production Repository Intelligence provider', () => {
     expect(result.body).toMatchObject({
       state: 'enhanced',
       deepState: 'completed',
-      result: { productIntelligence: { opportunities: expect.arrayContaining([expect.objectContaining({ sourceId: 'op-0' })]) } },
+      result: { productIntelligence: {
+        sourceAnalysisFingerprint: request.fingerprint,
+        opportunities: expect.arrayContaining([expect.objectContaining({ sourceId: 'op-0' })]),
+      } },
     });
     expect(result.body.state === 'enhanced' && result.body.diagnostics).toMatchObject({
+      analysisFingerprint: request.fingerprint,
+      providerTransmissionFingerprint: focused.request.fingerprint,
       executionProfile: 'product-strategist',
       outputTokenCap: 4_000,
       selectedFileCount: expect.any(Number),

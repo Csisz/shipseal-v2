@@ -7,9 +7,11 @@ import {
 } from '@/lib/repositoryIntelligence/deepIntelligenceClient';
 import {
   buildRepositoryProductExpansionStages,
+  buildRepositoryProductExpansionStagesForFingerprint,
   buildRepositoryProductRootStage,
   mergeRepositoryProductExpansionResults,
 } from '@/lib/repositoryIntelligence/stagedProductIntelligence';
+import { validateRepositoryProductExpansionOwnership } from '../../api/_lib/aiUsage';
 import { REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, REPOSITORY_PRODUCT_PIPELINE_VERSION } from '@/lib/repositoryIntelligence/productionProviderContract';
 import {
   buildProductStrategistExpansionResponseFormat,
@@ -109,6 +111,56 @@ describe('staged Product Intelligence', () => {
     expect(batches.map(batch => batch.parents.length)).toEqual([3, 3, 1]);
     expect(new Set(batches.flatMap(batch => batch.parents.map(parent => parent.id)))).toEqual(new Set(opportunities.map(item => item.id)));
     expect(buildRepositoryProductExpansionStages(request, rootResult.productIntelligence!)).toEqual(batches);
+  });
+
+  it('authorizes every canonical expansion batch against analysis identity despite a different provider transmission identity', () => {
+    const analysisFingerprint = request.fingerprint;
+    const providerTransmissionFingerprint = 'server-prepared-provider-fingerprint';
+    expect(providerTransmissionFingerprint).not.toBe(analysisFingerprint);
+    const stages = buildRepositoryProductExpansionStagesForFingerprint(
+      analysisFingerprint,
+      rootResult.productIntelligence!,
+    );
+
+    expect(stages).toHaveLength(3);
+    expect(stages.map(stage => validateRepositoryProductExpansionOwnership(
+      analysisFingerprint,
+      rootResult.productIntelligence!,
+      stage,
+    ))).toEqual(stages.map(() => ({ valid: true })));
+  });
+
+  it('rejects tampered expansion parents, evidence, batches, and foreign analysis fingerprints', () => {
+    const [canonical] = buildRepositoryProductExpansionStagesForFingerprint(
+      request.fingerprint,
+      rootResult.productIntelligence!,
+    );
+    const wrongParent = structuredClone(canonical);
+    wrongParent.parents[0].id = 'product-opportunity:tampered';
+    expect(validateRepositoryProductExpansionOwnership(request.fingerprint, rootResult.productIntelligence!, wrongParent))
+      .toMatchObject({ valid: false, reason: 'parent-set-mismatch' });
+
+    const wrongEvidence = structuredClone(canonical);
+    wrongEvidence.parents[0].evidenceIds = ['evidence-not-owned-by-parent'];
+    expect(validateRepositoryProductExpansionOwnership(request.fingerprint, rootResult.productIntelligence!, wrongEvidence))
+      .toMatchObject({ valid: false, reason: 'parent-set-mismatch' });
+
+    const wrongBatch = { ...canonical, batchIndex: 99 };
+    expect(validateRepositoryProductExpansionOwnership(request.fingerprint, rootResult.productIntelligence!, wrongBatch))
+      .toMatchObject({ valid: false, reason: 'batch-metadata-mismatch' });
+
+    const foreignStage = buildRepositoryProductExpansionStagesForFingerprint(
+      'another-analysis-fingerprint',
+      rootResult.productIntelligence!,
+    )[0];
+    expect(validateRepositoryProductExpansionOwnership(request.fingerprint, rootResult.productIntelligence!, foreignStage))
+      .toMatchObject({ valid: false, reason: 'stage-fingerprint-mismatch' });
+
+    expect(validateRepositoryProductExpansionOwnership(
+      'another-analysis-fingerprint',
+      rootResult.productIntelligence!,
+      foreignStage,
+    )).toMatchObject({ valid: false, reason: 'analysis-fingerprint-mismatch' });
   });
 
   it('validates each expansion batch and keeps generated-language repair local', () => {

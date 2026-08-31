@@ -25,11 +25,17 @@ export interface RepositoryProductPipelineProgress {
 }
 
 export function buildRepositoryProductRootStage(request: RepositoryDeepIntelligenceRequest): RepositoryProductProviderStage {
+  return buildRepositoryProductRootStageForFingerprint(request.fingerprint);
+}
+
+export function buildRepositoryProductRootStageForFingerprint(
+  analysisFingerprint: string,
+): Extract<RepositoryProductProviderStage, { kind: 'roots' }> {
   return {
     kind: 'roots',
     fingerprint: stableContextFingerprint({
       version: REPOSITORY_PRODUCT_PIPELINE_VERSION,
-      report: request.fingerprint,
+      report: analysisFingerprint,
       stage: 'roots',
     }),
   };
@@ -43,7 +49,7 @@ export function buildRepositoryProductExpansionStages(
 }
 
 export function buildRepositoryProductExpansionStagesForFingerprint(
-  requestFingerprint: string,
+  analysisFingerprint: string,
   product: RepositoryProductIntelligenceResult,
 ): Extract<RepositoryProductProviderStage, { kind: 'expansion' }>[] {
   const parents = product.opportunities.map(opportunity => ({
@@ -67,7 +73,7 @@ export function buildRepositoryProductExpansionStagesForFingerprint(
       parents: batchParents,
       fingerprint: stableContextFingerprint({
         version: REPOSITORY_PRODUCT_PIPELINE_VERSION,
-        report: requestFingerprint,
+        report: analysisFingerprint,
         stage: 'expansion',
         parents: batchParents.map(parent => ({ id: parent.id, evidenceIds: parent.evidenceIds })),
       }),

@@ -22,6 +22,8 @@ import {
 
 export interface ValidateRepositoryDeepIntelligenceResponseInput {
   request: RepositoryDeepIntelligenceRequest;
+  /** Canonical ShipSeal analysis identity; provider preparation may change request.fingerprint. */
+  analysisFingerprint?: string;
   rawResponse: unknown;
   expectedProviderId?: string;
   policy?: RepositoryDeepIntelligenceResultPolicyOverride;
@@ -42,6 +44,7 @@ const RAW_HTML_RE = /<\/?[A-Za-z][^>]*>/;
 
 export function validateRepositoryDeepIntelligenceResponse({
   request,
+  analysisFingerprint,
   rawResponse,
   expectedProviderId,
   policy: policyOverride,
@@ -92,7 +95,7 @@ export function validateRepositoryDeepIntelligenceResponse({
   ]));
   const productIntelligence = request.requestedCapabilities.includes('product-opportunity-analysis')
     ? validateRepositoryProductIntelligence({
-      sourceAnalysisFingerprint: request.fingerprint,
+      sourceAnalysisFingerprint: analysisFingerprint ?? request.fingerprint,
       rawUnderstanding: response.productUnderstanding,
       rawOpportunities: response.productOpportunities,
       evidenceReferences: request.evidenceReferences,

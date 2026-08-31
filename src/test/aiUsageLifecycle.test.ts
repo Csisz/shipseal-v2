@@ -592,7 +592,7 @@ describe('Omega 19.1 transactional Deep Analysis lifecycle', () => {
     const outbound = vi.fn(async () => new Response('{}'));
     await service.guardProviderFetcher(next, outbound as typeof fetch)('https://api.openai.test');
     expect(outbound).toHaveBeenCalledTimes(1);
-    await expect(service.authorize('paid', input, roots(input), first.publicOperationId)).rejects.toMatchObject({ category: 'operation_conflict' });
+    await expect(service.authorize('paid', input, roots(input), { recoveryOperationId: first.publicOperationId })).rejects.toMatchObject({ category: 'operation_conflict' });
   });
 
   it('denies an exhausted allowance before a provider permit can be requested', async () => {
@@ -640,7 +640,7 @@ describe('Omega 19.1 transactional Deep Analysis lifecycle', () => {
     await service.complete(root, 'owner-a', enhanced());
     store.operationFor('owner-a', input)!.stages.get(root.stageFingerprint)!.cached = undefined;
 
-    await expect(service.authorize('owner-b', input, roots(input), root.publicOperationId))
+    await expect(service.authorize('owner-b', input, roots(input), { recoveryOperationId: root.publicOperationId }))
       .rejects.toMatchObject({ category: 'operation_conflict' });
     expect(store.operationFor('owner-b', input)).toBeUndefined();
     expect((await service.getUsageSummary('owner-b')).deepAnalysis).toMatchObject({ used: 0, reserved: 0 });

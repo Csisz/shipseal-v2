@@ -82,6 +82,7 @@ export interface RepositoryDeepIntelligenceExecutionResult {
 export interface RunRepositoryDeepIntelligenceInput {
   provider: RepositoryDeepIntelligenceProvider;
   request: RepositoryDeepIntelligenceRequest;
+  analysisFingerprint?: string;
   signal?: AbortSignal;
   timeoutMs?: number;
   policy?: RepositoryDeepIntelligenceResultPolicyOverride;

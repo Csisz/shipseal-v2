@@ -7,14 +7,17 @@ import {
   REPOSITORY_PRODUCT_PIPELINE_VERSION,
   REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION,
   type RepositoryIntelligenceProviderApiResponse,
+  type RepositoryIntelligenceSafeDiagnostics,
   type RepositoryProductProviderStage,
 } from '../../src/lib/repositoryIntelligence/productionProviderContract.js';
 import {
   buildRepositoryProductExpansionStagesForFingerprint,
+  buildRepositoryProductRootStageForFingerprint,
   isCompleteRepositoryProductIntelligenceResult,
   mergeRepositoryProductExpansionResults,
 } from '../../src/lib/repositoryIntelligence/stagedProductIntelligence.js';
 import type { RepositoryDeepIntelligenceRequest } from '../../src/lib/repositoryIntelligence/deepIntelligenceRequest.js';
+import type { RepositoryProductIntelligenceResult } from '../../src/lib/repositoryIntelligence/productIntelligenceSchema.js';
 import type {
   AccountAiUsageSummary,
   AiUsageDenialCategory,
@@ -55,7 +58,8 @@ interface AuthorizeAiStageInput {
   operationKind: AiOperationKind;
   logicalAnalysisFingerprint: string;
   repositoryIdentity: string;
-  requestFingerprint: string;
+  analysisFingerprint: string;
+  providerTransmissionFingerprint: string;
   pipelineVersion: string;
   executionProfile: RepositoryDeepIntelligenceRequest['executionProfile'];
   stageKind: AiStageKind;
@@ -116,11 +120,22 @@ export class AiUsageDeniedError extends Error {
     public readonly status: number,
     public readonly retryable: boolean,
     message: string,
-    public readonly diagnostics?: {
-      publicOperationId?: string;
-      operationRecoveryAction?: AiOperationStatusSnapshot['recoveryAction'];
-      operationLeaseExpiresAt?: string;
-    },
+    public readonly diagnostics?: Pick<RepositoryIntelligenceSafeDiagnostics,
+      | 'publicOperationId'
+      | 'operationRecoveryAction'
+      | 'operationLeaseExpiresAt'
+      | 'analysisFingerprint'
+      | 'providerTransmissionFingerprint'
+      | 'expectedStageFingerprint'
+      | 'receivedStageFingerprint'
+      | 'analysisFingerprintMismatch'
+      | 'stageFingerprintMismatch'
+      | 'parentSetMismatch'
+      | 'batchMetadataMismatch'
+      | 'stageOwnershipFailureReason'
+      | 'operationalFailureCategory'
+      | 'failureBoundary'
+    >,
   ) {
     super(message);
     this.name = 'AiUsageDeniedError';
@@ -158,7 +173,11 @@ export function resolveAiCostGuardConfig(env: NodeJS.ProcessEnv = process.env): 
   };
 }
 
-export function buildLogicalAiOperationIdentity(userId: string, request: RepositoryDeepIntelligenceRequest) {
+export function buildLogicalAiOperationIdentity(
+  userId: string,
+  request: RepositoryDeepIntelligenceRequest,
+  analysisFingerprint = request.fingerprint,
+) {
   const operationKind: AiOperationKind = request.executionProfile === 'product-strategist'
     ? 'repository_futures'
     : 'repository_deep_intelligence';
@@ -167,12 +186,18 @@ export function buildLogicalAiOperationIdentity(userId: string, request: Reposit
     userId,
     operationKind,
     repositoryIdentity,
-    requestFingerprint: request.fingerprint,
+    requestFingerprint: analysisFingerprint,
     pipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION,
     rootContractVersion: REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION,
     executionProfile: request.executionProfile,
   });
   return { operationKind, repositoryIdentity, logicalAnalysisFingerprint };
+}
+
+export interface AiUsageAuthorizationOptions {
+  recoveryOperationId?: string;
+  /** Original validated ShipSeal request identity, before provider preparation. */
+  analysisFingerprint?: string;
 }
 
 export class AiUsageAuthorizationService {
@@ -204,25 +229,27 @@ export class AiUsageAuthorizationService {
 
   async authorize(
     userId: string,
-    request: RepositoryDeepIntelligenceRequest,
+    providerRequest: RepositoryDeepIntelligenceRequest,
     productStage?: RepositoryProductProviderStage,
-    recoveryOperationId?: string,
+    options: AiUsageAuthorizationOptions = {},
   ): Promise<AuthorizedAiStage> {
     const maximumStageAttempts = boundedPositiveInteger(this.env.SHIPSEAL_AI_MAX_STAGE_ATTEMPTS, 2, 1, 10) || 2;
     const stageLeaseTtlMs = (boundedPositiveInteger(this.env.SHIPSEAL_AI_STAGE_LEASE_TTL_SECONDS, 180, 30, 900) || 180) * 1_000;
-    const identity = buildLogicalAiOperationIdentity(userId, request);
+    const analysisFingerprint = options.analysisFingerprint ?? providerRequest.fingerprint;
+    const identity = buildLogicalAiOperationIdentity(userId, providerRequest, analysisFingerprint);
     const stageKind: AiStageKind = productStage?.kind
-      || (request.executionProfile === 'product-strategist' ? 'roots' : 'analysis');
-    const stageFingerprint = productStage?.fingerprint || (request.executionProfile === 'product-strategist'
-      ? stableContextFingerprint({ version: REPOSITORY_PRODUCT_PIPELINE_VERSION, report: request.fingerprint, stage: 'roots' })
-      : request.fingerprint);
+      || (providerRequest.executionProfile === 'product-strategist' ? 'roots' : 'analysis');
+    const stageFingerprint = productStage?.fingerprint || (providerRequest.executionProfile === 'product-strategist'
+      ? buildRepositoryProductRootStageForFingerprint(analysisFingerprint).fingerprint
+      : analysisFingerprint);
     const now = this.now();
     return this.store.authorizeStage({
       userId,
       ...identity,
-      requestFingerprint: request.fingerprint,
+      analysisFingerprint,
+      providerTransmissionFingerprint: providerRequest.fingerprint,
       pipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION,
-      executionProfile: request.executionProfile,
+      executionProfile: providerRequest.executionProfile,
       stageKind,
       stageFingerprint,
       productStage,
@@ -230,7 +257,7 @@ export class AiUsageAuthorizationService {
       now,
       leaseExpiresAt: new Date(now.getTime() + stageLeaseTtlMs),
       maximumStageAttempts,
-      recoveryOperationId,
+      recoveryOperationId: options.recoveryOperationId,
     });
   }
 
@@ -557,7 +584,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
           where owner_user_id = ${input.userId}
             and operation_kind = ${input.operationKind}
             and repository_identity = ${input.repositoryIdentity}
-            and request_fingerprint = ${input.requestFingerprint}
+            and request_fingerprint = ${input.analysisFingerprint}
             and execution_profile = ${input.executionProfile}
             and state <> 'terminal_failure' and refunded_user_units = 0
           order by succeeded_at desc nulls last, created_at desc
@@ -598,7 +625,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
             reserved_user_units, consumed_user_units, created_at, updated_at
           ) values (
             ${operationId}, ${publicOperationId}, ${input.userId}, ${projectId}, ${input.operationKind}, ${input.logicalAnalysisFingerprint},
-            ${input.repositoryIdentity}, ${input.requestFingerprint}, ${input.pipelineVersion}, ${input.executionProfile},
+            ${input.repositoryIdentity}, ${input.analysisFingerprint}, ${input.pipelineVersion}, ${input.executionProfile},
             ${input.reserveUserUnit ? 'reserved' : 'running'}, ${input.reserveUserUnit ? 1 : 0}, 0, ${input.now.toISOString()}, ${input.now.toISOString()}
           ) returning *
         `;
@@ -608,16 +635,29 @@ export class PostgresAiUsageStore implements AiUsageStore {
         }
       }
 
-      if ((!input.recoveryOperationId && String(operation.request_fingerprint) !== input.requestFingerprint)
+      if ((!input.recoveryOperationId && String(operation.request_fingerprint) !== input.analysisFingerprint)
         || String(operation.repository_identity) !== input.repositoryIdentity) {
-        throw operationConflict(false, 'The logical analysis identity conflicts with an existing operation.');
+        throw operationConflict(false, 'The logical analysis identity conflicts with an existing operation.', {
+          analysisFingerprint: input.analysisFingerprint,
+          providerTransmissionFingerprint: input.providerTransmissionFingerprint,
+          analysisFingerprintMismatch: String(operation.request_fingerprint) !== input.analysisFingerprint,
+          operationalFailureCategory: 'expansion_stage_ownership_failed',
+          failureBoundary: 'authorization',
+          stageOwnershipFailureReason: 'analysis-fingerprint-mismatch',
+        });
       }
       if (operation.state === 'terminal_failure') throw operationConflict(false, 'This analysis reached a terminal failure and cannot create another provider attempt.');
       if (operation.state === 'succeeded' && input.stageKind === 'roots') {
         return this.authorizeIntegrityRecovery(transaction, operation, input);
       }
       if (input.stageKind === 'expansion') {
-        await assertExpansionBelongsToValidatedRoot(transaction, operationIdFor(operation), input.requestFingerprint, input.productStage);
+        await assertExpansionBelongsToValidatedRoot(
+          transaction,
+          operationIdFor(operation),
+          input.analysisFingerprint,
+          input.providerTransmissionFingerprint,
+          input.productStage,
+        );
       }
 
       const operationId = String(operation.id);
@@ -1126,14 +1166,18 @@ async function assertExpansionBelongsToValidatedRoot(
   transaction: TransactionSql,
   operationId: string,
   requestFingerprint: string,
+  providerTransmissionFingerprint: string,
   productStage?: RepositoryProductProviderStage,
 ) {
-  if (productStage?.kind !== 'expansion') throw operationConflict(false, 'Future expansion is invalid.');
-  const rootFingerprint = stableContextFingerprint({
-    version: REPOSITORY_PRODUCT_PIPELINE_VERSION,
-    report: requestFingerprint,
-    stage: 'roots',
+  if (productStage?.kind !== 'expansion') throw operationConflict(false, 'Future expansion is invalid.', {
+    analysisFingerprint: requestFingerprint,
+    providerTransmissionFingerprint,
+    operationalFailureCategory: 'expansion_stage_ownership_failed',
+    failureBoundary: 'stage-ownership-validation',
+    batchMetadataMismatch: true,
+    stageOwnershipFailureReason: 'batch-metadata-mismatch',
   });
+  const rootFingerprint = buildRepositoryProductRootStageForFingerprint(requestFingerprint).fingerprint;
   const rows = await transaction<Record<string, unknown>[]>`
     select s.cached_response, o.canonical_root_response
     from public.shipseal_ai_operations o
@@ -1145,28 +1189,82 @@ async function assertExpansionBelongsToValidatedRoot(
   const response = reusableRootResponse(rows[0]?.cached_response)
     || reusableRootResponse(rows[0]?.canonical_root_response)
     || undefined;
-  const opportunities = response?.state === 'enhanced' ? response.result.productIntelligence?.opportunities : undefined;
-  if (!opportunities?.length) throw operationConflict(true, 'Validated Future roots are not available for this expansion.');
-  const expectedTotalBatches = Math.ceil(opportunities.length / 3);
-  const expectedParents = opportunities.slice(productStage.batchIndex * 3, productStage.batchIndex * 3 + 3).map(opportunity => ({
-    id: opportunity.id,
-    title: opportunity.title,
-    opportunityStatement: opportunity.opportunityStatement,
-    userValue: opportunity.userValue,
-    whyItFits: opportunity.whyItFits,
-    evidenceIds: [...opportunity.evidenceIds].sort(),
-  }));
-  const expectedFingerprint = stableContextFingerprint({
-    version: REPOSITORY_PRODUCT_PIPELINE_VERSION,
-    report: requestFingerprint,
-    stage: 'expansion',
-    parents: expectedParents.map(parent => ({ id: parent.id, evidenceIds: parent.evidenceIds })),
+  const product = response?.state === 'enhanced' ? response.result.productIntelligence : undefined;
+  if (!product?.opportunities.length) throw operationConflict(true, 'Validated Future roots are not available for this expansion.', {
+    analysisFingerprint: requestFingerprint,
+    providerTransmissionFingerprint,
+    operationalFailureCategory: 'expansion_stage_ownership_failed',
+    failureBoundary: 'stage-ownership-validation',
+    stageOwnershipFailureReason: 'validated-root-unavailable',
   });
-  if (productStage.totalBatches !== expectedTotalBatches
-    || productStage.fingerprint !== expectedFingerprint
-    || JSON.stringify(productStage.parents.map(parent => ({ ...parent, evidenceIds: [...parent.evidenceIds].sort() }))) !== JSON.stringify(expectedParents)) {
-    throw operationConflict(false, 'Future expansion does not match the validated root analysis.');
+  const ownership = validateRepositoryProductExpansionOwnership(requestFingerprint, product, productStage);
+  if (ownership.valid === false) {
+    throw operationConflict(false, 'Future expansion does not match the validated root analysis.', {
+      analysisFingerprint: requestFingerprint,
+      providerTransmissionFingerprint,
+      expectedStageFingerprint: ownership.expectedStageFingerprint,
+      receivedStageFingerprint: productStage.fingerprint,
+      analysisFingerprintMismatch: ownership.reason === 'analysis-fingerprint-mismatch',
+      stageFingerprintMismatch: ownership.reason === 'stage-fingerprint-mismatch',
+      parentSetMismatch: ownership.reason === 'parent-set-mismatch',
+      batchMetadataMismatch: ownership.reason === 'batch-metadata-mismatch',
+      stageOwnershipFailureReason: ownership.reason,
+      operationalFailureCategory: 'expansion_stage_ownership_failed',
+      failureBoundary: 'stage-ownership-validation',
+    });
   }
+}
+
+export type RepositoryProductExpansionOwnershipFailureReason =
+  | 'analysis-fingerprint-mismatch'
+  | 'stage-fingerprint-mismatch'
+  | 'parent-set-mismatch'
+  | 'batch-metadata-mismatch';
+
+export function validateRepositoryProductExpansionOwnership(
+  analysisFingerprint: string,
+  product: RepositoryProductIntelligenceResult,
+  stage: Extract<RepositoryProductProviderStage, { kind: 'expansion' }>,
+): { valid: true } | {
+  valid: false;
+  reason: RepositoryProductExpansionOwnershipFailureReason;
+  expectedStageFingerprint?: string;
+} {
+  if (product.sourceAnalysisFingerprint !== analysisFingerprint) {
+    return { valid: false, reason: 'analysis-fingerprint-mismatch' };
+  }
+  const expectedStages = buildRepositoryProductExpansionStagesForFingerprint(analysisFingerprint, product);
+  const expected = expectedStages[stage.batchIndex];
+  if (!expected || stage.batchIndex < 0 || stage.totalBatches !== expectedStages.length) {
+    return { valid: false, reason: 'batch-metadata-mismatch', expectedStageFingerprint: expected?.fingerprint };
+  }
+  if (!sameExpansionParents(stage.parents, expected.parents)) {
+    return { valid: false, reason: 'parent-set-mismatch', expectedStageFingerprint: expected.fingerprint };
+  }
+  if (stage.fingerprint !== expected.fingerprint) {
+    return { valid: false, reason: 'stage-fingerprint-mismatch', expectedStageFingerprint: expected.fingerprint };
+  }
+  return { valid: true };
+}
+
+function sameExpansionParents(
+  received: Extract<RepositoryProductProviderStage, { kind: 'expansion' }>['parents'],
+  expected: Extract<RepositoryProductProviderStage, { kind: 'expansion' }>['parents'],
+) {
+  if (received.length !== expected.length) return false;
+  return received.every((parent, index) => {
+    const canonical = expected[index];
+    return parent.id === canonical.id
+      && parent.title === canonical.title
+      && parent.opportunityStatement === canonical.opportunityStatement
+      && parent.userValue === canonical.userValue
+      && parent.whyItFits === canonical.whyItFits
+      && sameOrderedStrings([...parent.evidenceIds].sort(), [...canonical.evidenceIds].sort());
+  });
+}
+
+function sameOrderedStrings(left: string[], right: string[]) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function operationIdFor(operation: Record<string, unknown>) {

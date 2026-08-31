@@ -117,11 +117,14 @@ export type RepositoryIntelligenceOperationalFailureCategory =
   | 'expansion_parent_identity_failed'
   | 'expansion_duplicate_identity_failed'
   | 'merge_incomplete'
+  | 'expansion_stage_ownership_failed'
   | 'cancelled';
 
 export type RepositoryIntelligenceFailureBoundary =
   | 'configuration'
   | 'request-preflight'
+  | 'authorization'
+  | 'stage-ownership-validation'
   | 'provider-http'
   | 'provider-generation'
   | 'provider-envelope'
@@ -137,6 +140,10 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   productPipelineVersion?: typeof REPOSITORY_PRODUCT_PIPELINE_VERSION;
   rootContractVersion?: typeof REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION;
   requestId?: string;
+  /** Stable logical Product Intelligence analysis identity. */
+  analysisFingerprint?: string;
+  /** Fingerprint of the bounded/redacted request actually sent to the provider. */
+  providerTransmissionFingerprint?: string;
   requestFingerprint?: string;
   reportIdentityHash?: string;
   providerType?: string;
@@ -235,6 +242,13 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   providerHttpStatusCategory?: string;
   expansionParentFutureIds?: string[];
   expansionParentCount?: number;
+  expectedStageFingerprint?: string;
+  receivedStageFingerprint?: string;
+  analysisFingerprintMismatch?: boolean;
+  stageFingerprintMismatch?: boolean;
+  parentSetMismatch?: boolean;
+  batchMetadataMismatch?: boolean;
+  stageOwnershipFailureReason?: 'analysis-fingerprint-mismatch' | 'stage-fingerprint-mismatch' | 'parent-set-mismatch' | 'batch-metadata-mismatch' | 'validated-root-unavailable';
   acceptedRootCount?: number;
   rejectedRootCount?: number;
   stageRetryCount?: number;
