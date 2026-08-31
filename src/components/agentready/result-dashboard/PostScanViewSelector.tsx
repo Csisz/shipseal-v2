@@ -20,6 +20,7 @@ export function PostScanViewSelector({
   futuresStatus,
   futureAvailability: suppliedFutureAvailability,
   onRetryFutures,
+  persistenceControl,
   onSelect,
 }: {
   report: ReadinessReport;
@@ -28,6 +29,7 @@ export function PostScanViewSelector({
   futuresStatus?: RepositoryIntelligenceProviderStatus;
   futureAvailability?: RepositoryFutureAvailability;
   onRetryFutures?: () => void;
+  persistenceControl?: ReactNode;
   onSelect: (view: PostScanEntryView) => void;
 }) {
   const rootRef = useRef<HTMLElement>(null);
@@ -88,6 +90,7 @@ export function PostScanViewSelector({
           <h1 id="post-scan-view-selector-heading" className="mt-2 font-display text-2xl font-semibold tracking-[-0.025em] sm:text-3xl md:text-4xl">
             Choose your first perspective
           </h1>
+          {persistenceControl && <div className="mx-auto mt-4 max-w-md">{persistenceControl}</div>}
         </header>
 
         {!futuresAvailable && (

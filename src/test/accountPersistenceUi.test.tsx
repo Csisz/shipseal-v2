@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AccountProvider } from '@/components/account/AccountProvider';
@@ -16,6 +17,7 @@ const project = {
   githubRepositoryId: null, githubInstallationId: null, displayName: 'shipseal-v2',
   createdAt: '2026-07-17T08:00:00.000Z', updatedAt: '2026-07-17T08:00:00.000Z', lastScanAt: '2026-07-17T08:00:00.000Z',
   archived: false, latestScanStatus: 'completed' as const, latestIntelligenceMode: 'deterministic' as const, latestVerificationState: 'not-started' as const,
+  scanCount: 1,
 };
 const scan = {
   version: PERSISTENCE_SCHEMA_VERSION, id: `scn_${'c'.repeat(24)}`, projectId: project.id, sourceType: 'github-public' as const,
@@ -30,23 +32,23 @@ function json(body: unknown, status = 200) { return Promise.resolve(new Response
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe('Omega 18.1 account and persistence UI', () => {
-  it('keeps an anonymous scan open and requests sign-in only when Save project is chosen', async () => {
+  it('keeps an anonymous scan open and requests sign-in only when private saving is chosen', async () => {
     vi.stubGlobal('fetch', vi.fn(() => json({ user: null })));
     const open = vi.spyOn(window, 'open').mockReturnValue({} as Window);
     const report = buildSampleReport();
     render(<AccountProvider><SaveProjectControl report={report} /></AccountProvider>);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign in to save' })).toBeEnabled());
     expect(screen.queryByText(/An account is needed only/i)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in to save' }));
     expect(open).toHaveBeenCalledWith(expect.stringContaining('/api/account/login'), 'shipseal-account', expect.any(String));
-    expect(screen.getByText(/This scan remains open/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled();
+    expect(screen.getByText(/This result remains open/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign in to save' })).toBeEnabled();
   });
 
   it('surfaces a recoverable popup configuration failure without closing the scan', async () => {
     vi.stubGlobal('fetch', vi.fn(() => json({ user: null })));
     render(<AccountProvider><SaveProjectControl report={buildSampleReport()} /></AccountProvider>);
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign in to save' })).toBeEnabled());
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
@@ -56,7 +58,7 @@ describe('Omega 18.1 account and persistence UI', () => {
     });
 
     expect(await screen.findByRole('status')).toHaveTextContent('Anonymous scanning remains available');
-    expect(screen.getByRole('button', { name: 'Save project' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Sign in to save' })).toBeEnabled();
   });
 
   it('keeps anonymous ZIP and public URL sources available when account auth is unavailable', async () => {
@@ -69,7 +71,7 @@ describe('Omega 18.1 account and persistence UI', () => {
     expect(screen.getByLabelText('Public GitHub repository URL')).toBeEnabled();
   });
 
-  it('saves explicitly for an authenticated user and exposes the private project link', async () => {
+  it('deduplicates authenticated autosave across StrictMode effects', async () => {
     const fetcher = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       if (url === '/api/account/session') return json({ user });
@@ -77,20 +79,40 @@ describe('Omega 18.1 account and persistence UI', () => {
       return json({ error: { code: 'not_found', message: 'not found' } }, 404);
     });
     vi.stubGlobal('fetch', fetcher);
-    render(<AccountProvider><SaveProjectControl report={buildSampleReport()} /></AccountProvider>);
-    await waitFor(() => expect(screen.getByText('My projects')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
-    await waitFor(() => expect(screen.getByText('Project and scan history saved privately.')).toBeInTheDocument());
-    expect(screen.getByRole('link', { name: 'Open saved project' })).toHaveAttribute('href', `/projects/${project.id}`);
-    const post = fetcher.mock.calls.find(call => String(call[0]) === '/api/projects');
+
+    render(<StrictMode><AccountProvider><SaveProjectControl report={buildSampleReport()} /></AccountProvider></StrictMode>);
+
+    await waitFor(() => expect(screen.getByText('Saved privately')).toBeInTheDocument());
+    expect(fetcher.mock.calls.filter(call => String(call[0]) === '/api/projects' && call[1]?.method === 'POST')).toHaveLength(1);
+  });
+
+  it('autosaves once for an authenticated user and exposes the private project context', async () => {
+    const fetcher = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/account/session') return json({ user });
+      if (url === '/api/projects' && init?.method === 'POST') return json({ project, scan }, 201);
+      return json({ error: { code: 'not_found', message: 'not found' } }, 404);
+    });
+    vi.stubGlobal('fetch', fetcher);
+    const onPersisted = vi.fn();
+    render(<AccountProvider><SaveProjectControl report={buildSampleReport()} onPersisted={onPersisted} /></AccountProvider>);
+    await waitFor(() => expect(screen.getByText('Saved privately')).toBeInTheDocument());
+    expect(screen.getByText('My Projects')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open project history' })).toHaveAttribute('href', `/projects/${project.id}`);
+    expect(onPersisted).toHaveBeenCalledWith({ projectId: project.id, scanId: scan.id });
+    const posts = fetcher.mock.calls.filter(call => String(call[0]) === '/api/projects' && call[1]?.method === 'POST');
+    expect(posts).toHaveLength(1);
+    const post = posts[0];
     expect(String(post?.[1]?.body)).not.toMatch(/github_pat_|API_KEY=|PRIVATE KEY/);
   });
 
   it('renders a calm project list and account deletion confirmation without a score dashboard', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => String(input) === '/api/account/session' ? json({ user }) : json({ projects: [project] })));
     render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><AccountProvider><Projects /></AccountProvider></MemoryRouter>);
-    expect(await screen.findByRole('heading', { name: 'Saved projects' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'My Projects' })).toBeInTheDocument();
     expect(await screen.findByText('Csisz/shipseal-v2')).toBeInTheDocument();
+    expect(screen.getByText('1 scan')).toBeInTheDocument();
+    expect(screen.getByText('Latest completed')).toBeInTheDocument();
     expect(screen.queryByText(/readiness score/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
     expect(screen.getByRole('button', { name: 'Delete my ShipSeal account' })).toBeInTheDocument();
@@ -118,9 +140,7 @@ describe('Omega 18.1 account and persistence UI', () => {
   it('keeps persistence failure recoverable without removing the current scan action', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => String(input) === '/api/account/session' ? json({ user }) : json({ error: { code: 'unavailable', message: 'unavailable' } }, 503)));
     render(<AccountProvider><SaveProjectControl report={buildSampleReport()} /></AccountProvider>);
-    await waitFor(() => expect(screen.getByText('My projects')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
-    expect(await screen.findByText(/current scan remains usable and was not rerun/i)).toBeInTheDocument();
+    expect(await screen.findByText(/repository result is ready, but ShipSeal could not save it privately yet/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry save' })).toBeEnabled();
   });
 });

@@ -67,18 +67,23 @@ export class InMemoryAccountPersistenceStore implements AccountPersistenceStore 
       const baselineTime = Date.parse(baselineScan.summary.completedAt || baselineScan.summary.startedAt);
       const laterTime = Date.parse(input.scan.completedAt || input.scan.startedAt);
       if (!Number.isFinite(laterTime) || laterTime <= baselineTime) throw new Error('Verification later scan must complete after its baseline.');
-      if ('repositoryIdentity' in relationship && relationship.repositoryIdentity !== identity) throw new Error('Verification repository identity does not match this project.');
+      if ('repositoryIdentity' in relationship
+        && relationship.repositoryIdentity !== identity
+        && relationship.repositoryIdentity !== this.verificationIdentity(input)) {
+        throw new Error('Verification repository identity does not match this project.');
+      }
     }
     let project = [...this.projects.values()].find(item => item.ownerId === userId && item.identity === identity);
     const duplicate = project && [...this.scans.values()].find(item => item.ownerId === userId && item.summary.projectId === project?.id && item.idempotencyKey === input.idempotencyKey);
     if (project && duplicate) return { project: this.safeProject(project), scan: duplicate.summary };
     const now = new Date().toISOString();
     if (!project) {
+      const { uploadIdentityFingerprint: _uploadIdentityFingerprint, ...projectInput } = input.project;
       project = persistedProjectSchema.parse({
-        version: PERSISTENCE_SCHEMA_VERSION, id: createPublicId('prj'), ...input.project,
+        version: PERSISTENCE_SCHEMA_VERSION, id: createPublicId('prj'), ...projectInput,
         createdAt: now, updatedAt: now, lastScanAt: input.scan.completedAt, archived: false,
         latestScanStatus: input.scan.status, latestIntelligenceMode: input.scan.intelligenceMode,
-        latestVerificationState: input.scan.verificationRelationship?.state || 'not-started',
+        latestVerificationState: input.scan.verificationRelationship?.state || 'not-started', scanCount: 0,
       }) as PersistedProject & { ownerId: string; identity: string };
       Object.assign(project, { ownerId: userId, identity });
       this.projects.set(project.id, project);
@@ -101,6 +106,7 @@ export class InMemoryAccountPersistenceStore implements AccountPersistenceStore 
       baselineScanId: input.scan.verificationRelationship?.baselineScanId || null, safeFailureCategory: input.scan.safeFailureCategory,
     });
     this.scans.set(scan.id, { ownerId: userId, summary: scan, snapshot: scanSnapshotSchema.parse(input.scan.snapshot), idempotencyKey: input.idempotencyKey });
+    project.scanCount = [...this.scans.values()].filter(item => item.ownerId === userId && item.summary.projectId === project.id).length;
     if (relationship) {
       const isV2 = 'preparedPlanId' in relationship;
       this.verifications.push({
@@ -174,6 +180,7 @@ export class InMemoryAccountPersistenceStore implements AccountPersistenceStore 
       project.latestScanStatus = remaining[0]?.status || null;
       project.latestIntelligenceMode = remaining[0]?.intelligenceMode || null;
       project.latestVerificationState = remaining[0]?.verificationState || null;
+      project.scanCount = [...this.scans.values()].filter(item => item.ownerId === userId && item.summary.projectId === project.id).length;
     }
     return true;
   }
@@ -204,5 +211,13 @@ export class InMemoryAccountPersistenceStore implements AccountPersistenceStore 
     const { ownerId: _ownerId, rescanId: _rescanId, ...safe } = verification;
     return structuredClone(safe);
   }
-  private identity(input: SaveProjectRequest) { return input.project.repositoryOwner && input.project.repositoryName ? `github:${input.project.repositoryOwner.toLowerCase()}/${input.project.repositoryName.toLowerCase()}` : `upload:${(input.project.uploadLabel || input.project.displayName).toLowerCase()}`; }
+  private identity(input: SaveProjectRequest) {
+    if (input.project.repositoryOwner && input.project.repositoryName) return `github:${input.project.repositoryOwner.toLowerCase()}/${input.project.repositoryName.toLowerCase()}`;
+    return `upload:${(input.project.uploadLabel || input.project.displayName).toLowerCase()}:${input.project.uploadIdentityFingerprint || input.scan.deterministicRequestFingerprint}`;
+  }
+
+  private verificationIdentity(input: SaveProjectRequest) {
+    if (input.project.repositoryOwner && input.project.repositoryName) return `github:${input.project.repositoryOwner.toLowerCase()}/${input.project.repositoryName.toLowerCase()}`;
+    return `upload:${(input.project.uploadLabel || input.project.displayName).toLowerCase()}`;
+  }
 }

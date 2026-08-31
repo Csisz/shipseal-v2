@@ -118,6 +118,7 @@ export const persistedProjectSchema = z.object({
   latestScanStatus: scanStatusSchema.nullable(),
   latestIntelligenceMode: intelligenceModeSchema.nullable(),
   latestVerificationState: persistedVerificationStateSchema.nullable(),
+  scanCount: z.number().int().nonnegative().max(1_000_000).default(0),
 }).strict();
 
 export const persistedScanSummarySchema = z.object({
@@ -231,6 +232,7 @@ export const saveProjectRequestSchema = z.object({
     defaultBranch: z.string().max(250).nullable(),
     githubRepositoryId: z.string().max(80).nullable(),
     githubInstallationId: z.string().max(80).nullable(),
+    uploadIdentityFingerprint: z.string().regex(/^[a-z0-9]{8,128}$/i).nullable().default(null),
     displayName: safeText(200),
   }).strict(),
   scan: z.object({

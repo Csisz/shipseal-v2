@@ -80,6 +80,14 @@ export function buildSaveProjectRequest(input: {
     source: { sourceType: source.sourceType, owner, repositoryName, branch: source.githubBranch || source.githubDefaultBranch || null },
     scanSummary: input.report.scanSummary,
   });
+  const uploadIdentityFingerprint = owner ? null : stableContextFingerprint({
+    repoName: input.report.repoName.trim().toLowerCase(),
+    sourceType: source.sourceType,
+    files: (input.report.analyzedFiles || input.report.sampleFiles)
+      .map(file => ({ path: file.path.toLowerCase(), size: file.size }))
+      .sort((left, right) => left.path.localeCompare(right.path) || left.size - right.size),
+    stack: input.report.stack,
+  });
   const providerState = input.providerStatus?.state;
   const intelligenceMode = providerState === 'enhanced' ? 'enhanced' : providerState === 'fallback' || providerState === 'cancelled' ? 'fallback' : 'deterministic';
   const providerModel = input.providerStatus?.state === 'enhanced' ? input.providerStatus.modelId : undefined;
@@ -96,6 +104,7 @@ export function buildSaveProjectRequest(input: {
       defaultBranch: source.githubDefaultBranch || null,
       githubRepositoryId: null,
       githubInstallationId: source.githubInstallationId || null,
+      uploadIdentityFingerprint,
       displayName: input.report.repoName,
     },
     scan: {

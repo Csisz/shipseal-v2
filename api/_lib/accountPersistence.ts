@@ -122,6 +122,7 @@ function mapProject(row: Record<string, unknown>): PersistedProject {
     latestScanStatus: nullable(row.latest_scan_status),
     latestIntelligenceMode: nullable(row.latest_intelligence_mode),
     latestVerificationState: nullable(row.latest_verification_state),
+    scanCount: Number(row.scan_count || 0),
   });
 }
 
@@ -289,7 +290,9 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
         if (!Number.isFinite(laterCompletedAt) || laterCompletedAt <= baselineCompletedAt) {
           throw new PersistenceConflictError('Verification later scan must complete after its baseline.');
         }
-        if ('repositoryIdentity' in relationship && relationship.repositoryIdentity !== projectIdentity(input)) {
+        if ('repositoryIdentity' in relationship
+          && relationship.repositoryIdentity !== projectIdentity(input)
+          && relationship.repositoryIdentity !== verificationProjectIdentity(input)) {
           throw new PersistenceConflictError('Verification repository identity does not match this project.');
         }
       }
@@ -337,12 +340,16 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
       select p.*,
         latest.status as latest_scan_status,
         latest.intelligence_mode as latest_intelligence_mode,
-        latest.verification_state as latest_verification_state
+        latest.verification_state as latest_verification_state,
+        coalesce(scan_totals.scan_count, 0)::int as scan_count
       from shipseal_projects p
       left join lateral (
         select status, intelligence_mode, verification_state from shipseal_scans s
         where s.project_id = p.id order by s.completed_at desc nulls last, s.created_at desc limit 1
       ) latest on true
+      left join lateral (
+        select count(*)::int as scan_count from shipseal_scans s where s.project_id = p.id
+      ) scan_totals on true
       where p.owner_user_id = ${userId} and p.deleted_at is null
       order by p.last_scan_at desc nulls last, p.created_at desc, p.id asc
       limit ${limit} offset ${offset}
@@ -437,7 +444,14 @@ export class PostgresAccountPersistenceStore implements AccountPersistenceStore 
 
 function projectIdentity(input: SaveProjectRequest) {
   if (input.project.repositoryOwner && input.project.repositoryName) return `github:${input.project.repositoryOwner.toLowerCase()}/${input.project.repositoryName.toLowerCase()}`;
-  return `upload:${input.project.uploadLabel?.trim().toLowerCase() || input.project.displayName.trim().toLowerCase()}`;
+  const label = input.project.uploadLabel?.trim().toLowerCase() || input.project.displayName.trim().toLowerCase();
+  return `upload:${label}:${input.project.uploadIdentityFingerprint || input.scan.deterministicRequestFingerprint}`;
+}
+
+function verificationProjectIdentity(input: SaveProjectRequest) {
+  if (input.project.repositoryOwner && input.project.repositoryName) return `github:${input.project.repositoryOwner.toLowerCase()}/${input.project.repositoryName.toLowerCase()}`;
+  const label = input.project.uploadLabel?.trim().toLowerCase() || input.project.displayName.trim().toLowerCase();
+  return `upload:${label}`;
 }
 
 let sharedStore: AccountPersistenceStore | null = null;

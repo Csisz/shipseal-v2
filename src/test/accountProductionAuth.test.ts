@@ -203,8 +203,12 @@ describe('ShipSeal Production account configuration', () => {
       expectedArtifactIds: ['artifact-1'],
     };
     const rescan = await store.saveProjectAndScan(user.id, rescanInput);
-    expect(await store.listProjects(user.id, 50, 0)).toHaveLength(1);
+    const repeatedRescan = await store.saveProjectAndScan(user.id, rescanInput);
+    const projects = await store.listProjects(user.id, 50, 0);
+    expect(projects).toHaveLength(1);
+    expect(projects[0]).toMatchObject({ id: baseline.project.id, scanCount: 2 });
     expect(await store.listScans(user.id, baseline.project.id, 50, 0)).toHaveLength(2);
+    expect(repeatedRescan.scan.id).toBe(rescan.scan.id);
     expect((await store.getScan(user.id, rescan.scan.id))?.scan.baselineScanId).toBe(baseline.scan.id);
     expect(store.verifications).toEqual([expect.objectContaining({ ownerId: user.id, projectId: baseline.project.id, baselineScanId: baseline.scan.id, rescanId: rescan.scan.id })]);
   });

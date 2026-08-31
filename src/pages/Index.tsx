@@ -22,6 +22,7 @@ import type { RepositoryVerificationBaseline, WorkspaceStoryChapterId } from '@/
 import { validateRepositoryIntelligenceVerificationBaseline, type RepositoryIntelligenceProviderStatus, type RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
 import { getScan } from '@/lib/persistence';
 import { useOptionalAccount } from '@/components/account/accountContext';
+import type { PersistedProjectContext } from '@/components/account/SaveProjectControl';
 import {
   resolveRepositoryFormationPhase,
   type RepositoryFuturePreparationState,
@@ -155,6 +156,7 @@ const Index = () => {
   const [intelligenceReveal, setIntelligenceReveal] = useState<{ key: string; visible: boolean } | null>(null);
   const [activeStoryChapterId, setActiveStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
   const [verificationBaseline, setVerificationBaseline] = useState<RepositoryVerificationBaseline | null>(null);
+  const [activeProjectContext, setActiveProjectContext] = useState<(PersistedProjectContext & { reportKey: string }) | null>(null);
   const [futurePreparation, setFuturePreparation] = useState<{
     reportIdentity: string;
     state: RepositoryFuturePreparationState;
@@ -170,6 +172,7 @@ const Index = () => {
   const activeGithubConnection = pendingSource?.type === 'github-app' ? pendingSource.connection : undefined;
   const isScanning = scan.status === 'scanning';
   const activeReportKey = activeReport ? `${activeReport.repoName}-${activeReport.scannedAt}` : null;
+  const currentProjectContext = activeProjectContext?.reportKey === activeReportKey ? activeProjectContext : null;
   const showIntelligenceReveal = Boolean(
     activeReport &&
     activeReportKey &&
@@ -739,7 +742,7 @@ const Index = () => {
               onSaveRepositoryIntelligenceVerificationBaseline={setRepositoryIntelligenceVerificationBaseline}
               onDiscardRepositoryIntelligenceVerificationBaseline={() => setRepositoryIntelligenceVerificationBaseline(null)}
               onRescanRepositoryIntelligence={pendingSource?.type === 'github' || pendingSource?.type === 'github-app' ? rescanRepositoryIntelligence : undefined}
-              persistenceControl={<Suspense fallback={<div className="text-xs text-muted-foreground">Preparing private save…</div>}><SaveProjectControl report={activeReport} providerStatus={sampleReport ? undefined : scan.repositoryIntelligenceProviderStatus} verificationBaseline={sampleReport ? undefined : repositoryIntelligenceVerificationBaseline} verificationResult={sampleReport ? undefined : scan.repositoryIntelligenceVerification} projectId={verificationProjectContext?.projectId} baselineScanId={verificationProjectContext?.baselineScanId} /></Suspense>}
+              persistenceControl={sampleReport ? undefined : <Suspense fallback={<div className="text-xs text-muted-foreground">Preparing private save…</div>}><SaveProjectControl key={activeReportKey || undefined} report={activeReport} providerStatus={scan.repositoryIntelligenceProviderStatus} verificationBaseline={repositoryIntelligenceVerificationBaseline} verificationResult={scan.repositoryIntelligenceVerification} projectId={verificationProjectContext?.projectId || currentProjectContext?.projectId} baselineScanId={verificationProjectContext?.baselineScanId} existingContext={currentProjectContext} onPersisted={context => activeReportKey && setActiveProjectContext({ ...context, reportKey: activeReportKey })} /></Suspense>}
             />
           </Suspense>
         </main>

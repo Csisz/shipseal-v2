@@ -26,7 +26,8 @@ export default async function handler(req: VercelAccountRequest, res: ServerResp
       input.project = {
         sourceType: project.sourceType, repositoryOwner: project.repositoryOwner, repositoryName: project.repositoryName,
         uploadLabel: project.uploadLabel, defaultBranch: project.defaultBranch, githubRepositoryId: project.githubRepositoryId,
-        githubInstallationId: project.githubInstallationId, displayName: project.displayName,
+        githubInstallationId: project.githubInstallationId, uploadIdentityFingerprint: input.project.uploadIdentityFingerprint,
+        displayName: project.displayName,
       };
       const saved = await store.saveProjectAndScan(session.user.id, input);
       if (saved.project.id !== id) throw new AccountRequestError(409, 'conflict', 'Scan repository identity does not match the saved project.');

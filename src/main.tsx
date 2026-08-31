@@ -3,7 +3,8 @@ import App from "./App.tsx";
 import "./index.css";
 
 async function renderApp() {
-  if (import.meta.env.DEV && new URLSearchParams(window.location.search).get('omega18Qa') === 'persistence') {
+  const params = new URLSearchParams(window.location.search);
+  if (import.meta.env.DEV && (params.get('omega18Qa') === 'persistence' || params.get('omega20Continuity') === '1')) {
     await import('./dev/accountPersistenceQaBootstrap');
   }
   createRoot(document.getElementById("root")!).render(<App />);

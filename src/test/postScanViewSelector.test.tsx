@@ -113,7 +113,7 @@ describe('premium post-scan view selector', () => {
     expect(await screen.findByTestId('futures-experience')).toBeInTheDocument();
   });
 
-  it('keeps Universe usable while Futures retries and does not force navigation when Futures becomes ready', async () => {
+  it('keeps Universe usable while Futures resumes and auto-enters after the explicitly requested analysis becomes ready', async () => {
     const report = reportWithIdentity('2026-08-11T10:01:30.000Z');
     const retry = vi.fn(async () => undefined);
     const onReset = vi.fn();
@@ -168,9 +168,9 @@ describe('premium post-scan view selector', () => {
       repositoryProductIntelligenceStatus={{ state: 'enhanced', deepState: 'completed', retryable: false, providerId: 'fixture', message: 'Future analysis is ready.' }}
       retryRepositoryProductIntelligence={retry}
     />);
-    expect(screen.getByTestId('universe-experience')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Change view/i }));
-    expect(screen.getByRole('button', { name: 'Open Repository Futures' })).toBeEnabled();
+    expect(await screen.findByTestId('futures-experience')).toBeInTheDocument();
+    expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   it('offers an explicit completion-billed Future action after a free deterministic scan', () => {
@@ -188,6 +188,57 @@ describe('premium post-scan view selector', () => {
     expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('Uses 1 Deep Analysis when successfully completed');
     fireEvent.click(screen.getByRole('button', { name: 'Generate Future analysis' }));
     expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it('auto-enters Futures exactly once after explicit generation completes', async () => {
+    const report = reportWithIdentity('2026-08-11T10:01:41.000Z');
+    const start = vi.fn(async () => undefined);
+    const { rerender } = render(<ResultWorkspace
+      report={report}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{ state: 'deterministic', retryable: false, message: 'Repository evidence is ready.' }}
+      retryRepositoryProductIntelligence={start}
+    />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Future analysis' }));
+    rerender(<ResultWorkspace
+      report={report}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{ state: 'preparing', deepState: 'pending', retryable: false, productStage: 'roots', message: 'Mapping major directions.' }}
+      retryRepositoryProductIntelligence={start}
+    />);
+    const product = { opportunities: [{ id: 'future.one' }] } as unknown as RepositoryProductIntelligenceResult;
+    rerender(<ResultWorkspace
+      report={report}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligence={product}
+      repositoryProductIntelligenceStatus={{ state: 'enhanced', deepState: 'completed', retryable: false, providerId: 'fixture', message: 'Future analysis is ready.' }}
+      retryRepositoryProductIntelligence={start}
+    />);
+
+    expect(await screen.findByTestId('futures-experience')).toBeInTheDocument();
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not auto-enter a cached Future without current explicit intent', () => {
+    const product = { opportunities: [{ id: 'future.cached' }] } as unknown as RepositoryProductIntelligenceResult;
+    render(<ResultWorkspace
+      report={reportWithIdentity('2026-08-11T10:01:41.500Z')}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligence={product}
+      repositoryProductIntelligenceStatus={{ state: 'enhanced', deepState: 'completed', retryable: false, providerId: 'fixture', message: 'Future analysis is ready.' }}
+    />);
+
+    expect(screen.getByTestId('post-scan-view-selector')).toBeInTheDocument();
+    expect(screen.queryByTestId('futures-experience')).not.toBeInTheDocument();
   });
 
   it('returns a refunded historical analysis to the clean explicit-start state', () => {

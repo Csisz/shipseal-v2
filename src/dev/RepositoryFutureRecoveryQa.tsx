@@ -16,6 +16,7 @@ const failureStatus: RepositoryIntelligenceProviderStatus = {
     productStage: 'roots',
     operationalFailureCategory: 'roots_schema_failed',
     failureBoundary: 'schema-validation',
+    operationRecoveryAction: 'retry_stage',
     compactOpportunityContract: 'roots',
     compactOpportunityShapeRejectedCount: 7,
     compactOpportunityShapeIssueFields: ['evo'],
@@ -50,6 +51,7 @@ export default function RepositoryFutureRecoveryQa() {
 
   const retry = async () => {
     setRetryCount(count => count + 1);
+    await fetch('/api/repository-intelligence?qaStage=roots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixture: 'future-continuity' }) });
     setStatus({
       state: 'preparing',
       deepState: 'pending',
@@ -60,6 +62,17 @@ export default function RepositoryFutureRecoveryQa() {
       totalBatches: 3,
       activeBatchIndexes: [2],
     });
+  };
+
+  const complete = async () => {
+    await fetch('/api/repository-intelligence?qaStage=expansion', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixture: 'future-continuity', batchIndex: 2 }) });
+    setStatus({
+      state: 'preparing', deepState: 'pending', retryable: false,
+      productStage: 'finalizing', completedBatches: 3, totalBatches: 3, activeBatchIndexes: [],
+      message: 'Saving Future analysis.',
+    });
+    await fetch('/api/repository-intelligence?qaStage=finalization', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fixture: 'future-continuity' }) });
+    setStatus({ state: 'enhanced', deepState: 'completed', message: 'Future analysis ready.', retryable: false, providerId: 'qa-provider' });
   };
 
   return (
@@ -83,7 +96,7 @@ export default function RepositoryFutureRecoveryQa() {
           <button
             type="button"
             className="rounded-full bg-primary px-3 py-1.5 font-semibold text-primary-foreground"
-            onClick={() => setStatus({ state: 'enhanced', deepState: 'completed', message: 'Future analysis ready.', retryable: false, providerId: 'qa-provider' })}
+            onClick={() => void complete()}
           >
             Complete controlled batch
           </button>

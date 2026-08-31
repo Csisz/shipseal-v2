@@ -81,6 +81,11 @@ interface Props {
   persistenceControl?: ReactNode;
 }
 
+type FutureEntryIntent = {
+  mode: 'generate-and-open' | 'resume-and-open';
+  observedRunning: boolean;
+};
+
 export function ResultWorkspace({
   report,
   history,
@@ -130,6 +135,7 @@ export function ResultWorkspace({
   const [prCreated, setPrCreated] = useState(false);
   const [workspaceReportIdentity, setWorkspaceReportIdentity] = useState(reportIdentity);
   const [futureDegradedAccess, setFutureDegradedAccess] = useState(false);
+  const [futureEntryIntent, setFutureEntryIntent] = useState<FutureEntryIntent | null>(null);
   const billingFutureFocusConsumed = useRef(false);
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
@@ -158,6 +164,7 @@ export function ResultWorkspace({
     setPackagePrepared(false);
     setPrCreated(false);
     setFutureDegradedAccess(false);
+    setFutureEntryIntent(null);
   }, [initialIntake, intakeSkipped, reportIdentity, workspaceReportIdentity]);
 
   useEffect(() => {
@@ -236,6 +243,33 @@ export function ResultWorkspace({
     || futureAvailability === 'temporarily-unavailable' && Boolean(repositoryProductIntelligenceStatus?.retryable);
   const futuresCanStart = futureAvailability === 'startable';
 
+  const handleFutureAction = useCallback(() => {
+    if (!retryRepositoryProductIntelligence) return;
+    setFutureEntryIntent({
+      mode: futuresCanStart ? 'generate-and-open' : 'resume-and-open',
+      observedRunning: false,
+    });
+    void retryRepositoryProductIntelligence().catch(() => setFutureEntryIntent(null));
+  }, [futuresCanStart, retryRepositoryProductIntelligence]);
+
+  useEffect(() => {
+    if (!futureEntryIntent || futureAvailability !== 'running' || futureEntryIntent.observedRunning) return;
+    setFutureEntryIntent(current => current ? { ...current, observedRunning: true } : current);
+  }, [futureAvailability, futureEntryIntent]);
+
+  useEffect(() => {
+    if (!futureEntryIntent?.observedRunning || !futureTerminalFailure) return;
+    setFutureEntryIntent(null);
+  }, [futureEntryIntent, futureTerminalFailure]);
+
+  useEffect(() => {
+    if (!futureEntryIntent || !futuresReady) return;
+    setFutureEntryIntent(null);
+    setEntryView('futures');
+    setPendingDashboardFocus(null);
+    handleResultChapterChange('improve');
+  }, [futureEntryIntent, futuresReady, handleResultChapterChange]);
+
   useEffect(() => {
     if (billingFutureFocusConsumed.current || !futuresReady || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -279,7 +313,8 @@ export function ResultWorkspace({
         futuresAvailable={futuresReady}
         futuresStatus={repositoryProductIntelligenceStatus}
         futureAvailability={futureAvailability}
-        onRetryFutures={retryRepositoryProductIntelligence && (futuresCanRetry || futuresCanStart) ? () => { void retryRepositoryProductIntelligence(); } : undefined}
+        onRetryFutures={retryRepositoryProductIntelligence && (futuresCanRetry || futuresCanStart) ? handleFutureAction : undefined}
+        persistenceControl={persistenceControl}
         onSelect={handleEntryViewSelect}
       />
     );
