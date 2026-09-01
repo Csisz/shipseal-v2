@@ -3,7 +3,7 @@ import type {
   RepositoryFutureStageOverlay,
 } from './futurePathwaysPresentation';
 
-export const FUTURES_CANVAS_WORLD = { width: 1840, height: 1160 } as const;
+export const FUTURES_CANVAS_WORLD = { width: 2020, height: 1320 } as const;
 export type RepositoryFuturesCanvasOrientation = 'horizontal' | 'vertical';
 export type RepositoryFuturesPresentationStream = 'strategic' | 'evidence' | 'product' | 'foundation' | 'exploratory' | 'general';
 
@@ -110,53 +110,70 @@ const structuredRows = [
 const lattice = {
   repository: 150,
   direction: 510,
-  next: 900,
-  later: 1290,
-  outcome: 1660,
+  next: 920,
+  later: 1390,
+  outcome: 1780,
 } as const;
 
-const TERMINAL_COLUMN_SPACING = 170;
-const TERMINAL_COLLISION_WIDTH = 152;
-const TERMINAL_COLLISION_HEIGHT = 88;
+const TERMINAL_COLUMN_SPACING = 190;
+const TERMINAL_COLLISION_WIDTH = 176;
+const TERMINAL_COLLISION_HEIGHT = 128;
 
-const VERTICAL_WORLD = { width: 2300, height: 1540 } as const;
+const VERTICAL_WORLD = { width: 2500, height: 1750 } as const;
 const verticalStreamPosition = (index: number) => 205 + index * 270;
 
 const SPATIAL_LATTICE = {
   horizontal: {
     top: 104,
-    branchGap: 34,
+    branchGap: 52,
     repository: 150,
     goal: 510,
-    generationTwo: 900,
-    generationTwoColumnGap: 170,
-    generationThree: 1320,
-    terminalColumnGap: 164,
+    generationTwo: 920,
+    generationTwoColumnGap: 196,
+    generationThree: 1390,
+    terminalColumnGap: 190,
   },
   vertical: {
     left: 112,
-    branchGap: 54,
+    branchGap: 70,
     repository: 190,
     goal: 480,
-    generationTwo: 790,
-    generationThree: 1090,
-    terminalBandGap: 136,
+    generationTwo: 840,
+    generationThree: 1200,
+    terminalBandGap: 160,
   },
 } as const;
 
 type RepositoryFuturesLayoutMode = RepositoryFutureStageOverlay['mode'];
 
+export function repositoryFutureRenderedFootprint(
+  node: Pick<RepositoryFuturesCanvasNode, 'kind' | 'depth'>,
+  mode: RepositoryFuturesLayoutMode = 'quick',
+  disclosure: 'near' | 'title' | 'compact' | 'anchor' = 'near',
+): Pick<RepositoryFuturesNodeLayoutBox, 'width' | 'height' | 'clearance'> {
+  if (disclosure === 'anchor') return { width: 24, height: 24, clearance: 20 };
+  if (disclosure === 'compact') {
+    if (node.kind === 'dependency') return { width: 96, height: 30, clearance: 24 };
+    if (node.kind === 'artifact') return { width: 92, height: 30, clearance: 22 };
+    if (node.kind === 'capability') return { width: 104, height: 30, clearance: 24 };
+    if (node.depth === 3) return { width: 100, height: 30, clearance: 22 };
+    return { width: 116, height: 32, clearance: 24 };
+  }
+  const near = disclosure === 'near';
+  if (node.kind === 'repository') return { width: 184, height: near ? 104 : 94, clearance: 32 };
+  if (node.kind === 'goal') return { width: 192, height: near ? 128 : 114, clearance: 32 };
+  if (node.kind === 'dependency') return { width: 132, height: near ? 90 : 78, clearance: 28 };
+  if (node.kind === 'capability') return { width: 144, height: near ? mode === 'deep' ? 100 : 96 : 84, clearance: 28 };
+  if (node.kind === 'artifact') return { width: 132, height: near ? mode === 'deep' ? 92 : 88 : 76, clearance: 26 };
+  if (node.depth === 3) return { width: 144, height: near ? mode === 'deep' ? 98 : 92 : 80, clearance: mode === 'deep' ? 30 : 28 };
+  return { width: 160, height: near ? mode === 'deep' ? 110 : 104 : 90, clearance: mode === 'deep' ? 32 : 30 };
+}
+
 export function repositoryFuturesNodeFootprint(
   node: Pick<RepositoryFuturesCanvasNode, 'kind' | 'depth'>,
   mode: RepositoryFuturesLayoutMode = 'quick',
 ): Pick<RepositoryFuturesNodeLayoutBox, 'width' | 'height' | 'clearance'> {
-  if (node.kind === 'repository') return { width: 184, height: 88, clearance: 30 };
-  if (node.kind === 'goal') return { width: 192, height: 112, clearance: 28 };
-  if (node.kind === 'dependency') return { width: 104, height: 54, clearance: 24 };
-  if (node.kind === 'capability') return { width: 108, height: mode === 'deep' ? 72 : 60, clearance: 24 };
-  if (node.kind === 'artifact') return { width: 96, height: mode === 'deep' ? 66 : 48, clearance: 22 };
-  if (node.depth === 3) return { width: mode === 'deep' ? 132 : 112, height: mode === 'deep' ? 72 : 48, clearance: mode === 'deep' ? 24 : 20 };
-  return { width: 132, height: mode === 'deep' ? 82 : 60, clearance: mode === 'deep' ? 26 : 22 };
+  return repositoryFutureRenderedFootprint(node, mode, 'near');
 }
 
 function layoutRectangle(node: RepositoryFuturesCanvasNode): RepositoryFuturesLayoutRectangle {
@@ -374,6 +391,35 @@ function relaxRepositoryFuturesLayout(
   }
 }
 
+function packRemainingRepositoryFuturesCollisions(
+  nodes: RepositoryFuturesCanvasNode[],
+  orientation: RepositoryFuturesCanvasOrientation,
+) {
+  const fixed = nodes.filter(node => movementPriority(node) >= 100)
+    .sort((left, right) => orientation === 'horizontal'
+      ? left.y - right.y || left.id.localeCompare(right.id)
+      : left.x - right.x || left.id.localeCompare(right.id));
+  const movable = nodes.filter(node => movementPriority(node) < 100)
+    .sort((left, right) => orientation === 'horizontal'
+      ? left.y - right.y || left.x - right.x || left.id.localeCompare(right.id)
+      : left.x - right.x || left.y - right.y || left.id.localeCompare(right.id));
+  const placed = [...fixed];
+  movable.forEach(node => {
+    for (let attempt = 0; attempt <= placed.length; attempt += 1) {
+      const rectangle = layoutRectangle(node);
+      const collisions = placed.map(existing => layoutRectangle(existing))
+        .filter(existing => layoutRectanglesCollide(rectangle, existing));
+      if (!collisions.length) break;
+      if (orientation === 'horizontal') {
+        node.y = Math.max(...collisions.map(existing => existing.bottom + Math.max(existing.clearance, rectangle.clearance) + rectangle.height / 2));
+      } else {
+        node.x = Math.max(...collisions.map(existing => existing.right + Math.max(existing.clearance, rectangle.clearance) + rectangle.width / 2));
+      }
+    }
+    placed.push(node);
+  });
+}
+
 function placeHorizontalTerminal(
   node: RepositoryFuturesCanvasNode,
   parent: RepositoryFuturesCanvasNode,
@@ -382,8 +428,8 @@ function placeHorizontalTerminal(
   siblingIndex: number,
 ) {
   const baseX = Math.max(SPATIAL_LATTICE.horizontal.generationThree, parent.x + 360);
-  const yOffsets = [0, -38, 38, -76, 76, -114, 114];
-  const options = [0, 1, 2, 3].flatMap(column => yOffsets.map(offset => ({
+  const yOffsets = [0, -68, 68, -136, 136, -204, 204];
+  const options = yOffsets.flatMap(offset => [0, 1, 2, 3].map(column => ({
     x: baseX + column * SPATIAL_LATTICE.horizontal.terminalColumnGap,
     y: parent.y + offset + (siblingIndex % 2 ? 5 : -5),
     terminalColumn: column,
@@ -412,8 +458,8 @@ function layoutHorizontalBranches(
     const children = childNodes.get(goal.id) || [];
     const rowCount = Math.max(1, Math.ceil(children.length / 2));
     const deepestHeight = Math.max(0, ...children.map(child => repositoryFuturesNodeFootprint(child, mode).height));
-    const rowSpacing = Math.max(84, deepestHeight + (mode === 'deep' ? 28 : 22));
-    const contentHeight = Math.max(repositoryFuturesNodeFootprint(goal, mode).height, deepestHeight + (rowCount - 1) * rowSpacing + 50);
+    const rowSpacing = Math.max(112, deepestHeight + (mode === 'deep' ? 36 : 32));
+    const contentHeight = Math.max(repositoryFuturesNodeFootprint(goal, mode).height, deepestHeight + (rowCount - 1) * rowSpacing + 70);
     return { goal, children, rowCount, rowSpacing, contentHeight };
   });
   let cursor = SPATIAL_LATTICE.horizontal.top;
@@ -459,7 +505,7 @@ function layoutVerticalBranches(
   const metrics = goals.map(goal => {
     const children = childNodes.get(goal.id) || [];
     const childWidth = Math.max(132, ...children.map(child => repositoryFuturesNodeFootprint(child, mode).width));
-    const width = Math.max(270, children.length * (childWidth + 30) + 64);
+    const width = Math.max(310, children.length * (childWidth + 44) + 80);
     return { goal, children, width };
   });
   let cursor = SPATIAL_LATTICE.vertical.left;
@@ -472,7 +518,7 @@ function layoutVerticalBranches(
 
   const placed: RepositoryFuturesCanvasNode[] = [...goals];
   metrics.forEach(metric => {
-    const childSpacing = metric.children.length > 1 ? Math.min(182, (metric.width - 96) / metric.children.length) : 0;
+    const childSpacing = metric.children.length > 1 ? Math.min(220, (metric.width - 112) / metric.children.length) : 0;
     metric.children.forEach((child, index) => {
       const rank = index - (metric.children.length - 1) / 2;
       child.x = metric.goal.x + rank * childSpacing;
@@ -487,7 +533,7 @@ function layoutVerticalBranches(
       descendants.forEach((child, siblingIndex) => {
         const baseBand = parentIndex % 2;
         const requestedBand = Math.min(2, baseBand + Math.floor(siblingIndex / 2));
-        const xOffsets = descendants.length > 1 ? [-82, 82, -164, 164, 0] : [0, -82, 82];
+        const xOffsets = descendants.length > 1 ? [-96, 96, -192, 192, 0] : [0, -96, 96];
         const options = [requestedBand, (requestedBand + 1) % 3, (requestedBand + 2) % 3]
           .flatMap(band => xOffsets.map(offset => ({ x: parent.x + offset, band })));
         let placedOption = false;
@@ -567,6 +613,7 @@ function applyRepositoryFuturesSpatialLayout(
   layoutDependencies(nodes, orientation, mode);
   nodes.filter(node => !node.layoutBox).forEach(node => setNodeLayoutBox(node, mode));
   relaxRepositoryFuturesLayout(nodes, orientation);
+  packRemainingRepositoryFuturesCollisions(nodes, orientation);
   let boxes = nodes.map(layoutRectangle);
   if (orientation === 'vertical' && boxes.length) {
     const minimumLeft = Math.min(...boxes.map(box => box.left));

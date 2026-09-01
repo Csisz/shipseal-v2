@@ -44,8 +44,10 @@ describe('Omega 19.2 billing UI', () => {
     );
     expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('Repository Futures');
     expect(screen.getAllByText('Pro feature').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Upgrade to Pro' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Upgrade to Pro above' })).toBeDisabled();
+    const futureCard = screen.getByRole('button', { name: 'Upgrade to Pro' });
+    expect(futureCard).toBeEnabled();
+    expect(futureCard).toHaveAttribute('data-view-choice', 'futures');
+    expect(screen.getAllByRole('button', { name: 'Upgrade to Pro' })).toHaveLength(1);
   });
 
   it('asks an anonymous visitor to sign in instead of opening Checkout', () => {

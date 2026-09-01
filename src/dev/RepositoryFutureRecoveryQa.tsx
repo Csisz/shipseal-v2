@@ -33,9 +33,19 @@ const capacityStatus: RepositoryIntelligenceProviderStatus = {
   diagnostics: { costEstimate: 'unavailable', failureBoundary: 'provider-http' },
 };
 
+const startableStatus: RepositoryIntelligenceProviderStatus = {
+  state: 'deterministic',
+  message: 'Repository evidence is ready.',
+  retryable: false,
+};
+
 export default function RepositoryFutureRecoveryQa() {
-  const [status, setStatus] = useState<RepositoryIntelligenceProviderStatus>(() =>
-    new URLSearchParams(window.location.search).get('omega19State') === 'capacity' ? capacityStatus : failureStatus);
+  const [status, setStatus] = useState<RepositoryIntelligenceProviderStatus>(() => {
+    const requestedState = new URLSearchParams(window.location.search).get('omega19State');
+    if (requestedState === 'capacity') return capacityStatus;
+    if (requestedState === 'startable') return startableStatus;
+    return failureStatus;
+  });
   const [retryCount, setRetryCount] = useState(0);
   const isReady = status.state === 'enhanced';
 

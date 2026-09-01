@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowUpRight, GitFork, Orbit, Sparkles } from 'lucide-react';
 import type { ReadinessReport } from '@/lib/types';
 import {
@@ -6,10 +6,9 @@ import {
   type RepositoryFutureAvailability,
   type RepositoryIntelligenceProviderStatus,
 } from '@/lib/repositoryIntelligence';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { UpgradeToProButton } from '@/components/billing/BillingActionButton';
+import { useUpgradeToProAction } from '@/components/billing/useUpgradeToProAction';
 
 export type PostScanEntryView = 'universe' | 'futures';
 
@@ -33,6 +32,7 @@ export function PostScanViewSelector({
   onSelect: (view: PostScanEntryView) => void;
 }) {
   const rootRef = useRef<HTMLElement>(null);
+  const upgrade = useUpgradeToProAction();
   const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;
   const futuresRetrying = futuresStatus?.state === 'preparing';
   const supportReference = futuresStatus && 'diagnostics' in futuresStatus ? futuresStatus.diagnostics?.requestId : undefined;
@@ -48,6 +48,8 @@ export function PostScanViewSelector({
     ? futuresStatus.diagnostics?.operationRecoveryAction
     : undefined;
   const operationActive = futureAvailability === 'running';
+  const operationResumable = futureAvailability === 'resumable';
+  const temporarilyUnavailable = futureAvailability === 'temporarily-unavailable';
   const priorAnalysisReturned = recoveryAction === 'start_new_analysis'
     || (futuresStatus && 'diagnostics' in futuresStatus && futuresStatus.diagnostics?.operationCompletionState === 'refunded');
   const retryLabel = analysisStartable
@@ -59,17 +61,36 @@ export function PostScanViewSelector({
       || recoveryAction === 'integrity_recovery'
       ? 'Resume Future analysis'
       : 'Retry Future analysis';
+  const futureCardAction = futuresAvailable
+    ? 'Open Repository Futures'
+    : upgradeRequired
+      ? upgrade.label
+      : analysisStartable
+        ? 'Generate Future analysis'
+        : operationResumable
+          ? 'Resume Future analysis'
+          : operationActive
+            ? 'Future analysis in progress'
+            : temporarilyUnavailable && rateLimitWaiting
+              ? `Retry available in ${cooldownSeconds}s`
+              : temporarilyUnavailable && onRetryFutures
+                ? retryLabel
+                : 'Repository Futures unavailable';
+  const futureCardDisabled = operationActive
+    || temporarilyUnavailable && rateLimitWaiting
+    || !futuresAvailable && !upgradeRequired && !analysisStartable && !operationResumable && !(temporarilyUnavailable && onRetryFutures)
+    || upgrade.state === 'loading';
+  const activateFutureCard = () => {
+    if (futuresAvailable) { onSelect('futures'); return; }
+    if (upgradeRequired) { void upgrade.start(); return; }
+    if ((analysisStartable || operationResumable || temporarilyUnavailable) && onRetryFutures) onRetryFutures();
+  };
+  const showAttentionStatus = !futuresAvailable && !analysisStartable;
 
   useEffect(() => {
     rootRef.current?.focus({ preventScroll: true });
     rootRef.current?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
   }, []);
-
-  const activateFromKeyboard = (event: KeyboardEvent<HTMLButtonElement>, view: PostScanEntryView) => {
-    if (event.key !== 'Enter' && event.key !== ' ') return;
-    event.preventDefault();
-    onSelect(view);
-  };
 
   return (
     <section
@@ -90,27 +111,21 @@ export function PostScanViewSelector({
           <h1 id="post-scan-view-selector-heading" className="mt-2 font-display text-2xl font-semibold tracking-[-0.025em] sm:text-3xl md:text-4xl">
             Choose your first perspective
           </h1>
-          {persistenceControl && <div className="mx-auto mt-4 max-w-md">{persistenceControl}</div>}
+          {persistenceControl && <div className="mx-auto mt-3 max-w-md [&>div]:rounded-xl [&>div]:border-primary/10 [&>div]:bg-transparent [&>div]:p-0">{persistenceControl}</div>}
         </header>
 
-        {!futuresAvailable && (
+        {showAttentionStatus && (
           <aside className={cn(
             'mx-auto mb-5 flex w-full max-w-3xl flex-col items-start gap-3 rounded-2xl px-4 py-4 text-left sm:flex-row sm:items-center sm:justify-between',
-            analysisStartable
-              ? 'border border-primary/25 bg-primary/[0.06]'
-              : 'border border-amber-500/25 bg-amber-500/[0.06]',
+            upgradeRequired ? 'border border-primary/25 bg-primary/[0.06]' : 'border border-amber-500/25 bg-amber-500/[0.06]',
           )} role="status" data-testid="futures-degraded-status" data-future-availability={futureAvailability}>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="text-sm font-medium text-foreground">{upgradeRequired || analysisStartable ? 'Repository Futures' : 'Project Universe is ready'}</div>
-                {(upgradeRequired || analysisStartable) && <Badge variant="secondary">Pro AI analysis</Badge>}
+                <div className="text-sm font-medium text-foreground">{upgradeRequired ? 'Repository Futures' : 'Project Universe is ready'}</div>
+                {upgradeRequired && <Badge variant="secondary">Pro AI analysis</Badge>}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                {analysisStartable
-                  ? priorAnalysisReturned
-                    ? 'A previous incomplete analysis was returned to your allowance. You can generate a new Future analysis when you are ready. Uses 1 Deep Analysis when successfully completed.'
-                    : 'Project Universe is ready. Generate an evidence-backed Future Path when you choose. Uses 1 Deep Analysis when successfully completed.'
-                  : upgradeRequired
+                {upgradeRequired
                   ? 'Discover validated product directions, implementation pathways and executable plans. Project Universe and deterministic intelligence remain available on Free.'
                   : futuresRetrying
                   ? `${futuresStatus?.message || 'Future analysis is retrying in the background.'}${rateLimitWaiting ? ` Retrying in ${cooldownSeconds} seconds.` : ''} You can explore the repository now.`
@@ -123,13 +138,8 @@ export function PostScanViewSelector({
                   <div className="mt-1 font-mono">Reference: {supportReference}</div>
                 </details>
               )}
+              {upgrade.state === 'error' && <p role="alert" className="mt-2 text-xs text-destructive">{upgrade.message}</p>}
             </div>
-            {onRetryFutures && (
-              <Button type="button" size="sm" variant="outline" onClick={onRetryFutures} disabled={futuresRetrying || rateLimitWaiting || operationActive} className="shrink-0">
-                {futuresRetrying ? 'Resuming Future analysis…' : rateLimitWaiting ? `Retry available in ${cooldownSeconds}s` : operationActive ? 'Future analysis running' : retryLabel}
-              </Button>
-            )}
-            {upgradeRequired && <UpgradeToProButton size="sm" />}
           </aside>
         )}
 
@@ -143,23 +153,23 @@ export function PostScanViewSelector({
             action="Open Project Universe"
             metadata={[`${fileCount.toLocaleString()} repository entities`, 'Evidence-grounded map']}
             motif={<UniverseMotif />}
-            onSelect={onSelect}
-            onKeyDown={activateFromKeyboard}
+            onActivate={() => onSelect('universe')}
           />
           <ViewChoice
             view="futures"
             index="02"
             overline="Projected state"
             title="Repository Futures"
-            description={futuresAvailable ? 'Explore product directions, future pathways and what this project could become.' : analysisStartable ? 'Generate validated product directions, implementation pathways and an executable Future Path when you are ready.' : upgradeRequired ? 'Discover validated product directions, implementation pathways and executable plans with Pro.' : 'Validated Product Futures are unavailable until Future analysis completes successfully.'}
-            action={futuresAvailable ? 'Open Repository Futures' : analysisStartable ? 'Generate Future analysis above' : upgradeRequired ? 'Upgrade to Pro above' : futuresRetrying ? 'Future analysis in progress' : 'Repository Futures unavailable'}
+            description={futuresAvailable ? 'Explore product directions, future pathways and what this project could become.' : analysisStartable ? priorAnalysisReturned ? 'A previous incomplete analysis was returned to your allowance. Generate a fresh evidence-backed Future Path when you are ready.' : 'Generate validated product directions, implementation pathways and an executable Future Path when you are ready.' : upgradeRequired ? 'Discover validated product directions, implementation pathways and executable plans with Pro.' : operationResumable ? 'Continue the existing evidence-backed analysis from its last durable stage.' : 'Validated Product Futures are unavailable until Future analysis completes successfully.'}
+            action={futureCardAction}
             metadata={futuresAvailable
               ? [opportunityCount ? `${opportunityCount.toLocaleString()} product directions` : 'Evidence-led directions', 'Neural future pathways']
-              : analysisStartable ? ['Explicit start', 'Charged only on completion'] : upgradeRequired ? ['Pro feature', 'Evidence-backed AI'] : ['No incomplete Futures shown', futuresRetrying ? rateLimitWaiting ? 'Capacity cooldown' : 'Analysis retrying' : rateLimitWaiting ? 'Retry cooling down' : 'Retry available']}
+              : analysisStartable ? ['Explicit start', 'Completion-billed'] : upgradeRequired ? ['Pro feature', 'Evidence-backed AI'] : ['No incomplete Futures shown', futuresRetrying ? rateLimitWaiting ? 'Capacity cooldown' : 'Analysis running' : rateLimitWaiting ? 'Retry cooling down' : operationResumable ? 'Resume saved stages' : 'Unavailable']}
+            badge={!futuresAvailable && (analysisStartable || upgradeRequired || operationResumable) ? 'Pro AI analysis' : undefined}
+            footnote={analysisStartable ? 'Uses 1 Deep Analysis · charged only on completion' : operationResumable ? 'Resumes the existing analysis · no second reservation' : undefined}
             motif={<FuturesMotif />}
-            onSelect={onSelect}
-            onKeyDown={activateFromKeyboard}
-            disabled={!futuresAvailable}
+            onActivate={activateFutureCard}
+            disabled={futureCardDisabled}
           />
         </div>
       </div>
@@ -190,9 +200,10 @@ function ViewChoice({
   description,
   action,
   metadata,
+  badge,
+  footnote,
   motif,
-  onSelect,
-  onKeyDown,
+  onActivate,
   disabled = false,
 }: {
   view: PostScanEntryView;
@@ -202,9 +213,10 @@ function ViewChoice({
   description: string;
   action: string;
   metadata: readonly string[];
+  badge?: string;
+  footnote?: string;
   motif: ReactNode;
-  onSelect: (view: PostScanEntryView) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>, view: PostScanEntryView) => void;
+  onActivate: () => void;
   disabled?: boolean;
 }) {
   return (
@@ -212,11 +224,12 @@ function ViewChoice({
       type="button"
       aria-label={action}
       disabled={disabled}
-      onClick={() => onSelect(view)}
-      onKeyDown={event => onKeyDown(event, view)}
+      onClick={onActivate}
+      data-view-choice={view}
+      data-view-action={action}
       className={cn(
         'group relative flex min-h-[24rem] flex-col overflow-hidden rounded-[1.75rem] border border-primary/15 bg-[linear-gradient(145deg,hsl(var(--universe-surface)/0.72),hsl(var(--universe-stage-bg)/0.36))] p-6 text-left shadow-[0_24px_80px_hsl(var(--universe-stage-bg)/0.28)] transition-[border-color,background-color,box-shadow,transform] duration-200 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background motion-reduce:transition-none sm:p-8 lg:min-h-0 lg:rounded-none lg:border-y lg:first:rounded-l-[2rem] lg:last:rounded-r-[2rem] lg:last:border-l-0',
-        disabled ? 'cursor-not-allowed opacity-55' : 'hover:z-10 hover:border-primary/40 hover:shadow-[0_30px_100px_hsl(var(--primary)/0.12)] lg:hover:-translate-y-1',
+        disabled ? 'cursor-not-allowed opacity-70' : 'hover:z-10 hover:border-primary/40 hover:shadow-[0_30px_100px_hsl(var(--primary)/0.12)] lg:hover:-translate-y-1',
       )}
     >
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_46%,hsl(var(--primary)/0.09),transparent_36%)] opacity-60 transition-opacity duration-200 group-hover:opacity-100 group-focus-visible:opacity-100 motion-reduce:transition-none" />
@@ -230,11 +243,15 @@ function ViewChoice({
       </div>
 
       <div className="relative max-w-xl">
-        <h2 className="font-display text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">{title}</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-display text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">{title}</h2>
+          {badge && <Badge variant="secondary">{badge}</Badge>}
+        </div>
         <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">{description}</p>
         <span className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 text-sm font-medium text-foreground transition-colors group-hover:border-primary/55 group-hover:bg-primary/15 group-focus-visible:border-primary/55 motion-reduce:transition-none">
           {action}<ArrowUpRight className="h-4 w-4" aria-hidden="true" />
         </span>
+        {footnote && <span className="mt-3 block font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">{footnote}</span>}
       </div>
 
       <div className="relative mt-6 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border/45 pt-4 font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">

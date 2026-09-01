@@ -137,7 +137,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const broaderEdge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:alternative"]');
 
     expect(stage).toHaveAttribute('data-field-density', 'breathable-layered-neural');
-    expect(stage).toHaveAttribute('data-layout-strategy', 'stable-parent-local-branch-envelopes-with-bounded-relaxation');
+    expect(stage).toHaveAttribute('data-layout-strategy', 'stable-parent-local-branch-envelopes-with-maximum-readable-footprints');
     expect(stage).toHaveAttribute('data-stage-framing', 'immersive-full-stage');
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
     expect(container.querySelector('[data-field-layer="structured-rows"]')).toBeInTheDocument();
@@ -345,8 +345,32 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(screen.getByRole('button', { name: /Current repository: shipseal/i })).toHaveAttribute('data-label-detail', 'near');
     for (let index = 0; index < 7; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
     expect(stage).toHaveAttribute('data-camera-lod', 'near');
-    expect(alternative).toHaveAttribute('data-label-detail', 'near');
-    expect(alternative).toHaveTextContent('1 evidence signals');
+    expect(alternative).toHaveAttribute('data-label-detail', 'title');
+    expect(alternative).not.toHaveTextContent('1 evidence signals');
+  });
+
+  it('uses implementation zoom as a semantic lens instead of expanding every unrelated branch', () => {
+    render(<RepositoryFuturesNeuralCanvas repositoryName="cantu" overlay={overlay({
+      projections: [{
+        id: 'evolution:primary-next', goalId: 'goal:future', kind: 'evolution', title: 'Primary pathway group',
+        sourceId: 'goal:future', order: 0, humanReviewRequired: false, generation: 2,
+      }, {
+        id: 'evolution:alternate-next', goalId: 'goal:alternative', kind: 'evolution', title: 'Unrelated pathway group',
+        sourceId: 'goal:alternative', order: 1, humanReviewRequired: false, generation: 2,
+      }, {
+        id: 'evolution:alternate-later', goalId: 'goal:alternative', kind: 'evolution', title: 'Unrelated later possibility',
+        sourceId: 'evolution:alternate-next', order: 2, humanReviewRequired: false, generation: 3,
+      }],
+    })} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    for (let index = 0; index < 8; index += 1) fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
+
+    expect(stage).toHaveAttribute('data-semantic-zoom', 'implementation');
+    expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveAttribute('data-label-detail', 'near');
+    expect(screen.getByRole('button', { name: /Next product evolution: Primary pathway group/i })).toHaveAttribute('data-label-detail', 'near');
+    expect(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i })).toHaveAttribute('data-label-detail', 'title');
+    expect(screen.getByRole('button', { name: /Next product evolution: Unrelated pathway group/i })).toHaveAttribute('data-label-detail', 'compact');
+    expect(screen.getByRole('button', { name: /Later product possibility: Unrelated later possibility/i })).toHaveAttribute('data-label-detail', 'anchor');
   });
 
   it('keeps first-level Futures readable while progressively quieting selected deeper generations at overview', () => {
@@ -563,9 +587,11 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'vertical'));
     expect(Number(stage.getAttribute('data-camera-zoom'))).toBeCloseTo(0.72, 2);
     expect(stage).toHaveAttribute('data-mobile-disclosure', 'focused-pan-and-zoom');
+    expect(stage).toHaveClass('overflow-clip');
+    expect(stage).not.toHaveClass('overflow-hidden');
     expect(screen.queryByRole('button', { name: /Arrange/i })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveClass('min-h-[6.25rem]');
-    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '2300px', height: '1540px' });
+    expect(Number(screen.getByRole('button', { name: /Primary future goal/i }).getAttribute('data-rendered-height'))).toBeGreaterThanOrEqual(100);
+    expect(screen.getByTestId('repository-futures-camera')).toHaveStyle({ width: '2500px', height: '1750px' });
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
     expect(inspector).toHaveClass('inset-x-3');

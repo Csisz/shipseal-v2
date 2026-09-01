@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildRepositoryFuturesCanvasModel,
+  repositoryFutureRenderedFootprint,
   repositoryFuturesEdgePath,
   repositoryFuturesLayoutBoxes,
   repositoryFuturesLayoutCollisions,
@@ -22,6 +23,7 @@ import {
   repositoryFuturesSemanticZoomLevel,
   repositoryFuturesSafeInsets,
   repositoryFuturesSafeViewport,
+  revealRepositoryFuturesBounds,
   revealRepositoryFuturesTarget,
   wheelRepositoryFuturesCamera,
   zoomRepositoryFuturesCamera,
@@ -186,14 +188,14 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(goals).toHaveLength(6);
     expect(new Set(goals.map(node => node.x))).toEqual(new Set([510]));
     expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThanOrEqual(2);
-    expect(gaps.every(gap => gap === 146)).toBe(true);
+    expect(gaps.every(gap => gap === 180)).toBe(true);
     expect(repository.x).toBeLessThan(goals[0].x);
     expect(repository.y).toBe((goals[0].y + goals.at(-1)!.y) / 2);
     expect(enabler.x).toBeGreaterThan(goals[0].x);
     expect(enabler.y).toBeGreaterThanOrEqual(goals[0].y);
     expect(enabler.y).toBeLessThanOrEqual(goals.at(-1)!.y);
     expect('prerequisiteBand' in model).toBe(false);
-    expect(model.progressionBands.slice(0, 4).map(band => band.position)).toEqual([150, 510, 900, 1290]);
+    expect(model.progressionBands.slice(0, 4).map(band => band.position)).toEqual([150, 510, 920, 1390]);
   });
 
   it('separates repository-improvement streams by semantic family without changing canonical depth', () => {
@@ -538,6 +540,7 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(model.edges.filter(edge => edge.kind === 'expansion')).toHaveLength(3);
     expect(model.nodes.find(node => node.id === goal.goalId)!.x).toBeLessThan(capability.x);
     expect(capability.x).toBeLessThan(artifact.x);
+    expect(repositoryFuturesLayoutCollisions(model)).toEqual([]);
   });
 
   it('reorients the same deterministic topology top-to-bottom for the mobile world', () => {
@@ -636,6 +639,22 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
     expect(new Set(deep.nodes.map(node => node.id))).toEqual(new Set(quick.nodes.map(node => node.id)));
     expect(new Set(deep.edges.map(edge => edge.id))).toEqual(new Set(quick.edges.map(edge => edge.id)));
   });
+
+  it.each([
+    ['quick', 'horizontal'],
+    ['deep', 'horizontal'],
+    ['quick', 'vertical'],
+    ['deep', 'vertical'],
+  ] as const)('reserves the maximum readable %s footprint in %s layout without collisions', (mode, orientation) => {
+    const input = denseSpatialInput(7, 4, 3);
+    const model = buildRepositoryFuturesCanvasModel('cantu', { ...input, mode }, orientation);
+
+    expect(repositoryFuturesLayoutCollisions(model)).toEqual([]);
+    model.nodes.forEach(node => {
+      const expected = repositoryFutureRenderedFootprint(node, mode, 'near');
+      expect(node.layoutBox).toMatchObject(expected);
+    });
+  });
 });
 
 describe('Omega 18.5-V7.2 repository futures camera', () => {
@@ -720,6 +739,27 @@ describe('Omega 18.5-V7.2 repository futures camera', () => {
     expect(bounds.maxX * camera.zoom + camera.x).toBeLessThanOrEqual(safe.right - 39);
     expect(bounds.minY * camera.zoom + camera.y).toBeGreaterThanOrEqual(safe.top + 39);
     expect(bounds.maxY * camera.zoom + camera.y).toBeLessThanOrEqual(safe.bottom - 39);
+  });
+
+  it('fits a pinned readable neighborhood inside the inspector-safe viewport without exceeding the current zoom', () => {
+    const viewport = { width: 1440, height: 900 };
+    const insets = repositoryFuturesSafeInsets(viewport, { width: 320, height: 620 });
+    const safe = repositoryFuturesSafeViewport(viewport, insets);
+    const bounds = { minX: 400, minY: 180, maxX: 1190, maxY: 690 };
+    const camera = revealRepositoryFuturesBounds(
+      { x: -250, y: 20, zoom: 1.45 },
+      viewport,
+      bounds,
+      insets,
+      32,
+    );
+
+    expect(camera.zoom).toBeLessThanOrEqual(1.45);
+    expect(camera.zoom).toBeGreaterThanOrEqual(FUTURES_CAMERA_LIMITS.minimum);
+    expect(bounds.minX * camera.zoom + camera.x).toBeGreaterThanOrEqual(safe.left + 31);
+    expect(bounds.maxX * camera.zoom + camera.x).toBeLessThanOrEqual(safe.right - 31);
+    expect(bounds.minY * camera.zoom + camera.y).toBeGreaterThanOrEqual(safe.top + 31);
+    expect(bounds.maxY * camera.zoom + camera.y).toBeLessThanOrEqual(safe.bottom - 31);
   });
 
   it('returns exactly the root, selected goals, and their automatic dependencies for plan framing', () => {

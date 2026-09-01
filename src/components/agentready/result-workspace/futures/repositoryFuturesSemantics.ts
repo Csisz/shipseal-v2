@@ -118,15 +118,22 @@ export function repositoryFuturesSemanticLabelDetail(input: {
   if (input.kind === 'repository') return 'near';
   const directlyFocused = Boolean(input.hovered || input.searched || input.focused);
   const forced = Boolean(input.selected || input.traced || directlyFocused);
-  if (input.depth === 1) return input.zoom === 'implementation' || input.zoom === 'detail' ? 'near' : 'title';
+  if (input.depth === 1) {
+    if (forced && (input.zoom === 'implementation' || input.zoom === 'detail')) return 'near';
+    return 'title';
+  }
   if (directlyFocused) return input.zoom === 'implementation' ? 'near' : 'title';
   if (forced) {
     if (input.zoom === 'implementation') return 'near';
     if (input.zoom === 'detail' || input.zoom === 'path') return 'title';
     return 'compact';
   }
-  if (input.zoom === 'implementation') return input.mode === 'deep' ? 'near' : input.depth === 3 ? 'title' : 'near';
-  if (input.zoom === 'detail') return input.mode === 'deep' ? input.depth === 3 ? 'title' : 'near' : input.depth === 3 ? 'compact' : 'title';
+  if (input.zoom === 'implementation') return input.mode === 'deep'
+    ? input.depth === 3 ? 'compact' : 'title'
+    : input.depth === 3 ? 'anchor' : 'compact';
+  if (input.zoom === 'detail') return input.mode === 'deep'
+    ? input.depth === 3 ? 'compact' : 'title'
+    : input.depth === 3 ? 'anchor' : 'compact';
   if (input.zoom === 'path') return input.mode === 'deep' ? input.depth === 3 ? 'compact' : 'title' : input.depth === 3 ? 'anchor' : 'compact';
   if (input.mode === 'deep') return 'compact';
   return input.depth === 3 ? 'anchor' : 'compact';

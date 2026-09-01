@@ -99,17 +99,19 @@ describe('premium post-scan view selector', () => {
     expect(screen.queryByTestId('universe-experience')).not.toBeInTheDocument();
   });
 
-  it('supports explicit keyboard activation for both choices', async () => {
+  it('uses native keyboard-activatable buttons for both choices', async () => {
     renderWorkspace();
     const universe = screen.getByRole('button', { name: 'Open Project Universe' });
+    expect(universe.tagName).toBe('BUTTON');
     universe.focus();
-    fireEvent.keyDown(universe, { key: 'Enter' });
+    fireEvent.click(universe);
     expect(screen.getByTestId('universe-experience')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Change view/i }));
     const futures = screen.getByRole('button', { name: 'Open Repository Futures' });
+    expect(futures.tagName).toBe('BUTTON');
     futures.focus();
-    fireEvent.keyDown(futures, { key: ' ' });
+    fireEvent.click(futures);
     expect(await screen.findByTestId('futures-experience')).toBeInTheDocument();
   });
 
@@ -139,7 +141,7 @@ describe('premium post-scan view selector', () => {
 
     expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('Project Universe is ready');
     expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Repository Futures unavailable' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Resume Future analysis' })).toBeEnabled();
     expect(screen.queryByTestId('futures-experience')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Resume Future analysis' }));
     expect(retry).toHaveBeenCalledTimes(1);
@@ -185,7 +187,8 @@ describe('premium post-scan view selector', () => {
     />);
 
     expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
-    expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('Uses 1 Deep Analysis when successfully completed');
+    expect(screen.queryByTestId('futures-degraded-status')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Generate Future analysis' })).toHaveTextContent('Uses 1 Deep Analysis · charged only on completion');
     fireEvent.click(screen.getByRole('button', { name: 'Generate Future analysis' }));
     expect(start).toHaveBeenCalledTimes(1);
   });
@@ -262,15 +265,15 @@ describe('premium post-scan view selector', () => {
       retryRepositoryProductIntelligence={start}
     />);
 
-    const state = screen.getByTestId('futures-degraded-status');
-    expect(state).toHaveAttribute('data-future-availability', 'startable');
-    expect(state).toHaveTextContent('A previous incomplete analysis was returned to your allowance');
-    expect(state).toHaveTextContent('Uses 1 Deep Analysis when successfully completed');
-    expect(state).not.toHaveTextContent('cannot be resumed safely');
-    expect(state).not.toHaveTextContent('repository changes');
+    expect(screen.queryByTestId('futures-degraded-status')).not.toBeInTheDocument();
+    const futureCard = screen.getByRole('button', { name: 'Generate Future analysis' });
+    expect(futureCard).toHaveTextContent('A previous incomplete analysis was returned to your allowance');
+    expect(futureCard).toHaveTextContent('Uses 1 Deep Analysis · charged only on completion');
+    expect(futureCard).not.toHaveTextContent('cannot be resumed safely');
+    expect(futureCard).not.toHaveTextContent('repository changes');
     expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Generate Future analysis above' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: 'Generate Future analysis' }));
+    expect(futureCard).toBeEnabled();
+    fireEvent.click(futureCard);
     expect(start).toHaveBeenCalledTimes(1);
   });
 

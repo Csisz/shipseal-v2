@@ -222,6 +222,29 @@ export function revealRepositoryFuturesTarget(
   return { x, y, zoom: camera.zoom };
 }
 
+export function revealRepositoryFuturesBounds(
+  camera: RepositoryFuturesCamera,
+  viewport: RepositoryFuturesViewport,
+  bounds: RepositoryFuturesWorldBounds,
+  insets: RepositoryFuturesCameraInsets = EMPTY_INSETS,
+  padding = 28,
+): RepositoryFuturesCamera {
+  const safe = repositoryFuturesSafeViewport(viewport, insets);
+  const width = bounds.maxX - bounds.minX;
+  const height = bounds.maxY - bounds.minY;
+  const projectedWidth = width * camera.zoom;
+  const projectedHeight = height * camera.zoom;
+  if (projectedWidth > safe.width - padding * 2 || projectedHeight > safe.height - padding * 2) {
+    return fitRepositoryFuturesBoundsCamera(viewport, bounds, insets, padding, camera.zoom);
+  }
+  return revealRepositoryFuturesTarget(camera, safe, {
+    x: (bounds.minX + bounds.maxX) / 2,
+    y: (bounds.minY + bounds.maxY) / 2,
+    width,
+    height,
+  }, padding);
+}
+
 /**
  * Compatibility wrapper for point focus. Unlike the previous fly-to policy,
  * it only reveals an obscured point and never changes zoom.

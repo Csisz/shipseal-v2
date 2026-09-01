@@ -66,15 +66,18 @@ describe('Omega 20.2 Repository Futures semantics', () => {
     expect(repositoryFuturesSemanticZoomLevel(1.3)).toBe('implementation');
   });
 
-  it('keeps strategy focused on G1 and progressively reveals G2 and G3', () => {
+  it('keeps strategy focused on G1 and reveals close detail through active context rather than global expansion', () => {
     const detail = (depth: 1 | 2 | 3, zoom: 'strategy' | 'path' | 'detail' | 'implementation', mode: 'quick' | 'deep' = 'quick') => (
       repositoryFuturesSemanticLabelDetail({ kind: 'evolution', depth, zoom, mode })
     );
     expect(repositoryFuturesSemanticLabelDetail({ kind: 'goal', depth: 1, zoom: 'strategy', mode: 'quick' })).toBe('title');
     expect(detail(2, 'strategy')).toBe('compact');
     expect(detail(3, 'strategy')).toBe('anchor');
-    expect(detail(2, 'detail')).toBe('title');
-    expect(detail(3, 'implementation')).toBe('title');
+    expect(detail(2, 'detail')).toBe('compact');
+    expect(detail(3, 'implementation')).toBe('anchor');
+    expect(repositoryFuturesSemanticLabelDetail({ kind: 'evolution', depth: 2, zoom: 'detail', mode: 'quick', traced: true })).toBe('title');
+    expect(repositoryFuturesSemanticLabelDetail({ kind: 'evolution', depth: 3, zoom: 'implementation', mode: 'quick', focused: true })).toBe('near');
+    expect(repositoryFuturesSemanticLabelDetail({ kind: 'evolution', depth: 2, zoom: 'implementation', mode: 'deep' })).toBe('title');
   });
 
   it('keeps Quick calmer than Deep while Deep still respects strategy LOD', () => {
