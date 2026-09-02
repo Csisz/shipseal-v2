@@ -2,7 +2,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, use
 import type React from 'react';
 import type { ReactNode } from 'react';
 import { useTheme } from 'next-themes';
-import { AlertOctagon, ArrowLeft, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, HelpCircle, Layers, Lightbulb, Maximize2, Minimize2, MoreHorizontal, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { AlertOctagon, ArrowLeft, ArrowRight, Check, CheckCircle2, Copy, Crosshair, Download, FileArchive, HelpCircle, Layers, Lightbulb, Maximize2, Minimize2, MoreHorizontal, PanelRightClose, PanelRightOpen, RefreshCw, Search, ShieldCheck, Sparkles, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import type { AgentOperatingModeId, AgentPackFile, MCPRiskSeverity, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { evaluateReadiness } from '@/lib/scoring';
 import { ScoreGauge } from '@/components/agentready/ScoreGauge';
@@ -102,6 +102,7 @@ import { buildVerifyPresentation } from '@/components/agentready/result-dashboar
 import { VerificationJourney } from '@/components/agentready/result-dashboard/VerificationJourney';
 import { selectRepositoryFrictions } from '@/components/agentready/result-dashboard/repositoryFrictions';
 import type { ResultChapterId } from '@/components/agentready/result-dashboard/types';
+import { resolveUniverseFastPathAction, type UniverseFastPathAction } from '../fastPathPresentation';
 import {
   Row,
   SummaryTile,
@@ -506,6 +507,11 @@ function RepositoryAtlasVisualization({
     ? futureImpactMode === 'selected-path' ? 'with-shipseal' : 'current'
     : transformationMode === 'after-rescan' ? 'current' : transformationMode;
   const selectedProposal = selectedProposalId ? renderedTransformation.proposals.find(proposal => proposal.id === selectedProposalId) || null : null;
+  const selectedFastPathNodeId = viewMode === 'atlas2d' ? selectedNode?.id : selectedUniverseNode?.id;
+  const selectedFastPathAction = useMemo(
+    () => resolveUniverseFastPathAction(selectedFastPathNodeId, transformation.proposals),
+    [selectedFastPathNodeId, transformation.proposals],
+  );
   useEffect(() => {
     if (futureStageOverlay && !futureStageOverlay.universeProjection && futureImpactMode === 'selected-path') setFutureImpactMode('current');
   }, [futureImpactMode, futureStageOverlay]);
@@ -834,7 +840,7 @@ function RepositoryAtlasVisualization({
     setInspectorDismissed(false);
     setMobileInspectorExpanded(false);
     setRepositoryProfileOpen(node.id === atlas.rootNodeId || node.kind === 'repository');
-    setInspectorTab(node.evidenceItems.length ? 'evidence' : 'overview');
+    setInspectorTab('overview');
     const matchingUniverseNode = node.path
       ? universe.nodes.find(item => item.path === node.path)
       : universe.nodes.find(item => item.metadata.atlasNodeId === node.id);
@@ -861,7 +867,7 @@ function RepositoryAtlasVisualization({
     setInspectorDismissed(false);
     setMobileInspectorExpanded(false);
     setRepositoryProfileOpen(node.id === universe.rootNodeId || node.kind === 'repository');
-    setInspectorTab(node.evidenceItems.length ? 'evidence' : 'overview');
+    setInspectorTab('overview');
     if (node.clusterId) setFocusedClusterId(node.clusterId);
     if (node.metadata.atlasNodeId) setSelectedNodeId(node.metadata.atlasNodeId);
     focusUniverseNode(node);
@@ -948,6 +954,28 @@ function RepositoryAtlasVisualization({
     setAgentFlightPath(next);
     setAgentFlightPathCopied(false);
   }, [agentFlightPathTask, atlas, report, universe]);
+
+  const openFastPathAgentTask = useCallback((action: UniverseFastPathAction) => {
+    const next = buildRepositoryAgentFlightPath({
+      task: action.agentTask,
+      report,
+      universe,
+      atlas,
+    });
+    setAgentFlightPathTask(action.agentTask);
+    setAgentFlightPath(next);
+    setAgentFlightPathCopied(false);
+    setFlightPathOpen(true);
+    window.requestAnimationFrame(() => {
+      const panel = document.querySelector<HTMLElement>('[data-testid="agent-flight-path-panel"]');
+      if (typeof panel?.scrollIntoView === 'function') {
+        panel.scrollIntoView({
+          behavior: prefersReducedMotion ? 'auto' : 'smooth',
+          block: 'start',
+        });
+      }
+    });
+  }, [atlas, prefersReducedMotion, report, universe]);
 
   const copyAgentFlightPathPrompt = useCallback(async () => {
     if (!agentFlightPath?.prompt) return;
@@ -1815,9 +1843,11 @@ function RepositoryAtlasVisualization({
           }}
           rootNodeId={universe.rootNodeId}
           activeTab={inspectorTab}
+          fastPathAction={selectedFastPathAction}
           collapsed={fullscreen && inspectorCollapsed}
           onToggleCollapsed={() => setInspectorCollapsed(current => !current)}
           onTabChange={setInspectorTab}
+          onFix={openFastPathAgentTask}
           onClose={() => {
             setInspectorDismissed(true);
             setMobileInspectorExpanded(false);
@@ -2184,7 +2214,7 @@ function AgentFlightPathPanel({
   const defaultJourney = buildAgentSimulatorPlan(report);
 
   return (
-    <section className="rounded-[1.35rem] border border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.08),hsl(var(--background)/0.24)_42%,hsl(var(--accent)/0.06))] p-4 shadow-sm shadow-primary/10" aria-label="Agent Journey">
+    <section data-testid="agent-flight-path-panel" className="scroll-mt-20 rounded-[1.35rem] border border-primary/20 bg-[linear-gradient(135deg,hsl(var(--primary)/0.08),hsl(var(--background)/0.24)_42%,hsl(var(--accent)/0.06))] p-4 shadow-sm shadow-primary/10" aria-label="Agent Journey">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-2xl">
           <div className="text-xs font-mono uppercase tracking-wider text-primary-glow/80">Agent Journey</div>
@@ -3571,9 +3601,11 @@ function UniverseInspector({
   scanSummary,
   rootNodeId,
   activeTab,
+  fastPathAction,
   collapsed = false,
   onToggleCollapsed,
   onTabChange,
+  onFix,
   onClose,
   onFocusNode,
   onFocusCluster,
@@ -3598,9 +3630,11 @@ function UniverseInspector({
   };
   rootNodeId: string;
   activeTab: ContextualInspectorTab;
+  fastPathAction: UniverseFastPathAction | null;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   onTabChange: (tab: ContextualInspectorTab) => void;
+  onFix: (action: UniverseFastPathAction) => void;
   onClose: () => void;
   onFocusNode: () => void;
   onFocusCluster: () => void;
@@ -3660,6 +3694,19 @@ function UniverseInspector({
         {onToggleCollapsed && <Button type="button" variant="ghost" size="sm" onClick={onToggleCollapsed} aria-label="Collapse inspector"><PanelRightClose className="h-3.5 w-3.5" /></Button>}
         <Button type="button" variant="ghost" size="sm" onClick={onClose} aria-label="Close inspector">Close</Button>
       </header>
+
+      {fastPathAction && !isRepository && (
+        <section className="mt-4 rounded-2xl border border-primary/25 bg-primary/[0.065] p-3" aria-label="Recommended next action" data-fast-path-action="fix-this">
+          <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-primary">What should I do?</p>
+          <h4 className="mt-1 text-sm font-semibold text-foreground">{fastPathAction.title}</h4>
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{fastPathAction.summary}</p>
+          <div className="mt-2 text-[11px] text-muted-foreground">{fastPathAction.affectedEntityCount} connected repository {fastPathAction.affectedEntityCount === 1 ? 'entity' : 'entities'}</div>
+          <Button type="button" className="mt-3 min-h-11 w-full" onClick={() => onFix(fastPathAction)}>
+            Fix this
+            <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+          </Button>
+        </section>
+      )}
 
       <div className="mt-4 flex gap-1 overflow-x-auto pb-1" role="tablist" aria-label="Contextual repository details">
         {availableTabs.map(tab => (

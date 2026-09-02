@@ -37,6 +37,7 @@ import {
 import { AiWorkspaceHero } from './result-workspace/universe/UniverseWorkspace';
 import { RepositoryFormation } from './RepositoryFormation';
 import { PanelsTopLeft } from 'lucide-react';
+import type { RepositoryFuturesEntryMotion } from './result-workspace/futures/repositoryFuturesMotion';
 const RepositoryFuturesWorkspace = lazy(() => import('./result-workspace/futures/RepositoryFuturesWorkspace'));
 const ImproveChapter = lazy(() => import('./result-dashboard/chapters/ImproveChapter'));
 const VerifyChapter = lazy(() => import('./result-dashboard/chapters/VerifyChapter'));
@@ -136,6 +137,7 @@ export function ResultWorkspace({
   const [workspaceReportIdentity, setWorkspaceReportIdentity] = useState(reportIdentity);
   const [futureDegradedAccess, setFutureDegradedAccess] = useState(false);
   const [futureEntryIntent, setFutureEntryIntent] = useState<FutureEntryIntent | null>(null);
+  const [futureEntryMotion, setFutureEntryMotion] = useState<RepositoryFuturesEntryMotion>('cached-result');
   const billingFutureFocusConsumed = useRef(false);
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
@@ -165,6 +167,7 @@ export function ResultWorkspace({
     setPrCreated(false);
     setFutureDegradedAccess(false);
     setFutureEntryIntent(null);
+    setFutureEntryMotion('cached-result');
   }, [initialIntake, intakeSkipped, reportIdentity, workspaceReportIdentity]);
 
   useEffect(() => {
@@ -202,7 +205,8 @@ export function ResultWorkspace({
     handleResultChapterChange('understand');
   };
   const handleEntryViewSelect = useCallback((view: PostScanEntryView) => {
-    setEntryView(view);
+    if (view === 'futures') setFutureEntryMotion('cached-result');
+    runRepositoryPerspectiveTransition(() => setEntryView(view));
     if (view === 'universe') {
       setUniverseRequested(true);
       setPendingDashboardFocus('repository-universe');
@@ -264,8 +268,9 @@ export function ResultWorkspace({
 
   useEffect(() => {
     if (!futureEntryIntent || !futuresReady) return;
+    setFutureEntryMotion('new-result');
     setFutureEntryIntent(null);
-    setEntryView('futures');
+    runRepositoryPerspectiveTransition(() => setEntryView('futures'));
     setPendingDashboardFocus(null);
     handleResultChapterChange('improve');
   }, [futureEntryIntent, futuresReady, handleResultChapterChange]);
@@ -275,7 +280,8 @@ export function ResultWorkspace({
     const params = new URLSearchParams(window.location.search);
     if (params.get('open') !== 'futures') return;
     billingFutureFocusConsumed.current = true;
-    setEntryView('futures');
+    setFutureEntryMotion('cached-result');
+    runRepositoryPerspectiveTransition(() => setEntryView('futures'));
     setPendingDashboardFocus(null);
     handleResultChapterChange('improve');
   }, [futuresReady, handleResultChapterChange]);
@@ -322,17 +328,18 @@ export function ResultWorkspace({
 
   if (effectiveEntryView === 'futures' && repositoryUniverse) {
     return (
-      <section data-view-transition="selector-to-futures" data-experience-shell="futures" className="w-full bg-workspace futures-surface-enter motion-reduce:animate-none">
+      <section data-view-transition="selector-to-futures" data-experience-shell="futures" data-motion-event={futureEntryMotion === 'new-result' ? 'future-enter-new' : 'future-enter-cached'} className="repository-perspective-surface w-full bg-workspace futures-surface-enter motion-reduce:animate-none">
         <div className="dashboard-print-warning">
           For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
         </div>
-        <ChangeViewControl currentView="Repository Futures" onChange={() => setEntryView(null)} />
+        <ChangeViewControl currentView="Repository Futures" repositoryName={report.repoName} onChange={() => runRepositoryPerspectiveTransition(() => setEntryView(null))} />
         <Suspense fallback={<ResultChapterLoading chapterLabel="Repository Futures" />}>
           <RepositoryFuturesWorkspace
             report={report}
             repositoryModel={repositoryUniverse}
             productIntelligence={repositoryProductIntelligence}
             productIntelligenceStatus={repositoryProductIntelligenceStatus}
+            entryMotion={futureEntryMotion}
             secondaryOpen={pendingDashboardFocus === 'repository-intelligence'}
             secondaryContent={(
               <div className="space-y-6">
@@ -368,12 +375,12 @@ export function ResultWorkspace({
   }
 
   return (
-    <section data-experience-shell="universe" className="container max-w-[1480px] py-4 md:py-5 animate-fade-in-up">
+    <section data-experience-shell="universe" data-motion-event="universe-enter" className="repository-perspective-surface container max-w-[1480px] py-4 md:py-5 animate-fade-in-up">
       <div className="dashboard-print-warning">
         For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
       </div>
 
-      <ChangeViewControl currentView="Project Universe" onChange={() => setEntryView(null)} />
+      <ChangeViewControl currentView="Project Universe" repositoryName={report.repoName} onChange={() => runRepositoryPerspectiveTransition(() => setEntryView(null))} />
 
       {(!['understand', 'improve'].includes(activeResultChapter) || repositoryHealth.overall.score === null || (activeResultChapter === 'understand' && !universeRequested)) && <PostScanOverview
         report={report}
@@ -517,6 +524,7 @@ export function ResultWorkspace({
             intakeSkipped={intakeSkipped}
             resolvedPackages={resolvedPackages}
             agentOperatingMode={agentOperatingMode}
+            onCreatePullRequest={handleReviewRepositoryIntelligence}
           />
         </Suspense>
       )}
@@ -525,7 +533,22 @@ export function ResultWorkspace({
   );
 }
 
-function ChangeViewControl({ currentView, onChange }: { currentView: 'Project Universe' | 'Repository Futures'; onChange: () => void }) {
+type ShipSealViewTransitionDocument = Document & {
+  startViewTransition?: (update: () => void) => { finished: Promise<void> };
+};
+
+function runRepositoryPerspectiveTransition(update: () => void) {
+  if (typeof document === 'undefined'
+    || typeof window === 'undefined'
+    || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    || !(document as ShipSealViewTransitionDocument).startViewTransition) {
+    update();
+    return;
+  }
+  (document as ShipSealViewTransitionDocument).startViewTransition?.(update);
+}
+
+function ChangeViewControl({ currentView, repositoryName, onChange }: { currentView: 'Project Universe' | 'Repository Futures'; repositoryName: string; onChange: () => void }) {
   return (
     <div
       data-testid="experience-shell-utility"
@@ -533,8 +556,8 @@ function ChangeViewControl({ currentView, onChange }: { currentView: 'Project Un
       className="relative z-[var(--layer-toolbar)] w-full border-y border-primary/10 bg-[hsl(var(--surface-floating)/0.72)] backdrop-blur-xl"
     >
       <div className="mx-auto flex min-h-12 w-full max-w-[1920px] items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
-        <span className="truncate font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground sm:text-[10px]">
-          {currentView}
+        <span data-shared-repository-anchor className="truncate font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground sm:text-[10px]">
+          {currentView} <span aria-hidden="true">·</span> {repositoryName}
         </span>
         <button
           type="button"

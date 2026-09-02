@@ -8,6 +8,7 @@ import type {
 import type { RepositoryUniverseModel } from '@/lib/workspace';
 import { ResultWorkspaceDisclosure } from '../ResultWorkspaceDisclosure';
 import RepositoryFuturePathways from './RepositoryFuturePathways';
+import type { RepositoryFuturesEntryMotion } from './repositoryFuturesMotion';
 
 interface RepositoryFuturesWorkspaceProps {
   report: ReadinessReport;
@@ -16,6 +17,7 @@ interface RepositoryFuturesWorkspaceProps {
   productIntelligenceStatus?: RepositoryIntelligenceProviderStatus;
   secondaryContent?: ReactNode;
   secondaryOpen?: boolean;
+  entryMotion?: RepositoryFuturesEntryMotion;
 }
 
 /**
@@ -29,12 +31,14 @@ export default function RepositoryFuturesWorkspace({
   productIntelligenceStatus,
   secondaryContent,
   secondaryOpen = false,
+  entryMotion = 'cached-result',
 }: RepositoryFuturesWorkspaceProps) {
   return (
     <section
       aria-labelledby="repository-futures-heading"
       data-testid="repository-futures-workspace"
       data-futures-environment="full-stage"
+      data-motion-event={entryMotion === 'new-result' ? 'future-enter-new' : 'future-enter-cached'}
       className="relative min-h-[calc(100dvh-3rem)] w-full overflow-x-clip bg-workspace pb-10"
     >
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_72%_8%,hsl(var(--primary)/0.1),transparent_34%),radial-gradient(circle_at_18%_18%,hsl(var(--accent)/0.055),transparent_32%),linear-gradient(180deg,hsl(var(--workspace)/0.34),transparent_46%)]" />
@@ -59,6 +63,7 @@ export default function RepositoryFuturesWorkspace({
             universe={repositoryModel}
             productIntelligence={productIntelligence}
             providerStatus={productIntelligenceStatus}
+            entryMotion={entryMotion}
           />
         </div>
 

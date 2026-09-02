@@ -111,7 +111,7 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
   it('makes the canvas primary, removes duplicate introduction, and keeps configuration secondary', async () => {
     const { container, overlay } = await renderPathways();
     expect(screen.queryByRole('heading', { name: 'Where should this product go next?' })).not.toBeInTheDocument();
-    expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-reveal-motion', 'topology-one-shot');
+    expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-reveal-motion', 'cached-result');
     const configure = screen.getByText('Configure path').closest('details');
     expect(configure).toHaveAttribute('data-secondary-surface', 'configure-path');
     expect(configure).not.toHaveAttribute('open');
@@ -320,18 +320,31 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
   it('keeps plan creation unavailable until a Primary exists, then opens one deterministic executable plan without a provider call', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await renderPathways();
-    expect(screen.getByRole('button', { name: 'Build this future' })).toBeDisabled();
-    expect(screen.getByText('Choose one Primary Future to create an implementation plan.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open plan' })).not.toBeInTheDocument();
+    expect(screen.getByText('Select a Future to see what building it takes.')).toBeInTheDocument();
 
     chooseFirstPrimary();
-    const buildButton = await screen.findByRole('button', { name: 'Build this future' });
+    const buildButton = await screen.findByRole('button', { name: 'Open plan' });
     expect(buildButton).toBeEnabled();
     fireEvent.click(buildButton);
 
     const plan = screen.getByTestId('executable-future-plan');
     expect(plan).toHaveAttribute('data-review-phase', 'draft');
-    expect(within(plan).getByRole('heading', { name: 'From foundation to verification' })).toBeInTheDocument();
-    expect(within(plan).getByRole('heading', { name: 'Agent handoff' })).toBeInTheDocument();
+    expect(within(plan).getByText('Ready to build')).toBeInTheDocument();
+    expect(within(plan).getByRole('button', { name: 'Prepare for agent' })).toBeInTheDocument();
+    expect(within(plan).getByText('Advanced plan').closest('details')).not.toHaveAttribute('open');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
+  it('turns an inspected candidate into the Primary and opens its plan through one Build action', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    await renderPathways();
+    fireEvent.click(screen.getAllByRole('button', { name: /Candidate future goal/i })[0]);
+    const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Build this future' }));
+
+    expect(screen.getByTestId('executable-future-plan')).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
@@ -347,8 +360,9 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await renderPathways();
     chooseFirstPrimary();
-    fireEvent.click(await screen.findByRole('button', { name: 'Build this future' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open plan' }));
 
+    fireEvent.click(screen.getByText('Advanced plan'));
     fireEvent.click(screen.getByRole('button', { name: 'Review plan' }));
     fireEvent.click(screen.getByRole('button', { name: 'Mark ready for agent' }));
     expect(screen.getByTestId('executable-future-plan')).toHaveAttribute('data-review-phase', 'ready');
@@ -384,18 +398,18 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await renderPathways();
     chooseFirstPrimary();
-    fireEvent.click(await screen.findByRole('button', { name: 'Build this future' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open plan' }));
     const firstFingerprint = screen.getByTestId('executable-future-plan').getAttribute('data-plan-fingerprint');
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Futures' }));
     fireEvent.click(screen.getByRole('button', { name: 'Deep Configuration' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Build this future' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open plan' }));
     expect(screen.getByTestId('executable-future-plan')).toHaveAttribute('data-plan-fingerprint', firstFingerprint);
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Futures' }));
     const replacement = screen.getAllByRole('button', { name: 'Make primary' })[0];
     fireEvent.click(replacement);
-    fireEvent.click(screen.getByRole('button', { name: 'Build this future' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open plan' }));
     expect(screen.getByTestId('executable-future-plan').getAttribute('data-plan-fingerprint')).not.toBe(firstFingerprint);
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
@@ -404,9 +418,10 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
   it('uses a single-column-safe document surface and disables convergence motion under reduced-motion preferences', async () => {
     await renderPathways();
     chooseFirstPrimary();
-    fireEvent.click(await screen.findByRole('button', { name: 'Build this future' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open plan' }));
     const plan = screen.getByTestId('executable-future-plan');
     expect(plan).toHaveClass('overflow-hidden', 'motion-reduce:animate-none');
+    fireEvent.click(within(plan).getByText('Advanced plan'));
     expect(within(plan).getByRole('button', { name: 'Download plan' })).toHaveClass('w-full');
     expect(plan.querySelectorAll('[data-plan-stage-kind]').length).toBeGreaterThanOrEqual(3);
   });

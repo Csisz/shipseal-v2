@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { repositoryUniverseLabelPriority, repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseProposalDisplayLabel, repositoryUniverseProposalLabelVisible, repositoryUniverseRevealStartCamera, repositoryUniverseWheelCameraState } from '@/components/agentready/RepositoryUniverse3D';
+import { REPOSITORY_UNIVERSE_REVEAL_MS, repositoryUniverseRevealLayer, repositoryUniverseRevealProgress } from '@/components/agentready/result-workspace/universe/repositoryUniverseMotion';
 import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseFocusCameraState, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryUniverseNode } from '@/lib/workspace';
 
@@ -130,6 +131,21 @@ describe('Repository Universe 3D labels', () => {
     expect(revealStart.target).toEqual(camera.target);
     expect(revealStart.theta).not.toBe(camera.theta);
     expect(repositoryUniverseRevealStartCamera(camera, false)).toEqual(camera);
+  });
+
+  it('reveals repository, landmarks, relationships, then background context inside the fast motion budget', () => {
+    const root = node({ id: 'repo:test', kind: 'repository', importance: 'primary' });
+    const landmark = node({ id: 'folder:src', kind: 'folder', importance: 'primary' });
+    const background = node({ id: 'file:quiet', kind: 'file', importance: 'background' });
+
+    expect(REPOSITORY_UNIVERSE_REVEAL_MS).toBeLessThanOrEqual(550);
+    expect(repositoryUniverseRevealLayer(root, root.id)).toBe('repository');
+    expect(repositoryUniverseRevealLayer(landmark, root.id)).toBe('landmarks');
+    expect(repositoryUniverseRevealLayer(background, root.id)).toBe('context');
+    expect(repositoryUniverseRevealProgress(100, 'repository')).toBeGreaterThan(repositoryUniverseRevealProgress(100, 'landmarks'));
+    expect(repositoryUniverseRevealProgress(190, 'landmarks')).toBeGreaterThan(repositoryUniverseRevealProgress(190, 'relationships'));
+    expect(repositoryUniverseRevealProgress(REPOSITORY_UNIVERSE_REVEAL_MS, 'context')).toBe(1);
+    expect(repositoryUniverseRevealProgress(0, 'context', false)).toBe(1);
   });
 
   it('targets selected nodes without changing orientation and preserves that target for zoom', () => {

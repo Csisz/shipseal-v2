@@ -90,6 +90,7 @@ export interface RepositoryFutureStageOverlay {
   notice?: string;
   onModeChange: (mode: RepositoryFuturePathwaysMode) => void;
   onCandidateFocus: (goalId: string) => void;
+  onCandidateBuild?: (goalId: string) => void;
   onCandidateSelect: (goalId: string) => void;
   onCandidateAddSupport: (goalId: string) => void;
   onCandidateRemoveSupport: (goalId: string) => void;

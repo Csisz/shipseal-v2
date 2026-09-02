@@ -134,7 +134,7 @@ vi.mock('@/lib/github/write', async () => {
 import { ResultDashboard } from '@/components/agentready/ResultDashboard';
 
 function switchToAtlas2D() {
-  const atlasButton = screen.getByRole('button', { name: /Atlas 2D/i });
+  const atlasButton = screen.getByRole('button', { name: /^Atlas 2D$/i });
   if (atlasButton.getAttribute('aria-pressed') !== 'true') {
     fireEvent.click(atlasButton);
   }
@@ -150,6 +150,7 @@ function switchResultChapter(label: 'Understand' | 'Improve' | 'Verify' | 'Deliv
 
 async function openDeliveryGroup(name: 'Client handoff' | 'AI workspace' | 'Repository Intelligence' | 'Technical exports') {
   switchResultChapter('Deliver');
+  fireEvent.click(await screen.findByRole('button', { name: /More delivery options/i }, { timeout: 10000 }));
   fireEvent.click(await screen.findByRole('button', { name: new RegExp(`Open ${name}`, 'i') }, { timeout: 10000 }));
 }
 
@@ -214,6 +215,28 @@ function optimizationDashboardReportWithFiles(files: string[], repoName = 'optim
 }
 
 describe('Result Workspace evidence and delivery', () => {
+  it('leads Deliver with one agent outcome and keeps expert artifact groups behind progressive disclosure', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    render(
+      <ResultDashboard
+        report={buildSampleReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    switchResultChapter('Deliver');
+    expect(await screen.findByRole('button', { name: /Give this to an AI agent/i }, { timeout: 10000 })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Technical exports/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /More delivery options/i }));
+    expect(screen.getByRole('button', { name: /Open Technical exports/i })).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
+  });
+
   beforeEach(() => {
     globalThis.IntersectionObserver = class ImmediateIntersectionObserver implements IntersectionObserver {
       readonly root = null;

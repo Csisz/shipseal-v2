@@ -92,11 +92,6 @@ export function PostScanOverview({
         <div className={`relative flex flex-wrap items-center gap-2 ${stageOverlay ? 'pt-0.5' : 'lg:justify-end'}`}>
           {isMobile ? (
             <>
-              {stageOverlay && (
-                <Button type="button" size="sm" onClick={onPlanAgentTask} className="h-9 bg-primary px-3 text-xs text-primary-foreground hover:bg-primary/90" data-mobile-primary-action="true">
-                  <Compass className="mr-1.5 h-3.5 w-3.5" /> Plan an agent task
-                </Button>
-              )}
               <details className="group relative" data-testid="mobile-repository-context-disclosure">
                 <summary className="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full border border-primary/15 bg-floating/70 text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden" aria-label="More repository actions">
                   <MoreHorizontal className="h-4 w-4" />
@@ -117,11 +112,9 @@ export function PostScanOverview({
                     <Button type="button" variant="outline" size="sm" onClick={onReviewRepositoryIntelligence} className="w-full justify-start">
                       Review improvements <ArrowRight className="ml-auto h-4 w-4" />
                     </Button>
-                    {!stageOverlay && (
-                      <Button type="button" variant="outline" size="sm" onClick={onPlanAgentTask} className="w-full justify-start">
-                        <Compass className="mr-1.5 h-3.5 w-3.5" /> Plan an agent task
-                      </Button>
-                    )}
+                    <Button type="button" variant="outline" size="sm" onClick={onPlanAgentTask} className="w-full justify-start">
+                      <Compass className="mr-1.5 h-3.5 w-3.5" /> Plan an agent task
+                    </Button>
                     {persistenceControl && <div className="[&>div]:rounded-xl [&>div]:border-primary/10 [&>div]:bg-transparent [&>div]:p-0">{persistenceControl}</div>}
                     {onReplayReveal && <Button type="button" variant="ghost" size="sm" onClick={onReplayReveal} className="w-full justify-start"><Sparkles className="mr-1.5 h-3.5 w-3.5" /> Replay reveal</Button>}
                     <Button type="button" variant="ghost" size="sm" onClick={onReset} className="w-full justify-start"><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Scan another project</Button>
@@ -131,12 +124,19 @@ export function PostScanOverview({
             </>
           ) : (
             <>
-              <Button type="button" variant={stageOverlay ? 'outline' : 'default'} size="sm" onClick={onReviewRepositoryIntelligence} className={stageOverlay ? 'border-border/60 bg-background/20' : 'bg-primary text-primary-foreground hover:bg-primary/90'}>
-                Review improvements <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-              <Button type="button" variant={stageOverlay ? 'default' : 'outline'} size="sm" onClick={onPlanAgentTask} className={stageOverlay ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'border-border/60 bg-background/20'}>
-                <Compass className="mr-1.5 h-3.5 w-3.5" /> Plan an agent task
-              </Button>
+              {!stageOverlay && <>
+                <Button type="button" size="sm" onClick={onReviewRepositoryIntelligence} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  Review improvements <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={onPlanAgentTask} className="border-border/60 bg-background/20">
+                  <Compass className="mr-1.5 h-3.5 w-3.5" /> Plan an agent task
+                </Button>
+              </>}
+              {stageOverlay && (
+                <Button type="button" variant="ghost" size="sm" onClick={onPlanAgentTask} className="text-muted-foreground hover:text-foreground">
+                  <Compass className="mr-1.5 h-3.5 w-3.5" /> Plan an agent task
+                </Button>
+              )}
               {persistenceControl && (
                 <div className={stageOverlay ? '[&>div]:rounded-xl [&>div]:border-primary/10 [&>div]:bg-transparent [&>div]:p-0.5' : ''}>
                   {persistenceControl}
@@ -149,6 +149,7 @@ export function PostScanOverview({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" collisionPadding={12} className="w-52" data-overlay-layer="popover">
+                  {stageOverlay && <DropdownMenuItem onSelect={onReviewRepositoryIntelligence}><ArrowRight className="mr-1.5 h-3.5 w-3.5" /> Review improvements</DropdownMenuItem>}
                   {onReplayReveal && <DropdownMenuItem onSelect={onReplayReveal}><Sparkles className="mr-1.5 h-3.5 w-3.5" /> Replay reveal</DropdownMenuItem>}
                   <DropdownMenuItem onSelect={onReset}><RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Scan another project</DropdownMenuItem>
                 </DropdownMenuContent>

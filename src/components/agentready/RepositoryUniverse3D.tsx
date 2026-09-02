@@ -4,6 +4,7 @@ import type { RepositoryTransformationDomainFilter, RepositoryTransformationMode
 import { drawRepositoryUniverseSemanticIcon, repositoryUniverseClusterSemanticStyle, repositoryUniverseSemanticStyle, type RepositoryUniverseSemanticStyle, type RepositoryUniverseSemanticType } from '@/lib/workspace/repositoryUniverseSemantics';
 import { brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseNodeClusterToken, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseVisualPosition, softenClusterColor, blendHex, repositoryUniverseLandmarkOpacity, repositoryUniverseRendererTokens, repositoryUniverseSemanticIconVisible, repositoryUniverseSemanticLabelVisible, repositoryUniverseSemanticOpacityMultiplier, repositoryUniverseSemanticZoomLevel, REPOSITORY_UNIVERSE_CINEMATIC_TOKENS, type RepositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
 import type { ShipSealResolvedTheme } from '@/lib/theme';
+import { REPOSITORY_UNIVERSE_REVEAL_MS, repositoryUniverseRevealLayer, repositoryUniverseRevealProgress } from './result-workspace/universe/repositoryUniverseMotion';
 
 export interface UniverseCameraState {
   theta: number;
@@ -93,9 +94,9 @@ interface ProposalEdgeRenderItem {
   line: THREE.Line<THREE.BufferGeometry, THREE.LineDashedMaterial>;
 }
 
-const INITIAL_APPEARANCE_MS = 1800;
-const NODE_FOCUS_TRANSITION_MS = 650;
-const IDLE_ROTATION_DELAY_MS = 3600;
+const INITIAL_APPEARANCE_MS = REPOSITORY_UNIVERSE_REVEAL_MS;
+const NODE_FOCUS_TRANSITION_MS = 360;
+const IDLE_ROTATION_DELAY_MS = 12_000;
 const LABEL_FAR_RADIUS = 720;
 const LABEL_MEDIUM_RADIUS = 420;
 const PROPOSAL_LABEL_FAR_RADIUS = 620;
@@ -909,6 +910,11 @@ export default function RepositoryUniverse3D({
       const contextualRelated = relatedNodeIdsForSelection(interactionContextId);
       const radius = cameraStateRef.current.radius;
       const zoomLevel = repositoryUniverseSemanticZoomLevel(radius);
+      const revealInProgress = revealEnabled && !revealInterrupted;
+      const revealElapsed = now - startedAt;
+      const relationshipReveal = repositoryUniverseRevealProgress(revealElapsed, 'relationships', revealInProgress);
+      const landmarkReveal = repositoryUniverseRevealProgress(revealElapsed, 'landmarks', revealInProgress);
+      const contextReveal = repositoryUniverseRevealProgress(revealElapsed, 'context', revealInProgress);
 
       for (const item of edgeItems.values()) {
         const { edge, line } = item;
@@ -919,7 +925,7 @@ export default function RepositoryUniverse3D({
         const focused = Boolean(focusedCluster && nodeById.get(edge.source)?.clusterId === focusedCluster && nodeById.get(edge.target)?.clusterId === focusedCluster);
         const visible = visibleEdges.has(edge.id);
         line.visible = visible;
-        line.material.opacity = !visible
+        const resolvedOpacity = !visible
           ? 0
           : routeRelationship
             ? visualTokens.edgeOpacitySelected
@@ -932,6 +938,7 @@ export default function RepositoryUniverse3D({
               : edge.relationship === 'contains'
                 ? interactionContextId || focusedCluster || routeActive ? visualTokens.edgeOpacityContainsQuiet : visualTokens.edgeOpacityContainsBase
                 : interactionContextId || focusedCluster || routeActive ? visualTokens.edgeOpacityQuiet : visualTokens.edgeOpacityBase;
+        line.material.opacity = resolvedOpacity * relationshipReveal;
         line.material.color.setHex(routeRelationship
           ? visualTokens.route
           : colorForEdge(edge, activeLocalRelationship, focused, visualTokens));
@@ -942,13 +949,13 @@ export default function RepositoryUniverse3D({
         const selected = selectedProposal === item.proposalId;
         const excluded = excludedProposals.has(item.proposalId);
         item.line.visible = visible;
-        item.line.material.opacity = !visible ? 0 : excluded ? 0.09 : selected ? 0.56 : 0.26;
+        item.line.material.opacity = (!visible ? 0 : excluded ? 0.09 : selected ? 0.56 : 0.26) * contextReveal;
         item.line.material.color.setHex(selected
           ? visualTokens.proposalSelected
           : visualTokens.proposal);
       }
 
-      const focusPulse = reducedMotionRef.current ? 0.5 : (Math.sin(now / 520) + 1) / 2;
+      const focusPulse = 0.5;
       for (const item of nodeItems.values()) {
         const { node, semantic, mesh, hitTarget, halo, icon, iconMaterial, label, labelMaterial, baseRadius } = item;
         const visible = visibleNodes.has(node.id);
@@ -967,11 +974,12 @@ export default function RepositoryUniverse3D({
         const semanticLabelVisible = repositoryUniverseSemanticLabelVisible(semantic, zoomLevel, forcedSemanticIdentity, contextualSemanticIdentity);
         const semanticOpacityMultiplier = repositoryUniverseSemanticOpacityMultiplier(semantic, zoomLevel, forcedSemanticIdentity, contextualSemanticIdentity, Boolean(interactionContextId));
         const baseOpacity = selected ? 1 : hovered || matched ? 0.99 : routeHighlighted ? 0.99 : connected ? 0.96 : quiet || suppressed ? visualTokens.nodeOpacityQuiet : node.importance === 'background' ? visualTokens.nodeOpacityBackground : visualTokens.nodeOpacityBase;
-        const opacity = !visible ? 0 : baseOpacity * semanticOpacityMultiplier;
+        const nodeReveal = repositoryUniverseRevealProgress(revealElapsed, repositoryUniverseRevealLayer(node, model.rootNodeId), revealInProgress);
+        const opacity = !visible ? 0 : baseOpacity * semanticOpacityMultiplier * nodeReveal;
         const scale = selected ? 2.16 + focusPulse * 0.08 : hovered ? 1.62 : matched ? 1.54 : routeHighlighted ? 1.5 : connected ? 1.32 : node.importance === 'primary' ? 1.12 : 1;
 
         mesh.visible = opacity > 0.02;
-        hitTarget.visible = visible && opacity > 0.02;
+        hitTarget.visible = visible && opacity > 0.02 && nodeReveal > 0.62;
         mesh.material.opacity = opacity;
         mesh.material.color.setHex(verificationState && !selected ? verificationOverlayColor(verificationState) : colorForNode(node, selected, matched, routeHighlighted, hovered, connected, visualTokens));
         mesh.material.emissive.setHex(verificationState && !selected ? verificationOverlayColor(verificationState) : emissiveForNode(node, selected, matched, routeHighlighted, hovered, visualTokens));
@@ -989,10 +997,10 @@ export default function RepositoryUniverse3D({
                   ? visualTokens.primaryEmissiveIntensity
                   : visualTokens.quietEmissiveIntensity;
         mesh.material.wireframe = node.evidenceType === 'missing' || node.kind === 'recommendation';
-        mesh.scale.setScalar(scale);
+        mesh.scale.setScalar(scale * (0.94 + nodeReveal * 0.06));
 
         halo.visible = visible && (selected || hovered || matched || routeHighlighted || connected || Boolean(verificationState && verificationState !== 'unchanged'));
-        halo.material.opacity = selected
+        halo.material.opacity = (selected
           ? visualTokens.haloOpacitySelected + focusPulse * visualTokens.haloPulseOpacity
           : hovered
             ? visualTokens.haloOpacityHovered
@@ -1004,7 +1012,7 @@ export default function RepositoryUniverse3D({
                   ? 0.12
                   : connected
                   ? visualTokens.haloOpacityConnected
-                  : 0;
+                  : 0) * nodeReveal;
         halo.material.color.setHex(selected
           ? visualTokens.selected
           : routeHighlighted
@@ -1022,7 +1030,7 @@ export default function RepositoryUniverse3D({
         const iconBaseSize = semantic.emphasis === 'landmark' ? 19 : semantic.emphasis === 'primary' ? 14 : semantic.emphasis === 'supporting' ? 11.5 : 9.5;
         const iconScale = selected ? 1.72 : hovered ? 1.42 : matched ? 1.34 : routeHighlighted ? 1.3 : connected ? 1.14 : 1;
         icon.visible = iconVisible;
-        iconMaterial.opacity = !iconVisible ? 0 : selected || hovered || matched ? 1 : routeHighlighted ? 0.98 : connected ? 0.92 : zoomLevel === 'overview' ? 0.9 : 0.82;
+        iconMaterial.opacity = (!iconVisible ? 0 : selected || hovered || matched ? 1 : routeHighlighted ? 0.98 : connected ? 0.92 : zoomLevel === 'overview' ? 0.9 : 0.82) * nodeReveal;
         icon.position.copy(mesh.position);
         icon.scale.set(iconBaseSize * iconScale, iconBaseSize * iconScale, 1);
 
@@ -1037,7 +1045,7 @@ export default function RepositoryUniverse3D({
           cameraRadius: radius,
         });
         label.visible = labelVisible;
-        const desiredLabelOpacity = labelVisible ? labelOpacity(node, radius, selected, hovered, matched, connected) : 0;
+        const desiredLabelOpacity = (labelVisible ? labelOpacity(node, radius, selected, hovered, matched, connected) : 0) * nodeReveal;
         labelMaterial.opacity = desiredLabelOpacity;
         label.position.set(mesh.position.x, mesh.position.y + baseRadius * scale + 5, mesh.position.z);
         const labelScale = labelScaleForNode(node, radius, selected || hovered || matched);
@@ -1068,7 +1076,7 @@ export default function RepositoryUniverse3D({
         const baseOpacity = repositoryUniverseLandmarkOpacity(zoomLevel, visualTokens);
         const active = item.clusterId === focusedCluster || nodeById.get(interactionContextId || '')?.clusterId === item.clusterId;
         item.landmark.visible = baseOpacity > 0.01 || active;
-        item.material.opacity = active ? Math.max(baseOpacity, 0.96) : baseOpacity;
+        item.material.opacity = (active ? Math.max(baseOpacity, 0.96) : baseOpacity) * landmarkReveal;
         item.landmark.scale.set(active ? 91 : 84, active ? 25 : 23, 1);
         item.landmark.lookAt(camera.position);
       }
@@ -1079,13 +1087,13 @@ export default function RepositoryUniverse3D({
         const hovered = hoveredProposalId === item.proposalId;
         const excluded = excludedProposals.has(item.proposalId);
         const unrelated = Boolean(selectedProposal && !selected);
-        const opacity = !visible ? 0 : excluded ? 0.16 : selected ? 0.96 : hovered ? 0.82 : unrelated ? 0.3 : 0.58;
+        const opacity = (!visible ? 0 : excluded ? 0.16 : selected ? 0.96 : hovered ? 0.82 : unrelated ? 0.3 : 0.58) * contextReveal;
         item.mesh.visible = opacity > 0.02;
         item.mesh.material.opacity = opacity;
         item.mesh.material.emissiveIntensity = selected ? visualTokens.selectedEmissiveIntensity : hovered ? visualTokens.priorityEmissiveIntensity : visualTokens.quietEmissiveIntensity;
         item.mesh.scale.setScalar(selected ? 1.28 : hovered ? 1.12 : 1);
         item.halo.visible = visible && !excluded && (selected || hovered || !selectedProposal);
-        item.halo.material.opacity = selected ? 0.22 : hovered ? 0.1 : 0.035;
+        item.halo.material.opacity = (selected ? 0.22 : hovered ? 0.1 : 0.035) * contextReveal;
         item.halo.scale.setScalar(selected ? 1.24 + focusPulse * 0.04 : 1);
         const labelVisible = visible && repositoryUniverseProposalLabelVisible({
           selected,
@@ -1097,7 +1105,7 @@ export default function RepositoryUniverse3D({
           priorityIndex: item.priorityIndex,
         });
         item.label.visible = labelVisible;
-        const desiredLabelOpacity = !labelVisible ? 0 : selected ? 1 : hovered ? 0.94 : unrelated ? 0.42 : excluded ? 0.3 : 0.72;
+        const desiredLabelOpacity = (!labelVisible ? 0 : selected ? 1 : hovered ? 0.94 : unrelated ? 0.42 : excluded ? 0.3 : 0.72) * contextReveal;
         item.labelMaterial.opacity = desiredLabelOpacity;
         item.label.position.set(item.position.x, item.position.y + (selected ? 13 : 10), item.position.z);
         item.label.scale.set(selected ? 48 : hovered ? 45 : 40, selected ? 16 : 14, 1);
@@ -1132,11 +1140,15 @@ export default function RepositoryUniverse3D({
       const pinnedSelectionActive = Boolean(selectedNodeIdRef.current && selectedNodeIdRef.current !== model.rootNodeId);
       if (!reducedMotionRef.current && !rotationPausedRef.current && !pinnedSelectionActive && !hoveredNodeId && routeNodeIdSetRef.current.size === 0 && localSettled && now - userInteractedAt > IDLE_ROTATION_DELAY_MS) {
         const state = cameraStateRef.current;
-        cameraStateRef.current = { ...state, theta: state.theta + 0.0007 };
+        cameraStateRef.current = { ...state, theta: state.theta + 0.00012 };
       }
-      const appearance = reducedMotionRef.current || !animateInRef.current || revealInterrupted ? 1 : easeOutCubic(Math.min(1, elapsed / INITIAL_APPEARANCE_MS));
       for (const item of nodeItems.values()) {
         const base = item.position;
+        const appearance = repositoryUniverseRevealProgress(
+          elapsed,
+          repositoryUniverseRevealLayer(item.node, model.rootNodeId),
+          !reducedMotionRef.current && animateInRef.current && !revealInterrupted,
+        );
         const startScale = 0.72;
         item.mesh.position.set(
           base.x * startScale + base.x * (1 - startScale) * appearance,
@@ -1149,7 +1161,6 @@ export default function RepositoryUniverse3D({
         item.label.position.x = item.mesh.position.x;
         item.label.position.z = item.mesh.position.z;
       }
-      if (!reducedMotionRef.current) starField.rotation.y += 0.000012;
       applyCamera(now);
       updateVisualState(now);
       publishRequestedProjections(now);
@@ -1201,6 +1212,7 @@ export default function RepositoryUniverse3D({
       className="relative h-full min-h-[440px] overflow-hidden bg-[hsl(var(--universe-stage-bg))]"
       data-testid="repository-universe-host"
       data-reveal-active={!settled && !reducedMotion ? 'true' : 'false'}
+      data-motion-event={!settled && !reducedMotion ? 'universe-enter' : 'settled'}
       data-verification-overlay-count={Object.keys(verificationNodeStates).length}
     >
       <canvas
@@ -1219,11 +1231,12 @@ export default function RepositoryUniverse3D({
         data-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-rotation-paused={rotationPaused || reducedMotion ? 'true' : 'false'}
         data-settled={settled ? 'true' : 'false'}
+        data-reveal-sequence="repository-landmarks-relationships-context"
       />
       {!settled && (
         <div
           data-testid="repository-universe-cinematic-reveal"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_48%,hsl(var(--accent)/0.08),transparent_38%),linear-gradient(180deg,hsl(var(--universe-stage-bg)/0.45),transparent_30%,transparent_72%,hsl(var(--universe-stage-bg)/0.52))] motion-reduce:hidden"
+          className="repository-universe-intelligence-reveal pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_50%_48%,hsl(var(--accent)/0.08),transparent_38%),linear-gradient(180deg,hsl(var(--universe-stage-bg)/0.45),transparent_30%,transparent_72%,hsl(var(--universe-stage-bg)/0.52))] motion-reduce:hidden"
           aria-hidden="true"
         />
       )}

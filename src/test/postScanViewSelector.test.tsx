@@ -189,6 +189,8 @@ describe('premium post-scan view selector', () => {
     expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
     expect(screen.queryByTestId('futures-degraded-status')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Generate Future analysis' })).toHaveTextContent('Uses 1 Deep Analysis · charged only on completion');
+    expect(screen.getByText(/Deep Analysis sends selected, bounded repository evidence/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /How AI processing works/i })).toHaveAttribute('href', '/privacy#deterministic-ai');
     fireEvent.click(screen.getByRole('button', { name: 'Generate Future analysis' }));
     expect(start).toHaveBeenCalledTimes(1);
   });

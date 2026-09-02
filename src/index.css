@@ -484,25 +484,54 @@
   will-change: transform, opacity;
 }
 
-/* Repository Futures reveals only real topology, once, in spatial order. */
+/* Repository intelligence motion explains hierarchy without moving topology. */
 @keyframes futures-node-reveal {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.965); }
 }
 
 @keyframes futures-edge-reveal {
-  from { opacity: 0; }
+  from { opacity: 0; stroke-dashoffset: 1; }
 }
 
 @keyframes futures-surface-enter {
-  from { opacity: 0; transform: translateY(10px) scale(0.997); }
+  from { opacity: 0; transform: translateY(7px) scale(0.998); }
+}
+
+@keyframes futures-surface-settle {
+  from { opacity: 0; transform: translateY(3px); }
+}
+
+@keyframes future-route-resolve {
+  from { stroke-dashoffset: 1; opacity: 0.36; }
+}
+
+@keyframes future-local-trace {
+  from { stroke-dashoffset: 1; opacity: 0.4; }
+}
+
+@keyframes future-content-disclose {
+  from { opacity: 0; transform: scale(0.985); }
+}
+
+@keyframes future-inspector-enter {
+  from { opacity: 0; transform: translateY(8px); }
+}
+
+@keyframes repository-universe-intelligence-reveal {
+  from { opacity: 0.82; }
+  to { opacity: 0; }
+}
+
+.repository-universe-intelligence-reveal {
+  animation: repository-universe-intelligence-reveal 520ms ease-out 1 both;
 }
 
 .future-canvas-node-reveal {
-  animation: futures-node-reveal 320ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 backwards;
+  animation: futures-node-reveal 260ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 backwards;
 }
 
 .future-canvas-edge-reveal {
-  animation: futures-edge-reveal 420ms ease-out 1 backwards;
+  animation: futures-edge-reveal 360ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 backwards;
 }
 
 .future-canvas-edge-ambient {
@@ -515,6 +544,29 @@
 
 .future-canvas-edge-semantic[data-hover-trace='real-relationship'] {
   filter: drop-shadow(0 0 2px hsl(var(--futures-selected) / 0.24));
+}
+
+.future-canvas-edge-semantic[data-motion-trace='hover-direct'],
+.future-canvas-edge-semantic[data-motion-trace='pinned-route'] {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: future-local-trace 240ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 both;
+}
+
+.future-canvas-edge-semantic[data-route-resolution='primary'],
+.future-canvas-edge-semantic[data-route-resolution='supporting'] {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: future-route-resolve 420ms cubic-bezier(0.2, 0.72, 0.28, 1) var(--future-route-delay, 0ms) 1 both;
+}
+
+[data-node-disclosure-content] {
+  transform-origin: center;
+  animation: future-content-disclose 160ms ease-out 1 both;
+}
+
+.future-neural-inspector {
+  animation: future-inspector-enter 220ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 both;
 }
 
 @keyframes future-hover-card-enter {
@@ -691,6 +743,17 @@
   backdrop-filter: blur(7px);
 }
 
+.future-field-node:hover,
+.future-field-node:focus-visible,
+.future-field-node[data-interaction-state='pinned'] {
+  transform: translate(-50%, calc(-50% - 1px)) scale(1.008);
+}
+
+.future-field-node [data-compact-node-title] {
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
 .future-semantic-emblem {
   color: hsl(var(--futures-domain-general));
 }
@@ -756,13 +819,12 @@
   opacity: 0.68;
 }
 
-@keyframes futures-primary-alive {
-  0%, 100% { opacity: 0.62; }
-  50% { opacity: 0.7; }
+@keyframes futures-primary-resolve {
+  from { opacity: 0.32; transform: scale(0.94); }
 }
 
 .future-field-node[data-primary-alive='subtle-halo']::before {
-  animation: futures-primary-alive 6.4s ease-in-out infinite;
+  animation: futures-primary-resolve 360ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 both;
 }
 
 .future-field-node[data-neural-role='supporting']::before,
@@ -833,7 +895,28 @@
 }
 
 .futures-surface-enter {
-  animation: futures-surface-enter 440ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 both;
+  animation: futures-surface-settle 240ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 both;
+}
+
+.futures-surface-enter[data-motion-event='future-enter-new'] {
+  animation-name: futures-surface-enter;
+  animation-duration: 420ms;
+}
+
+[data-shared-repository-anchor] {
+  view-transition-name: shipseal-repository-anchor;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.2, 0.72, 0.28, 1);
+}
+
+::view-transition-old(shipseal-repository-anchor),
+::view-transition-new(shipseal-repository-anchor) {
+  animation-duration: 280ms;
+  animation-timing-function: ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -841,7 +924,15 @@
   .future-canvas-edge-reveal,
   .futures-surface-enter,
   .future-neural-hover-card,
-  .future-field-node[data-primary-alive]::before {
+  .future-field-node[data-primary-alive]::before,
+  .future-canvas-edge-semantic[data-motion-trace],
+  .future-canvas-edge-semantic[data-route-resolution],
+  [data-node-disclosure-content],
+  .future-neural-inspector {
+    animation: none !important;
+  }
+
+  .repository-universe-intelligence-reveal {
     animation: none !important;
   }
 
@@ -849,6 +940,10 @@
   .future-canvas-edge-semantic,
   .future-field-node {
     transition: none !important;
+  }
+
+  [data-shared-repository-anchor] {
+    view-transition-name: none;
   }
 }
 

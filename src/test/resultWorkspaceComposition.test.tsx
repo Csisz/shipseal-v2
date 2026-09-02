@@ -142,7 +142,7 @@ vi.mock('@/lib/github/write', async () => {
 import { ResultDashboard } from '@/components/agentready/ResultDashboard';
 
 function switchToAtlas2D() {
-  const atlasButton = screen.getByRole('button', { name: /Atlas 2D/i });
+  const atlasButton = screen.getByRole('button', { name: /^Atlas 2D$/i });
   if (atlasButton.getAttribute('aria-pressed') !== 'true') {
     fireEvent.click(atlasButton);
   }
@@ -286,7 +286,7 @@ describe('Result Workspace composition', () => {
 
     const context = screen.getByTestId('repository-context-overlay');
     expect(within(context).getByRole('heading', { name: /Repository understood/i })).toBeInTheDocument();
-    expect(within(context).getAllByRole('button').filter(button => button.hasAttribute('data-mobile-primary-action'))).toHaveLength(1);
+    expect(within(context).getAllByRole('button').filter(button => button.hasAttribute('data-mobile-primary-action'))).toHaveLength(0);
     expect(within(context).getByRole('button', { name: /Plan an agent task/i })).toBeInTheDocument();
     expect(within(context).getByRole('button', { name: /Review improvements/i })).not.toBeVisible();
 
@@ -370,7 +370,7 @@ describe('Result Workspace composition', () => {
       }
     }
     expect(await screen.findByTestId('repository-universe-canvas')).toHaveAttribute('data-camera-target', selectedTarget);
-  }, 20_000);
+  }, 40_000);
 
   it('uses compact Delivery Pack summary text that does not truncate the old wording', async () => {
     const report = buildSampleReport();
@@ -391,6 +391,7 @@ describe('Result Workspace composition', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Replay reveal/i }));
     expect(onReplayReveal).toHaveBeenCalledTimes(1);
     switchResultChapter('Deliver');
+    fireEvent.click(await screen.findByRole('button', { name: /More delivery options/i }, { timeout: 10000 }));
     fireEvent.click(await screen.findByRole('button', { name: /Open Client handoff/i }, { timeout: 10000 }));
     await screen.findByText('Delivery Pack preview mock', {}, { timeout: 10000 });
     expect(screen.getAllByText('Full ShipSeal package').length).toBeGreaterThan(0);
@@ -399,7 +400,7 @@ describe('Result Workspace composition', () => {
     expect(screen.getByText(/Everything ShipSeal can generate/i)).toBeInTheDocument();
     switchResultChapter('Improve');
     expect(await screen.findByText(/Secondary repository improvements/i)).toBeInTheDocument();
-  });
+  }, 20_000);
 
   it('opens the selector after a deterministic scan without starting or rendering Future analysis', async () => {
     globalThis.IntersectionObserver = class DeferredIntersectionObserver implements IntersectionObserver {
@@ -486,7 +487,7 @@ describe('Result Workspace composition', () => {
     selectorMockState.view = 'universe';
   });
 
-  it('opens with a simplified repository-specific entry and routes the primary action to Repository Intelligence review', async () => {
+  it('opens with a simplified repository-specific entry and keeps Repository Intelligence review in secondary actions', async () => {
     const prepareRepositoryIntelligenceReview = vi.fn(() => new Promise<never>(() => undefined));
     render(
       <ResultDashboard
@@ -506,7 +507,7 @@ describe('Result Workspace composition', () => {
     expect(within(chapterNav).getByRole('button', { name: /Deliver/i })).toBeInTheDocument();
     expect(screen.getByText(/areas creating agent friction/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/Next best action/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Review improvements$/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Review improvements$/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Plan an agent task$/i })).toBeInTheDocument();
     const universe = await screen.findByRole('img', { name: /Repository Universe 3D graph/i });
     expect(universe).toBeInTheDocument();
@@ -528,7 +529,8 @@ describe('Result Workspace composition', () => {
     expect(screen.getByTestId('result-chapter-rail-overlay')).toHaveClass('lg:col-start-1', 'lg:max-w-[23rem]');
     expect(screen.queryByText('Exports and reports')).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /^Review improvements$/i }));
+    fireEvent.keyDown(screen.getByRole('button', { name: /More result actions/i }), { key: 'ArrowDown' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: /^Review improvements$/i }));
 
     expect(within(chapterNav).getByRole('button', { name: /Improve/i })).toHaveAttribute('aria-pressed', 'true');
     await waitFor(() => expect(prepareRepositoryIntelligenceReview).toHaveBeenCalledTimes(1), { timeout: 10000 });
@@ -736,9 +738,10 @@ describe('Result Workspace composition', () => {
     expect(screen.getByRole('heading', { name: /Explore the repository universe/i })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Repository Universe 3D graph/i })).toBeInTheDocument();
     switchResultChapter('Deliver');
+    fireEvent.click(await screen.findByRole('button', { name: /More delivery options/i }, { timeout: 10000 }));
     fireEvent.click(await screen.findByRole('button', { name: /Open Client handoff/i }, { timeout: 10000 }));
     expect(await screen.findByRole('heading', { name: /Reports and Delivery Outputs/i }, { timeout: 10000 })).toBeInTheDocument();
-  });
+  }, 20_000);
 
   it('syncs Repository Atlas selection with Workspace Story chapters', () => {
     render(

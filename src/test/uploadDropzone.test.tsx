@@ -49,8 +49,9 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(screen.getByText('Upload ZIP')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Try sample/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Select repository')).toHaveAttribute('placeholder', 'Connect GitHub to list repositories');
-    expect(screen.getByText(/static scan of allowed repository evidence/i)).toBeInTheDocument();
-    expect(screen.getByText(/Imported code is never executed/i)).toBeInTheDocument();
+    expect(screen.getByText(/analyzes repository files statically/i)).toBeInTheDocument();
+    expect(screen.getByText(/Imported repository code is not executed/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Trust details' })).toHaveAttribute('href', '/trust');
     expect(screen.getByRole('button', { name: /^Connect GitHub$/i })).toBeEnabled();
     expect(screen.queryByRole('button', { name: /Install or configure ShipSeal GitHub App/i })).not.toBeInTheDocument();
 
@@ -58,15 +59,14 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(onSampleReport).toHaveBeenCalledTimes(1);
   });
 
-  it('shows local MVP CORS and ZIP fallback guidance', () => {
+  it('describes the selective public GitHub evidence boundary without restoring archive fallback', () => {
     render(<UploadDropzone onFile={vi.fn()} onGitHubImport={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Public URL/i }));
 
     expect(screen.getByText(/Paste a public GitHub repository URL/i)).toBeInTheDocument();
-    expect(screen.getByText(/Local browser import may be blocked by CORS or network policy/i)).toBeInTheDocument();
-    expect(screen.getByText(/Hosted demos can use the ShipSeal archive proxy/i)).toBeInTheDocument();
-    expect(screen.getByText(/download the repository ZIP from GitHub and upload it here/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not download the whole repository archive/i)).toBeInTheDocument();
+    expect(screen.getByText(/Not observed within that boundary does not mean confirmed missing/i)).toBeInTheDocument();
   });
 
   it('emphasizes independent scan paths when connected GitHub is not configured', () => {

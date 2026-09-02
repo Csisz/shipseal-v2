@@ -63,7 +63,10 @@ describe('ShipSeal landing', () => {
     expect(screen.getByText('Contact and commercial access')).toBeInTheDocument();
     expect(screen.queryByLabelText('Contact name')).not.toBeInTheDocument();
     expect(screen.getByText('Privacy').closest('a')).toHaveAttribute('href', '/privacy');
+    expect(screen.getAllByText('Terms').some(node => node.closest('a')?.getAttribute('href') === '/terms')).toBe(true);
     expect(screen.getByText('Security').closest('a')).toHaveAttribute('href', '/security');
+    expect(screen.getAllByText('Trust').some(node => node.closest('a')?.getAttribute('href') === '/trust')).toBe(true);
+    expect(screen.getByText(/Stripe processes payment information/i)).toBeInTheDocument();
   });
 
   it('preselects a package when a path card is clicked', () => {

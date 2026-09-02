@@ -153,11 +153,14 @@ export function repositoryFutureRenderedFootprint(
 ): Pick<RepositoryFuturesNodeLayoutBox, 'width' | 'height' | 'clearance'> {
   if (disclosure === 'anchor') return { width: 24, height: 24, clearance: 20 };
   if (disclosure === 'compact') {
-    if (node.kind === 'dependency') return { width: 96, height: 30, clearance: 24 };
-    if (node.kind === 'artifact') return { width: 92, height: 30, clearance: 22 };
-    if (node.kind === 'capability') return { width: 104, height: 30, clearance: 24 };
-    if (node.depth === 3) return { width: 100, height: 30, clearance: 22 };
-    return { width: 116, height: 32, clearance: 24 };
+    // Compact cards reserve two honest readable lines. Their renderer always
+    // uses this fixed height, so long background titles cannot escape the
+    // collision footprint while hover/pin remains the full-title lens.
+    if (node.kind === 'dependency') return { width: 104, height: 38, clearance: 24 };
+    if (node.kind === 'artifact') return { width: 100, height: 38, clearance: 22 };
+    if (node.kind === 'capability') return { width: 112, height: 38, clearance: 24 };
+    if (node.depth === 3) return { width: 108, height: 38, clearance: 22 };
+    return { width: 124, height: 40, clearance: 24 };
   }
   const near = disclosure === 'near';
   if (node.kind === 'repository') return { width: 184, height: near ? 104 : 94, clearance: 32 };

@@ -134,7 +134,7 @@ vi.mock('@/lib/github/write', async () => {
 import { ResultDashboard } from '@/components/agentready/ResultDashboard';
 
 function switchToAtlas2D() {
-  const atlasButton = screen.getByRole('button', { name: /Atlas 2D/i });
+  const atlasButton = screen.getByRole('button', { name: /^Atlas 2D$/i });
   if (atlasButton.getAttribute('aria-pressed') !== 'true') {
     fireEvent.click(atlasButton);
   }
@@ -324,6 +324,7 @@ describe('Repository Universe workspace state', () => {
 
       expect(screen.getByRole('img', { name: /Repository Atlas knowledge graph/i })).toBeInTheDocument();
       switchResultChapter('Deliver');
+      fireEvent.click(await screen.findByRole('button', { name: /More delivery options/i }, { timeout: 10000 }));
       fireEvent.click(await screen.findByRole('button', { name: /Open Client handoff/i }, { timeout: 10000 }));
       expect(await screen.findByRole('heading', { name: /Reports and Delivery Outputs/i }, { timeout: 10000 })).toBeInTheDocument();
       expect(onReset).not.toHaveBeenCalled();
@@ -564,6 +565,7 @@ describe('Repository Universe workspace state', () => {
     expect(screen.getByRole('tab', { name: /Story/i })).toHaveAttribute('aria-selected', 'true');
 
     switchResultChapter('Deliver');
+    fireEvent.click(await screen.findByRole('button', { name: /More delivery options/i }));
     fireEvent.click(await screen.findByRole('button', { name: /Open Client handoff/i }));
     expect(await screen.findByRole('heading', { name: /Reports and Delivery Outputs/i })).toBeInTheDocument();
     switchResultChapter('Understand');

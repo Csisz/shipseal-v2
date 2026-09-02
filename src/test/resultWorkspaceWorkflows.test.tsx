@@ -20,6 +20,7 @@ const universeMockState = vi.hoisted(() => ({
   cameraRadii: [] as number[],
   cameraTargets: [] as Array<{ x: number; y: number; z: number }>,
   visibleNodeCounts: [] as number[],
+  actionableNodeId: undefined as string | undefined,
   shouldThrow: false,
 }));
 
@@ -118,6 +119,9 @@ vi.mock('@/components/agentready/RepositoryUniverse3D', () => ({
         </button>
         <button type="button" onClick={() => model.nodes[2] && onSelectNode(model.nodes[2].id)}>
           Select second universe node
+        </button>
+        <button type="button" disabled={!universeMockState.actionableNodeId} onClick={() => universeMockState.actionableNodeId && onSelectNode(universeMockState.actionableNodeId)}>
+          Select actionable universe node
         </button>
         <button type="button" onClick={onSceneSettled}>Settle Universe reveal</button>
       </div>
@@ -250,6 +254,7 @@ describe('Result Workspace improvement and verification workflows', () => {
     universeMockState.cameraRadii = [];
     universeMockState.cameraTargets = [];
     universeMockState.visibleNodeCounts = [];
+    universeMockState.actionableNodeId = undefined;
     universeMockState.shouldThrow = false;
     githubWriteMock.createGitHubAppReadinessPr.mockReset();
     githubWriteMock.createGitHubAppReadinessPr.mockResolvedValue({
@@ -432,6 +437,29 @@ describe('Result Workspace improvement and verification workflows', () => {
     await waitFor(() => expect(screen.getByTestId('repository-universe-canvas')).toBeInTheDocument());
     expect(Number(screen.getByTestId('repository-universe-canvas').getAttribute('data-route-node-count'))).toBeGreaterThan(0);
     expect(within(panel).queryByText(/guaranteed correct route|will fix the issue|productivity guaranteed/i)).not.toBeInTheDocument();
+  });
+
+  it('offers one deterministic Fix this action only for a repository entity backed by an existing improvement', async () => {
+    const report = optimizationDashboardReport();
+    const universe = buildRepositoryUniverseModel(report);
+    const atlas = buildRepositoryAtlasModel(report);
+    const transformation = buildRepositoryTransformationProposalModel(report, universe, atlas);
+    universeMockState.actionableNodeId = transformation.proposals
+      .flatMap(proposal => proposal.graphChanges.affectedExistingNodeIds)
+      .find(id => id !== universe.rootNodeId && universe.nodes.some(node => node.id === id && node.kind !== 'repository'));
+    expect(universeMockState.actionableNodeId).toBeTruthy();
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    render(<ResultDashboard report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />);
+    await screen.findByRole('img', { name: /Repository Universe 3D graph/i }, { timeout: 10000 });
+    fireEvent.click(await screen.findByRole('button', { name: 'Select actionable universe node' }, { timeout: 10000 }));
+    const nextAction = await screen.findByRole('region', { name: 'Recommended next action' });
+    const fix = within(nextAction).getByRole('button', { name: 'Fix this' });
+    fireEvent.click(fix);
+
+    expect(await screen.findByTestId('agent-flight-path-panel')).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 
   it('shows payment review gates without inventing Stripe files', () => {

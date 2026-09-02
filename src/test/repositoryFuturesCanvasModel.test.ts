@@ -655,6 +655,23 @@ describe('Omega 18.5-V4 repository futures canvas model', () => {
       expect(node.layoutBox).toMatchObject(expected);
     });
   });
+
+  it('reserves a fixed two-line compact footprint for every secondary semantic entity', () => {
+    const model = buildRepositoryFuturesCanvasModel('cantu', denseSpatialInput(3, 3, 2), 'horizontal');
+    const secondary = model.nodes.filter(node => node.kind === 'evolution'
+      || node.kind === 'capability'
+      || node.kind === 'dependency'
+      || node.kind === 'artifact');
+
+    expect(secondary.length).toBeGreaterThan(0);
+    secondary.forEach(node => {
+      const compact = repositoryFutureRenderedFootprint(node, 'quick', 'compact');
+      expect(compact.height).toBeGreaterThanOrEqual(38);
+      expect(compact.width).toBeGreaterThanOrEqual(100);
+      expect(node.layoutBox!.height).toBeGreaterThanOrEqual(compact.height);
+      expect(node.layoutBox!.width).toBeGreaterThanOrEqual(compact.width);
+    });
+  });
 });
 
 describe('Omega 18.5-V7.2 repository futures camera', () => {

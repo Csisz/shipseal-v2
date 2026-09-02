@@ -67,10 +67,12 @@ const usage = usageState === 'free'
     ? {
       plan: 'pro', entitlementStatus: 'active', capabilities: { repositoryFutures: true, executableFuturePlan: true },
       deepAnalysis: { limit: 4, used: 4, reserved: 0, remaining: 0, periodStart: '2026-08-01T00:00:00.000Z', periodEnd: '2026-09-01T00:00:00.000Z' },
+      billing: { customerPortalAvailable: true, cancelAtPeriodEnd: false, stripeStatus: 'active', currentPeriodEnd: '2026-09-01T00:00:00.000Z' },
     }
     : {
       plan: 'pro', entitlementStatus: 'active', capabilities: { repositoryFutures: true, executableFuturePlan: true },
       deepAnalysis: { limit: 10, used: 3, reserved: 1, remaining: 6, periodStart: '2026-08-01T00:00:00.000Z', periodEnd: '2026-09-01T00:00:00.000Z' },
+      billing: { customerPortalAvailable: true, cancelAtPeriodEnd: false, stripeStatus: 'active', currentPeriodEnd: '2026-09-01T00:00:00.000Z' },
     };
 const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.stringify(body), {
   status,

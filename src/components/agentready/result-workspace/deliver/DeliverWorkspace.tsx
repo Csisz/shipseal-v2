@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { AlertOctagon, Check, CheckCircle2, Copy, Download, FileArchive, Layers, Lightbulb, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
+import { AlertOctagon, Bot, Check, CheckCircle2, ChevronDown, Copy, Download, FileArchive, GitPullRequest, Layers, Lightbulb, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react';
 import type { AgentOperatingModeId, AgentPackFile, ReadinessReport, ScanHistoryItem } from '@/lib/types';
 import { evaluateReadiness } from '@/lib/scoring';
 import { ScoreGauge } from '@/components/agentready/ScoreGauge';
@@ -38,6 +38,7 @@ import {
   mcpGovernanceSummary,
   severityClass,
 } from '../model/deliveryWorkspaceSelectors';
+import { resolveFastPathAgentArtifact } from '../fastPathPresentation';
 
 const DeliveryPackPreview = lazy(() => import('@/components/agentready/DeliveryPackPreview').then(module => ({ default: module.DeliveryPackPreview })));
 
@@ -51,6 +52,7 @@ interface DeliverWorkspaceProps {
   intakeSkipped: boolean;
   resolvedPackages: ShipSealGoalId[];
   agentOperatingMode?: AgentOperatingModeId;
+  onCreatePullRequest?: () => void;
 }
 
 type DeliveryOutcomeGroup = 'client-handoff' | 'ai-workspace' | 'repository-intelligence' | 'technical-exports';
@@ -65,6 +67,7 @@ export default function DeliverWorkspace({
   intakeSkipped,
   resolvedPackages,
   agentOperatingMode,
+  onCreatePullRequest,
 }: DeliverWorkspaceProps) {
   const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
   const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
@@ -77,6 +80,8 @@ export default function DeliverWorkspace({
   const [draftIntake, setDraftIntake] = useState(() => normalizeProjectIntake(initialIntake, report.repoName));
   const [wasIntakeSkipped, setWasIntakeSkipped] = useState(intakeSkipped);
   const [activeDeliveryGroup, setActiveDeliveryGroup] = useState<DeliveryOutcomeGroup | null>(null);
+  const [deliveryOptionsOpen, setDeliveryOptionsOpen] = useState(false);
+  const [agentArtifactCopied, setAgentArtifactCopied] = useState(false);
   const readiness = evaluateReadiness(report.score, report.blockers);
   const ready = readiness.isReady;
   const limitedScan = report.scanSummary.limited || report.scanSummary.scanMode === 'limited-fallback';
@@ -92,6 +97,7 @@ export default function DeliverWorkspace({
     description: 'MCP governance policy generated from this repository scan.',
     content: file.content,
   }));
+  const fastPathAgentArtifact = resolveFastPathAgentArtifact(modeAgentPack);
 
   useEffect(() => {
     const nextIntake = normalizeProjectIntake(initialIntake, report.repoName);
@@ -99,6 +105,8 @@ export default function DeliverWorkspace({
     setDraftIntake(nextIntake);
     setWasIntakeSkipped(intakeSkipped);
     setActiveDeliveryGroup(null);
+    setDeliveryOptionsOpen(false);
+    setAgentArtifactCopied(false);
   }, [initialIntake, intakeSkipped, report.repoName, report.scannedAt]);
 
   const intakeDirty = !sameProjectIntake(appliedIntake, draftIntake);
@@ -112,37 +120,44 @@ export default function DeliverWorkspace({
     setContextCopied(true);
     setTimeout(() => setContextCopied(false), 1500);
   };
+  const copyFastPathAgentArtifact = async () => {
+    if (!fastPathAgentArtifact) return;
+    await navigator.clipboard.writeText(fastPathAgentArtifact.content);
+    setAgentArtifactCopied(true);
+    setTimeout(() => setAgentArtifactCopied(false), 1500);
+  };
 
   return (
     <>
       {active && (
-        <section className="mb-8" aria-labelledby="delivery-outcome-groups-heading">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Delivery</div>
-              <h2 id="delivery-outcome-groups-heading" className="mt-1 font-display text-2xl font-semibold">Prepare delivery</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Choose the outcome you need; technical detail stays closed until requested.</p>
-            </div>
-            <Button type="button" onClick={() => setActiveDeliveryGroup('client-handoff')} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              Prepare delivery
-            </Button>
+        <section className="mb-8 rounded-3xl border border-primary/15 bg-card/50 p-4 sm:p-6" aria-labelledby="delivery-outcome-groups-heading" data-fast-path-surface="deliver">
+          <div className="max-w-2xl">
+            <div className="text-xs font-mono uppercase tracking-wider text-primary">Execute</div>
+            <h2 id="delivery-outcome-groups-heading" className="mt-1 font-display text-2xl font-semibold">What do you want to do next?</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Use the repository-grounded work in the tool that will implement or review it.</p>
           </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <Button type="button" size="lg" onClick={() => setActiveDeliveryGroup('ai-workspace')} className="mt-5 min-h-12 w-full justify-center sm:w-auto">
+            <Bot className="mr-2 h-4 w-4" aria-hidden="true" /> Give this to an AI agent
+          </Button>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {onCreatePullRequest && <Button type="button" variant="outline" onClick={onCreatePullRequest} className="min-h-11"><GitPullRequest className="mr-2 h-4 w-4" />Create GitHub PR</Button>}
+            <Button type="button" variant="outline" onClick={() => setActiveDeliveryGroup('client-handoff')} className="min-h-11"><Download className="mr-2 h-4 w-4" />Download</Button>
+            <Button type="button" variant="ghost" aria-expanded={deliveryOptionsOpen} onClick={() => setDeliveryOptionsOpen(current => !current)} className="min-h-11 text-muted-foreground">More delivery options <ChevronDown className={`ml-2 h-4 w-4 transition-transform ${deliveryOptionsOpen ? 'rotate-180' : ''}`} /></Button>
+          </div>
+          {deliveryOptionsOpen && <div className="mt-4 grid gap-3 border-t border-border/45 pt-4 md:grid-cols-2 xl:grid-cols-4" data-testid="advanced-delivery-options">
             {([
-              ['client-handoff', 'Client handoff', 'Package the reviewed client-facing report and Delivery Pack.'],
-              ['ai-workspace', 'AI workspace', 'Review agent instructions, context, and workspace outputs.'],
-              ['repository-intelligence', 'Repository Intelligence', 'Inspect evidence, readiness, and governance outcomes.'],
-              ['technical-exports', 'Technical exports', 'Access score, manifest, generated files, and scan metadata.'],
+              ['client-handoff', 'Client handoff', 'Reports and Delivery Pack.'],
+              ['ai-workspace', 'AI workspace', 'Agent instructions and context.'],
+              ['repository-intelligence', 'Repository Intelligence', 'Evidence and readiness detail.'],
+              ['technical-exports', 'Technical exports', 'Score, manifest and generated files.'],
             ] as const).map(([id, title, description]) => (
               <article key={id} className={`rounded-2xl border p-4 ${activeDeliveryGroup === id ? 'border-primary/45 bg-primary/10' : 'border-border/55 bg-background/20'}`}>
                 <h3 className="font-display font-semibold">{title}</h3>
-                <p className="mt-1 min-h-10 text-xs leading-relaxed text-muted-foreground">{description}</p>
-                <Button type="button" variant="ghost" size="sm" aria-label={`Open ${title}`} aria-pressed={activeDeliveryGroup === id} onClick={() => setActiveDeliveryGroup(id)} className="mt-3 px-0 text-primary-glow hover:bg-transparent hover:text-primary-glow">
-                  {activeDeliveryGroup === id ? 'Showing details' : 'Open group'}
-                </Button>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{description}</p>
+                <Button type="button" variant="ghost" size="sm" aria-label={`Open ${title}`} aria-pressed={activeDeliveryGroup === id} onClick={() => setActiveDeliveryGroup(id)} className="mt-2 px-0 text-primary-glow hover:bg-transparent hover:text-primary-glow">Open</Button>
               </article>
             ))}
-          </div>
+          </div>}
         </section>
       )}
 
@@ -319,6 +334,20 @@ export default function DeliverWorkspace({
       <div>
       {activeDeliveryGroup === 'ai-workspace' && (
       <>
+      {fastPathAgentArtifact && <section className="mb-6 rounded-3xl border border-primary/25 bg-primary/[0.055] p-5" aria-labelledby="agent-ready-output-heading" data-testid="agent-ready-output">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <div className="font-mono text-[10px] uppercase tracking-[0.15em] text-primary">Agent-ready output</div>
+            <h3 id="agent-ready-output-heading" className="mt-1 font-display text-xl font-semibold">{fastPathAgentArtifact.name}</h3>
+            <p className="mt-1 text-sm text-muted-foreground">{fastPathAgentArtifact.description}</p>
+          </div>
+          <Button type="button" onClick={() => void copyFastPathAgentArtifact()} className="min-h-11 shrink-0"><Copy className="mr-2 h-4 w-4" />{agentArtifactCopied ? 'Copied' : 'Copy for agent'}</Button>
+        </div>
+        <details className="mt-4 rounded-xl border border-border/45 bg-background/25 p-3">
+          <summary className="cursor-pointer text-sm font-medium">Preview output</summary>
+          <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg bg-inset p-3 font-mono text-xs text-muted-foreground">{fastPathAgentArtifact.content}</pre>
+        </details>
+      </section>}
       <div className="glass rounded-2xl p-6 mb-8">
         <div className="flex flex-wrap items-start gap-3 mb-5">
           <Sparkles className={ready ? 'h-4 w-4 text-success mt-1' : 'h-4 w-4 text-accent mt-1'} />

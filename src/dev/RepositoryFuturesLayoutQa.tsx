@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { ResultWorkspace } from '@/components/agentready/ResultWorkspace';
 import { buildReport } from '@/lib/readiness';
@@ -5,6 +6,7 @@ import {
   REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
   REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
   validateRepositoryProductIntelligence,
+  type RepositoryIntelligenceProviderStatus,
 } from '@/lib/repositoryIntelligence';
 
 const evidence = [
@@ -157,6 +159,7 @@ export const futuresSpatialQaProductIntelligence = validateRepositoryProductInte
 });
 
 export default function RepositoryFuturesLayoutQa() {
+  if (new URLSearchParams(window.location.search).get('motionEntry') === 'new') return <RepositoryFuturesMotionEntryQa />;
   const productIntelligence = new URLSearchParams(window.location.search).get('spatialStress') === '1'
     ? futuresSpatialQaProductIntelligence
     : futuresQaProductIntelligence;
@@ -170,6 +173,35 @@ export default function RepositoryFuturesLayoutQa() {
         onClearHistory={() => undefined}
         repositoryProductIntelligence={productIntelligence}
         repositoryProductIntelligenceStatus={{ state: 'enhanced', deepState: 'completed', message: 'Product opportunities enhanced.', retryable: false, providerId: 'qa-provider' }}
+      />
+    </main>
+  );
+}
+
+function RepositoryFuturesMotionEntryQa() {
+  const [phase, setPhase] = useState<'startable' | 'running' | 'ready'>('startable');
+  const status: RepositoryIntelligenceProviderStatus = phase === 'startable'
+    ? { state: 'deterministic', message: 'Repository evidence is ready.', retryable: false }
+    : phase === 'running'
+      ? { state: 'preparing', message: 'Building the deterministic Future motion fixture.', retryable: false }
+      : { state: 'enhanced', deepState: 'completed', message: 'Future analysis is ready.', retryable: false, providerId: 'qa-provider' };
+  const completeFixture = async () => {
+    setPhase('running');
+    await new Promise(resolve => window.setTimeout(resolve, 240));
+    setPhase('ready');
+  };
+
+  return (
+    <main className="min-h-screen bg-workspace text-foreground" data-testid="repository-futures-motion-entry-qa">
+      <div className="fixed bottom-3 right-3 z-[100]"><ThemeToggle /></div>
+      <ResultWorkspace
+        report={futuresQaReport}
+        history={[]}
+        onReset={() => undefined}
+        onClearHistory={() => undefined}
+        repositoryProductIntelligence={phase === 'ready' ? futuresSpatialQaProductIntelligence : null}
+        repositoryProductIntelligenceStatus={status}
+        retryRepositoryProductIntelligence={completeFixture}
       />
     </main>
   );

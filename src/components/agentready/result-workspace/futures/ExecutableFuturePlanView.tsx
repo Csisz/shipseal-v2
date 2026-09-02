@@ -33,6 +33,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { buildFuturePlanFastPathSummary } from '../fastPathPresentation';
 
 type PlanReviewPhase = 'draft' | 'review' | 'ready';
 type AgentTarget = 'codex' | 'claude-code';
@@ -55,27 +56,27 @@ export function ExecutableFuturePlanEntry({
         <div className="max-w-3xl">
           <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-primary">
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            Possibility converges into execution
+            {plan ? 'Plan ready' : 'Choose a direction'}
           </div>
           <h2 className="mt-2 font-display text-xl font-semibold text-foreground">
-            {plan ? 'Your selected Future can become one implementation plan.' : 'Choose one Primary Future to create an implementation plan.'}
+            {plan ? `${plan.implementationStages.length}-step implementation plan` : 'Select a Future to see what building it takes.'}
           </h2>
           <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">
             {plan
               ? `${plan.primaryFuture.title}${plan.supportingFutures.length ? ` + ${plan.supportingFutures.length} supporting ${plan.supportingFutures.length === 1 ? 'Future' : 'Futures'}` : ''} · ${plan.requiredCapabilities.length} automatic ${plan.requiredCapabilities.length === 1 ? 'capability' : 'capabilities'} · no additional AI request`
-              : 'Select a Primary in the neural field. Optional Supports and required dependencies will converge into the same deterministic plan.'}
+              : 'Open a direction, then use Build this future. Supporting Futures remain optional.'}
           </p>
         </div>
-        <Button
+        {plan && <Button
           type="button"
           size="lg"
-          disabled={!plan}
           onClick={onOpen}
-          className="group min-h-12 shrink-0 rounded-xl px-5"
+          variant="outline"
+          className="group min-h-11 shrink-0 rounded-xl px-4"
         >
-          Build this future
+          Open plan
           <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" aria-hidden="true" />
-        </Button>
+        </Button>}
       </div>
     </section>
   );
@@ -86,7 +87,9 @@ export default function ExecutableFuturePlanView({ plan, onBack }: { plan: Execu
   const [acknowledgedGateIds, setAcknowledgedGateIds] = useState<Set<string>>(new Set());
   const [activeTarget, setActiveTarget] = useState<AgentTarget>();
   const [copyStatus, setCopyStatus] = useState('');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const allGatesAcknowledged = plan.reviewGates.every(gate => acknowledgedGateIds.has(gate.id));
+  const summary = useMemo(() => buildFuturePlanFastPathSummary(plan), [plan]);
   const prompt = useMemo(() => activeTarget === 'codex'
     ? renderCodexFuturePlanPrompt(plan)
     : activeTarget === 'claude-code'
@@ -98,7 +101,18 @@ export default function ExecutableFuturePlanView({ plan, onBack }: { plan: Execu
     setAcknowledgedGateIds(new Set());
     setActiveTarget(undefined);
     setCopyStatus('');
+    setAdvancedOpen(false);
   }, [plan.fingerprint]);
+
+  const prepareForAgent = () => {
+    if (plan.reviewGates.length > 0 && phase !== 'ready') {
+      setPhase('review');
+      setAdvancedOpen(true);
+      return;
+    }
+    setPhase('ready');
+    setActiveTarget('codex');
+  };
 
   const toggleGate = (gateId: string, checked: boolean) => {
     setAcknowledgedGateIds(current => {
@@ -151,20 +165,42 @@ export default function ExecutableFuturePlanView({ plan, onBack }: { plan: Execu
           </div>
         </div>
 
-        <div className="mt-7 max-w-4xl">
-          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary">Executable Future Plan</p>
-          <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl md:text-5xl">A concrete mission for {plan.repository.name}</h1>
-          <p className="mt-4 max-w-3xl text-base leading-relaxed text-muted-foreground md:text-lg">{plan.objective}</p>
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-end">
+          <div className="max-w-4xl">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-primary">Ready to build</p>
+            <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight sm:text-4xl">{plan.primaryFuture.title}</h1>
+            <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">{plan.objective}</p>
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-sm text-muted-foreground" aria-label="Future Plan summary">
+              <span><strong className="text-foreground">{summary.stepCount}</strong> steps</span>
+              <span><strong className="text-foreground">{summary.prerequisiteCount}</strong> prerequisites</span>
+              <span><strong className="text-foreground">{summary.existingAreaCount}</strong> existing repository {summary.existingAreaCount === 1 ? 'area' : 'areas'}</span>
+              {summary.likelyNewAreaCount > 0 && <span><strong className="text-foreground">{summary.likelyNewAreaCount}</strong> likely new {summary.likelyNewAreaCount === 1 ? 'responsibility' : 'responsibilities'}</span>}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-primary/20 bg-primary/[0.055] p-4">
+            <Button type="button" size="lg" className="min-h-12 w-full" onClick={prepareForAgent} data-fast-path-action="prepare-for-agent">
+              Prepare for agent
+              <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+            </Button>
+            <p className="mt-2 text-center text-[11px] leading-relaxed text-muted-foreground">
+              {summary.reviewGateCount ? `${summary.reviewGateCount} human-review ${summary.reviewGateCount === 1 ? 'gate stays' : 'gates stay'} explicit.` : 'Deterministic handoff · no additional AI request.'}
+            </p>
+          </div>
         </div>
 
-        <div className="mt-7 grid gap-3 border-t border-border/35 pt-5 sm:grid-cols-3" aria-label="Future Plan selection">
+        <div className="sr-only" aria-label="Future Plan selection">
           <PlanSelectionItem label="Primary" value={plan.primaryFuture.title} icon={<Sparkles className="h-4 w-4" />} />
           <PlanSelectionItem label="Supporting" value={plan.supportingFutures.length ? plan.supportingFutures.map(goal => goal.title).join(' · ') : 'None selected'} icon={<GitBranch className="h-4 w-4" />} />
           <PlanSelectionItem label="Required capabilities" value={`${plan.requiredCapabilities.length} ordered prerequisite${plan.requiredCapabilities.length === 1 ? '' : 's'}`} icon={<Network className="h-4 w-4" />} />
         </div>
       </header>
 
-      <div className="relative mx-auto grid max-w-[1180px] gap-10 px-4 py-7 sm:px-6 md:px-8 md:py-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
+      <details data-testid="advanced-future-plan" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)} className="group border-b border-border/45">
+        <summary className="mx-auto flex min-h-14 max-w-[1180px] cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-6 md:px-8">
+          <span>Advanced plan</span>
+          <span className="text-xs font-normal text-muted-foreground">Review {summary.stepCount} steps, affected areas, evidence and verification</span>
+        </summary>
+      <div className="relative mx-auto grid max-w-[1180px] gap-10 border-t border-border/35 px-4 py-7 sm:px-6 md:px-8 md:py-10 lg:grid-cols-[minmax(0,1fr)_17rem] lg:gap-12">
         <main className="min-w-0 space-y-12">
           <section aria-labelledby="implementation-plan-heading">
             <SectionHeading eyebrow="Implementation sequence" title="From foundation to verification" description="Dependencies come first. Each later stage inherits the repository scope and evidence established before it." />
@@ -274,6 +310,7 @@ export default function ExecutableFuturePlanView({ plan, onBack }: { plan: Execu
           </div>
         </aside>
       </div>
+      </details>
 
       <Dialog open={Boolean(activeTarget)} onOpenChange={open => { if (!open) { setActiveTarget(undefined); setCopyStatus(''); } }}>
         <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-3xl rounded-2xl bg-background p-0 shadow-[var(--shadow-lg-semantic)] motion-reduce:animate-none sm:w-[calc(100%-2rem)]">

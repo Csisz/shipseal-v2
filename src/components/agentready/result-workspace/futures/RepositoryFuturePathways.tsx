@@ -53,6 +53,7 @@ import { RepositoryFuturePathwaysStage } from './RepositoryFuturePathwaysStage';
 import { RepositoryFuturesNeuralCanvas } from './RepositoryFuturesNeuralCanvas';
 import { buildRepositoryFuturePathwaysGraph } from './repositoryFuturePathwaysGraph';
 import ExecutableFuturePlanView, { ExecutableFuturePlanEntry } from './ExecutableFuturePlanView';
+import type { RepositoryFuturesEntryMotion } from './repositoryFuturesMotion';
 
 interface RepositoryFuturePathwaysProps {
   report: ReadinessReport;
@@ -60,12 +61,13 @@ interface RepositoryFuturePathwaysProps {
   productIntelligence?: RepositoryProductIntelligenceResult | null;
   providerStatus?: RepositoryIntelligenceProviderStatus;
   onStageOverlayChange?: (overlay: RepositoryFutureStageOverlay | null) => void;
+  entryMotion?: RepositoryFuturesEntryMotion;
 }
 
 type RoleFilter = 'all' | 'selected' | 'saved' | 'available' | 'blocked';
 type Focus = { kind: 'goal'; id: string } | { kind: 'dependency'; id: string } | null;
 
-export default function RepositoryFuturePathways({ report, universe, productIntelligence, providerStatus, onStageOverlayChange }: RepositoryFuturePathwaysProps) {
+export default function RepositoryFuturePathways({ report, universe, productIntelligence, providerStatus, onStageOverlayChange, entryMotion = 'cached-result' }: RepositoryFuturePathwaysProps) {
   const rootRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLDetailsElement | null>(null);
   const [mode, setMode] = useState<RepositoryFuturePathwaysMode>('quick');
@@ -140,7 +142,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         setFocus({ kind: 'goal', id: goalId });
         setTracePinnedId(goalId);
       }
-      return;
+      return accepted;
     }
     const operation = replaceRepositoryFuturePrimary(graph, draft, goalId);
     const accepted = acceptResult(operation.result, operation.removedGoalIds.length
@@ -150,7 +152,12 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       setFocus({ kind: 'goal', id: goalId });
       setTracePinnedId(goalId);
     }
+    return accepted;
   }, [acceptResult, draft, graph]);
+
+  const buildSelectedFuture = useCallback((goalId: string) => {
+    if (choosePrimary(goalId)) setPlanOpen(true);
+  }, [choosePrimary]);
 
   const addSupport = useCallback((goalId: string) => {
     if (!draft) {
@@ -392,6 +399,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       if (nextMode === 'deep' && composerRef.current) composerRef.current.open = true;
     },
     onCandidateFocus: goalId => setFocus({ kind: 'goal', id: goalId }),
+    onCandidateBuild: buildSelectedFuture,
     onCandidateSelect: choosePrimary,
     onCandidateAddSupport: addSupport,
     onCandidateRemoveSupport: removeSupport,
@@ -418,7 +426,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       if (composerRef.current) composerRef.current.open = true;
       composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
-  }), [addSupport, choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, notice, productIntelligenceState, removeSupport, replaceSupportDirect, restoreOption, saveForLater, stageCandidates, stageProjections, tracePinnedId, tracePreviewId, universeProjection]);
+  }), [addSupport, buildSelectedFuture, choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, notice, productIntelligenceState, removeSupport, replaceSupportDirect, restoreOption, saveForLater, stageCandidates, stageProjections, tracePinnedId, tracePreviewId, universeProjection]);
 
   useEffect(() => {
     if (focus?.kind !== 'dependency' || !draft || draft.dependencies.some(dependency => dependency.id === focus.id)) return;
@@ -451,7 +459,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   return (
     <section ref={rootRef} aria-label="Repository Future pathways" className="scroll-mt-20" data-futures-composition="canvas-first">
       <div data-primary-surface="neural-field">
-        <RepositoryFuturesNeuralCanvas repositoryName={report.repoName} overlay={overlay} />
+        <RepositoryFuturesNeuralCanvas repositoryName={report.repoName} overlay={overlay} entryMotion={entryMotion} />
       </div>
 
       <ExecutableFuturePlanEntry plan={executablePlan} onOpen={() => setPlanOpen(true)} />

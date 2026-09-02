@@ -60,6 +60,7 @@ function overlay(values: Partial<RepositoryFutureStageOverlay> = {}): Repository
     onModeChange: vi.fn(),
     onCandidateFocus: vi.fn(),
     onCandidateSelect: vi.fn(),
+    onCandidateBuild: vi.fn(),
     onCandidateAddSupport: vi.fn(),
     onCandidateRemoveSupport: vi.fn(),
     onCandidateReplaceSupport: vi.fn(),
@@ -428,6 +429,8 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
 
     expect(edge).toHaveAttribute('data-selected-route', 'true');
     expect(edge).toHaveAttribute('data-corridor-transition', 'semantic-emphasis');
+    expect(edge).toHaveAttribute('data-route-resolution', 'primary');
+    expect((edge as SVGPathElement).style.getPropertyValue('--future-route-delay')).toMatch(/ms$/);
     expect(container.querySelector('animate')).not.toBeInTheDocument();
 
     rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({
@@ -769,16 +772,79 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Future saved for later.');
   });
 
-  it('owns Quick and Deep once inside the canvas and exposes only one emphasized inspector action', () => {
-    const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+  it('owns Quick and Deep once inside the canvas and exposes one outcome-first inspector action', () => {
+    const value = overlay();
+    const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
     expect(container.querySelectorAll('[data-futures-mode-owner]')).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Quick Path' })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: 'Deep Configuration' })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
-    expect(inspector.querySelectorAll('[data-action-emphasis="primary"]')).toHaveLength(1);
+    const build = within(inspector).getByRole('button', { name: /Build this future/i });
+    expect(build).toHaveAttribute('data-fast-path-action', 'build-future');
+    fireEvent.click(build);
+    expect(value.onCandidateBuild).toHaveBeenCalledWith('goal:alternative');
+    expect(within(inspector).getByText('Selection options').closest('details')).not.toHaveAttribute('open');
     expect(within(inspector).getByText('Why this fits').closest('details')).not.toHaveAttribute('open');
     expect(within(inspector).getByText('Evidence and compatibility').closest('details')).not.toHaveAttribute('open');
+  });
+
+  it('contains long compact background titles in the declared two-line footprint and reveals the full title through hover and pin', () => {
+    const longTitle = 'A very long background capability title that must remain inside its compact semantic card at every ordinary zoom level';
+    const value = overlay({
+      projections: [{
+        id: 'evolution:long',
+        goalId: 'goal:alternative',
+        kind: 'evolution',
+        title: longTitle,
+        sourceId: 'goal:alternative',
+        order: 0,
+        generation: 2,
+        humanReviewRequired: false,
+      }],
+    });
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} entryMotion="cached-result" />);
+    const node = screen.getByRole('button', { name: new RegExp(longTitle) });
+
+    expect(node).toHaveAttribute('data-label-detail', 'compact');
+    expect(node).toHaveClass('overflow-hidden');
+    expect(node).toHaveStyle({ height: '40px' });
+    expect(node.querySelector('[data-compact-node-title]')).toHaveClass('line-clamp-2', 'break-words');
+
+    fireEvent.mouseEnter(node);
+    expect(screen.getByRole('tooltip')).toHaveTextContent(longTitle);
+    const revealedTitle = node.querySelector('[data-node-disclosure-content] .line-clamp-3');
+    expect(revealedTitle).toBeInTheDocument();
+    expect(revealedTitle).not.toHaveClass('block');
+    fireEvent.click(node);
+    fireEvent.mouseLeave(node);
+    expect(screen.getByRole('complementary', { name: 'Neural Futures inspector' })).toHaveTextContent(longTitle);
+  });
+
+  it('exposes semantic presentation events without changing graph identity or invoking plan actions', () => {
+    const value = overlay();
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    const { container, rerender } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} entryMotion="new-result" />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    const ids = [...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-future-node-id'));
+    const positions = [...container.querySelectorAll<HTMLElement>('[data-neural-node]')].map(node => ({ left: node.style.left, top: node.style.top }));
+
+    expect(stage).toHaveAttribute('data-motion-event', 'future-enter-new');
+    expect(stage).toHaveAttribute('data-semantic-zoom-motion', 'semantic-zoom-change');
+    fireEvent.mouseEnter(screen.getByRole('button', { name: /Candidate future goal/i }));
+    expect(screen.getByRole('button', { name: /Candidate future goal/i })).toHaveAttribute('data-motion-event', 'node-hover');
+    expect(container.querySelector('[data-motion-trace="hover-direct"]')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Candidate future goal/i }));
+    expect(value.onCandidateSelect).not.toHaveBeenCalled();
+    expect(value.onCandidateAddSupport).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} entryMotion="cached-result" />);
+    expect(stage).toHaveAttribute('data-motion-event', 'future-enter-cached');
+    expect([...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-future-node-id'))).toEqual(ids);
+    expect([...container.querySelectorAll<HTMLElement>('[data-neural-node]')].map(node => ({ left: node.style.left, top: node.style.top }))).toEqual(positions);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });

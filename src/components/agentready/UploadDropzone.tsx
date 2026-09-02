@@ -360,10 +360,10 @@ export function UploadDropzone({
             Supported example: <span className="font-mono text-foreground/80">https://github.com/Csisz/shipseal</span>. Public repositories only.
           </div>
           <details className="mt-3 rounded-xl border border-border/50 bg-background/20 text-xs text-muted-foreground">
-            <summary className="cursor-pointer px-3 py-2 font-medium hover:text-foreground">Public import limits and fallback</summary>
+            <summary className="cursor-pointer px-3 py-2 font-medium hover:text-foreground">Public import and evidence limits</summary>
             <div className="space-y-2 border-t border-border/45 px-3 py-3">
-              <p>Local browser import may be blocked by CORS or network policy. Hosted demos can use the ShipSeal archive proxy.</p>
-              <p>If import fails, download the repository ZIP from GitHub and upload it here.</p>
+              <p>ShipSeal resolves an immutable commit, discovers the repository tree, and reads a deterministic selection of text evidence. It does not download the whole repository archive for normal public import.</p>
+              <p>Large repositories may complete as a bounded scan. Not observed within that boundary does not mean confirmed missing.</p>
             </div>
           </details>
           <Button
@@ -395,7 +395,9 @@ function TrustHintStrip() {
   return (
     <div className="mb-4 flex items-start gap-2 rounded-xl border border-border/55 bg-secondary/15 px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
       <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" />
-      <span>ShipSeal performs a static scan of allowed repository evidence. Imported code is never executed.</span>
+      <span>
+        ShipSeal analyzes repository files statically. Imported repository code is not executed. GitHub access follows approved permissions, and repository changes require a separate confirmation. <a href="/trust" className="text-primary hover:underline">Trust details</a>
+      </span>
     </div>
   );
 }

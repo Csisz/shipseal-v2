@@ -105,7 +105,7 @@ export function PostScanViewSelector({
 
       <div className="relative mx-auto flex min-h-[calc(100svh-4rem)] max-w-[1600px] flex-col px-4 py-6 sm:px-6 md:py-8 lg:px-8">
         <header className="mx-auto mb-5 max-w-2xl text-center motion-safe:animate-fade-in-up motion-reduce:animate-none md:mb-7">
-          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary-glow">
+          <div data-shared-repository-anchor className="font-mono text-[10px] uppercase tracking-[0.22em] text-primary-glow">
             Repository understood · {report.repoName}
           </div>
           <h1 id="post-scan-view-selector-heading" className="mt-2 font-display text-2xl font-semibold tracking-[-0.025em] sm:text-3xl md:text-4xl">
@@ -172,6 +172,11 @@ export function PostScanViewSelector({
             disabled={futureCardDisabled}
           />
         </div>
+        {(analysisStartable || operationResumable) && (
+          <p className="mx-auto mt-3 max-w-3xl text-center text-xs leading-relaxed text-muted-foreground">
+            Deep Analysis sends selected, bounded repository evidence to the configured AI provider after server-side preparation and best-effort redaction. A unit is charged only after successful durable completion. <a href="/privacy#deterministic-ai" className="text-primary hover:underline">How AI processing works</a>
+          </p>
+        )}
       </div>
     </section>
   );

@@ -71,6 +71,27 @@ Suggested timings:
 
 ## Signature Motion Patterns
 
+## Repository Map Motion Hierarchy
+
+Repository Universe and Repository Futures share one bounded presentation vocabulary:
+
+1. **Orientation** keeps the current project and map direction legible.
+2. **Reveal** introduces repository, landmark, relationship and context layers in that order.
+3. **Relationship tracing** wakes direct parents, children and their connecting route.
+4. **Selection and focus** pins local context, updates the inspector and only moves the camera when needed.
+5. **Route resolution** travels from the current repository through Primary and then Supporting paths.
+6. **Semantic zoom disclosure** crossfades anchor, compact, title and near detail without moving topology.
+7. **State transition** connects Universe and Futures as perspectives of the same repository.
+
+The implementation timing bands are deliberately short:
+
+- micro interaction: 100-180 ms
+- local focus and node disclosure: 160-260 ms
+- relationship and route resolution: 220-500 ms
+- workspace perspective transition: 280-550 ms
+
+These motions are presentation-only. They never trigger analysis, persistence, billing or graph mutation. Under `prefers-reduced-motion`, movement and route drawing resolve immediately while the same information hierarchy remains visible.
+
 ### Intelligence Reveal™
 
 Used after scan completion.

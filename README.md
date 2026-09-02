@@ -11,8 +11,8 @@ ShipSeal analyzes repository structure and metadata. It does not execute uploade
 ## What Works Now
 
 - ZIP upload scanning in the browser.
-- Public GitHub repo import when browser ZIP fetch is available, with a Vercel same-origin proxy option for hosted demos.
-- Graceful manual ZIP fallback when GitHub import fails.
+- Public and connected GitHub import through immutable-commit tree discovery and selected blob reads.
+- Deterministic full/bounded evidence coverage without whole-repository GitHub ZIP ingestion.
 - Sample report for `sample-nextjs-app`.
 - Deterministic readiness rule: score >= 85 and zero critical blockers.
 - AI Readiness Narrative generated locally from scan metadata.
@@ -26,7 +26,7 @@ ShipSeal analyzes repository structure and metadata. It does not execute uploade
 - Sanitized repo context preview/export.
 - Full ZIP export with manifest-based Delivery Pack folders.
 - Metadata-only recent scan history.
-- Optional private account-backed projects and durable scan history after an explicit Save project action.
+- Private account-backed projects and durable scan history automatically saved after a valid completed scan while signed in.
 
 ## Run Locally
 
@@ -37,7 +37,7 @@ npm run dev
 
 Vite defaults to port `8080`. If that port is busy, Vite may choose another port.
 
-Use `npm run dev` for frontend-only local development. Use `vercel dev` when you also need the Vercel API routes such as `/api/repository-intelligence`, `/api/github-archive`, `/api/create-readiness-pr`, `/api/github-app/repositories`, `/api/github-app/archive`, `/api/github-app/create-readiness-pr`, and the legacy `/api/audit-request` contact endpoint.
+Use `npm run dev` for frontend-only local development. Use `vercel dev` when you also need the Vercel API routes such as `/api/repository-evidence`, `/api/repository-intelligence`, account/project/billing routes, `/api/github-app/repositories`, and `/api/github-app/create-readiness-pr`. Archive routes remain legacy/write-workflow compatibility surfaces and are not the normal GitHub scan path.
 
 Omega 18.1 durable projects use dedicated GitHub OAuth identity and PostgreSQL. Configure the server-only account variables from `.env.example`, apply `npm run db:migrate`, then use `vercel dev`. Anonymous ZIP/public scans remain available without an account. Opening a saved scan does not rescan, call the provider, or mutate GitHub. Omega 18.4 adds an owner-scoped, versioned baseline-to-later-scan verification relationship; Applied to review branch and PR opened remain Pending verification until compatible rescan evidence exists. Omega 19.1 requires an authenticated account and server-side entitlement before ShipSeal-funded production AI, reserves one allowance unit for a logical Repository Futures analysis, and enforces persisted global provider-call and in-flight limits. Omega 19.2 adds Stripe-hosted Pro Checkout and Customer Portal sessions plus signed-webhook synchronization into that existing entitlement boundary. See [Stripe Billing Activation](docs/implementation/STRIPE_BILLING_ACTIVATION.md), [Account and Project Persistence Architecture](docs/implementation/ACCOUNT_PERSISTENCE_ARCHITECTURE.md), and [Authoritative Verification Relationship](docs/implementation/AUTHORITATIVE_VERIFICATION_RELATIONSHIP.md).
 
@@ -67,7 +67,7 @@ Local ZIP mode remains browser-local and non-executing. It uses the ZIP central 
 
 Public GitHub repositories can be scanned through public URL import. A configured GitHub App can also return selected repository metadata and use server-side installation tokens for commit-bound tree/blob indexing and Readiness PR creation. Without GitHub App server env, the connected repo UI stays honest and reports that listing is not configured.
 
-Privacy note: uploaded ZIP scanning stays local/browser-side. ShipSeal does not execute uploaded code.
+Privacy note: deterministic uploaded-ZIP scanning stays local/browser-side. ShipSeal does not execute uploaded code. If a signed-in user explicitly starts Deep Analysis, selected bounded evidence derived from the ZIP is sent through the server to the configured AI provider; completed scans also autosave a private derived result snapshot.
 
 Recommended demo path:
 
@@ -87,7 +87,7 @@ npm run dev
 
 For Vercel, use `npm run build` and publish the `dist` directory; the serverless endpoints under `api/` include selective repository evidence import, account/billing state, Repository Futures, and GitHub App repository/PR operations. Public GitHub API capacity is intentionally bounded; configured GitHub App installation access is preferred for private and larger connected repositories.
 
-For Netlify/static-only hosting, the app still works with ZIP upload and sample project flow, but the Vercel API endpoint is not available unless an equivalent same-origin function is implemented. See [Hosted Demo Readiness](docs/demo/HOSTED_DEMO_READINESS.md) for the full deployment and validation checklist.
+For Netlify/static-only hosting, the app still works with deterministic ZIP upload and sample flows, but account, selective GitHub evidence, billing, and Deep Analysis API endpoints are unavailable unless equivalent server functions are implemented. See [Hosted Demo Readiness](docs/demo/HOSTED_DEMO_READINESS.md) for the full deployment and validation checklist.
 
 ## Deploy To Vercel
 
@@ -100,7 +100,7 @@ vercel deploy
 vercel --prod
 ```
 
-Use `vercel dev` to verify the frontend and `/api/github-archive` endpoint together before publishing. In local Vite mode, public GitHub import can still hit browser CORS restrictions; in Vercel hosted mode, ShipSeal uses `/api/github-archive` first for public GitHub ZIP import.
+Use `vercel dev` to verify the frontend and `/api/repository-evidence` endpoint together before publishing. Hosted public and connected GitHub scans use selective tree/blob evidence acquisition; they do not use the archive endpoint as a normal-scan fallback.
 
 Expected dev modes:
 
@@ -154,7 +154,7 @@ When a scan came from GitHub import, ShipSeal can auto-fill repository owner and
 
 ShipSeal creates a separate branch such as `shipseal/readiness-pack` or a timestamped fallback branch, uploads the Readiness Fix Pack files, and opens a Pull Request for human review. ShipSeal never pushes directly to `main`.
 
-Recommended flow: `Connect GitHub -> select repository -> scan -> generate -> create PR`. The current GitHub App MVP uses scoped installation tokens server-side for repository listing, archive download, and PR creation. GitHub App installation authorization remains separate from the implemented GitHub OAuth account session. Account sessions and private scan history are stored server-side; installation webhooks and lifecycle audit-log hardening are not implemented.
+Recommended flow: `Connect GitHub -> select repository -> scan -> generate -> create PR`. The current GitHub App uses scoped installation tokens server-side for repository listing, selective tree/blob reads, and explicit PR creation. GitHub App installation authorization remains separate from the implemented GitHub OAuth account session. Account sessions and private scan history are stored server-side; installation webhooks and lifecycle audit-log hardening are not implemented.
 
 Workflow files such as `.github/workflows/ci.yml` are sensitive and should be reviewed carefully before merging. See [Create Readiness PR Plan](docs/implementation/CREATE_READINESS_PR_PLAN.md).
 
@@ -176,7 +176,8 @@ Current MVP:
 - `Connect GitHub` opens the GitHub App install page when frontend app env is configured,
 - `/api/github-app/callback` reads `installation_id` and redirects to `/?githubInstallationId=...#scan`,
 - `/api/github-app/repositories` returns `not_configured` without server credentials and can list repositories when GitHub App server env is configured,
-- `/api/github-app/archive` downloads the selected repository archive with a server-side GitHub App installation token,
+- `/api/repository-evidence` resolves an immutable commit and returns selected evidence for public or connected GitHub scans,
+- `/api/github-app/archive` remains a legacy compatibility route and is not used by normal connected scanning,
 - `/api/github-app/create-readiness-pr` creates the ShipSeal branch, writes Readiness Fix Pack files, and opens a PR with a server-side installation token,
 - shared GitHub connection state tracks source mode, owner/repo, repository listing capability, and PR creation capability,
 - no stored tokens,
@@ -191,7 +192,7 @@ Frontend demo env:
 
 The primary `Connect GitHub` action opens `/api/github-app/login` and uses server-side OAuth to discover existing GitHub App installations. `VITE_GITHUB_APP_INSTALL_URL` or `VITE_GITHUB_APP_SLUG` powers the secondary `Install or configure ShipSeal GitHub App` action for first-time installation or changing repository access.
 
-Server-side Vercel env for OAuth connect, repository listing, App archive download, and App PR creation:
+Server-side Vercel env for OAuth connect, repository listing, selective repository evidence, and App PR creation:
 
 - `GITHUB_APP_ID`
 - `GITHUB_APP_PRIVATE_KEY`
@@ -311,10 +312,10 @@ Click `View sample report` on the landing page. The sample demonstrates:
 
 Limitations:
 
-- Public repositories only.
-- No tokens, credentials, OAuth, or private repo access.
-- Browser ZIP fetch may fail due to CORS, network policy, repo availability, branch names, or ZIP size.
-- If import fails, download the ZIP from GitHub and upload it manually.
+- Public URL mode accepts public repositories only.
+- Private repositories require an approved GitHub App installation.
+- GitHub availability, permission, rate-limit, and operational safety ceilings still apply.
+- Large repositories may complete with an explicit bounded evidence boundary rather than every eligible text file.
 
 ## Architecture
 
@@ -322,7 +323,7 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 
 - `src/lib/scanEngine/`: scan engine boundary and local implementation.
 - `src/lib/github/`: public GitHub URL parsing and ZIP import helper.
-- `src/lib/scanner.ts`: JSZip-based metadata scanner.
+- `src/lib/scanner.ts`: repository metadata scanner; local ZIP acquisition uses bounded random-access ZIP reading.
 - `src/lib/scoring.ts`: deterministic readiness scoring.
 - `src/lib/ai/`: local deterministic AI provider boundary.
 - `src/lib/repositoryIntelligence/`: deterministic evidence, bounded context, validated provider-neutral intelligence, artifact review/apply and verification.
@@ -361,8 +362,8 @@ ShipSeal is a React/Vite/shadcn application with local-first scanning.
 - No backend worker.
 - GitHub OAuth accounts and PostgreSQL-backed private projects/scans are implemented when server account services are configured; anonymous scan/export remains available without them.
 - Stripe Checkout and subscription synchronization are available when the server-only billing environment and migration are configured; Team checkout, annual pricing, top-ups, and custom invoice UI are not implemented.
-- Private repository access requires a separately configured GitHub App and server-side credentials. Account identity does not grant repository installation access. Installation webhooks, scheduled rescans, public sharing, Stripe billing synchronization and organization roles are not implemented.
-- Repository Futures includes a session-local deterministic Future Graph, bounded Product Opportunity enrichment, canvas-first Quick Path, Deep Configuration and selected-path Universe projection. Future artifact preparation, prompt packs, persistence, GitHub Future apply, rescan verification and verified unlocks remain deferred.
+- Private repository access requires a separately configured GitHub App and server-side credentials. Account identity does not grant repository installation access. Installation webhooks, scheduled rescans, public sharing, and organization roles are not implemented.
+- Repository Futures supports explicit paid generation, durable staged recovery, canonical result persistence, and completion-only allowance consumption. Applying Future plans to GitHub remains separate and review-controlled.
 - Optional external intelligence is disabled by default, requires explicit server-only configuration and never replaces deterministic evidence or fallback.
 - No browser API keys.
 - Scan cancellation is best-effort while JSZip work is in progress.

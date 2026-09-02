@@ -12,6 +12,7 @@ import { RepositoryIntelligencePreview } from './landing/RepositoryIntelligenceP
 import { Reveal } from './landing/Reveal';
 import { UpgradeToProButton } from '@/components/billing/BillingActionButton';
 import { formatMonthlyPlanPrice, PUBLIC_BILLING_CATALOG } from '@/lib/billing/catalog';
+import { SHIPSEAL_PUBLIC_CONTACT_EMAIL } from '@/lib/trust/publicTrust';
 
 interface Props {
   onSampleReport: () => void;
@@ -148,6 +149,11 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
               <p className="md:col-span-2">ShipSeal provides technical readiness guidance and documentation support. This is not legal advice or compliance certification.</p>
             </div>
           </details>
+          <div className="mx-auto mt-4 flex max-w-5xl flex-wrap gap-x-4 gap-y-2 text-sm">
+            <a href="/trust" className="text-primary hover:underline">Trust center</a>
+            <a href="/trust/github" className="text-primary hover:underline">GitHub permissions</a>
+            <a href="/privacy#deterministic-ai" className="text-primary hover:underline">AI and repository data</a>
+          </div>
         </div>
       </section>
 
@@ -181,6 +187,9 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
             </Card>
           ))}
         </div>
+        <p className="mx-auto mt-4 max-w-4xl text-xs leading-relaxed text-muted-foreground">
+          Pro is billed monthly. Stripe processes payment information and hosts subscription management. Deep Analysis allowance corrections after technical failure are not monetary subscription refunds. See <a href="/terms" className="text-primary hover:underline">Terms</a>.
+        </p>
       </section>
 
       <section id="contact" className="container scroll-mt-20 pb-16 md:pb-24">
@@ -202,9 +211,12 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
       <footer className="border-t border-border/45 py-8">
         <div className="container flex flex-col gap-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>ShipSeal {SHIPSEAL_VERSION} · Repository intelligence without code execution.</span>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            <a href="/trust" className="hover:text-foreground">Trust</a>
             <a href="/privacy" className="hover:text-foreground">Privacy</a>
+            <a href="/terms" className="hover:text-foreground">Terms</a>
             <a href="/security" className="hover:text-foreground">Security</a>
+            <a href="/trust/github" className="hover:text-foreground">GitHub permissions</a>
           </div>
         </div>
       </footer>
@@ -303,7 +315,7 @@ function ContactDisclosure() {
       '',
       draft.message,
     ].join('\n');
-    return `mailto:hello@shipseal.dev?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    return `mailto:${SHIPSEAL_PUBLIC_CONTACT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }, [draft]);
 
   const prepare = (event: FormEvent) => {

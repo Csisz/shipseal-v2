@@ -116,7 +116,9 @@ describe('Omega 18.1 account and persistence UI', () => {
     expect(screen.queryByText(/readiness score/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
     expect(screen.getByRole('button', { name: 'Delete my ShipSeal account' })).toBeInTheDocument();
-    expect(screen.getByText(/does not modify GitHub/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not cancel or erase Stripe records/i)).toBeInTheDocument();
+    expect(screen.getByText(/does not.*uninstall the GitHub App/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Privacy page' })).toHaveAttribute('href', '/privacy');
   });
 
   it('shows immutable scan history, long branch metadata, and explicit scan/project deletion', async () => {

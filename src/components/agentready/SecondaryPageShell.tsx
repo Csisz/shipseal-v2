@@ -2,6 +2,7 @@ import { ArrowLeft } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Nav } from './Nav';
+import { PublicTrustFooter } from '@/components/trust/PublicTrustFooter';
 
 interface SecondaryPageShellProps {
   eyebrow: string;
@@ -33,6 +34,7 @@ export function SecondaryPageShell({
         </header>
         <div className="mt-10">{children}</div>
       </main>
+      <PublicTrustFooter />
     </div>
   );
 }

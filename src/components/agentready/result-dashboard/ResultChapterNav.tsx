@@ -20,7 +20,8 @@ export function ResultChapterNav({
 }) {
   const stageOverlay = variant === 'overlay';
   return (
-    <nav className={stageOverlay ? 'pointer-events-auto min-w-0 rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.68)] p-1 shadow-[0_18px_55px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl motion-safe:animate-fade-in' : 'mb-2'} aria-label="Result chapters" data-mobile-layout="two-by-two">
+    <nav className={stageOverlay ? 'pointer-events-auto min-w-0 rounded-2xl border border-primary/15 bg-[hsl(var(--universe-surface)/0.68)] p-1 shadow-[0_18px_55px_hsl(var(--universe-stage-bg)/0.5)] backdrop-blur-xl motion-safe:animate-fade-in' : 'mb-2'} aria-label="Result chapters" data-mobile-layout="two-by-two" data-experience-layer="advanced">
+      {stageOverlay && <div className="px-2 pb-1 pt-0.5 font-mono text-[8px] uppercase tracking-[0.15em] text-muted-foreground">Advanced workspace</div>}
       <div className={stageOverlay ? 'grid min-w-0 grid-cols-2 gap-1 sm:grid-cols-4' : 'grid grid-cols-2 gap-2 sm:grid-cols-4'}>
         {RESULT_CHAPTERS.map(chapter => (
         <button
