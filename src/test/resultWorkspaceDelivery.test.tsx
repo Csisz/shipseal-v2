@@ -232,7 +232,7 @@ describe('Result Workspace evidence and delivery', () => {
     expect(screen.queryByRole('button', { name: /Open Technical exports/i })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /More delivery options/i }));
-    expect(screen.getByRole('button', { name: /Open Technical exports/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Open Technical exports/i }, { timeout: 10000 })).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });

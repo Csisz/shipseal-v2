@@ -24,6 +24,7 @@ describe('hosted deployment configuration', () => {
     });
     expect(config.routes).toBeUndefined();
     expect(config.rewrites).toEqual([
+      { source: '/api/admin', destination: '/api/admin-router' },
       { source: '/api/account/:route(login|callback|session|logout|delete|usage|ai-operation-status|ai-operation-result)', destination: '/api/account-router?route=:route' },
       { source: '/api/billing/:route(create-checkout-session|create-portal-session|webhook)', destination: '/api/billing-router?route=:route' },
       { source: '/api/projects/:projectId/scans', destination: '/api/persistence-router?route=project-scans&projectId=:projectId' },

@@ -11,6 +11,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/admin",
+      "destination": "/api/admin-router"
+    },
+    {
       "source": "/api/account/:route(login|callback|session|logout|delete|usage|ai-operation-status|ai-operation-result)",
       "destination": "/api/account-router?route=:route"
     },

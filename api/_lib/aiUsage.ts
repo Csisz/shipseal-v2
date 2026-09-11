@@ -33,6 +33,7 @@ import type {
   AiOperationStatusSnapshot,
   PersistedRepositoryFutureResult,
 } from '../../src/lib/aiOperationRecoveryContract.js';
+import { recordOperationalEvent } from './operationalEvents.js';
 
 export type AiOperationKind = 'repository_futures' | 'repository_deep_intelligence';
 export type AiStageKind = 'analysis' | 'roots' | 'expansion';
@@ -706,6 +707,10 @@ export class PostgresAiUsageStore implements AiUsageStore {
       return mapAuthorization(operation, authorizedStage, leaseId);
     });
     if ('billingIntegrityDenial' in outcome) throw outcome.billingIntegrityDenial;
+    void recordOperationalEvent(this.sql, {
+      category: 'ai_stage', action: `${input.stageKind}.authorize`, status: 'succeeded', userId: input.userId,
+      publicOperationId: outcome.publicOperationId, stage: input.stageKind, metadata: { operationKind: input.operationKind },
+    });
     return outcome;
   }
 
@@ -802,7 +807,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
   }
 
   async acquireProviderPermit(input: AcquireProviderPermitInput): Promise<ProviderPermit> {
-    return this.sql.begin(async transaction => {
+    const result = await this.sql.begin(async transaction => {
       const stageRows = await transaction<Record<string, unknown>[]>`
         select * from public.shipseal_ai_operation_stages
         where id = ${input.authorization.stageId} and operation_id = ${input.authorization.operationId}
@@ -880,6 +885,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
       `;
       return { id: permitId, windowKey };
     });
+    return result;
   }
 
   async releaseProviderPermit(permit: ProviderPermit, now: Date) {

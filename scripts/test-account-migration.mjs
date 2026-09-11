@@ -25,11 +25,15 @@ const billingIntegrityMigrationFile = '0007_ai_billing_integrity.sql';
 const billingIntegrityMigrationIndex = migrationFiles.indexOf(billingIntegrityMigrationFile);
 if (billingIntegrityMigrationIndex === -1) throw new Error(`${billingIntegrityMigrationFile} is missing.`);
 const billingIntegrityMigration = migrations[billingIntegrityMigrationIndex];
+const operationalEventsMigrationFile = '0008_operational_events.sql';
+const operationalEventsMigrationIndex = migrationFiles.indexOf(operationalEventsMigrationFile);
+if (operationalEventsMigrationIndex === -1) throw new Error(`${operationalEventsMigrationFile} is missing.`);
 const accountTables = ['shipseal_users', 'shipseal_sessions', 'shipseal_projects', 'shipseal_scans', 'shipseal_verification_relationships', 'shipseal_schema_migrations'];
 const aiTables = ['shipseal_entitlements', 'shipseal_ai_operations', 'shipseal_ai_operation_stages', 'shipseal_ai_usage_ledger', 'shipseal_ai_budget_windows', 'shipseal_ai_provider_permits'];
 const billingIntegrityTables = ['shipseal_ai_usage_adjustments'];
 const billingTables = ['shipseal_billing_customers', 'shipseal_billing_subscriptions', 'shipseal_billing_events'];
-const requiredTables = [...accountTables, ...aiTables, ...billingIntegrityTables, ...billingTables];
+const operationalTables = ['shipseal_operational_events'];
+const requiredTables = [...accountTables, ...aiTables, ...billingIntegrityTables, ...billingTables, ...operationalTables];
 const normalizedSecurityMigration = securityMigration.replace(/\s+/g, ' ').trim().toLowerCase();
 const rlsTables = [...securityMigration.matchAll(/alter\s+table\s+(?:public\.)?([a-z0-9_]+)\s+enable\s+row\s+level\s+security\s*;/gi)].map(match => match[1]);
 const publicRevoke = securityMigration.match(/revoke\s+all\s+privileges\s+on\s+table([\s\S]*?)from\s+public\s*;/i)?.[1] ?? '';
@@ -144,7 +148,12 @@ if (!normalizedBillingIntegrityMigration.includes("values ('0007_ai_billing_inte
 // blocks. Validate that production-only contract above, then omit exactly those
 // statements while exercising the remaining migration and schema behavior twice.
 function forPgMem(file, migration) {
-  if (![securityMigrationFile, aiSecurityMigrationFile, billingSecurityMigrationFile, billingIntegrityMigrationFile].includes(file)) return migration;
+  if (![securityMigrationFile, aiSecurityMigrationFile, billingSecurityMigrationFile, billingIntegrityMigrationFile, operationalEventsMigrationFile].includes(file)) return migration;
+  if (file === operationalEventsMigrationFile) {
+    return migration
+      .replace(/alter\s+table\s+(?:public\.)?[a-z0-9_]+\s+enable\s+row\s+level\s+security\s*;/gi, '')
+      .replace(/revoke\s+all\s+privileges\s+on\s+table[\s\S]*?from\s+public\s*;/i, '');
+  }
   if (file === billingIntegrityMigrationFile) {
     return migration
       .replace(/alter\s+table\s+(?:public\.)?[a-z0-9_]+\s+enable\s+row\s+level\s+security\s*;/gi, '')

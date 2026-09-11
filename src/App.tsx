@@ -19,6 +19,7 @@ const Security = lazy(() => import('./pages/Security.tsx'));
 const Terms = lazy(() => import('./pages/Terms.tsx'));
 const Trust = lazy(() => import('./pages/Trust.tsx'));
 const GithubPermissions = lazy(() => import('./pages/GithubPermissions.tsx'));
+const Admin = lazy(() => import('./pages/Admin.tsx'));
 const NotFound = lazy(() => import('./pages/NotFound.tsx'));
 
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ const App = () => (
                 <Route path="/security" element={<Security />} />
                 <Route path="/trust" element={<Trust />} />
                 <Route path="/trust/github" element={<GithubPermissions />} />
+                <Route path="/admin" element={<Admin />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
