@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useUpgradeToProAction } from '@/components/billing/useUpgradeToProAction';
+import { operationSupportReference } from '@/lib/supportReference';
 
 export type PostScanEntryView = 'universe' | 'futures';
 
@@ -35,7 +36,9 @@ export function PostScanViewSelector({
   const upgrade = useUpgradeToProAction();
   const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;
   const futuresRetrying = futuresStatus?.state === 'preparing';
-  const supportReference = futuresStatus && 'diagnostics' in futuresStatus ? futuresStatus.diagnostics?.requestId : undefined;
+  const supportReference = futuresStatus && 'diagnostics' in futuresStatus
+    ? operationSupportReference(futuresStatus.diagnostics?.publicOperationId)
+    : null;
   const rateLimitRetryAt = futuresStatus?.state === 'preparing'
     ? futuresStatus.rateLimitRetryAt
     : futuresStatus && 'diagnostics' in futuresStatus ? futuresStatus.diagnostics?.rateLimitRetryAt : undefined;
@@ -132,12 +135,7 @@ export function PostScanViewSelector({
                   : futuresStatus?.message || 'Future pathways can be retried without scanning the repository again.'}
                 {!futuresRetrying && rateLimitWaiting ? ` Retry available in ${cooldownSeconds} seconds.` : ''}
               </p>
-              {supportReference && (
-                <details className="mt-2 text-xs text-muted-foreground">
-                  <summary className="cursor-pointer">Support details</summary>
-                  <div className="mt-1 font-mono">Reference: {supportReference}</div>
-                </details>
-              )}
+              {supportReference && <p className="mt-2 font-mono text-xs text-muted-foreground">Reference: {supportReference}</p>}
               {upgrade.state === 'error' && <p role="alert" className="mt-2 text-xs text-destructive">{upgrade.message}</p>}
             </div>
           </aside>

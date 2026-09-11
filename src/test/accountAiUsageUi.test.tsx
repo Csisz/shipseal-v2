@@ -35,7 +35,7 @@ describe('Omega 19.1 account AI usage UI', () => {
     render(<AccountContext.Provider value={accountValue()}><AccountUsageCard /></AccountContext.Provider>);
     expect(screen.getByTestId('account-ai-usage')).toHaveTextContent('Pro');
     expect(screen.getByText('6 of 10')).toBeInTheDocument();
-    expect(screen.getByText('3 used · 1 in progress')).toBeInTheDocument();
+    expect(screen.getByText('3 used · 1 held (not consumed)')).toBeInTheDocument();
     expect(screen.queryByText(/provider call|in-flight|global budget/i)).not.toBeInTheDocument();
   });
 

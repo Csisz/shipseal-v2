@@ -710,11 +710,36 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           return;
         }
         if (response.state === 'stage-enhanced') throw new Error('Incomplete staged response reached the Product Intelligence owner.');
-        const incompleteExpansion = response.diagnostics?.productStage === 'expansion';
+        // Expansion batches can finish concurrently. A sibling batch may have
+        // released the reservation after the first failed response was built,
+        // so refresh the settled operation before presenting retry/billing
+        // semantics to the user.
+        const settledOperation = await recoveryModule.getRepositoryFutureOperationStatus({
+          ...operationLookup,
+          publicOperationId: response.diagnostics?.publicOperationId,
+        }).catch(() => null);
+        const settledDiagnostics = settledOperation
+          ? {
+              ...response.diagnostics,
+              publicOperationId: settledOperation.publicOperationId,
+              operationRecoveryAction: settledOperation.recoveryAction,
+              operationCompletionState: settledOperation.completionState,
+              operationUserUnitState: settledOperation.userUnitState,
+              completedBatchCount: settledOperation.completedExpansionCount,
+              ...(settledOperation.expectedExpansionCount === null
+                ? {}
+                : { totalBatchCount: settledOperation.expectedExpansionCount }),
+              ...(settledOperation.leaseExpiresAt
+                ? { operationLeaseExpiresAt: settledOperation.leaseExpiresAt }
+                : {}),
+            }
+          : response.diagnostics;
+        const settledRetryable = settledOperation?.retryable ?? response.retryable;
+        const incompleteExpansion = settledDiagnostics?.productStage === 'expansion';
         productRateLimitCooldownUntilRef.current = response.category === 'rate_limited'
-          ? response.diagnostics?.rateLimitRetryAt || 0
+          ? settledDiagnostics?.rateLimitRetryAt || 0
           : 0;
-        const terminalWithoutCharge = !response.retryable
+        const terminalWithoutCharge = !settledRetryable
           && response.category !== 'allowance_exhausted'
           && response.category !== 'upgrade_required'
           && response.category !== 'entitlement_inactive';
@@ -725,10 +750,10 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
             ? 'Repository Futures could not be completed. Your Deep Analysis allowance was not used.'
             : response.category === 'request_timeout'
             ? 'ShipSeal can safely resume this Future analysis. Completed stages remain saved.'
-            : repositoryFutureFailureMessage(response.category, response.diagnostics),
-          retryable: response.retryable,
+            : repositoryFutureFailureMessage(response.category, settledDiagnostics),
+          retryable: settledRetryable,
           category: response.category,
-          diagnostics: response.diagnostics,
+          diagnostics: settledDiagnostics,
         };
         setState(current => ({ ...current, repositoryProductIntelligenceStatus: fallbackStatus }));
       } catch {

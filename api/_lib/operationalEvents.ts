@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { Sql } from 'postgres';
+import { operationSupportReference } from '../../src/lib/supportReference.js';
 
 export type OperationalEventCategory = 'auth' | 'github' | 'ingestion' | 'scan' | 'persistence' | 'ai_operation' | 'ai_stage' | 'provider' | 'billing' | 'stripe_webhook' | 'github_mutation' | 'export' | 'system';
 export type OperationalEventStatus = 'started' | 'succeeded' | 'failed' | 'retryable' | 'duplicate' | 'ignored';
@@ -24,8 +25,7 @@ export function sanitizeOperationalMetadata(metadata: Record<string, unknown> = 
   return Object.fromEntries(Object.entries(metadata).filter(([key, value]) => !SECRET_KEY.test(key) && (value === null || ['string', 'number', 'boolean'].includes(typeof value))));
 }
 export function supportReference(publicOperationId: string) {
-  const suffix = publicOperationId.replace(/[^A-Za-z0-9]/g, '').slice(-10).toUpperCase();
-  return `RI-${suffix || randomBytes(5).toString('hex').toUpperCase()}`;
+  return operationSupportReference(publicOperationId) || `RI-${randomBytes(5).toString('hex').toUpperCase()}`;
 }
 export async function recordOperationalEvent(sql: Sql, input: OperationalEventInput) {
   const eventId = `evt_${randomBytes(12).toString('base64url')}`;

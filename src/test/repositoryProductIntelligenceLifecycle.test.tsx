@@ -6,6 +6,7 @@ import type { RepoScanInput } from '@/lib/types';
 const lifecycleMocks = vi.hoisted(() => ({
   scan: vi.fn(),
   request: vi.fn(),
+  getOperationStatus: vi.fn(),
 }));
 
 vi.mock('@/lib/scanEngine', async importOriginal => {
@@ -28,6 +29,11 @@ vi.mock('@/lib/repositoryIntelligence/deepIntelligenceClient', () => ({
   requestRepositoryIntelligenceEnhancement: lifecycleMocks.request,
   requestRepositoryProductIntelligenceStaged: lifecycleMocks.request,
 }));
+
+vi.mock('@/lib/aiOperationRecovery', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/lib/aiOperationRecovery')>();
+  return { ...actual, getRepositoryFutureOperationStatus: lifecycleMocks.getOperationStatus };
+});
 
 import { useRepoScan } from '@/hooks/useRepoScan';
 
@@ -104,6 +110,8 @@ describe('report-scoped Product Intelligence lifecycle', () => {
   beforeEach(() => {
     lifecycleMocks.scan.mockReset();
     lifecycleMocks.request.mockReset();
+    lifecycleMocks.getOperationStatus.mockReset();
+    lifecycleMocks.getOperationStatus.mockResolvedValue(null);
     lifecycleMocks.scan.mockImplementation(async (_input, callbacks) => {
       callbacks?.onScanInput?.(scanInput);
       return buildSampleReport();
@@ -157,6 +165,56 @@ describe('report-scoped Product Intelligence lifecycle', () => {
     await waitFor(() => expect(second.result.current.repositoryProductIntelligenceStatus).toMatchObject({ state: 'fallback', category: 'request_timeout' }));
     expect(second.result.current.repositoryProductIntelligenceStatus.message)
       .toBe('ShipSeal can safely resume this Future analysis. Completed stages remain saved.');
+  });
+
+  it('uses the settled operation state when a concurrent stage released the unit', async () => {
+    lifecycleMocks.request.mockResolvedValueOnce({
+      ...timeoutResponse(),
+      category: 'evidence_validation_failed',
+      message: 'Some future pathways could not be completed.',
+      diagnostics: {
+        ...timeoutResponse().diagnostics,
+        publicOperationId: 'op_terminal_fixture',
+        operationRecoveryAction: 'retry_stage',
+        operationCompletionState: 'retryable',
+        operationUserUnitState: 'reserved',
+      },
+    });
+    lifecycleMocks.getOperationStatus
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        publicOperationId: 'op_terminal_fixture',
+        operationState: 'terminal_failure',
+        rootStageState: 'succeeded',
+        retryable: false,
+        completionState: 'terminal',
+        cacheAvailable: false,
+        rootCacheAvailable: true,
+        completedExpansionCount: 0,
+        expectedExpansionCount: 3,
+        leaseExpiresAt: null,
+        userUnitState: 'released',
+        recoveryAction: 'terminal_failure',
+        integrityRecoveryAttemptsUsed: 0,
+        reconciliationOutcome: 'not-required',
+      });
+    const { result } = renderHook(() => useRepoScan());
+
+    await act(async () => { await result.current.startScan(new File(['zip'], 'terminal.zip')); });
+    await act(async () => { await result.current.prepareRepositoryProductIntelligence(); });
+
+    await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus).toMatchObject({
+      state: 'fallback',
+      retryable: false,
+      category: 'evidence_validation_failed',
+      message: 'Repository Futures could not be completed. Your Deep Analysis allowance was not used.',
+      diagnostics: {
+        publicOperationId: 'op_terminal_fixture',
+        operationRecoveryAction: 'terminal_failure',
+        operationCompletionState: 'terminal',
+        operationUserUnitState: 'released',
+      },
+    }));
   });
 
   it('terminates cancellation and issues a new provider request on retry', async () => {

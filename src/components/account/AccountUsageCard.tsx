@@ -55,7 +55,7 @@ export function AccountUsageCard() {
             <div className="text-sm text-muted-foreground">Deep Analyses remaining</div>
           </div>
           <div className="text-right text-sm text-muted-foreground">
-            <div>{usage.deepAnalysis.used} used · {usage.deepAnalysis.reserved} in progress</div>
+            <div>{usage.deepAnalysis.used} used · {usage.deepAnalysis.reserved} held (not consumed)</div>
             <div>{usage.deepAnalysis.limit} total this period</div>
           </div>
         </div>

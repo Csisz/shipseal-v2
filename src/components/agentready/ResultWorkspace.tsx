@@ -36,6 +36,7 @@ import {
 } from './result-workspace/model/resultWorkspaceSelectors';
 import { AiWorkspaceHero } from './result-workspace/universe/UniverseWorkspace';
 import { RepositoryFormation } from './RepositoryFormation';
+import { operationSupportReference } from '@/lib/supportReference';
 import { PanelsTopLeft } from 'lucide-react';
 import type { RepositoryFuturesEntryMotion } from './result-workspace/futures/repositoryFuturesMotion';
 const RepositoryFuturesWorkspace = lazy(() => import('./result-workspace/futures/RepositoryFuturesWorkspace'));
@@ -305,7 +306,12 @@ export function ResultWorkspace({
         stage="directions"
         title="Forming future pathways"
         action={repositoryProductIntelligenceStatus?.message || 'Connecting repository evidence to grounded future directions.'}
-        failure={terminalFailure ? { message: repositoryProductIntelligenceStatus.message } : undefined}
+        failure={terminalFailure ? {
+          message: repositoryProductIntelligenceStatus.message,
+          reference: 'diagnostics' in repositoryProductIntelligenceStatus
+            ? operationSupportReference(repositoryProductIntelligenceStatus.diagnostics?.publicOperationId)
+            : null,
+        } : undefined}
         fullScreen
       />
     );

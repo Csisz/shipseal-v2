@@ -20,6 +20,7 @@ interface RepositoryFormationProps {
   onCancel?: () => void;
   failure?: {
     message: string;
+    reference?: string | null;
     onRetry?: () => void;
     onReturn?: () => void;
   };
@@ -82,6 +83,7 @@ export function RepositoryFormation({
         <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
           {failure?.message || action}
         </p>
+        {failure?.reference && <p className="mt-2 font-mono text-xs text-muted-foreground">Reference: {failure.reference}</p>}
 
         <div className="repository-formation-bloom relative mt-6 size-44 sm:mt-7 sm:size-48" aria-hidden="true">
           <svg viewBox="0 0 280 280" className="absolute inset-0 h-full w-full overflow-visible" fill="none">

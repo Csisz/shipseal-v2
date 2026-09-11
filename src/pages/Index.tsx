@@ -3,6 +3,7 @@ import { Nav } from '@/components/agentready/Nav';
 import { Landing } from '@/components/agentready/Landing';
 import { UploadDropzone } from '@/components/agentready/UploadDropzone';
 import { RepositoryFormation } from '@/components/agentready/RepositoryFormation';
+import { operationSupportReference } from '@/lib/supportReference';
 import { SurfaceState } from '@/components/agentready/SurfaceState';
 import { buildSampleReport } from '@/lib/readiness';
 import { SAMPLE_PROJECT_REPO_INPUT } from '@/lib/demo/sampleReadiness';
@@ -635,6 +636,9 @@ const Index = () => {
   const formationFailure = productFailure || scan.repositoryIntelligenceReviewError || activeFuturePreparationState === 'failed'
     ? {
         message: productFailure?.message || scan.repositoryIntelligenceReviewError || futurePreparation.error || 'Future pathways could not be prepared.',
+        reference: productFailure && 'diagnostics' in productFailure
+          ? operationSupportReference(productFailure.diagnostics?.publicOperationId)
+          : null,
         onRetry: productFailure || activeFuturePreparationState === 'failed' ? retryFutureAnalysis : undefined,
         onReturn: reset,
       }

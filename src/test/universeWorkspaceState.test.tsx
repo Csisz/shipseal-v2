@@ -256,6 +256,40 @@ describe('Repository Universe workspace state', () => {
     });
   });
 
+  it('uses the selected Atlas entity for the Universe fast path', async () => {
+    const report = buildSampleReport();
+    const universe = buildRepositoryUniverseModel(report);
+    const atlas = buildRepositoryAtlasModel(report);
+    const transformation = buildRepositoryTransformationProposalModel(report, universe, atlas);
+    const actionableAtlasNodeId = transformation.proposals
+      .flatMap(proposal => proposal.graphChanges.affectedExistingNodeIds)
+      .find(nodeId => atlas.nodes.some(node => node.id === nodeId));
+    expect(actionableAtlasNodeId).toBeTruthy();
+    const actionableAtlasNode = atlas.nodes.find(node => node.id === actionableAtlasNodeId);
+    const mappedUniverseNode = universe.nodes.find(node => node.path === actionableAtlasNode?.path)
+      || universe.nodes.find(node => node.metadata.atlasNodeId === actionableAtlasNodeId);
+    expect(mappedUniverseNode).toBeTruthy();
+
+    render(
+      <ResultDashboard
+        report={report}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+      />
+    );
+
+    switchToAtlas2D();
+    fireEvent.click(screen.getByTestId(`atlas-node-${actionableAtlasNodeId}`));
+
+    expect(screen.getByRole('heading', { name: mappedUniverseNode!.label })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Fix this/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Fix this/i }));
+
+    expect(await screen.findByTestId('agent-flight-path-panel')).toBeInTheDocument();
+  });
+
   it('preserves Repository Universe selection and camera state in fullscreen', async () => {
     const requestFullscreen = vi.fn().mockResolvedValue(undefined);
     const exitFullscreen = vi.fn().mockResolvedValue(undefined);

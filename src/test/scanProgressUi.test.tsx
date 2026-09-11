@@ -60,9 +60,10 @@ describe('unified repository formation experience', () => {
       act(() => vi.advanceTimersByTime(8_000));
       expect(screen.getByTestId('formation-long-running')).toHaveTextContent(/Still working on product directions/i);
 
-      rerender(<RepositoryFormation repositoryName="fixture" stage="directions" title="Forming repository intelligence" action="" failure={{ message: 'Future analysis is taking longer than expected.', onRetry }} />);
+      rerender(<RepositoryFormation repositoryName="fixture" stage="directions" title="Forming repository intelligence" action="" failure={{ message: 'Future analysis is taking longer than expected.', reference: 'RI-789XYZQRST', onRetry }} />);
       expect(document.querySelector('.repository-formation-active-trace')).not.toBeInTheDocument();
       expect(document.querySelector('.repository-formation-orbit')).not.toBeInTheDocument();
+      expect(screen.getByText('Reference: RI-789XYZQRST')).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Retry Future analysis' }));
       expect(onRetry).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId('repository-formation')).toHaveAttribute('aria-busy', 'false');
