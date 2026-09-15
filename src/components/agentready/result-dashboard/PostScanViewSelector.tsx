@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useUpgradeToProAction } from '@/components/billing/useUpgradeToProAction';
 import { operationSupportReference } from '@/lib/supportReference';
+import { ScanCoverageDisclosure } from './ScanCoverageDisclosure';
 
 export type PostScanEntryView = 'universe' | 'futures';
 
@@ -34,6 +35,7 @@ export function PostScanViewSelector({
 }) {
   const rootRef = useRef<HTMLElement>(null);
   const upgrade = useUpgradeToProAction();
+  const bounded = report.scanSummary.scanMode === 'bounded';
   const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;
   const futuresRetrying = futuresStatus?.state === 'preparing';
   const supportReference = futuresStatus && 'diagnostics' in futuresStatus
@@ -114,6 +116,7 @@ export function PostScanViewSelector({
           <h1 id="post-scan-view-selector-heading" className="mt-2 font-display text-2xl font-semibold tracking-[-0.025em] sm:text-3xl md:text-4xl">
             Choose your first perspective
           </h1>
+          {bounded && <ScanCoverageDisclosure report={report} compact centered />}
           {persistenceControl && <div className="mx-auto mt-3 max-w-md [&>div]:rounded-xl [&>div]:border-primary/10 [&>div]:bg-transparent [&>div]:p-0">{persistenceControl}</div>}
         </header>
 

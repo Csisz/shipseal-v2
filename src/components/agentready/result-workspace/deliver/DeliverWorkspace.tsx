@@ -424,6 +424,8 @@ export default function DeliverWorkspace({
             <Row label="Primary" value={report.stack.primary} />
             <Row label="Languages" value={report.stack.languages.join(', ') || '-'} />
             <Row label="Frameworks" value={report.stack.frameworks.join(', ') || '-'} />
+            <Row label="Data layers" value={(report.stack.dataLayers || []).join(', ') || '-'} />
+            <Row label="Databases" value={(report.stack.databases || []).join(', ') || '-'} />
             <Row label="Tests" value={report.stack.testFrameworks.join(', ') || '-'} />
             <Row label="Pkg mgr" value={report.summary.packageManager} />
             <Row label="Folders" value={report.summary.keyFolders.join(', ') || '-'} />

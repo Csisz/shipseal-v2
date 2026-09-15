@@ -7,7 +7,7 @@ export interface RepoFileSummary {
   size: number;
   isDir?: boolean;
   ignored?: boolean;
-  ignoredReason?: 'generated-vendor' | 'binary' | 'unsafe-path' | 'too-large-text';
+  ignoredReason?: 'generated-vendor' | 'binary' | 'unsafe-path' | 'too-large-text' | 'unsupported-low-value' | 'unreadable-text' | 'budget-excluded';
 }
 
 export interface ScanSummary {
@@ -39,6 +39,8 @@ export interface ScanSummary {
   analyzedTextFiles?: number;
   analyzedTextBytes?: number;
   oversizedTextFilesIgnored?: number;
+  unsupportedFilesIgnored?: number;
+  unreadableTextFilesIgnored?: number;
   budgetExcludedFiles?: number;
   boundedReasons?: string[];
   selectionPolicyVersion?: string;
@@ -74,6 +76,8 @@ export interface DetectedStack {
   packageManagers: string[];
   scripts: Record<string, string>;
   testFrameworks: string[];
+  dataLayers?: string[];
+  databases?: string[];
   runCommands: { label: string; cmd: string }[];
   primary: string; // primary stack label
 }
@@ -115,6 +119,8 @@ export interface RepoContextPackSummary {
   detectedStack: string;
   languages: string[];
   frameworks: string[];
+  dataLayers?: string[];
+  databases?: string[];
   packageManager: string;
   scripts: Record<string, string>;
   runCommands: { label: string; cmd: string }[];

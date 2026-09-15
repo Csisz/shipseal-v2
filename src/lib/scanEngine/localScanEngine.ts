@@ -1,5 +1,5 @@
 import { buildReport } from '../readiness';
-import { ArchiveParseError, LIMITED_SCAN_WARNING, fallbackScan, scanZipFile } from '../scanner';
+import { ArchiveParseError, scanZipFile } from '../scanner';
 import { ScannerValidationError } from '../scannerLimits';
 import { validateZipUpload } from '../uploadValidation';
 import type { ReadinessReport, RepoScanInput } from '../types';
@@ -56,20 +56,10 @@ export class LocalScanEngine implements ScanEngine {
             scanInput.repoName = `${input.source.githubOwner}/${input.source.githubRepo}`;
           }
         } catch (error) {
-          if (error instanceof ScannerValidationError) {
-            throw error;
+          if (error instanceof ArchiveParseError) {
+            throw new ScannerValidationError("We couldn't read this ZIP archive.");
           }
-          callbacks.onWarning?.(error instanceof ArchiveParseError
-            ? `${LIMITED_SCAN_WARNING} Archive classification: ${error.diagnostics.inputKind}.`
-            : LIMITED_SCAN_WARNING);
-          if (!input.file) throw error;
-          scanInput = fallbackScan(input.file, error instanceof ArchiveParseError ? error.diagnostics : undefined);
-          scanInput.source = input.source || {
-            sourceType: input.mode === 'github-public' ? 'github-url' : 'zip-upload',
-          };
-          if (input.source?.githubOwner && input.source.githubRepo) {
-            scanInput.repoName = `${input.source.githubOwner}/${input.source.githubRepo}`;
-          }
+          throw error;
         }
       });
 

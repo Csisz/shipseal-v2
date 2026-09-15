@@ -456,7 +456,11 @@ const Index = () => {
     if (!scan.error || lastError.current === scan.error) return;
     lastError.current = scan.error;
     toast({
-      title: scan.status === 'cancelled' ? 'Scan cancelled' : importErrorTitle(scan.errorCategory),
+      title: scan.status === 'cancelled'
+        ? 'Scan cancelled'
+        : scan.error === "We couldn't read this ZIP archive."
+          ? "We couldn't read this ZIP archive."
+          : importErrorTitle(scan.errorCategory),
       description: scan.error,
       variant: scan.status === 'cancelled' ? 'default' : 'destructive',
     });
@@ -664,6 +668,7 @@ const Index = () => {
       : activeReport?.source.sourceType.startsWith('github')
         ? 'GitHub repository'
         : scan.activeScanSourceLabel || 'Repository scan';
+  const corruptZipFailure = scan.status === 'failed' && scan.error === "We couldn't read this ZIP archive.";
 
   const handleClearHistory = useCallback(() => {
     clearScanHistory();
@@ -761,15 +766,19 @@ const Index = () => {
                 {(scan.status === 'failed' || scan.status === 'cancelled') && (
                   <SurfaceState
                     tone={scan.status === 'cancelled' ? 'empty' : 'error'}
-                    title={scan.status === 'cancelled' ? 'Scan cancelled' : importErrorTitle(scan.errorCategory)}
+                    title={scan.status === 'cancelled' ? 'Scan cancelled' : corruptZipFailure ? "We couldn't read this ZIP archive." : importErrorTitle(scan.errorCategory)}
                     description={scan.status === 'cancelled'
                       ? 'The repository was not changed. You can restart when ready.'
+                      : corruptZipFailure
+                        ? 'This file is not a readable supported ZIP. Try another ZIP or choose another source.'
                       : 'ShipSeal could not finish this source. Retry it or choose another source.'}
-                    action={pendingSource
+                    action={corruptZipFailure
+                      ? <Button type="button" size="sm" onClick={() => { scanStartInFlight.current = false; scan.resetScan(); setPendingSource(null); }}>Try another ZIP</Button>
+                      : pendingSource
                       ? <Button type="button" size="sm" onClick={retryPendingScan}>Retry scan</Button>
                       : undefined}
                     fallback={<Button type="button" size="sm" variant="outline" onClick={() => { scanStartInFlight.current = false; scan.resetScan(); setPendingSource(null); }}>Choose another source</Button>}
-                    details={scan.status === 'failed' ? scan.error : undefined}
+                    details={scan.status === 'failed' && !corruptZipFailure ? scan.error : undefined}
                     className="mb-4"
                   />
                 )}

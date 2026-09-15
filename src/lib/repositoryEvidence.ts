@@ -7,7 +7,7 @@ import {
 } from './scannerLimits.js';
 import type { RepoFileSummary, RepoScanInput, ScanSourceMetadata, ScanSummary } from './types.js';
 
-export const REPOSITORY_EVIDENCE_SELECTION_POLICY_VERSION = 'shipseal.evidence-selection.v1';
+export const REPOSITORY_EVIDENCE_SELECTION_POLICY_VERSION = 'shipseal.evidence-selection.v2';
 
 export interface DiscoveredRepositoryEntry {
   path: string;
@@ -23,7 +23,7 @@ export interface RepositoryEvidenceSelection {
 }
 
 const TEXT_EXTENSIONS = /\.(?:[cm]?[jt]sx?|py|rb|php|java|kt|kts|go|rs|swift|scala|cs|fs|fsx|c|cc|cpp|cxx|h|hpp|vue|svelte|astro|html?|css|scss|sass|less|mdx?|json|jsonc|ya?ml|toml|ini|cfg|conf|properties|xml|gradle|graphql|gql|sql|sh|bash|zsh|fish|ps1|bat|cmd|txt)$/i;
-const IMPORTANT_BASENAMES = /^(?:readme(?:\.[^.]+)?|package\.json|pnpm-workspace\.yaml|yarn\.lock|pnpm-lock\.yaml|package-lock\.json|bun\.lockb?|deno\.jsonc?|tsconfig(?:\.[^.]+)?\.json|vite\.config\.[^.]+|next\.config\.[^.]+|requirements\.txt|pyproject\.toml|poetry\.lock|pom\.xml|build\.gradle(?:\.kts)?|go\.mod|cargo\.toml|composer\.json|gemfile|makefile|dockerfile|compose\.ya?ml|vercel\.json|netlify\.toml|codeowners|agents\.md|claude\.md|\.cursorrules|\.env\.example|\.gitignore)$/i;
+const IMPORTANT_BASENAMES = /^(?:readme(?:\.[^.]+)?|package\.json|pnpm-workspace\.yaml|yarn\.lock|pnpm-lock\.yaml|package-lock\.json|bun\.lockb?|deno\.jsonc?|tsconfig(?:\.[^.]+)?\.json|vite\.config\.[^.]+|next\.config\.[^.]+|requirements(?:[-_.][^.]+)?\.txt|pyproject\.toml|pipfile|pipfile\.lock|setup\.py|poetry\.lock|pom\.xml|build\.gradle(?:\.kts)?|go\.mod|cargo\.toml|composer\.json|gemfile|makefile|dockerfile|compose\.ya?ml|vercel\.json|netlify\.toml|codeowners|agents\.md|claude\.md|\.cursorrules|\.env\.example|\.gitignore)$/i;
 const ARCHIVE_EXTENSIONS = /\.(?:zip|tar|tgz|gz|bz2|xz|rar|7z)$/i;
 
 export function isReadableRepositoryText(path: string) {
@@ -50,7 +50,7 @@ function evidencePriority(path: string) {
   const base = normalized.split('/').pop() || '';
   if (/^readme(?:\.[^.]+)?$/i.test(base)) return 0;
   if (/^(?:agents\.md|claude\.md|\.cursorrules)$/i.test(base) || /^\.cursor\/rules/i.test(normalized)) return 1;
-  if (/^(?:package\.json|pnpm-workspace\.yaml|yarn\.lock|pnpm-lock\.yaml|package-lock\.json|bun\.lockb?|deno\.jsonc?|tsconfig(?:\.[^.]+)?\.json|vite\.config\.[^.]+|next\.config\.[^.]+|pyproject\.toml|requirements\.txt|pom\.xml|build\.gradle(?:\.kts)?|go\.mod|cargo\.toml|composer\.json|gemfile)$/i.test(base)) return 2;
+  if (/^(?:package\.json|pnpm-workspace\.yaml|yarn\.lock|pnpm-lock\.yaml|package-lock\.json|bun\.lockb?|deno\.jsonc?|tsconfig(?:\.[^.]+)?\.json|vite\.config\.[^.]+|next\.config\.[^.]+|pyproject\.toml|requirements(?:[-_.][^.]+)?\.txt|pipfile|pipfile\.lock|setup\.py|pom\.xml|build\.gradle(?:\.kts)?|go\.mod|cargo\.toml|composer\.json|gemfile)$/i.test(base)) return 2;
   if (/^\.github\/workflows\//i.test(normalized) || /(?:^|\/)(?:dockerfile|compose\.ya?ml|vercel\.json|netlify\.toml)$/i.test(normalized)) return 3;
   if (/(?:^|\/)(?:test|tests|spec|specs)(?:\/|\.)/i.test(normalized) || /(?:\.test|\.spec)\.[^.]+$/i.test(base)) return 4;
   if (/^(?:docs|documentation)(?:\/|$)/i.test(normalized) || /(?:architecture|adr|design)/i.test(normalized)) return 5;
@@ -92,6 +92,7 @@ export function selectRepositoryEvidence(
     } else if (binary) summary.binaryFilesIgnored += 1;
     else if (oversized) summary.oversizedTextFilesIgnored += 1;
     else if (isReadableRepositoryText(entry.path)) eligible.push(entry);
+    else summary.unsupportedFilesIgnored = (summary.unsupportedFilesIgnored || 0) + 1;
   }
   summary.eligibleTextFiles = eligible.length;
 
@@ -147,7 +148,7 @@ export function selectRepositoryEvidence(
   if (!summary.discoveryComplete) summary.boundedReasons.push('repository-discovery-incomplete');
   if (summary.budgetExcludedFiles > 0) summary.boundedReasons.push(selected.length >= maximumFiles ? 'selected-file-budget' : 'readable-byte-budget');
   summary.scanMode = summary.boundedReasons.length ? 'bounded' : 'full';
-  summary.filesIgnored = summary.generatedVendorFilesIgnored + summary.binaryFilesIgnored + summary.oversizedTextFilesIgnored + summary.budgetExcludedFiles;
+  summary.filesIgnored = excludedFileCount(summary);
   summary.filesAnalyzed = selected.length;
 
   for (const entry of selected) represented.push({ path: entry.path, size: entry.size });
@@ -158,7 +159,16 @@ export function selectRepositoryEvidence(
   for (const entry of areaRepresentatives) {
     const area = repositoryArea(entry.path);
     if (representedAreas.has(area)) continue;
-    represented.push({ path: entry.path, size: entry.size });
+    represented.push({
+      path: entry.path,
+      size: entry.size,
+      ignored: true,
+      ignoredReason: !isReadableRepositoryText(entry.path)
+        ? 'unsupported-low-value'
+        : entry.size > SCANNER_LIMITS.maxReadableTextFileSizeBytes
+          ? 'too-large-text'
+          : 'budget-excluded',
+    });
     representedAreas.add(area);
     if (represented.length >= maximumFiles + 48) break;
   }
@@ -173,10 +183,13 @@ export function finalizeRepositoryEvidence(
   textContents: Record<string, string>,
 ): RepoScanInput {
   const analyzedBytes = Object.values(textContents).reduce((sum, text) => sum + new TextEncoder().encode(text).byteLength, 0);
-  selection.summary.analyzedTextFiles = Object.keys(textContents).length;
+  const analyzedTextFiles = Object.keys(textContents).length;
+  selection.summary.analyzedTextFiles = analyzedTextFiles;
   selection.summary.analyzedTextBytes = analyzedBytes;
   selection.summary.readableTextBytesAnalyzed = analyzedBytes;
-  selection.summary.filesAnalyzed = Object.keys(textContents).length;
+  selection.summary.filesAnalyzed = analyzedTextFiles;
+  selection.summary.unreadableTextFilesIgnored = Math.max(0, selection.selected.length - analyzedTextFiles);
+  selection.summary.filesIgnored = excludedFileCount(selection.summary);
   selection.summary.warnings = selection.summary.scanMode === 'bounded'
     ? ['Large repository evidence was selected deterministically within ShipSeal’s safe analysis budget.']
     : [];
@@ -188,9 +201,19 @@ function createEvidenceSummary(): ScanSummary {
     scanMode: 'full', limited: false, totalFilesFound: 0, discoveryComplete: true,
     discoveredFiles: 0, discoveredDirectories: 0, eligibleTextFiles: 0, selectedTextFiles: 0,
     analyzedTextFiles: 0, analyzedTextBytes: 0, generatedVendorFilesIgnored: 0,
-    binaryFilesIgnored: 0, oversizedTextFilesIgnored: 0, budgetExcludedFiles: 0,
+    binaryFilesIgnored: 0, oversizedTextFilesIgnored: 0, unsupportedFilesIgnored: 0,
+    unreadableTextFilesIgnored: 0, budgetExcludedFiles: 0,
     boundedReasons: [], selectionPolicyVersion: REPOSITORY_EVIDENCE_SELECTION_POLICY_VERSION,
     representedFiles: 0, filesAnalyzed: 0, filesIgnored: 0, readableTextBytesAnalyzed: 0,
     ignoredGeneratedFolders: [], warnings: [], limits: { ...SCANNER_LIMITS },
   };
+}
+
+export function excludedFileCount(summary: ScanSummary): number {
+  return summary.generatedVendorFilesIgnored
+    + summary.binaryFilesIgnored
+    + (summary.oversizedTextFilesIgnored || 0)
+    + (summary.unsupportedFilesIgnored || 0)
+    + (summary.unreadableTextFilesIgnored || 0)
+    + (summary.budgetExcludedFiles || 0);
 }

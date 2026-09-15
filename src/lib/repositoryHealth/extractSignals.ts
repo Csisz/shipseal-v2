@@ -2,6 +2,7 @@ import { detectStack } from '../stack';
 import { scoreRepo } from '../scoring';
 import { detectEntryPointCandidates, detectEntryPointClassification, detectSourceFolders } from '../sourceDetection';
 import type { RepoScanInput } from '../types';
+import { deriveRepositoryEvidenceFacts, type RepositoryEvidenceFacts } from '../repositoryFacts';
 import { classifyRepositoryFiles, isInstructionPath } from './classifyFiles';
 import type {
   ClassifiedRepositoryFile,
@@ -35,6 +36,7 @@ type SignalFacts = {
   entryPointClassification: EntryPointClassification;
   sourceFolders: string[];
   blockers: HealthBlocker[];
+  repositoryFacts: RepositoryEvidenceFacts;
 };
 
 export function extractRepositoryHealthSignals(input: RepoScanInput): RepositoryHealthSignals {
@@ -63,17 +65,20 @@ export function extractRepositoryHealthSignals(input: RepoScanInput): Repository
     entryPointClassification,
     sourceFolders,
     blockers,
+    repositoryFacts: deriveRepositoryEvidenceFacts(input),
   };
+
+  const signals = [
+    ...repositoryIntelligenceSignals(facts),
+    ...contextWasteSignals(facts),
+    ...aiDevelopmentReadinessSignals(facts),
+    ...agentRoutingSignals(facts),
+    ...deliveryConfidenceSignals(facts),
+  ];
 
   return {
     files,
-    signals: [
-      ...repositoryIntelligenceSignals(facts),
-      ...contextWasteSignals(facts),
-      ...aiDevelopmentReadinessSignals(facts),
-      ...agentRoutingSignals(facts),
-      ...deliveryConfidenceSignals(facts),
-    ],
+    signals: scopeBoundedAbsenceSignals(signals, input),
     duplicateDocumentationGroups,
     documentationFamilies,
     entryPointCandidates,
@@ -139,7 +144,10 @@ function aiDevelopmentReadinessSignals(facts: SignalFacts): HealthSignal[] {
   const scriptNames = Object.keys(scripts);
   const runCommandLabels = facts.stack.runCommands.map(command => command.label.toLowerCase());
   const hasBuild = !!scripts.build || runCommandLabels.includes('build');
-  const hasTest = !!scripts.test || hasAny(facts, /(^|\/)(tests?|__tests__)\/|(\.|-)(test|spec)\.[cm]?[jt]sx?$/i);
+  const hasTest = !!scripts.test
+    || runCommandLabels.includes('test')
+    || facts.stack.testFrameworks.length > 0
+    || hasAny(facts, /(^|\/)(tests?|__tests__)\/|(\.|-)(test|spec)\.[cm]?[jt]sx?$/i);
   const hasLintOrTypecheck = !!scripts.lint || !!scripts.typecheck || runCommandLabels.includes('lint') || runCommandLabels.includes('typecheck') || hasAny(facts, /(^|\/)(eslint\.config\.[jt]s|tsconfig\.json)$/i);
   const scriptEarned = [hasBuild, hasTest, hasLintOrTypecheck].filter(Boolean).length;
   const ciWorkflows = findPaths(facts, CI_WORKFLOW_RE);
@@ -267,7 +275,7 @@ function hasRoutingGuidance(facts: SignalFacts) {
 
 function findCompactContextAnchors(facts: SignalFacts) {
   const anchors: string[] = [];
-  if (hasAny(facts, /(^|\/)readme(\.md)?$/i)) anchors.push('README/project overview');
+  if (facts.repositoryFacts.context.hasReadme) anchors.push('README/project overview');
   if (hasAny(facts, /(^|\/)docs\/(index|readme)\.md$/i)) anchors.push('docs index');
   if (hasAny(facts, /(^|\/)(architecture|arch|system-design)\.md$/i) || hasAny(facts, /(^|\/)docs\/.*(architecture|arch|system-design).*\.md$/i)) anchors.push('architecture summary');
   if (hasAny(facts, /(^|\/)(task_router|task-router|agent_router|agent-routing|routing)\.md$/i)) anchors.push('task router');
@@ -281,7 +289,7 @@ function findCompactContextAnchors(facts: SignalFacts) {
       evidence: ['No compact README, docs index, architecture summary, task router, command map, or root instruction anchor found.'],
     };
   }
-  if (anchors.length === 1) {
+  if (anchors.length === 1 && !facts.repositoryFacts.context.hasContextAnchor) {
     return {
       status: 'partial' as const,
       earned: 5,
@@ -293,6 +301,25 @@ function findCompactContextAnchors(facts: SignalFacts) {
     earned: 0,
     evidence: [`Compact context anchors detected: ${anchors.join(', ')}.`],
   };
+}
+
+function scopeBoundedAbsenceSignals(signals: HealthSignal[], input: RepoScanInput): HealthSignal[] {
+  if (input.scanSummary?.scanMode !== 'bounded') return signals;
+  return signals.map(signal => {
+    if (!['fail', 'partial'].includes(signal.status) || !signal.evidence.some(isAbsenceEvidence)) return signal;
+    return {
+      ...signal,
+      status: 'unknown' as const,
+      earned: 0,
+      evidence: signal.evidence.map(item => isAbsenceEvidence(item)
+        ? `Not observed in analyzed evidence: ${item.replace(/^No\s+/i, '').replace(/\.$/, '').toLowerCase()}.`
+        : item),
+    };
+  });
+}
+
+function isAbsenceEvidence(value: string) {
+  return /^(?:No\b|.*\bnot (?:detected|found|available)\b|.*\bmissing\b)/i.test(value.trim());
 }
 
 function classifyFolderInstructionCoverage(facts: SignalFacts, nestedInstructions: string[]) {

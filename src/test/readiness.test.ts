@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import JSZip from 'jszip';
 import { buildReport, buildSampleReport } from '@/lib/readiness';
-import { LIMITED_SCAN_WARNING, scanZipFile } from '@/lib/scanner';
+import { scanZipFile } from '@/lib/scanner';
 import { SCANNER_LIMITS, getUnsafeZipPathReason } from '@/lib/scannerLimits';
 import { LocalScanEngine, ScanCancelledError } from '@/lib/scanEngine';
 import type { CreateScanRequest, ScanJobResult } from '@/lib/api/contracts';
@@ -225,43 +225,22 @@ describe('Sprint 8 demo readiness polish', () => {
     });
   });
 
-  it('marks ZIP parse fallback reports as limited in score.json and client report HTML', async () => {
+  it('rejects corrupt user ZIP bytes instead of synthesizing a report', async () => {
     const engine = new LocalScanEngine();
-    const report = await engine.scan({
+    await expect(engine.scan({
       file: new File(['not a real zip'], 'broken-repo.zip', { type: 'application/zip' }),
       mode: 'local',
       source: { sourceType: 'zip-upload' },
-    });
-    const scoreJson = buildScoreJson(report);
-    const html = generateClientReportHtml({
-      intake: normalizeProjectIntake({ projectName: 'Broken Repo' }, 'Broken Repo'),
-      scoreJson,
-    });
-
-    expect(scoreJson.scanSummary.scanMode).toBe('limited-fallback');
-    expect(scoreJson.scanSummary.limited).toBe(true);
-    expect(scoreJson.isReady).toBe(false);
-    expect(scoreJson.status).toBe('Not Ready');
-    expect(scoreJson.criticalBlockers.map(blocker => blocker.id)).toContain('limited-scan');
-    expect(scoreJson.scanSummary.warnings.join('\n')).toContain(LIMITED_SCAN_WARNING);
-    expect(scoreJson.mcpReadiness.status).toBe('Provisional MCP Readiness');
-    expect(scoreJson.mcpReadiness.summary).toContain('Provisional MCP Readiness');
-    expect(scoreJson.scanSummary.archiveDiagnostics?.inputKind).toBe('invalid-zip');
-    expect(html).toContain('Limited scan');
-    expect(html).toContain('complete client handoff audit');
+    })).rejects.toThrow("We couldn't read this ZIP archive.");
   });
 
-  it('classifies HTML error responses saved as ZIPs in limited scan diagnostics', async () => {
+  it('rejects HTML error responses saved as ZIPs instead of synthesizing evidence', async () => {
     const engine = new LocalScanEngine();
-    const report = await engine.scan({
+    await expect(engine.scan({
       file: new File(['<!doctype html><html><body>GitHub error</body></html>'], 'github-error.zip', { type: 'application/zip' }),
       mode: 'github-public',
       source: { sourceType: 'github-url', githubOwner: 'Csisz', githubRepo: 'shipseal' },
-    });
-
-    expect(report.scanSummary.limited).toBe(true);
-    expect(report.scanSummary.archiveDiagnostics?.inputKind).toBe('html-error-response');
-    expect(report.mcpReadiness.status).toBe('Provisional MCP Readiness');
+    })).rejects.toThrow("We couldn't read this ZIP archive.");
   });
 });
 

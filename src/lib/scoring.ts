@@ -8,6 +8,7 @@ import type {
   ScoreItem,
 } from './types';
 import { detectEntryPointCandidates, detectSourceFolders } from './sourceDetection';
+import { deriveRepositoryEvidenceFacts } from './repositoryFacts';
 
 const STACK_CONFIG_FILES = [
   'package.json', 'tsconfig.json', 'pyproject.toml', 'requirements.txt',
@@ -96,7 +97,7 @@ export function levelFromScore(score: number): ReadinessLevel {
 }
 
 export function scoreRepo(input: RepoScanInput, stack: DetectedStack): ScoringResult {
-  const absenceUnconfirmed = input.scanSummary?.discoveryComplete === false;
+  const absenceUnconfirmed = input.scanSummary?.discoveryComplete === false || input.scanSummary?.scanMode === 'bounded';
   const paths = new Set(input.files.filter(f => !f.isDir).map(f => f.path));
   const lower = new Set([...paths].map(p => p.toLowerCase()));
   const has = (p: string) => paths.has(p);
@@ -104,9 +105,10 @@ export function scoreRepo(input: RepoScanInput, stack: DetectedStack): ScoringRe
   const hasDir = (dir: string) => input.files.some(f => f.path.startsWith(dir + '/'));
   const anyMatch = (re: RegExp) => [...paths].some(p => re.test(p));
 
-  const readme = input.textContents['README.md'] || input.textContents['readme.md'] || input.textContents['README'] || '';
+  const repositoryFacts = deriveRepositoryEvidenceFacts(input);
+  const readme = repositoryFacts.context.readmePath ? input.textContents[repositoryFacts.context.readmePath] || '' : '';
   const readmeLower = readme.toLowerCase();
-  const hasReadme = readme.length > 0;
+  const hasReadme = repositoryFacts.context.hasReadme;
 
   const pkg = (() => { try { return JSON.parse(input.textContents['package.json'] || 'null'); } catch { return null; } })();
   const scripts = pkg?.scripts || {};
@@ -114,7 +116,10 @@ export function scoreRepo(input: RepoScanInput, stack: DetectedStack): ScoringRe
   const sourceFolders = detectSourceFolders(input);
   const hasSourceDir = SOURCE_DIRS.some(hasDir) || sourceFolders.length > 0;
   const hasCi = anyMatch(/\.github\/workflows\/.+\.ya?ml$/);
-  const hasTests = anyMatch(/(\.test\.|\.spec\.|__tests__\/|tests?\/)/i) || !!scripts.test;
+  const hasTests = anyMatch(/(\.test\.|\.spec\.|__tests__\/|tests?\/)/i)
+    || !!scripts.test
+    || stack.testFrameworks.length > 0
+    || stack.runCommands.some(command => command.label.toLowerCase() === 'test');
   const hasLint = !!scripts.lint || has('.eslintrc') || has('.eslintrc.json') || has('eslint.config.js') || has('eslint.config.ts');
   const hasTypecheck = !!scripts.typecheck || has('tsconfig.json');
   const hasBuild = !!scripts.build || has('vite.config.ts') || has('vite.config.js') || has('next.config.js') || stack.languages.includes('Go') || stack.languages.includes('Rust');
@@ -147,9 +152,9 @@ export function scoreRepo(input: RepoScanInput, stack: DetectedStack): ScoringRe
     [
       item('readme', 'README exists', 5, hasReadme),
       item('readme_purpose', 'README mentions purpose / overview / features', 4,
-        hasReadme && /(overview|purpose|features|about)/.test(readmeLower)),
+        repositoryFacts.context.hasProjectPurpose),
       item('readme_setup', 'README includes install / setup / run usage', 4,
-        hasReadme && /(install|setup|getting started|run|usage|quickstart)/.test(readmeLower)),
+        repositoryFacts.context.hasSetupGuidance),
       item('stack_config', 'Recognizable stack / config file exists', 3, hasStackConfig),
       item('src_folder', 'Clear source folder (src/app/pages/components/lib/backend/api)', 2, hasSourceDir),
       item('arch_docs', 'Architecture docs or CONTRIBUTING exists', 2, hasArchitectureDocs || hasContributing),
@@ -179,7 +184,7 @@ export function scoreRepo(input: RepoScanInput, stack: DetectedStack): ScoringRe
       item('forbidden_rules', 'Forbidden / sensitive change rules exist', 3,
         hasAgents || /do not|forbidden|never edit/i.test(readme)),
       item('post_change_cmds', 'Commands after changes are documented', 2,
-        !!scripts.test || /after.*change|verify|run tests/i.test(readme)),
+        !!scripts.test || repositoryFacts.context.documentedCommands.length > 0 || /after.*change|verify|run tests/i.test(readme)),
       item('reviewer_guide', 'Reviewer / self-check guidance exists', 2,
         has('REVIEWER_PROMPT.md') || /review/i.test(readme)),
     ], 20);

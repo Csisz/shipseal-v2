@@ -110,6 +110,8 @@ describe('Workspace Story model', () => {
         ignoredFolders: [],
       },
       stack: {
+        dataLayers: [],
+        databases: [],
         ...report.stack,
         primary: 'Unknown',
         languages: [],

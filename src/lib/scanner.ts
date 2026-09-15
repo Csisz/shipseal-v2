@@ -1,15 +1,12 @@
-import type { RepoFileSummary, RepoScanInput, ScanSummary } from './types';
+import type { RepoScanInput, ScanSummary } from './types';
 import { Reader, TextWriter, ZipReader, type FileEntry } from '@zip.js/zip.js';
 import { finalizeRepositoryEvidence, selectRepositoryEvidence } from './repositoryEvidence';
 import {
   SCANNER_LIMITS,
   ScannerValidationError,
-  createEmptyScanSummary,
   getUnsafeZipPathReason,
   normalizeZipPath,
 } from './scannerLimits';
-
-export const LIMITED_SCAN_WARNING = 'ZIP parsing failed, so ShipSeal used a deterministic fallback scan. This is a limited scan and must not be treated as a complete client handoff audit.';
 
 type ArchiveDiagnostics = NonNullable<ScanSummary['archiveDiagnostics']>;
 
@@ -22,7 +19,6 @@ export class ArchiveParseError extends Error {
     this.diagnostics = diagnostics;
   }
 }
-
 
 function sourceInputKind(file: File, source?: RepoScanInput['source']): ArchiveDiagnostics['inputKind'] {
   if (source?.sourceType === 'github-url' || source?.sourceType === 'github-public' || source?.sourceType === 'github-app') return 'github-zipball';
@@ -243,8 +239,11 @@ export async function scanZipFile(file: File, source?: RepoScanInput['source'], 
     if (!selectedPaths.has(path)) continue;
     try {
       textContents[path] = await entry.getData(new TextWriter(), { checkSignature: true });
-    } catch {
-      selection.summary.warnings.push(`Could not read ${path} as text; it was skipped.`);
+    } catch (error) {
+      throw new ArchiveParseError('ZIP parser could not read a selected repository entry.', {
+        ...archiveDiagnostics,
+        parseError: error instanceof Error ? error.name : 'UnknownError',
+      });
     }
   }
   const repoName = file.name.replace(/\.zip$/i, '') || 'repository';
@@ -252,39 +251,4 @@ export async function scanZipFile(file: File, source?: RepoScanInput['source'], 
   } finally {
     await zip.close().catch(() => undefined);
   }
-}
-
-/**
- * Build a fallback scan input when ZIP parsing fails (e.g. malformed zip).
- * Produces deterministic fallback data from the filename so the flow still works.
- */
-export function fallbackScan(file: File, diagnostics?: ArchiveDiagnostics): RepoScanInput {
-  const repoName = file.name.replace(/\.zip$/i, '');
-  const files: RepoFileSummary[] = [
-    { path: 'README.md', size: 1200 },
-    { path: 'package.json', size: 800 },
-    { path: 'src/index.ts', size: 200 },
-    { path: '.gitignore', size: 120 },
-  ];
-  const textContents: Record<string, string> = {
-    'package.json': JSON.stringify({ name: repoName, scripts: { build: 'tsc', test: 'vitest' } }),
-    'README.md': `# ${repoName}\n\nA sample repository.`,
-    '.gitignore': 'node_modules\ndist\n.env\n',
-  };
-  return {
-    files,
-    textContents,
-    repoName,
-    scanSummary: {
-      ...createEmptyScanSummary(),
-      scanMode: 'limited-fallback',
-      limited: true,
-      limitationReason: 'ZIP parsing failed before repository contents could be fully analyzed.',
-      archiveDiagnostics: diagnostics,
-      totalFilesFound: files.length,
-      filesAnalyzed: files.length,
-      readableTextBytesAnalyzed: Object.values(textContents).reduce((total, text) => total + text.length, 0),
-      warnings: [LIMITED_SCAN_WARNING],
-    },
-  };
 }

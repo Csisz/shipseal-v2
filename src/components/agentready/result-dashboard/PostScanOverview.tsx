@@ -6,6 +6,7 @@ import type { ReadinessReport } from '@/lib/types';
 import type { RepositoryFriction } from './types';
 import type { ReactNode } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { ScanCoverageDisclosure } from './ScanCoverageDisclosure';
 
 export function PostScanOverview({
   report,
@@ -77,15 +78,10 @@ export function PostScanOverview({
               </p>
             </>
           )}
+          {bounded && <ScanCoverageDisclosure report={report} compact={stageOverlay} />}
           {limited && !stageOverlay && (
             <p className="mt-3 max-w-3xl rounded-2xl border border-warning/35 bg-warning/10 px-4 py-3 text-sm text-warning/90">
               Limited scan: {limitedScanReason || 'The scanner could not fully analyze the repository, so unavailable areas are not treated as failures.'}
-            </p>
-          )}
-          {bounded && !stageOverlay && (
-            <p className="mt-3 max-w-3xl rounded-2xl border border-primary/25 bg-primary/[0.06] px-4 py-3 text-sm text-foreground/85" role="status">
-              <span className="font-medium text-foreground">Large repository.</span>{' '}
-              ShipSeal indexed {(report.scanSummary.discoveredFiles ?? report.scanSummary.totalFilesFound).toLocaleString()} files and analyzed {(report.scanSummary.analyzedTextFiles ?? report.scanSummary.filesAnalyzed).toLocaleString()} relevant evidence files. Generated, binary, oversized, and lower-priority content was excluded within the safe analysis budget.
             </p>
           )}
         </div>

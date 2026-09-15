@@ -1,4 +1,5 @@
 import type { RepoScanInput, DetectedStack } from './types';
+import { deriveRepositoryEvidenceFacts } from './repositoryFacts';
 
 type PackageJson = {
   name?: string;
@@ -24,6 +25,8 @@ export function detectStack(input: RepoScanInput): DetectedStack {
   const frameworks = new Set<string>();
   const packageManagers = new Set<string>();
   const testFrameworks = new Set<string>();
+  const dataLayers = new Set<string>();
+  const databases = new Set<string>();
   const runCommands: { label: string; cmd: string }[] = [];
   let scripts: Record<string, string> = {};
 
@@ -64,15 +67,28 @@ export function detectStack(input: RepoScanInput): DetectedStack {
   if (hasAny('next.config.js', 'next.config.mjs', 'next.config.ts') || hasDir('app') || hasDir('pages')) frameworks.add('Next.js');
 
   // Python
-  if (hasAny('requirements.txt', 'pyproject.toml', 'setup.py')) {
+  const facts = deriveRepositoryEvidenceFacts(input);
+  const lowerPaths = new Set(files.map(file => file.path.toLowerCase()));
+  const hasPythonManifest = [...lowerPaths].some(path => /(^|\/)(requirements(?:[-_.][^/]*)?\.txt|pyproject\.toml|pipfile|setup\.py)$/.test(path));
+  if (hasPythonManifest) {
     languages.add('Python');
-    const req = input.textContents['requirements.txt'] || input.textContents['pyproject.toml'] || '';
-    if (/fastapi/i.test(req)) frameworks.add('FastAPI');
-    if (/django/i.test(req)) frameworks.add('Django');
-    if (/flask/i.test(req)) frameworks.add('Flask');
+    const dependencies = new Set(facts.python.packageNames);
+    if (dependencies.has('fastapi')) frameworks.add('FastAPI');
+    if (dependencies.has('django')) frameworks.add('Django');
+    if (dependencies.has('flask')) frameworks.add('Flask');
+    if (dependencies.has('sqlalchemy')) dataLayers.add('SQLAlchemy');
+    if (dependencies.has('psycopg2') || dependencies.has('psycopg2-binary')) databases.add('PostgreSQL');
+    if (dependencies.has('pytest')) testFrameworks.add('pytest');
+    if (facts.python.usesPoetry) packageManagers.add('Poetry');
+    else if (facts.python.usesPipenv) packageManagers.add('Pipenv');
+    else if (facts.python.usesPip) packageManagers.add('pip');
+
+    const pythonEvidence = Object.values(input.textContents).join('\n');
+    if (/\bsqlite3?\b/i.test(pythonEvidence)) databases.add('SQLite');
     for (const command of detectPythonCommands(input)) {
       runCommands.push(command);
     }
+    runCommands.push(...facts.context.documentedCommands);
   }
 
   if (has('pom.xml') || has('build.gradle') || has('build.gradle.kts')) {
@@ -100,7 +116,9 @@ export function detectStack(input: RepoScanInput): DetectedStack {
     packageManagers: [...packageManagers],
     scripts,
     testFrameworks: [...testFrameworks],
-    runCommands,
+    dataLayers: [...dataLayers],
+    databases: [...databases],
+    runCommands: dedupeCommands(runCommands),
     primary,
   };
 }

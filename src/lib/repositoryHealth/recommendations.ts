@@ -1,5 +1,6 @@
 import type { HealthDimensionId, HealthRecommendation, HealthSignal } from './types';
 import { detectStack } from '../stack';
+import { deriveRepositoryEvidenceFacts } from '../repositoryFacts';
 import type { RepoScanInput } from '../types';
 
 type RecommendationTemplate = Omit<HealthRecommendation, 'evidence'>;
@@ -315,9 +316,12 @@ const RECOMMENDATION_TEMPLATES: Record<string, RecommendationTemplate> = {
 
 export function buildRepositoryHealthRecommendations(signals: HealthSignal[], maxActions = 5, input?: RepoScanInput): HealthRecommendation[] {
   const stack = input ? detectStack(input) : undefined;
+  const repositoryFacts = input ? deriveRepositoryEvidenceFacts(input) : undefined;
   const paths = new Set(input?.files.map(file => file.path.toLowerCase()) || []);
   return dedupeRecommendations(signals
     .filter(signal => signal.status === 'fail' || signal.status === 'partial')
+    .filter(signal => !(signal.id === 'waste.compact-anchor-missing' && repositoryFacts?.context.hasContextAnchor))
+    .filter(signal => !(signal.id === 'ai.tests-present' && (repositoryFacts?.context.documentedCommands.length || stack?.testFrameworks.length)))
     .map(signal => recommendationForSignal(signal, { stack, paths }))
     .filter((recommendation): recommendation is HealthRecommendation => !!recommendation)
   )
@@ -362,10 +366,13 @@ function adaptRecommendationToStack(
   if (!pythonOnly) return recommendation;
 
   if (recommendation.id === 'ai.package-scripts') {
+    const hasTestCommand = context.stack?.runCommands.some(command => command.label.toLowerCase() === 'test');
     return {
       ...recommendation,
-      title: 'Document build, test, and quality commands',
-      action: 'Document the repository build, test, and quality commands in pyproject.toml, a Makefile, or the development documentation.',
+      title: hasTestCommand ? 'Document the remaining build and quality commands' : 'Document build, test, and quality commands',
+      action: hasTestCommand
+        ? 'Keep the detected test command and document any missing build, lint, or typecheck commands in pyproject.toml, a Makefile, or the development documentation.'
+        : 'Document the repository build, test, and quality commands in pyproject.toml, a Makefile, or the development documentation.',
       suggestedTargetPath: pythonCommandTarget(context.paths),
     };
   }

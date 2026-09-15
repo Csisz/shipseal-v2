@@ -269,9 +269,9 @@ describe('public GitHub import helpers', () => {
     expect(report.blockers.map(blocker => blocker.id)).not.toContain('limited-scan');
   });
 
-  it('marks a GitHub App archive parse failure as a limited scan with reason', async () => {
+  it('rejects a GitHub App archive parse failure without synthetic evidence', async () => {
     const file = new File(['not a zip archive'], 'Csisz-shipseal-v2-main.zip', { type: 'application/zip' });
-    const report = await new LocalScanEngine().scan({
+    await expect(new LocalScanEngine().scan({
       file,
       mode: 'github-public',
       source: {
@@ -281,20 +281,7 @@ describe('public GitHub import helpers', () => {
         githubBranch: 'main',
         githubInstallationId: '12345',
       },
-    });
-
-    expect(report.repoName).toBe('Csisz/shipseal-v2');
-    expect(report.scanSummary.limited).toBe(true);
-    expect(report.scanSummary.scanMode).toBe('limited-fallback');
-    expect(report.scanSummary.limitationReason).toBe('ZIP parsing failed before repository contents could be fully analyzed.');
-    expect(report.scanEvidence).toMatchObject({
-      sourceType: 'github-app',
-      repositoryFullName: 'Csisz/shipseal-v2',
-      branchOrRef: 'main',
-      limitedScan: true,
-      limitationReason: 'ZIP parsing failed before repository contents could be fully analyzed.',
-    });
-    expect(report.blockers.map(blocker => blocker.id)).toContain('limited-scan');
+    })).rejects.toThrow("We couldn't read this ZIP archive.");
   });
 
   it('exports score.json evidence using actual GitHub App repository name and file counts', async () => {

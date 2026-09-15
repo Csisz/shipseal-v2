@@ -106,21 +106,12 @@ describe('GitHub full-scan dogfood regressions', () => {
     expect(await zip.file('06-client-handoff/CLIENT_HANDOFF_REPORT.html')!.async('string')).not.toContain('Limited scan');
   });
 
-  it('HTML saved as ZIP is a limited scan with safe diagnostics', async () => {
-    const report = await new LocalScanEngine().scan({
+  it('rejects HTML saved as ZIP without a synthetic completed scan', async () => {
+    await expect(new LocalScanEngine().scan({
       file: new File(['<!doctype html><html><body>Not a ZIP</body></html>'], 'github-error.zip', { type: 'application/zip' }),
       mode: 'github-public',
       source: { sourceType: 'github-url', githubOwner: 'Csisz', githubRepo: 'shipseal-v2' },
-    });
-
-    expect(report.scanSummary.limited).toBe(true);
-    expect(report.scanSummary.archiveDiagnostics).toMatchObject({
-      inputKind: 'html-error-response',
-      startsWithZipMagic: false,
-      contentKind: 'html',
-    });
-    expect(report.blockers.map(blocker => blocker.id)).toContain('limited-scan');
-    expect(report.mcpReadiness.status).toBe('Provisional MCP Readiness');
+    })).rejects.toThrow("We couldn't read this ZIP archive.");
   });
 });
 

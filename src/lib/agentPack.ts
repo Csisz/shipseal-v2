@@ -75,6 +75,8 @@ export function buildContextPack(input: RepoScanInput, stack: DetectedStack): st
     `**Primary stack:** ${stack.primary}`,
     `**Languages:** ${stack.languages.join(', ') || 'unknown'}`,
     `**Frameworks:** ${stack.frameworks.join(', ') || 'none detected'}`,
+    `**Data layers:** ${(stack.dataLayers || []).join(', ') || 'none detected'}`,
+    `**Databases:** ${(stack.databases || []).join(', ') || 'none detected'}`,
     `**Package managers:** ${stack.packageManagers.join(', ') || 'n/a'}`,
     `**Detected scripts:** ${Object.keys(stack.scripts).join(', ') || 'none'}`,
     '',

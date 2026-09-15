@@ -175,6 +175,28 @@ describe('premium post-scan view selector', () => {
     expect(retry).toHaveBeenCalledTimes(1);
   });
 
+  it('discloses bounded coverage on the first rendered result surface', () => {
+    const report = reportWithIdentity('2026-08-11T10:00:30.000Z');
+    report.scanSummary = {
+      ...report.scanSummary,
+      scanMode: 'bounded',
+      limited: false,
+      discoveredFiles: 357,
+      totalFilesFound: 357,
+      analyzedTextFiles: 160,
+      filesAnalyzed: 160,
+      filesIgnored: 197,
+      boundedReasons: ['selected-file-budget'],
+    };
+
+    renderWorkspace(report);
+
+    expect(screen.getByTestId('bounded-coverage-disclosure')).toHaveTextContent('Bounded analysis');
+    expect(screen.getByTestId('bounded-coverage-disclosure')).toHaveTextContent('160 of 357 files analyzed');
+    fireEvent.click(screen.getByRole('button', { name: 'Why?' }));
+    expect(screen.getByText(/deterministic high-value evidence selection reached the safe file budget/i)).toBeVisible();
+  });
+
   it('offers an explicit completion-billed Future action after a free deterministic scan', () => {
     const start = vi.fn(async () => undefined);
     render(<ResultWorkspace
