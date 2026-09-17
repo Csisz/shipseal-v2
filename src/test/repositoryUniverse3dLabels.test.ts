@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { repositoryUniverseLabelPriority, repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseProposalDisplayLabel, repositoryUniverseProposalLabelVisible, repositoryUniverseRevealStartCamera, repositoryUniverseWheelCameraState } from '@/components/agentready/RepositoryUniverse3D';
+import { repositoryUniverseLabelPriority, repositoryUniverseNodeBaseColor, repositoryUniverseNodeDisplayLabel, repositoryUniverseProposalDisplayLabel, repositoryUniverseProposalLabelVisible, repositoryUniverseRevealStartCamera, repositoryUniverseWheelCameraState, shouldRepositoryUniverseIdleRotate } from '@/components/agentready/RepositoryUniverse3D';
 import { REPOSITORY_UNIVERSE_REVEAL_MS, repositoryUniverseRevealLayer, repositoryUniverseRevealProgress } from '@/components/agentready/result-workspace/universe/repositoryUniverseMotion';
 import { REPOSITORY_UNIVERSE_CLUSTER_PALETTE, brightenClusterColor, repositoryUniverseClusterToken, repositoryUniverseFocusCameraState, repositoryUniverseInspectorAwareLookTarget, repositoryUniverseRendererTokens } from '@/lib/workspace/repositoryUniverseVisual';
 import type { RepositoryUniverseNode } from '@/lib/workspace';
@@ -21,6 +21,21 @@ function node(overrides: Partial<RepositoryUniverseNode>) {
 }
 
 describe('Repository Universe 3D labels', () => {
+  it('keeps a settled map stable by default and permits ambient rotation only after explicit opt-in', () => {
+    const stable = {
+      reducedMotion: false,
+      rotationPaused: true,
+      pinnedSelectionActive: false,
+      hoveredNodeId: null,
+      routeNodeCount: 0,
+      settled: true,
+      idleForMs: 20_000,
+    };
+    expect(shouldRepositoryUniverseIdleRotate(stable)).toBe(false);
+    expect(shouldRepositoryUniverseIdleRotate({ ...stable, rotationPaused: false })).toBe(true);
+    expect(shouldRepositoryUniverseIdleRotate({ ...stable, rotationPaused: false, reducedMotion: true })).toBe(false);
+    expect(shouldRepositoryUniverseIdleRotate({ ...stable, rotationPaused: false, hoveredNodeId: 'node:hovered' })).toBe(false);
+  });
   it('derives safe labels for repository, folder, file and concept nodes', () => {
     expect(repositoryUniverseNodeDisplayLabel(node({ id: 'repo:test', kind: 'repository', label: 'shipseal' }))).toBe('shipseal');
     expect(repositoryUniverseNodeDisplayLabel(node({ id: 'folder:src', kind: 'folder', label: 'src', path: 'src' }))).toBe('src');

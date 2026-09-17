@@ -179,6 +179,23 @@ export function repositoryFuturesNodeFootprint(
   return repositoryFutureRenderedFootprint(node, mode, 'near');
 }
 
+/**
+ * The Fit-all contract is about keeping the repository anchor and every G1
+ * choice selectable. Deeper projections remain in the topology, but must not
+ * drag the choice corridor out of frame in dense vertical layouts.
+ */
+export function repositoryFuturesFitAllTargets(
+  model: Pick<RepositoryFuturesCanvasModel, 'nodes'>,
+  mode: RepositoryFuturesLayoutMode = 'quick',
+) {
+  return model.nodes
+    .filter(node => node.kind === 'repository' || node.kind === 'goal')
+    .map(node => {
+      const footprint = repositoryFutureRenderedFootprint(node, mode, 'near');
+      return { id: node.id, x: node.x, y: node.y, width: footprint.width, height: footprint.height };
+    });
+}
+
 function layoutRectangle(node: RepositoryFuturesCanvasNode): RepositoryFuturesLayoutRectangle {
   const box = node.layoutBox || repositoryFuturesNodeFootprint(node);
   return {

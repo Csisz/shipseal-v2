@@ -33,6 +33,12 @@ type OperationDiagnostic = {
   leaseExpiresAt: string | null;
   updatedAt: string | null;
   reconciliationOutcome: string;
+  staleRelease: {
+    eligible: boolean;
+    classification: 'superseded' | 'orphaned' | null;
+    reason: string;
+    alreadyReleased?: boolean;
+  };
   timeline: TimelineItem[];
 };
 type SafeEvent = { category?: unknown; action?: unknown; status?: unknown; created_at?: unknown; deployment_id?: unknown };
@@ -43,6 +49,7 @@ export default function Admin() {
   const [error, setError] = useState(false);
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState(false);
+  const [actionMessage, setActionMessage] = useState('');
   useEffect(() => { void load(); }, []);
   async function load(search = '') {
     try {
@@ -51,6 +58,20 @@ export default function Admin() {
       setData(await response.json() as AdminPayload);
       setError(false);
     } catch { setError(true); }
+  }
+  async function releaseReservation(publicOperationId: string) {
+    setActionMessage('Re-checking release safeguards...');
+    const response = await fetch('/api/admin?action=release-stale-reservation', {
+      method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ publicOperationId }),
+    });
+    const payload = await response.json() as { status?: string; error?: { message?: string } };
+    if (!response.ok) {
+      setActionMessage(payload.error?.message || 'The stale reservation could not be released safely.');
+      return;
+    }
+    setActionMessage(payload.status === 'already_released' ? 'Reservation was already released.' : 'Stale reservation released once and recorded in the audit timeline.');
+    await load(query);
   }
   if (error) return <><Nav /><main className="container max-w-5xl py-28"><SurfaceState tone="error" title="Operations surface unavailable" description="This internal surface is restricted or temporarily unavailable." /></main></>;
   if (!data) return <><Nav /><main className="container max-w-5xl py-28"><SurfaceState tone="loading" title="Loading operations" description="Reading safe operational aggregates." /></main></>;
@@ -91,7 +112,7 @@ export default function Admin() {
           <Input aria-label="Support reference" className="sm:max-w-sm" value={query} onChange={event => setQuery(event.target.value)} placeholder="RI-… or op_…" />
           <Button type="submit">Search</Button>
         </form>
-        {searched && (data.operation ? <OperationResult operation={data.operation} /> : <p className="mt-4 text-sm text-muted-foreground">No matching operation.</p>)}
+        {searched && (data.operation ? <OperationResult operation={data.operation} actionMessage={actionMessage} onRelease={releaseReservation} /> : <p className="mt-4 text-sm text-muted-foreground">No matching operation.</p>)}
       </CardContent>
     </Card>
 
@@ -102,7 +123,8 @@ export default function Admin() {
   </main></div>;
 }
 
-function OperationResult({ operation }: { operation: OperationDiagnostic }) {
+function OperationResult({ operation, actionMessage, onRelease }: { operation: OperationDiagnostic; actionMessage: string; onRelease: (publicOperationId: string) => Promise<void> }) {
+  const [confirmRelease, setConfirmRelease] = useState(false);
   const facts = [
     ['What happened?', operation.summary],
     ['Where did it fail?', operation.failureCategory ? humanize(operation.failureCategory) : 'No recorded failure'],
@@ -113,6 +135,11 @@ function OperationResult({ operation }: { operation: OperationDiagnostic }) {
   return <section aria-label="Operation diagnosis" className="mt-6 flex flex-col gap-5">
     <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm">{operation.supportReference}</span><Badge variant={operation.diagnosticState === 'needs_recovery' ? 'destructive' : 'secondary'}>{humanize(operation.diagnosticState)}</Badge><span className="text-xs text-muted-foreground">{humanize(operation.operationKind)} · {humanize(operation.operationState)}</span></div>
     <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{facts.map(([label, value]) => <div key={label} className="rounded-lg border border-border/60 p-3"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-sm font-medium">{value}</dd></div>)}</dl>
+    {operation.staleRelease.eligible && <section aria-label="Stale reservation resolution" className="flex flex-col gap-3 rounded-xl border border-border/60 p-4">
+      <div><h3 className="text-sm font-semibold">Release unreachable reservation</h3><p className="mt-1 text-xs text-muted-foreground">{operation.staleRelease.reason} This only releases the held unit; it cannot create a result or edit consumed usage.</p></div>
+      {confirmRelease ? <div className="flex flex-wrap items-center gap-2"><Button variant="destructive" onClick={() => { setConfirmRelease(false); void onRelease(operation.publicOperationId); }}>Confirm release</Button><Button variant="outline" onClick={() => setConfirmRelease(false)}>Cancel</Button></div> : <Button className="self-start" variant="outline" onClick={() => setConfirmRelease(true)}>Release stale reservation</Button>}
+    </section>}
+    {actionMessage && <p role="status" className="text-sm text-muted-foreground">{actionMessage}</p>}
     <div><h3 className="text-sm font-semibold">Safe timeline</h3>{operation.timeline.length ? <Table><TableHeader><TableRow><TableHead>Time</TableHead><TableHead>Type</TableHead><TableHead>Event</TableHead><TableHead>Detail</TableHead></TableRow></TableHeader><TableBody>{operation.timeline.map((item, index) => <TableRow key={`${item.at}-${index}`}><TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(item.at)}</TableCell><TableCell>{humanize(item.kind)}</TableCell><TableCell>{humanize(item.label)}</TableCell><TableCell>{item.detail ? humanize(item.detail) : '—'}</TableCell></TableRow>)}</TableBody></Table> : <p className="mt-2 text-sm text-muted-foreground">No stage or operational events were recorded for this historical operation.</p>}</div>
   </section>;
 }

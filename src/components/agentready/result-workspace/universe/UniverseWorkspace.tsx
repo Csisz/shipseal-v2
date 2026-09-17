@@ -466,7 +466,9 @@ function RepositoryAtlasVisualization({
   const [selectedUniverseNodeId, setSelectedUniverseNodeId] = useState(universe.rootNodeId);
   const [universeCamera, setUniverseCamera] = useState<UniverseCameraState>(initialUniverseCamera);
   const [universeFocusRequest, setUniverseFocusRequest] = useState({ nodeId: universe.rootNodeId, sequence: 0 });
-  const [universeRotationPaused, setUniverseRotationPaused] = useState(prefersReducedMotion);
+  // Settled repository maps are spatially stable by default. Ambient rotation
+  // remains an explicit secondary opt-in for people who want it.
+  const [universeRotationPaused, setUniverseRotationPaused] = useState(true);
   const [universeSceneSettled, setUniverseSceneSettled] = useState(prefersReducedMotion);
   const [universeRetryKey, setUniverseRetryKey] = useState(0);
   const [tooltip, setTooltip] = useState<{ x: number; y: number; label: string; detail: string } | null>(null);
@@ -1209,7 +1211,7 @@ function RepositoryAtlasVisualization({
                 <DropdownMenuItem onSelect={() => setFlightPathOpen(true)}>Agent Journey</DropdownMenuItem>
               </>
             )}
-            {viewMode === 'universe3d' && <DropdownMenuItem onSelect={() => setUniverseRotationPaused(current => !current)}>{universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}</DropdownMenuItem>}
+            {viewMode === 'universe3d' && !prefersReducedMotion && <DropdownMenuItem onSelect={() => setUniverseRotationPaused(current => !current)}>{universeRotationPaused ? 'Auto rotate' : 'Stop auto rotate'}</DropdownMenuItem>}
             <DropdownMenuItem onSelect={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) })) : setScale(view.scale + 0.14)}><ZoomIn className="mr-1.5 h-3.5 w-3.5" /> Zoom in</DropdownMenuItem>
             <DropdownMenuItem onSelect={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.min(1500, current.radius + 80) })) : setScale(view.scale - 0.14)}><ZoomOut className="mr-1.5 h-3.5 w-3.5" /> Zoom out</DropdownMenuItem>
             <DropdownMenuItem onSelect={resetAtlas}><Crosshair className="mr-1.5 h-3.5 w-3.5" /> Reset view</DropdownMenuItem>
@@ -1465,9 +1467,9 @@ function RepositoryAtlasVisualization({
           <Button type="button" variant="outline" size="sm" onClick={() => { setMobileControlsOpen(false); enterFullscreen(); }} className="justify-start">
             <Maximize2 className="mr-2 h-4 w-4" /> Fullscreen
           </Button>
-          {viewMode === 'universe3d' && (
+          {viewMode === 'universe3d' && !prefersReducedMotion && (
             <Button type="button" variant="outline" size="sm" onClick={() => setUniverseRotationPaused(current => !current)} className="justify-start">
-              {universeRotationPaused || prefersReducedMotion ? 'Resume rotation' : 'Pause rotation'}
+              {universeRotationPaused ? 'Auto rotate' : 'Stop auto rotate'}
             </Button>
           )}
           <Button type="button" variant="outline" size="sm" onClick={() => viewMode === 'universe3d' ? setUniverseCamera(current => ({ ...current, radius: Math.max(80, current.radius - 80) })) : setScale(view.scale + 0.14)} className="justify-start">

@@ -6,11 +6,14 @@ import {
   repositoryFuturesLayoutBoxes,
   repositoryFuturesLayoutCollisions,
   repositoryFuturesNodeFootprint,
+  repositoryFuturesFitAllTargets,
   repositoryFuturesSelectedPlanNodes,
   repositoryFuturesTrace,
 } from '@/components/agentready/result-workspace/futures/repositoryFuturesCanvasModel';
 import {
   FUTURES_CAMERA_LIMITS,
+  FUTURES_FIT_ALL_MINIMUM_ZOOM,
+  FUTURES_G1_LANDMARK_FLOOR,
   constrainRepositoryFuturesCamera,
   fitRepositoryFuturesBoundsCamera,
   fitRepositoryFuturesCamera,
@@ -19,6 +22,8 @@ import {
   panRepositoryFuturesCamera,
   repositoryFuturesBounds,
   repositoryFuturesCameraLayout,
+  repositoryFuturesFitPadding,
+  repositoryFuturesInspectorPresentation,
   repositoryFuturesLod,
   repositoryFuturesSemanticZoomLevel,
   repositoryFuturesSafeInsets,
@@ -720,6 +725,90 @@ describe('Omega 18.5-V7.2 repository futures camera', () => {
     expect(mobile.bottom).toBe(430);
     expect(repositoryFuturesSafeInsets({ width: 390, height: 700 }).bottom).toBe(82);
     expect(mobile.right).toBe(18);
+  });
+
+  it('switches to the drawer when a side inspector would make the G1 comparison corridor unusable', () => {
+    expect(repositoryFuturesInspectorPresentation({ width: 1440, height: 900 }, 7, 320)).toBe('side');
+    expect(repositoryFuturesInspectorPresentation({ width: 1024, height: 820 }, 7, 288)).toBe('side');
+    expect(repositoryFuturesInspectorPresentation({ width: 768, height: 820 }, 7, 288)).toBe('drawer');
+    expect(repositoryFuturesInspectorPresentation({ width: 390, height: 844 }, 7, 360)).toBe('drawer');
+
+    const tabletDrawer = repositoryFuturesSafeInsets({ width: 768, height: 820 }, { width: 744, height: 240 }, 'drawer');
+    expect(tabletDrawer).toEqual({ top: 108, right: 20, bottom: 282, left: 64 });
+  });
+
+  it.each([
+    ['horizontal', { width: 1440, height: 900 }, { width: 320, height: 620 }],
+    ['vertical', { width: 1440, height: 900 }, { width: 320, height: 620 }],
+    ['horizontal', { width: 1024, height: 820 }, { width: 288, height: 500 }],
+    ['vertical', { width: 1024, height: 820 }, { width: 288, height: 500 }],
+    ['horizontal', { width: 768, height: 820 }, { width: 744, height: 240 }],
+    ['vertical', { width: 768, height: 820 }, { width: 744, height: 240 }],
+    ['horizontal', { width: 390, height: 844 }, { width: 366, height: 260 }],
+    ['vertical', { width: 390, height: 844 }, { width: 366, height: 260 }],
+  ] as const)('keeps seven %s G1 landmarks visible and recognizable at %sx%s', (orientation, viewport, inspector) => {
+    const model = buildRepositoryFuturesCanvasModel('cantu', { ...denseSpatialInput(7, 4, 3), mode: 'deep' }, orientation);
+    const targets = repositoryFuturesFitAllTargets(model, 'deep');
+    const bounds = repositoryFuturesBounds(targets)!;
+    const presentation = repositoryFuturesInspectorPresentation(viewport, 7, inspector.width);
+    const insets = repositoryFuturesSafeInsets(viewport, inspector, presentation);
+    const safe = repositoryFuturesSafeViewport(viewport, insets);
+    const padding = repositoryFuturesFitPadding(viewport);
+    const camera = fitRepositoryFuturesBoundsCamera(viewport, bounds, insets, padding, 1.15, FUTURES_FIT_ALL_MINIMUM_ZOOM);
+
+    targets.filter(target => target.id.startsWith('goal:')).forEach(target => {
+      const width = Math.max(target.width * camera.zoom, FUTURES_G1_LANDMARK_FLOOR.width);
+      const height = Math.max(target.height * camera.zoom, FUTURES_G1_LANDMARK_FLOOR.height);
+      const centerX = target.x * camera.zoom + camera.x;
+      const centerY = target.y * camera.zoom + camera.y;
+      expect(centerX - width / 2).toBeGreaterThanOrEqual(safe.left - 0.01);
+      expect(centerX + width / 2).toBeLessThanOrEqual(safe.right + 0.01);
+      expect(centerY - height / 2).toBeGreaterThanOrEqual(safe.top - 0.01);
+      expect(centerY + height / 2).toBeLessThanOrEqual(safe.bottom + 0.01);
+      expect(width).toBeGreaterThanOrEqual(40);
+      expect(height).toBeGreaterThanOrEqual(32);
+    });
+  });
+
+  it.each([
+    ['horizontal', { width: 1440, height: 900 }, undefined],
+    ['horizontal', { width: 1440, height: 900 }, { width: 320, height: 620 }],
+    ['vertical', { width: 1440, height: 900 }, undefined],
+    ['vertical', { width: 1440, height: 900 }, { width: 320, height: 620 }],
+    ['horizontal', { width: 768, height: 820 }, undefined],
+    ['horizontal', { width: 768, height: 820 }, { width: 288, height: 520 }],
+    ['vertical', { width: 768, height: 820 }, undefined],
+    ['vertical', { width: 768, height: 820 }, { width: 288, height: 520 }],
+    ['horizontal', { width: 390, height: 760 }, undefined],
+    ['horizontal', { width: 390, height: 760 }, { width: 360, height: 300 }],
+    ['vertical', { width: 390, height: 760 }, undefined],
+    ['vertical', { width: 390, height: 760 }, { width: 360, height: 300 }],
+  ] as const)('fits every G1 choice inside the safe viewport for %s at %sx%s', (orientation, viewport, inspector) => {
+    const model = buildRepositoryFuturesCanvasModel('cantu', { ...denseSpatialInput(7, 4, 3), mode: 'deep' }, orientation);
+    const targets = repositoryFuturesFitAllTargets(model, 'deep');
+    const bounds = repositoryFuturesBounds(targets)!;
+    const insets = repositoryFuturesSafeInsets(viewport, inspector);
+    const safe = repositoryFuturesSafeViewport(viewport, insets);
+    const padding = viewport.width < 768 ? 14 : viewport.width < 1024 ? 22 : 36;
+    const camera = fitRepositoryFuturesBoundsCamera(
+      viewport,
+      bounds,
+      insets,
+      padding,
+      1.15,
+      FUTURES_FIT_ALL_MINIMUM_ZOOM,
+    );
+
+    targets.forEach(target => {
+      const left = (target.x - target.width / 2) * camera.zoom + camera.x;
+      const right = (target.x + target.width / 2) * camera.zoom + camera.x;
+      const top = (target.y - target.height / 2) * camera.zoom + camera.y;
+      const bottom = (target.y + target.height / 2) * camera.zoom + camera.y;
+      expect(left).toBeGreaterThanOrEqual(safe.left + padding - 0.01);
+      expect(right).toBeLessThanOrEqual(safe.right - padding + 0.01);
+      expect(top).toBeGreaterThanOrEqual(safe.top + padding - 0.01);
+      expect(bottom).toBeLessThanOrEqual(safe.bottom - padding + 0.01);
+    });
   });
 
   it('leaves a comfortably visible target completely unchanged', () => {

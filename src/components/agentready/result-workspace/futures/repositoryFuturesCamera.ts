@@ -31,9 +31,12 @@ export interface RepositoryFuturesWorldBounds {
 }
 
 export type RepositoryFuturesCameraLayout = 'mobile' | 'tablet' | 'desktop';
+export type RepositoryFuturesInspectorPresentation = 'side' | 'drawer';
 export type RepositoryFuturesSemanticZoomLevel = 'strategy' | 'path' | 'detail' | 'implementation';
 
 export const FUTURES_CAMERA_LIMITS = { minimum: 0.44, maximum: 1.45 } as const;
+export const FUTURES_FIT_ALL_MINIMUM_ZOOM = 0.04;
+export const FUTURES_G1_LANDMARK_FLOOR = { width: 40, height: 32 } as const;
 
 const EMPTY_INSETS: RepositoryFuturesCameraInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const SAFE_VIEWPORT_CONSTANTS = {
@@ -53,12 +56,15 @@ export function repositoryFuturesCameraLayout(viewport: RepositoryFuturesViewpor
 export function repositoryFuturesSafeInsets(
   viewport: RepositoryFuturesViewport,
   inspector?: { width: number; height: number },
+  inspectorPresentation?: RepositoryFuturesInspectorPresentation,
 ): RepositoryFuturesCameraInsets {
   const layout = repositoryFuturesCameraLayout(viewport);
-  if (layout === 'mobile') {
-    const constants = SAFE_VIEWPORT_CONSTANTS.mobile;
+  if (layout === 'mobile' || inspectorPresentation === 'drawer') {
+    const constants = layout === 'mobile' ? SAFE_VIEWPORT_CONSTANTS.mobile : SAFE_VIEWPORT_CONSTANTS.tablet;
     const inspectorHeight = inspector
-      ? Math.max(inspector.height, constants.fallbackInspectorHeight)
+      ? layout === 'mobile'
+        ? Math.max(inspector.height, SAFE_VIEWPORT_CONSTANTS.mobile.fallbackInspectorHeight)
+        : inspector.height
       : 0;
     return {
       top: constants.top,
@@ -77,6 +83,36 @@ export function repositoryFuturesSafeInsets(
     bottom: constants.bottom,
     left: constants.left,
   };
+}
+
+/**
+ * A side inspector is useful only while the remaining map can preserve a
+ * recognizable comparison landmark for each G1 Future. Otherwise the existing
+ * bottom-drawer composition keeps the map wide and the inspector reachable.
+ */
+export function repositoryFuturesInspectorPresentation(
+  viewport: RepositoryFuturesViewport,
+  selectableGoalCount: number,
+  inspectorWidth: number = SAFE_VIEWPORT_CONSTANTS.tablet.fallbackInspectorWidth,
+): RepositoryFuturesInspectorPresentation {
+  if (repositoryFuturesCameraLayout(viewport) === 'mobile') return 'drawer';
+  const sideSafe = repositoryFuturesSafeViewport(viewport, repositoryFuturesSafeInsets(
+    viewport,
+    { width: inspectorWidth, height: 0 },
+    'side',
+  ));
+  const comparisonWidth = Math.max(
+    360,
+    selectableGoalCount * FUTURES_G1_LANDMARK_FLOOR.width
+      + Math.max(0, selectableGoalCount - 1) * 24
+      + 48,
+  );
+  return sideSafe.width >= comparisonWidth ? 'side' : 'drawer';
+}
+
+export function repositoryFuturesFitPadding(viewport: RepositoryFuturesViewport) {
+  if (viewport.width < 1024) return 22;
+  return 36;
 }
 
 export function repositoryFuturesSafeViewport(
@@ -115,6 +151,7 @@ export function fitRepositoryFuturesBoundsCamera(
   insets: RepositoryFuturesCameraInsets = EMPTY_INSETS,
   padding = 48,
   maximumZoom = 1.15,
+  minimumZoom: number = FUTURES_CAMERA_LIMITS.minimum,
 ): RepositoryFuturesCamera {
   const safe = repositoryFuturesSafeViewport(viewport, insets);
   const width = Math.max(1, bounds.maxX - bounds.minX);
@@ -123,7 +160,7 @@ export function fitRepositoryFuturesBoundsCamera(
   const usableHeight = Math.max(1, safe.height - padding * 2);
   const zoom = clamp(
     Math.min(usableWidth / width, usableHeight / height),
-    FUTURES_CAMERA_LIMITS.minimum,
+    Math.min(minimumZoom, maximumZoom, FUTURES_CAMERA_LIMITS.maximum),
     Math.min(maximumZoom, FUTURES_CAMERA_LIMITS.maximum),
   );
   const worldCenterX = (bounds.minX + bounds.maxX) / 2;
@@ -154,7 +191,10 @@ export function zoomRepositoryFuturesCamera(
   nextZoom: number,
   anchor: { x: number; y: number },
 ): RepositoryFuturesCamera {
-  const zoom = clamp(nextZoom, FUTURES_CAMERA_LIMITS.minimum, FUTURES_CAMERA_LIMITS.maximum);
+  // A fit-all camera may temporarily sit below the normal exploration floor
+  // so a dense G1 comparison remains wholly visible. Zooming back in should be
+  // gradual instead of jumping directly to the regular manual-navigation floor.
+  const zoom = clamp(nextZoom, Math.min(camera.zoom, FUTURES_CAMERA_LIMITS.minimum), FUTURES_CAMERA_LIMITS.maximum);
   const worldX = (anchor.x - camera.x) / camera.zoom;
   const worldY = (anchor.y - camera.y) / camera.zoom;
   return {

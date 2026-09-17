@@ -8,6 +8,7 @@ const operation = {
   operationState: 'running', diagnosticState: 'needs_recovery', summary: 'The operation is not actively running and has a safe recovery path.',
   failureCategory: 'provider_timeout', userUnitState: 'reserved', resultExists: false, canRetry: true,
   recoveryAction: 'Resume stale lease', leaseExpiresAt: null, updatedAt: '2026-09-11T10:05:00.000Z',
+  staleRelease: { eligible: true, classification: 'superseded', reason: 'A newer durable Future supersedes this unreachable incomplete operation.' },
   reconciliationOutcome: 'not-required', timeline: [{ at: '2026-09-11T10:05:00.000Z', kind: 'stage', label: 'roots · running', detail: null }],
 };
 
@@ -64,5 +65,29 @@ describe('Admin operations presentation', () => {
     expect(screen.getByText('Yes · Resume stale lease')).toBeInTheDocument();
     expect(screen.getByText('roots · running')).toBeInTheDocument();
     await waitFor(() => expect(fetcher).toHaveBeenLastCalledWith('/api/admin?q=ri-456789xyzq', { credentials: 'include' }));
+  });
+
+  it('requires an explicit second confirmation before using the narrow stale-release action', async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(payload()), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ...payload(), operation }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'released' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        ...payload(),
+        operation: { ...operation, staleRelease: { eligible: false, classification: null, reason: 'This reservation has already been released.', alreadyReleased: true } },
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetcher);
+    renderAdmin();
+    await screen.findByText('0 / 100');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Support reference' }), { target: { value: operation.publicOperationId } });
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    await screen.findByRole('region', { name: 'Stale reservation resolution' });
+    fireEvent.click(screen.getByRole('button', { name: 'Release stale reservation' }));
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm release' }));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledWith('/api/admin?action=release-stale-reservation', expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ publicOperationId: operation.publicOperationId }),
+    })));
+    expect(await screen.findByRole('status')).toHaveTextContent('released once');
   });
 });

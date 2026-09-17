@@ -4,6 +4,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import type { RepositoryFutureStageOverlay } from './futurePathwaysPresentation';
 import {
   buildRepositoryFuturesCanvasModel,
+  repositoryFuturesFitAllTargets,
   repositoryFutureRenderedFootprint,
   repositoryFuturesEdgePath,
   repositoryFuturesSelectedPlanNodes,
@@ -12,12 +13,16 @@ import {
 } from './repositoryFuturesCanvasModel';
 import {
   constrainRepositoryFuturesCamera,
+  FUTURES_FIT_ALL_MINIMUM_ZOOM,
+  FUTURES_G1_LANDMARK_FLOOR,
   fitRepositoryFuturesBoundsCamera,
   fitRepositoryFuturesCamera,
   frameRepositoryFuturesOrigin,
   panRepositoryFuturesCamera,
   repositoryFuturesBounds,
+  repositoryFuturesFitPadding,
   repositoryFuturesLod,
+  repositoryFuturesInspectorPresentation,
   repositoryFuturesSemanticZoomLevel,
   repositoryFuturesSafeInsets,
   repositoryFuturesSafeViewport,
@@ -26,6 +31,7 @@ import {
   wheelRepositoryFuturesCamera,
   zoomRepositoryFuturesCamera,
   type RepositoryFuturesCamera,
+  type RepositoryFuturesInspectorPresentation,
 } from './repositoryFuturesCamera';
 import { resolveRepositoryFutureNodeActions, type RepositoryFutureNodeAction } from './repositoryFutureNodeActions';
 import { RepositoryFutureSemanticIcon } from './RepositoryFutureSemanticIcon';
@@ -78,6 +84,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
   const [pinnedId, setPinnedId] = useState<string>();
   const [dragging, setDragging] = useState(false);
   const [cameraTransitioning, setCameraTransitioning] = useState(false);
+  const [viewportSize, setViewportSize] = useState(DEFAULT_VIEWPORT);
   cameraRef.current = camera;
   const activeId = hoveredId || pinnedId || overlay.activeTraceId;
   const activeNode = pinnedId ? nodeById.get(pinnedId) : undefined;
@@ -114,6 +121,13 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
     setSemanticZoom(current => repositoryFuturesSemanticZoomWithHysteresis(camera.zoom, current));
   }, [camera.zoom]);
   const meaningfulBounds = useMemo(() => repositoryFuturesBounds(model.nodes.map(nodeCameraTarget))!, [model.nodes]);
+  const selectableFutureBounds = useMemo(() => repositoryFuturesBounds(
+    repositoryFuturesFitAllTargets(model, overlay.mode),
+  )!, [model, overlay.mode]);
+  const selectableGoalCount = useMemo(() => model.nodes.filter(node => node.kind === 'goal').length, [model.nodes]);
+  const inspectorPresentation: RepositoryFuturesInspectorPresentation = mobile
+    ? 'drawer'
+    : repositoryFuturesInspectorPresentation(viewportSize, selectableGoalCount);
   const selectedPlanNodeIds = useMemo(() => new Set(repositoryFuturesSelectedPlanNodes(model).map(node => node.id)), [model]);
   const selectedPlanNodes = useMemo(() => model.nodes.filter(node => selectedPlanNodeIds.has(node.id)), [model.nodes, selectedPlanNodeIds]);
   const selectedPlanBounds = useMemo(() => {
@@ -148,11 +162,16 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
   const getInsets = useCallback((includeInspector = Boolean(pinnedId)) => {
     const viewport = getViewport();
     const inspectorBounds = includeInspector ? inspectorRef.current?.getBoundingClientRect() : undefined;
+    const presentation: RepositoryFuturesInspectorPresentation = mobile ? 'drawer' : repositoryFuturesInspectorPresentation(
+      viewport,
+      selectableGoalCount,
+      inspectorBounds?.width,
+    );
     return repositoryFuturesSafeInsets(viewport, inspectorBounds ? {
       width: inspectorBounds.width,
       height: inspectorBounds.height,
-    } : includeInspector ? { width: 0, height: 0 } : undefined);
-  }, [getViewport, pinnedId]);
+    } : includeInspector ? { width: 0, height: 0 } : undefined, presentation);
+  }, [getViewport, mobile, pinnedId, selectableGoalCount]);
 
   const applyCamera = useCallback((next: RepositoryFuturesCamera, animate = false) => {
     if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
@@ -173,8 +192,21 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
   ), [getInsets, getViewport, meaningfulBounds, pinnedId]);
 
   const fitAll = useCallback(() => {
-    applyCamera(fitRepositoryFuturesBoundsCamera(getViewport(), meaningfulBounds, getInsets(), 52), true);
-  }, [applyCamera, getInsets, getViewport, meaningfulBounds]);
+    const viewport = getViewport();
+    const padding = repositoryFuturesFitPadding(viewport);
+    const next = fitRepositoryFuturesBoundsCamera(
+      viewport,
+      selectableFutureBounds,
+      getInsets(),
+      padding,
+      1.15,
+      FUTURES_FIT_ALL_MINIMUM_ZOOM,
+    );
+    // Fit is an explicit camera command. Prevent the semantic-zoom change it
+    // causes from immediately re-framing the pinned node and displacing G1s.
+    if (pinnedId) revealedPinnedContextRef.current = `${pinnedId}:${repositoryFuturesSemanticZoomLevel(next.zoom)}`;
+    applyCamera(next, true);
+  }, [applyCamera, getInsets, getViewport, pinnedId, selectableFutureBounds]);
 
   const fitPlan = useCallback(() => {
     if (!primary || !selectedPlanBounds) return;
@@ -221,18 +253,21 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
     const observer = new ResizeObserver(() => {
       if (!initialFramingRef.current) return;
       const viewport = getViewport();
+      setViewportSize(viewport);
       if (Math.abs(viewport.width - previousViewport.width) < 0.5 && Math.abs(viewport.height - previousViewport.height) < 0.5) return;
       previousViewport = viewport;
       const inspectorBounds = pinnedIdRef.current ? inspectorRef.current?.getBoundingClientRect() : undefined;
+      const presentation: RepositoryFuturesInspectorPresentation = mobile ? 'drawer' : repositoryFuturesInspectorPresentation(viewport, selectableGoalCount, inspectorBounds?.width);
       const insets = repositoryFuturesSafeInsets(viewport, inspectorBounds ? {
         width: inspectorBounds.width,
         height: inspectorBounds.height,
-      } : pinnedIdRef.current ? { width: 0, height: 0 } : undefined);
+      } : pinnedIdRef.current ? { width: 0, height: 0 } : undefined, presentation);
       setCamera(current => constrainRepositoryFuturesCamera(current, viewport, meaningfulBoundsRef.current, insets));
     });
     observer.observe(stageRef.current);
+    setViewportSize(getViewport());
     return () => observer.disconnect();
-  }, [getViewport]);
+  }, [getViewport, mobile, selectableGoalCount]);
 
   useEffect(() => () => {
     if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
@@ -304,6 +339,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
   }, [overlay]);
 
   const inspectNode = (node: RepositoryFuturesCanvasNode) => {
+    cancelCameraTransition();
     const nextPinned = pinnedId === node.id ? undefined : node.id;
     setPinnedId(nextPinned);
     setHoveredId(undefined);
@@ -414,6 +450,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
       return;
     }
     if (event.target !== event.currentTarget) return;
+    cancelCameraTransition();
     const pan = 36;
     if (event.key === 'ArrowLeft') setCamera(current => constrainCamera(panRepositoryFuturesCamera(current, pan, 0)));
     else if (event.key === 'ArrowRight') setCamera(current => constrainCamera(panRepositoryFuturesCamera(current, -pan, 0)));
@@ -450,6 +487,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
         data-camera-y={camera.y.toFixed(2)}
         data-camera-zoom={camera.zoom.toFixed(3)}
         data-camera-lod={lod}
+        data-camera-transitioning={cameraTransitioning ? 'true' : 'false'}
         data-semantic-zoom={semanticZoom}
         data-semantic-zoom-motion={reducedMotion ? 'static' : 'semantic-zoom-change'}
         data-disclosure-mode={overlay.mode}
@@ -475,6 +513,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
           if (!(event.target as Element).closest('[data-neural-node], [data-camera-control], [data-futures-mode-owner], [data-neural-inspector]')) clearFocus();
         }}
         data-stage-framing="immersive-full-stage"
+        data-inspector-presentation={inspectorPresentation}
         className={`futures-neural-stage relative h-[calc(100svh-10rem)] min-h-[640px] max-h-[960px] select-none overflow-clip overscroll-contain border-y border-primary/10 outline-none [touch-action:none] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:min-h-[720px] ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
       >
         <div aria-hidden="true" className="futures-neural-mesh pointer-events-none absolute inset-0 opacity-[0.2]" />
@@ -496,7 +535,11 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
             ))}
           </div>
         </div>
-        <div data-camera-control className="absolute bottom-3 left-3 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-0.5 rounded-full border border-border/35 bg-background/[0.72] p-0.5 shadow-sm backdrop-blur-md md:bottom-5 md:left-5">
+        <div
+          data-camera-control
+          data-camera-control-placement={inspectorPresentation === 'drawer' && pinnedId ? 'above-drawer' : 'stage-bottom'}
+          className={`absolute left-3 z-30 flex max-w-[calc(100%-1.5rem)] items-center gap-0.5 rounded-full border border-border/35 bg-background/[0.72] p-0.5 shadow-sm backdrop-blur-md md:left-5 ${inspectorPresentation === 'drawer' && pinnedId ? 'bottom-[calc(38%+1.5rem)]' : 'bottom-3 md:bottom-5'}`}
+        >
           <CameraButton label="Zoom out" onClick={() => zoomAtCenter(1 / 1.16)}><Minus /></CameraButton>
           <CameraButton label="Zoom in" onClick={() => zoomAtCenter(1.16)}><Plus /></CameraButton>
           <CameraButton label="Fit all futures" onClick={fitAll}><Focus /></CameraButton>
@@ -660,6 +703,10 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
             const showMetadata = labelDetail === 'near';
             const showCompactTitle = labelDetail === 'compact';
             const renderedFootprint = repositoryFutureRenderedFootprint(node, overlay.mode, labelDetail);
+            const landmarkFootprint = node.kind === 'goal' ? {
+              width: Math.max(renderedFootprint.width, FUTURES_G1_LANDMARK_FLOOR.width / Math.max(camera.zoom, 0.001)),
+              height: Math.max(renderedFootprint.height, FUTURES_G1_LANDMARK_FLOOR.height / Math.max(camera.zoom, 0.001)),
+            } : renderedFootprint;
             return (
               <button
                 key={node.id}
@@ -687,6 +734,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
                 data-text-rich={showFullTitle ? 'true' : undefined}
                 data-rendered-width={renderedFootprint.width}
                 data-rendered-height={renderedFootprint.height}
+                data-screen-landmark={node.kind === 'goal' && landmarkFootprint.width > renderedFootprint.width ? 'recognizable-g1' : undefined}
                 data-interaction-state={pinnedId === node.id ? 'pinned' : hoveredId === node.id ? 'hovered' : activeId && traced ? 'related' : 'idle'}
                 data-motion-event={pinnedId === node.id ? 'node-pin' : hoveredId === node.id ? 'node-hover' : undefined}
                 data-plan-motion-event={node.role === 'primary' ? 'primary-selected' : node.role === 'supporting' ? 'support-selected' : undefined}
@@ -705,8 +753,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
                 style={{
                   left: node.x,
                   top: node.y,
-                  width: mobile && labelDetail === 'anchor' ? 32 : renderedFootprint.width,
-                  height: mobile && labelDetail === 'anchor' ? 32 : renderedFootprint.height,
+                  width: mobile && labelDetail === 'anchor' ? Math.max(32 / camera.zoom, landmarkFootprint.width) : landmarkFootprint.width,
+                  height: mobile && labelDetail === 'anchor' ? Math.max(32 / camera.zoom, landmarkFootprint.height) : landmarkFootprint.height,
                   animationDelay: reducedMotion ? undefined : `${repositoryFutureNodeRevealDelay(node, entryMotion)}ms`,
                   transitionDuration: reducedMotion ? '0ms' : '240ms',
                   opacity: nodeOpacity(corridorLevel, disclosureDepth, overlay.mode),
@@ -744,7 +792,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
           <NodeHoverCard node={hoverNode} semantic={semanticByNodeId.get(hoverNode.id)!} style={hoverPosition} />
         )}
         {activeNode && (
-          <NeuralInspector inspectorRef={inspectorRef} node={activeNode} semantic={semanticByNodeId.get(activeNode.id)!} overlay={overlay} onClose={clearFocus} />
+          <NeuralInspector inspectorRef={inspectorRef} presentation={inspectorPresentation} node={activeNode} semantic={semanticByNodeId.get(activeNode.id)!} overlay={overlay} onClose={clearFocus} />
         )}
         {overlay.notice && <div role="status" aria-live="polite" className="pointer-events-none absolute left-3 top-24 z-30 max-w-[calc(100%-1.5rem)] rounded-xl border border-primary/20 bg-background/85 px-3 py-2 text-xs text-foreground shadow-sm backdrop-blur-md md:bottom-20 md:left-5 md:top-auto md:max-w-sm">{overlay.notice}</div>}
       </div>
@@ -782,7 +830,7 @@ function CameraButton({ label, onClick, children, disabled = false, disabledDesc
   return <button type="button" aria-label={label} title={disabled ? disabledDescription : label} disabled={disabled} onClick={event => { event.stopPropagation(); onClick(); }} className="grid h-10 w-10 place-items-center rounded-full text-muted-foreground transition-[color,background-color,transform] duration-150 hover:bg-primary/10 hover:text-foreground active:scale-[0.97] motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-muted-foreground">{children && <span className="[&>svg]:h-4 [&>svg]:w-4">{children}</span>}</button>;
 }
 
-function NeuralInspector({ inspectorRef, node, semantic, overlay, onClose }: { inspectorRef: React.RefObject<HTMLElement>; node: RepositoryFuturesCanvasNode; semantic: RepositoryFutureSemanticStyle; overlay: RepositoryFutureStageOverlay; onClose: () => void }) {
+function NeuralInspector({ inspectorRef, presentation, node, semantic, overlay, onClose }: { inspectorRef: React.RefObject<HTMLElement>; presentation: RepositoryFuturesInspectorPresentation; node: RepositoryFuturesCanvasNode; semantic: RepositoryFutureSemanticStyle; overlay: RepositoryFutureStageOverlay; onClose: () => void }) {
   const candidate = node.candidate;
   const dependency = node.dependency;
   const [replacementOpen, setReplacementOpen] = useState(false);
@@ -804,7 +852,7 @@ function NeuralInspector({ inspectorRef, node, semantic, overlay, onClose }: { i
     if (action.id === 'replace-support') setReplacementOpen(true);
   };
   return (
-    <aside ref={inspectorRef} data-neural-inspector data-testid="neural-futures-inspector" data-future-domain={semantic.domain} aria-label="Neural Futures inspector" className="future-neural-inspector absolute inset-x-3 bottom-3 z-40 max-h-[52%] overflow-y-auto rounded-t-[1.35rem] border border-primary/25 bg-background/[0.96] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl md:inset-x-auto md:bottom-5 md:right-5 md:max-h-[calc(100%-6.5rem)] md:w-72 md:rounded-[1.15rem] lg:w-[19rem] motion-reduce:animate-none">
+    <aside ref={inspectorRef} data-neural-inspector data-inspector-presentation={presentation} data-testid="neural-futures-inspector" data-future-domain={semantic.domain} aria-label="Neural Futures inspector" className={`future-neural-inspector absolute z-40 overflow-y-auto border border-primary/25 bg-background/[0.96] p-4 shadow-[var(--shadow-floating-panel)] backdrop-blur-xl motion-reduce:animate-none ${presentation === 'drawer' ? 'inset-x-3 bottom-3 max-h-[38%] rounded-t-[1.35rem]' : 'bottom-5 right-5 max-h-[calc(100%-6.5rem)] w-72 rounded-[1.15rem] lg:w-[19rem]'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <span className="future-semantic-emblem grid size-10 shrink-0 place-items-center rounded-xl border border-current/20 bg-background/55"><RepositoryFutureSemanticIcon icon={semantic.icon} className="size-5" /></span>

@@ -315,7 +315,7 @@ describe('Result Workspace composition', () => {
     fireEvent.click(within(toolbar).getByRole('button', { name: /More Universe controls/i }));
     const controlsSheet = await screen.findByTestId('mobile-universe-controls-sheet');
     expect(within(controlsSheet).getByRole('button', { name: /Fullscreen/i })).toBeInTheDocument();
-    expect(within(controlsSheet).getByRole('button', { name: /Pause rotation/i })).toBeInTheDocument();
+    expect(within(controlsSheet).getByRole('button', { name: /Auto rotate/i })).toBeInTheDocument();
     expect(within(controlsSheet).getByRole('button', { name: /Zoom in/i })).toBeInTheDocument();
     expect(within(controlsSheet).getByRole('button', { name: /Zoom out/i })).toBeInTheDocument();
     expect(within(controlsSheet).getByRole('button', { name: /Reset view/i })).toBeInTheDocument();
@@ -562,22 +562,30 @@ describe('Result Workspace composition', () => {
       />
     );
 
+    const universe = await screen.findByTestId('repository-universe-canvas');
+    expect(universe).toHaveAttribute('data-rotation-paused', 'true');
     fireEvent.click(await screen.findByRole('button', { name: /Select universe node/i }));
     expect(screen.getByRole('button', { name: /Close inspector/i })).toBeInTheDocument();
     expect(screen.getByRole('tablist', { name: /Contextual repository details/i })).toBeInTheDocument();
 
     const stage = screen.getByTestId('repository-universe-workspace-stage');
-    const { trigger, menu } = openMoreControls();
+    const { menu } = openMoreControls();
     expect(menu).toHaveAttribute('data-overlay-layer', 'popover');
     expect(stage).not.toContainElement(menu);
-    expect(screen.getByRole('menuitem', { name: /Pause rotation/i })).toBeVisible();
+    const autoRotate = screen.getByRole('menuitem', { name: /Auto rotate/i });
+    expect(autoRotate).toBeVisible();
     expect(screen.getByRole('menuitem', { name: /Zoom in/i })).toBeVisible();
     expect(screen.getByRole('menuitem', { name: /Zoom out/i })).toBeVisible();
     expect(screen.getByRole('menuitem', { name: /Reset view/i })).toBeVisible();
 
+    fireEvent.click(autoRotate);
+    expect(universe).toHaveAttribute('data-rotation-paused', 'false');
+    const reopened = openMoreControls();
+    expect(screen.getByRole('menuitem', { name: /Stop auto rotate/i })).toBeVisible();
+
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByTestId('universe-more-controls-menu')).not.toBeInTheDocument());
-    expect(trigger).toHaveFocus();
+    expect(reopened.trigger).toHaveFocus();
 
     openMoreControls();
     await act(async () => {

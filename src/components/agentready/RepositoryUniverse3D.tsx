@@ -1138,7 +1138,15 @@ export default function RepositoryUniverse3D({
         finishReveal();
       }
       const pinnedSelectionActive = Boolean(selectedNodeIdRef.current && selectedNodeIdRef.current !== model.rootNodeId);
-      if (!reducedMotionRef.current && !rotationPausedRef.current && !pinnedSelectionActive && !hoveredNodeId && routeNodeIdSetRef.current.size === 0 && localSettled && now - userInteractedAt > IDLE_ROTATION_DELAY_MS) {
+      if (shouldRepositoryUniverseIdleRotate({
+        reducedMotion: reducedMotionRef.current,
+        rotationPaused: rotationPausedRef.current,
+        pinnedSelectionActive,
+        hoveredNodeId,
+        routeNodeCount: routeNodeIdSetRef.current.size,
+        settled: localSettled,
+        idleForMs: now - userInteractedAt,
+      })) {
         const state = cameraStateRef.current;
         cameraStateRef.current = { ...state, theta: state.theta + 0.00012 };
       }
@@ -1258,6 +1266,27 @@ export default function RepositoryUniverse3D({
       )}
     </div>
   );
+}
+
+// Explicitly separates the optional ambient mode from normal settled-map
+// behavior so default stability remains testable without a WebGL renderer.
+// eslint-disable-next-line react-refresh/only-export-components
+export function shouldRepositoryUniverseIdleRotate(input: {
+  reducedMotion: boolean;
+  rotationPaused: boolean;
+  pinnedSelectionActive: boolean;
+  hoveredNodeId: string | null;
+  routeNodeCount: number;
+  settled: boolean;
+  idleForMs: number;
+}) {
+  return !input.reducedMotion
+    && !input.rotationPaused
+    && !input.pinnedSelectionActive
+    && !input.hoveredNodeId
+    && input.routeNodeCount === 0
+    && input.settled
+    && input.idleForMs > IDLE_ROTATION_DELAY_MS;
 }
 
 // Focused motion-contract tests consume this helper without requiring WebGL.

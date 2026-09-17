@@ -1,4 +1,5 @@
 import { operationSupportReference } from '../../src/lib/supportReference.js';
+import { assessStaleReservationRelease } from './adminStaleReservation.js';
 
 export type ProviderLimitState = 'configured' | 'not_configured' | 'invalid';
 
@@ -52,6 +53,7 @@ export function buildOperationDiagnostic(
   events: Record<string, unknown>[],
   now: Date,
 ) {
+  const staleRelease = assessStaleReservationRelease(operation, now);
   const activeStage = stages.find(stage => stage.state === 'running' && isLeaseActive(stage.lease_expires_at, now));
   const staleStage = stages.find(stage => stage.state === 'running' && !isLeaseActive(stage.lease_expires_at, now));
   const retryableStage = stages.find(stage => stage.state === 'retryable_failure');
@@ -117,6 +119,7 @@ export function buildOperationDiagnostic(
     completedAt: iso(operation.completed_at),
     releasedAt: iso(operation.released_at),
     reconciliationOutcome: operation.reconciliation_outcome ? String(operation.reconciliation_outcome) : 'not-required',
+    staleRelease,
     timeline,
   };
 }

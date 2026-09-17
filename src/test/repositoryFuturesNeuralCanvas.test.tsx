@@ -128,6 +128,34 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(value.onTraceClear).toHaveBeenCalled();
   });
 
+  it('keeps camera controls above an open responsive inspector drawer', () => {
+    const originalMatchMedia = window.matchMedia;
+    const originalInnerWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 390 });
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query.includes('max-width: 767px'),
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    try {
+      const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+      fireEvent.click(screen.getByRole('button', { name: /Primary future goal: Guided repository futures/i }));
+
+      expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-inspector-presentation', 'drawer');
+      expect(container.querySelector('[data-camera-control]')).toHaveAttribute('data-camera-control-placement', 'above-drawer');
+      expect(screen.getByRole('button', { name: 'Fit all futures' })).toBeEnabled();
+    } finally {
+      window.matchMedia = originalMatchMedia;
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalInnerWidth });
+    }
+  });
+
   it('layers only real relationships into a broader neural field while the selected route remains dominant', () => {
     const value = overlay({ activeTraceId: 'goal:future' });
     const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
@@ -188,6 +216,22 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     fireEvent.pointerUp(stage, { pointerId: 1, clientX: 140, clientY: 130 });
     fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
     expect(Number(stage.getAttribute('data-camera-zoom'))).toBeGreaterThanOrEqual(0.44);
+  });
+
+  it('lets pointer and keyboard input interrupt an in-flight fit transition', () => {
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+    const stage = screen.getByRole('application', { name: /Neural Repository Futures canvas/i });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
+    expect(stage).toHaveAttribute('data-camera-transitioning', 'true');
+    fireEvent.pointerDown(stage, { pointerId: 1, clientX: 180, clientY: 220 });
+    expect(stage).toHaveAttribute('data-camera-transitioning', 'false');
+    fireEvent.pointerUp(stage, { pointerId: 1, clientX: 180, clientY: 220 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
+    expect(stage).toHaveAttribute('data-camera-transitioning', 'true');
+    fireEvent.keyDown(stage, { key: 'ArrowRight' });
+    expect(stage).toHaveAttribute('data-camera-transitioning', 'false');
   });
 
   it('keeps camera X, Y, and zoom unchanged when a Future remains comfortably visible beside the inspector', () => {
