@@ -32,7 +32,8 @@ jobs:
 
       - name: Run tests
         # Accepted local validation command: npm run test
-        run: npm test
+        # Match the release gate: one worker avoids host-contention flakes on shared runners.
+        run: npm test -- --maxWorkers=1 --minWorkers=1
 
       - name: Build app
         run: npm run build

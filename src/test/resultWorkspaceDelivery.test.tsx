@@ -12,6 +12,9 @@ import {
   buildRepositoryVerificationBaseline,
   buildRepositoryUniverseModel,
 } from '@/lib/workspace';
+// This suite exercises Deliver behavior, not the lazy-chunk boundary. Resolve the
+// chunk during collection so cold transform time is not charged to the first test.
+import '@/components/agentready/result-workspace/deliver/DeliverWorkspace';
 
 const universeMockState = vi.hoisted(() => ({
   models: [] as unknown[],
@@ -140,16 +143,20 @@ function switchToAtlas2D() {
   }
 }
 
-function switchResultChapter(label: 'Understand' | 'Improve' | 'Verify' | 'Deliver') {
+async function switchResultChapter(label: 'Understand' | 'Improve' | 'Verify' | 'Deliver') {
   const chapterNav = screen.getByRole('navigation', { name: /Result chapters/i });
   const chapterButton = within(chapterNav).getByRole('button', { name: new RegExp(label, 'i') });
   if (chapterButton.getAttribute('aria-pressed') !== 'true') {
     fireEvent.click(chapterButton);
   }
+  await waitFor(() => {
+    const currentNav = screen.getByRole('navigation', { name: /Result chapters/i });
+    expect(within(currentNav).getByRole('button', { name: new RegExp(label, 'i') })).toHaveAttribute('aria-pressed', 'true');
+  });
 }
 
 async function openDeliveryGroup(name: 'Client handoff' | 'AI workspace' | 'Repository Intelligence' | 'Technical exports') {
-  switchResultChapter('Deliver');
+  await switchResultChapter('Deliver');
   fireEvent.click(await screen.findByRole('button', { name: /More delivery options/i }, { timeout: 10000 }));
   fireEvent.click(await screen.findByRole('button', { name: new RegExp(`Open ${name}`, 'i') }, { timeout: 10000 }));
 }
@@ -226,7 +233,7 @@ describe('Result Workspace evidence and delivery', () => {
       />
     );
 
-    switchResultChapter('Deliver');
+    await switchResultChapter('Deliver');
     expect(await screen.findByRole('button', { name: /Give this to an AI agent/i }, { timeout: 10000 })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Download/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Open Technical exports/i })).not.toBeInTheDocument();
