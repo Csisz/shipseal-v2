@@ -42,9 +42,12 @@ export { validateRepositoryDeepIntelligenceResponse, isResponsibilityCompatible 
 export {
   MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES,
   REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION,
+  REPOSITORY_PRODUCT_CONTENT_INTEGRITY_VERSION,
   REPOSITORY_PRODUCT_OPPORTUNITY_ORIGINS,
   REPOSITORY_PRODUCT_OPPORTUNITY_VERSION,
   REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
+  classifyRepositoryProductContentIntegrity,
+  readRepositoryProductNormalizationDiagnostics,
   validateRepositoryProductIntelligence,
 } from './productIntelligenceSchema';
 export { runRepositoryDeepIntelligence } from './deepIntelligenceExecution';

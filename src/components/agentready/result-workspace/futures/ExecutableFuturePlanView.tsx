@@ -24,6 +24,7 @@ import {
   type ExecutableFuturePlanArea,
 } from '@/lib/workspace';
 import { Badge } from '@/components/ui/badge';
+import { presentEvidenceReferences } from '@/lib/workspace/evidencePresentation';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -348,7 +349,8 @@ function PlanAreas({ areas }: { areas: ExecutableFuturePlanArea[] }) {
 }
 
 function EvidenceChips({ evidenceIds, plan }: { evidenceIds: string[]; plan: ExecutableFuturePlan }) {
-  return <div><h3 className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Why ShipSeal thinks this matters</h3><div className="mt-2 flex flex-wrap gap-2">{evidenceIds.map(id => { const evidence = plan.evidence.find(item => item.id === id); return <span key={id} title={id} className="max-w-full truncate rounded-full border border-border/45 bg-background/60 px-2.5 py-1 font-mono text-[10px] text-muted-foreground">{evidence?.path || id}</span>; })}</div></div>;
+  const presented = presentEvidenceReferences(evidenceIds, plan.evidence);
+  return <div><h3 className="font-mono text-[9px] uppercase tracking-[0.14em] text-muted-foreground">Why ShipSeal thinks this matters</h3><div className="mt-2 flex flex-wrap gap-2">{presented.map((evidence, index) => <span key={`${index}:${evidence.path || evidence.label}`} title={evidence.label} className="max-w-full truncate rounded-full border border-border/45 bg-background/60 px-2.5 py-1 font-mono text-[10px] text-muted-foreground">{evidence.path || evidence.label}</span>)}</div></div>;
 }
 
 function AreaCard({ area }: { area: ExecutableFuturePlanArea }) {

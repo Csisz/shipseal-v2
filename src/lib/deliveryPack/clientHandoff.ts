@@ -1,4 +1,5 @@
 import type { ProjectIntake } from '../intake';
+import { buildSharedExportFacts, type ExportCoverageFacts } from '../report/exportFacts';
 
 export interface ClientHandoffFiles {
   clientHandoffReport: string;
@@ -8,8 +9,6 @@ export interface ClientHandoffFiles {
 
 interface HandoffScoreSummary {
   repositoryName: string;
-  score: string;
-  status: string;
   isReady: boolean | null;
   criticalBlockers: Array<{ title?: string; detail?: string }>;
   improvements: Array<{ title?: string; category?: string; detail?: string }>;
@@ -18,6 +17,7 @@ interface HandoffScoreSummary {
   packageLabel: string;
   packageSummary: string;
   scanLimited: boolean;
+  coverage: ExportCoverageFacts;
   scanWarnings: string[];
   scanEvidence: {
     sourceType: string;
@@ -31,6 +31,16 @@ interface HandoffScoreSummary {
   mcpStatus: string;
   mcpScore: string;
   aiActSummary: string;
+  repositoryHealth: {
+    score: number | null;
+    status: string;
+    confidence: string;
+    topActions: string[];
+  };
+  deliveryReadiness: {
+    score: number | null;
+    status: string;
+  };
 }
 
 const DISCLAIMER = 'Disclaimer: This report is a delivery readiness aid only. This is not legal advice and this is not a production security audit.';
@@ -80,12 +90,13 @@ function renderClientHandoffReport(
     `- Selected package: ${summary.packageLabel}`,
     `- Package focus: ${summary.packageSummary}`,
     `- Generated outputs: ${summary.generatedFiles.length}`,
-    `- Scan coverage: ${summary.scanLimited ? 'Limited scan' : 'Full scan'}`,
+    `- Scan coverage: ${summary.coverage.label}`,
+    `- Coverage detail: ${summary.coverage.summary}`,
     `- Scan source: ${summary.scanEvidence.sourceType}`,
     `- Branch/ref: ${summary.scanEvidence.branchOrRef}`,
     `- Files discovered/analyzed/ignored: ${summary.scanEvidence.discoveredFileCount} / ${summary.scanEvidence.analyzedFileCount} / ${summary.scanEvidence.ignoredFileCount}`,
-    `- Score: ${summary.score}`,
-    `- Readiness status: ${summary.status}`,
+    `- Repository Health: ${scoreText(summary.repositoryHealth.score)} (${summary.repositoryHealth.status}; ${summary.repositoryHealth.confidence} confidence)`,
+    `- Delivery Pack readiness: ${scoreText(summary.deliveryReadiness.score)} (${summary.deliveryReadiness.status})`,
     `- Critical delivery risks detected: ${summary.criticalBlockers.length}`,
     `- Recommended decision: ${goNoGo}`,
     '',
@@ -94,6 +105,12 @@ function renderClientHandoffReport(
       '- ShipSeal could not fully parse the repository ZIP, so this report is based on deterministic fallback data.',
       '- Do not present this output as a complete client handoff audit. Re-run ShipSeal with a valid repository ZIP or GitHub import before relying on the score.',
       ...asBullets(summary.scanWarnings),
+      '',
+    ] : []),
+    ...(summary.coverage.mode === 'bounded' ? [
+      '## Bounded analysis coverage',
+      `- ${summary.coverage.summary}`,
+      '- Repository structure was discovered more broadly than file content was analyzed. Absence claims remain scoped to analyzed evidence.',
       '',
     ] : []),
     '## Scan evidence',
@@ -113,6 +130,9 @@ function renderClientHandoffReport(
     '',
     '## Main risks to discuss before handoff',
     ...asBullets(risks),
+    '',
+    '## Top Repository Health improvements',
+    ...asBullets(summary.repositoryHealth.topActions.length ? summary.repositoryHealth.topActions : ['No high-priority Repository Health action was generated from this scan.']),
     '',
     '## Missing or weak documentation signals',
     ...asBullets(missingDocs),
@@ -200,9 +220,9 @@ function renderNextStepsRoadmap(
     `- Agency: ${clientAgencyValue(intake.agencyName)}`,
     `- App description: ${valueOrNotProvided(intake.appDescription)}`,
     `- AI use case: ${valueOrNotProvided(intake.aiUseCase)}`,
-    `- Scan coverage: ${summary.scanLimited ? 'Limited scan' : 'Full scan'}`,
-    `- ShipSeal score: ${summary.score}`,
-    `- Status: ${summary.status}`,
+    `- Scan coverage: ${summary.coverage.label}`,
+    `- Repository Health: ${scoreText(summary.repositoryHealth.score)} (${summary.repositoryHealth.status})`,
+    `- Delivery Pack readiness: ${scoreText(summary.deliveryReadiness.score)} (${summary.deliveryReadiness.status})`,
     `- Main risk themes: ${risks.slice(0, 3).join('; ') || 'Not detected'}`,
     '',
     '## 30 days',
@@ -232,7 +252,7 @@ function executiveSummaryParagraph(intake: ProjectIntake, summary: HandoffScoreS
 
   return [
     `${intake.projectName}${client} was reviewed with ShipSeal to prepare a practical AI project handoff.`,
-    `The current score is ${summary.score} and the readiness status is ${summary.status}.`,
+    `Repository Health is ${scoreText(summary.repositoryHealth.score)} (${summary.repositoryHealth.status}); Delivery Pack readiness is ${scoreText(summary.deliveryReadiness.score)} (${summary.deliveryReadiness.status}). These measure different things.`,
     `The recommended handoff decision is: ${goNoGo}`,
     appDescription,
     'Use this report to align the client, delivery team, and reviewers on what is ready, what needs attention, and what should happen next.',
@@ -262,11 +282,10 @@ function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): 
   const scanSummary = asRecord(source.scanSummary);
   const scanEvidence = asRecord(source.scanEvidence);
   const deliveryFocus = asRecord(source.deliveryPackFocus);
+  const facts = buildSharedExportFacts({ scoreJson, fallbackRepositoryName });
 
   return {
     repositoryName: stringValue(source.repositoryName) || fallbackRepositoryName || 'Not provided',
-    score: typeof source.score === 'number' ? `${source.score}/100` : 'Not detected',
-    status: stringValue(source.status) || 'Not detected',
     isReady: typeof source.isReady === 'boolean' ? source.isReady : null,
     criticalBlockers: arrayValue(source.criticalBlockers).map(asRecord),
     improvements: arrayValue(source.improvements).map(asRecord),
@@ -274,7 +293,8 @@ function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): 
     generatedFiles: arrayValue(source.generatedFiles).map(value => String(value)),
     packageLabel: stringValue(deliveryFocus.packageLabel) || 'Full ShipSeal package',
     packageSummary: stringValue(deliveryFocus.packageSummary) || 'Full ShipSeal outputs prepared.',
-    scanLimited: scanSummary.limited === true || stringValue(scanSummary.scanMode) === 'limited-fallback',
+    scanLimited: facts.coverage.mode === 'limited-fallback',
+    coverage: facts.coverage,
     scanWarnings: arrayValue(scanSummary.warnings).map(value => String(value)),
     scanEvidence: {
       sourceType: displayEvidenceSource(stringValue(scanEvidence.sourceType)),
@@ -288,6 +308,8 @@ function parseScoreSummary(scoreJson: unknown, fallbackRepositoryName: string): 
     mcpStatus: stringValue(mcp.status) || stringValue(repoContext.mcpStatus) || 'Not detected',
     mcpScore: typeof mcp.score === 'number' ? `${mcp.score}/100` : 'Not detected',
     aiActSummary: 'Pre-screen only. Review AI Act, transparency, privacy, and human oversight notes with qualified reviewers.',
+    repositoryHealth: facts.repositoryHealth,
+    deliveryReadiness: facts.deliveryReadiness,
   };
 }
 
@@ -330,11 +352,17 @@ function numberString(value: unknown) {
   return typeof value === 'number' ? value.toLocaleString() : 'Not provided';
 }
 
+function scoreText(value: number | null) {
+  return value === null ? 'Not available' : `${value}/100`;
+}
+
 function topRisks(summary: HandoffScoreSummary, intake: ProjectIntake) {
   const risks = summary.criticalBlockers.slice(0, 5).map(blocker => `${stringValue(blocker.title) || 'Critical delivery risk'}: ${stringValue(blocker.detail) || 'Details not provided'}.`);
 
   if (summary.isReady === false && !risks.length) risks.push('The project is not currently marked ready for client handoff by the ShipSeal readiness rule.');
-  if (summary.scanLimited) risks.push('Limited scan warning: ZIP parsing failed, so this output is not a complete client handoff audit.');
+  if (summary.scanLimited) risks.push('Limited scan warning: repository intake used fallback evidence, so this output is not a complete client handoff audit.');
+  if (summary.coverage.mode === 'bounded') risks.push('Bounded analysis: negative claims apply to analyzed evidence, not every discovered file.');
+  risks.push(...summary.repositoryHealth.topActions.slice(0, 3).map(action => `Repository Health improvement: ${action}`));
   if (intake.handlesPersonalData) risks.push('Personal data handling was indicated. Ask the client owner to confirm privacy/GDPR review before production use.');
   if (intake.usedInEU && intake.generatesUserFacingContent) risks.push('EU use with user-facing AI output was indicated. Review and adapt the transparency notice before client delivery.');
   if (!intake.hasHumanApproval) risks.push('Human approval status was not provided in the intake. Confirm reviewer ownership before relying on AI output for important decisions.');

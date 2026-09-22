@@ -18,6 +18,7 @@ import {
   getPersistedRepositoryFutureResult,
   getRepositoryFutureOperationStatus,
   mergePersistedRepositoryFutureResult,
+  persistedRepositoryFutureContentIntegrity,
   selectRepositoryFutureRecoveryOperationId,
 } from '@/lib/aiOperationRecovery';
 
@@ -62,7 +63,9 @@ export default function SavedScan() {
             }
             setProductStatus({
               state: 'fallback', deepState: 'failed', category: 'operation_conflict', retryable: operation.retryable,
-              message: repositoryFutureFailureMessage('operation_conflict', { costEstimate: 'unavailable', operationRecoveryAction: operation.recoveryAction }),
+              message: operation.recoveryAction === 'start_new_analysis' && operation.userUnitState === 'consumed'
+                ? 'This saved Future used a legacy compact contract and cannot be reopened without clipped text. Generate a new analysis explicitly when ready; it uses 1 Deep Analysis, and ShipSeal will not invent the missing words or start paid work automatically.'
+                : repositoryFutureFailureMessage('operation_conflict', { costEstimate: 'unavailable', operationRecoveryAction: operation.recoveryAction }),
               diagnostics: {
                 costEstimate: 'unavailable', publicOperationId: operation.publicOperationId,
                 operationRecoveryAction: operation.recoveryAction,
@@ -81,7 +84,16 @@ export default function SavedScan() {
           return;
         }
         const restored = mergePersistedRepositoryFutureResult(persisted);
-        if (!restored) return;
+        if (!restored) {
+          if (persistedRepositoryFutureContentIntegrity(persisted) === 'legacy-truncated') {
+            setProductStatus({
+              state: 'fallback', deepState: 'rejected', category: 'evidence_validation_failed', retryable: true,
+              message: 'This saved Future used a legacy compact contract and contains clipped text. Regenerate analysis explicitly to create a complete result; ShipSeal will not invent the missing words or start paid work automatically.',
+              diagnostics: { ...persisted.complete.diagnostics, cacheUsed: true, publicOperationId: persisted.publicOperationId, operationRecoveryAction: 'start_new_analysis' },
+            });
+          }
+          return;
+        }
         setProductIntelligence(restored);
         setProductStatus({
           state: 'enhanced', deepState: 'completed', retryable: false,

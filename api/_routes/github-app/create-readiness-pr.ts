@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createHash } from 'node:crypto';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../../_lib/githubAppTypes.js';
 import { createGitHubInstallationClient, type GitHubInstallationClient } from '../../_lib/githubAppClient.js';
 
@@ -15,6 +16,7 @@ interface GitHubAppPrFile {
 }
 
 interface GitHubAppPrRequest {
+  mode?: 'preview' | 'apply';
   installationId: string;
   owner: string;
   repo: string;
@@ -23,6 +25,9 @@ interface GitHubAppPrRequest {
   prTitle: string;
   prBody: string;
   files: GitHubAppPrFile[];
+  confirmed?: boolean;
+  expectedBaseSha?: string;
+  reviewFingerprint?: string;
 }
 
 type VercelLikeRequest = IncomingMessage & {
@@ -110,6 +115,8 @@ function sendJson(res: ServerResponse, status: number, payload: Record<string, u
 export function validateGitHubAppPrRequest(input: unknown): GitHubAppPrRequest | { status: number; error: string } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return { status: 400, error: 'Invalid GitHub App PR payload.' };
   const body = input as Record<string, unknown>;
+  const modeValue = clean(body.mode);
+  const mode = modeValue === 'preview' || modeValue === 'apply' ? modeValue : undefined;
   const installationId = clean(body.installationId);
   const owner = clean(body.owner);
   const repo = clean(body.repo).replace(/\.git$/i, '');
@@ -118,7 +125,11 @@ export function validateGitHubAppPrRequest(input: unknown): GitHubAppPrRequest |
   const prTitle = clean(body.prTitle);
   const prBody = clean(body.prBody);
   const files = Array.isArray(body.files) ? body.files : [];
+  const confirmed = body.confirmed === true;
+  const expectedBaseSha = clean(body.expectedBaseSha);
+  const reviewFingerprint = clean(body.reviewFingerprint);
 
+  if (modeValue && !mode) return { status: 400, error: 'Invalid Readiness PR operation mode.' };
   if (!/^[0-9]+$/.test(installationId)) return { status: 400, error: 'A valid installationId is required.' };
   if (!isSafeRepoPart(owner)) return { status: 400, error: 'Invalid GitHub owner.' };
   if (!isSafeRepoPart(repo)) return { status: 400, error: 'Invalid GitHub repo.' };
@@ -128,6 +139,10 @@ export function validateGitHubAppPrRequest(input: unknown): GitHubAppPrRequest |
   if (!prBody) return { status: 400, error: 'Pull request summary is required.' };
   if (!files.length) return { status: 400, error: 'Readiness Fix Pack files are required.' };
   if (files.length > MAX_FILES) return { status: 400, error: 'Too many files for the Create Readiness PR MVP.' };
+  if (mode === 'preview' && confirmed) return { status: 400, error: 'Preview cannot be confirmed as a mutation.' };
+  if (mode === 'apply' && !confirmed) return { status: 400, error: 'Explicit confirmation is required before creating the Pull Request.' };
+  if (mode === 'apply' && !/^[a-f0-9]{40}$/i.test(expectedBaseSha)) return { status: 400, error: 'The reviewed base commit is missing or invalid.' };
+  if (mode === 'apply' && !/^[a-f0-9]{64}$/i.test(reviewFingerprint)) return { status: 400, error: 'The reviewed change fingerprint is missing or invalid.' };
 
   const normalizedFiles: GitHubAppPrFile[] = [];
   for (const item of files) {
@@ -141,7 +156,20 @@ export function validateGitHubAppPrRequest(input: unknown): GitHubAppPrRequest |
     normalizedFiles.push({ path, content });
   }
 
-  return { installationId, owner, repo, baseBranch: baseBranch || undefined, branchName, prTitle, prBody, files: normalizedFiles };
+  return {
+    mode,
+    installationId,
+    owner,
+    repo,
+    baseBranch: baseBranch || undefined,
+    branchName,
+    prTitle,
+    prBody,
+    files: normalizedFiles,
+    confirmed,
+    expectedBaseSha: expectedBaseSha || undefined,
+    reviewFingerprint: reviewFingerprint || undefined,
+  };
 }
 
 function isValidationError(value: GitHubAppPrRequest | { status: number; error: string }): value is { status: number; error: string } {
@@ -151,6 +179,112 @@ function isValidationError(value: GitHubAppPrRequest | { status: number; error: 
 async function getDefaultBranch(client: GitHubInstallationClient, owner: string, repo: string) {
   const metadata = await client.getJson<{ default_branch?: string }>(`/repos/${owner}/${repo}`);
   return metadata.default_branch || 'main';
+}
+
+async function resolveBase(client: GitHubInstallationClient, request: GitHubAppPrRequest) {
+  const baseBranch = request.baseBranch && request.baseBranch !== 'HEAD'
+    ? request.baseBranch
+    : await getDefaultBranch(client, request.owner, request.repo);
+  const baseRef = await client.getJson<{ object: { sha: string } }>(`/repos/${request.owner}/${request.repo}/git/ref/heads/${encodeBranch(baseBranch)}`);
+  return { baseBranch, baseSha: baseRef.object.sha };
+}
+
+function sha256(value: string) {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function reviewFingerprint(request: GitHubAppPrRequest, baseBranch: string, baseSha: string) {
+  return sha256(JSON.stringify({
+    repository: `${request.owner}/${request.repo}`,
+    baseBranch,
+    baseSha,
+    branchName: request.branchName,
+    prTitle: request.prTitle,
+    prBody: request.prBody,
+    files: request.files.map(file => ({ path: file.path, content: file.content })),
+  }));
+}
+
+function contentLines(value: string) {
+  const normalized = value.replace(/\r\n?/g, '\n');
+  if (!normalized) return [];
+  const lines = normalized.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return lines;
+}
+
+function unifiedReview(path: string, beforeContent: string, afterContent: string) {
+  const before = contentLines(beforeContent);
+  const after = contentLines(afterContent);
+  if (!before.length) {
+    return [
+      '--- /dev/null',
+      `+++ b/${path}`,
+      `@@ -0,0 +1,${after.length} @@`,
+      ...after.map(line => `+${line}`),
+    ].join('\n');
+  }
+  return [
+    `--- a/${path}`,
+    `+++ b/${path}`,
+    `@@ reviewed before (${before.length} lines) / after (${after.length} lines) @@`,
+    ...before.map(line => `-${line}`),
+    ...after.map(line => `+${line}`),
+  ].join('\n');
+}
+
+async function readBaseFile(client: GitHubInstallationClient, request: GitHubAppPrRequest, baseBranch: string, file: GitHubAppPrFile) {
+  const encodedPath = file.path.split('/').map(part => encodeURIComponent(part)).join('/');
+  const current = await client.getJson<{ type?: string; content?: string; encoding?: string } | unknown[]>(
+    `/repos/${request.owner}/${request.repo}/contents/${encodedPath}?ref=${encodeURIComponent(baseBranch)}`,
+    { optional404: true }
+  );
+  if (!current) return { action: 'create' as const, beforeContent: '' };
+  if (Array.isArray(current) || current.type !== 'file' || current.encoding !== 'base64' || typeof current.content !== 'string') {
+    throw new GitHubAppApiError(422, `ShipSeal cannot safely review the current repository target: ${file.path}.`, 'github_api_error');
+  }
+  return {
+    action: 'update' as const,
+    beforeContent: Buffer.from(current.content.replace(/\s/g, ''), 'base64').toString('utf8'),
+  };
+}
+
+export async function previewReadinessPrWithGitHubApp(
+  request: GitHubAppPrRequest,
+  options: Parameters<typeof createGitHubInstallationClient>[1] = {}
+) {
+  const client = await createGitHubInstallationClient(request.installationId, options);
+  const { baseBranch, baseSha } = await resolveBase(client, request);
+  const files = await Promise.all(request.files.map(async file => {
+    const current = await readBaseFile(client, request, baseBranch, file);
+    const additions = contentLines(file.content).length;
+    const deletions = contentLines(current.beforeContent).length;
+    return {
+      path: file.path,
+      action: current.action,
+      beforeContent: current.beforeContent,
+      afterContent: file.content,
+      unifiedDiff: unifiedReview(file.path, current.beforeContent, file.content),
+      additions,
+      deletions,
+      contentFingerprint: sha256(file.content),
+    };
+  }));
+  return {
+    ok: true as const,
+    mode: 'preview' as const,
+    plan: {
+      repository: `${request.owner}/${request.repo}`,
+      baseBranch,
+      baseSha,
+      branchName: request.branchName,
+      prTitle: request.prTitle,
+      files,
+      additions: files.reduce((sum, file) => sum + file.additions, 0),
+      deletions: files.reduce((sum, file) => sum + file.deletions, 0),
+      fingerprint: reviewFingerprint(request, baseBranch, baseSha),
+    },
+  };
 }
 
 async function createSafeBranch(client: GitHubInstallationClient, request: GitHubAppPrRequest, baseSha: string, now = () => new Date()) {
@@ -200,11 +334,16 @@ export async function createReadinessPrWithGitHubApp(
   options: Parameters<typeof createGitHubInstallationClient>[1] & { now?: () => Date } = {}
 ) {
   const client = await createGitHubInstallationClient(request.installationId, options);
-  const baseBranch = request.baseBranch && request.baseBranch !== 'HEAD'
-    ? request.baseBranch
-    : await getDefaultBranch(client, request.owner, request.repo);
-  const baseRef = await client.getJson<{ object: { sha: string } }>(`/repos/${request.owner}/${request.repo}/git/ref/heads/${encodeBranch(baseBranch)}`);
-  const branchName = await createSafeBranch(client, request, baseRef.object.sha, options.now);
+  const { baseBranch, baseSha } = await resolveBase(client, request);
+  if (request.mode === 'apply') {
+    if (request.expectedBaseSha !== baseSha) {
+      throw new GitHubAppApiError(409, 'The base branch changed after review. Refresh the preview before creating the Pull Request.', 'github_api_error');
+    }
+    if (request.reviewFingerprint !== reviewFingerprint(request, baseBranch, baseSha)) {
+      throw new GitHubAppApiError(409, 'The reviewed file plan changed. Refresh the preview before creating the Pull Request.', 'github_api_error');
+    }
+  }
+  const branchName = await createSafeBranch(client, request, baseSha, options.now);
 
   for (const file of request.files) {
     await putFile(client, request, branchName, file);
@@ -223,6 +362,7 @@ export async function createReadinessPrWithGitHubApp(
   }
 
   return {
+    mode: 'apply' as const,
     prUrl: pr.html_url,
     branchName,
     baseBranch,
@@ -253,6 +393,11 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   }
 
   try {
+    if (validated.mode === 'preview') {
+      const result = await previewReadinessPrWithGitHubApp(validated);
+      sendJson(res, 200, result);
+      return;
+    }
     const result = await createReadinessPrWithGitHubApp(validated);
     sendJson(res, 200, { ok: true, ...result });
   } catch (error) {
@@ -274,6 +419,7 @@ function userFacingGitHubAppPrError(error: unknown) {
   }
   const lower = error.message.toLowerCase();
 
+  if (error.status === 409) return { status: 409, error: error.message };
   if (error.status === 401) return { status: 401, error: 'GitHub App installation token could not be used. Reconnect GitHub and retry.' };
   if (error.status === 403) return { status: 403, error: 'GitHub App does not have permission to write to this repository. Check Contents and Pull requests permissions.' };
   if (error.status === 404) return { status: 404, error: 'GitHub App installation or selected repository was not found. Reconnect GitHub and select the repository again.' };

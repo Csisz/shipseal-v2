@@ -4,6 +4,12 @@ import { stableContextFingerprint } from './contextSelection.js';
 export const REPOSITORY_PRODUCT_UNDERSTANDING_VERSION = 'shipseal.repository-product-understanding.v1' as const;
 export const REPOSITORY_PRODUCT_OPPORTUNITY_VERSION = 'shipseal.repository-product-opportunity.v1' as const;
 export const REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION = 'shipseal.repository-product-intelligence-result.v1' as const;
+export const REPOSITORY_PRODUCT_CONTENT_INTEGRITY_VERSION = 'shipseal.repository-product-content-integrity.v4' as const;
+export const REPOSITORY_PRODUCT_COMPATIBLE_CONTENT_INTEGRITY_VERSIONS = [
+  'shipseal.repository-product-content-integrity.v2',
+  'shipseal.repository-product-content-integrity.v3',
+  REPOSITORY_PRODUCT_CONTENT_INTEGRITY_VERSION,
+] as const;
 export const MAXIMUM_REPOSITORY_PRODUCT_OPPORTUNITIES = 8;
 
 export const REPOSITORY_PRODUCT_OPPORTUNITY_ORIGINS = ['evidence-backed', 'strategic', 'exploratory'] as const;
@@ -18,6 +24,7 @@ export type RepositoryProductUnderstandingRejectionReason =
   | 'unknown-understanding-evidence'
   | 'invalid-existing-capability-evidence'
   | 'compact-evidence-index-out-of-range'
+  | 'compact-content-boundary'
   | 'generated-language-mismatch';
 
 export type RepositoryProductOpportunityRejectionReason =
@@ -39,6 +46,7 @@ export type RepositoryProductOpportunityRejectionReason =
   | 'compact-support-self-reference'
   | 'compact-support-forward-reference'
   | 'compact-support-reference-duplicate'
+  | 'compact-content-boundary'
   | 'generated-language-mismatch'
   | 'invalid-future-evolution';
 
@@ -54,6 +62,7 @@ export interface RepositoryProductNormalizationDiagnostics {
   compactCapabilityReferenceRejectedCount?: number;
   compactPathReferenceRejectedCount?: number;
   compactSupportReferenceRejectedCount?: number;
+  compactContentBoundaryPaths?: string[];
 }
 
 export const REPOSITORY_PRODUCT_NORMALIZATION_DIAGNOSTICS = Symbol.for('shipseal.repository-product-normalization-diagnostics');
@@ -266,6 +275,7 @@ export interface RepositoryProductValidationDiagnostics {
   compactCapabilityReferenceRejectedCount: number;
   compactPathReferenceRejectedCount: number;
   compactSupportReferenceRejectedCount: number;
+  compactContentBoundaryPaths?: string[];
 }
 
 export interface RepositoryProductIntelligenceResult {
@@ -279,7 +289,65 @@ export interface RepositoryProductIntelligenceResult {
   evidenceReferences: RepositoryProductEvidenceReference[];
   limitations: string[];
   humanReviewRequired: boolean;
+  contentIntegrity?: {
+    version: typeof REPOSITORY_PRODUCT_COMPATIBLE_CONTENT_INTEGRITY_VERSIONS[number];
+    state: 'complete';
+  };
   fingerprint: string;
+}
+
+export type RepositoryProductContentIntegrityClassification = 'current-complete' | 'legacy-compatible' | 'legacy-truncated';
+
+/**
+ * Legacy compact results predate the explicit integrity marker. A result is
+ * classified as truncated only when multiple distinct canonical values land
+ * exactly on old ShipSeal field boundaries (or one ends with a clipping dash).
+ * Missing text is never reconstructed or guessed.
+ */
+export function classifyRepositoryProductContentIntegrity(
+  result: RepositoryProductIntelligenceResult,
+): RepositoryProductContentIntegrityClassification {
+  if (result.contentIntegrity?.version === REPOSITORY_PRODUCT_CONTENT_INTEGRITY_VERSION
+    && result.contentIntegrity?.state === 'complete') return 'current-complete';
+  if (REPOSITORY_PRODUCT_COMPATIBLE_CONTENT_INTEGRITY_VERSIONS.includes(
+    result.contentIntegrity?.version as typeof REPOSITORY_PRODUCT_COMPATIBLE_CONTENT_INTEGRITY_VERSIONS[number],
+  ) && result.contentIntegrity?.state === 'complete') return 'legacy-compatible';
+  const boundaryValues = new Set<string>();
+  const inspect = (value: string | undefined, maximum: number) => {
+    const normalized = value?.trim();
+    if (normalized && normalized.length === maximum) boundaryValues.add(`${maximum}:${normalized}`);
+  };
+  const understanding = result.understanding;
+  if (understanding) {
+    inspect(understanding.productSummary?.statement, 88);
+    (understanding.primaryUsers || []).forEach(item => inspect(item.statement, 32));
+    inspect(understanding.primaryProblem?.statement, 64);
+    (understanding.currentProductLoop || []).forEach(item => inspect(item.statement, 40));
+    (understanding.existingCapabilities || []).forEach(item => { inspect(item.title, 32); inspect(item.description, 48); });
+    (understanding.constraints || []).forEach(item => inspect(item.statement, 40));
+    (understanding.businessModelClues || []).forEach(item => inspect(item.statement, 40));
+    (understanding.missingCapabilityAreas || []).forEach(item => inspect(item.statement, 40));
+    (understanding.limitations || []).forEach(item => inspect(item, 40));
+  }
+  result.opportunities.forEach(opportunity => {
+    inspect(opportunity.title, 40);
+    inspect(opportunity.opportunityStatement, 80);
+    inspect(opportunity.userValue, 64);
+    inspect(opportunity.whyItFits, 80);
+    (opportunity.targetUsers || []).forEach(item => inspect(item, 32));
+    (opportunity.requiredNewCapabilities || []).forEach(item => inspect(item.title, 40));
+    (opportunity.knownConflicts || []).forEach(item => inspect(item, 40));
+    (opportunity.expectedImplementationAreas || []).forEach(item => inspect(item.label, 40));
+    inspect(opportunity.verificationConcept, 80);
+    (opportunity.limitations || []).forEach(item => inspect(item, 40));
+    (opportunity.futureEvolutions || []).forEach(evolution => {
+      inspect(evolution.title, 40);
+      inspect(evolution.description, 72);
+      inspect(evolution.userValue, 56);
+    });
+  });
+  const containsExplicitClipEnding = [...boundaryValues].some(value => /(?:-|\u2026|\.\.\.)$/.test(value));
+  return containsExplicitClipEnding || boundaryValues.size >= 2 ? 'legacy-truncated' : 'legacy-compatible';
 }
 
 export function validateRepositoryProductIntelligence(input: {
@@ -378,6 +446,7 @@ export function validateRepositoryProductIntelligence(input: {
     compactCapabilityReferenceRejectedCount: input.normalizationDiagnostics?.compactCapabilityReferenceRejectedCount || 0,
     compactPathReferenceRejectedCount: input.normalizationDiagnostics?.compactPathReferenceRejectedCount || 0,
     compactSupportReferenceRejectedCount: input.normalizationDiagnostics?.compactSupportReferenceRejectedCount || 0,
+    compactContentBoundaryPaths: input.normalizationDiagnostics?.compactContentBoundaryPaths,
   };
   const core = {
     version: REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION,
@@ -394,6 +463,7 @@ export function validateRepositoryProductIntelligence(input: {
       ...(rejectedOpportunities.length ? ['One or more Product Opportunities were rejected by deterministic validation.'] : []),
     ]),
     humanReviewRequired: Boolean(understanding?.humanReviewState === 'required' || normalizedOpportunities.some(item => item.humanReviewRequirements.length > 0)),
+    contentIntegrity: { version: REPOSITORY_PRODUCT_CONTENT_INTEGRITY_VERSION, state: 'complete' as const },
   };
   return { ...core, fingerprint: stableContextFingerprint(core) };
 }

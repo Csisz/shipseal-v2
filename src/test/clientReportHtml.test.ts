@@ -106,6 +106,26 @@ describe('ShipSeal print-ready client report HTML', () => {
     expect(html).toContain('Medium confidence');
   });
 
+  it('uses canonical bounded coverage consistently instead of calling it a full scan', () => {
+    const report = buildSampleProjectReadinessReport();
+    report.scanSummary = {
+      ...report.scanSummary,
+      scanMode: 'bounded', limited: false, totalFilesFound: 357, discoveredFiles: 357,
+      filesAnalyzed: 160, analyzedTextFiles: 160, filesIgnored: 197,
+      boundedReasons: ['selected-file-budget'],
+    };
+    report.scanEvidence = {
+      ...report.scanEvidence,
+      scanMode: 'bounded', discoveredFileCount: 357, analyzedFileCount: 160,
+      ignoredFileCount: 197, selectedTextFileCount: 160, budgetExcludedFileCount: 175,
+    };
+    const html = generateClientReportHtml({ intake: SAMPLE_PROJECT_INTAKE, report, scoreJson: buildScoreJson(report) });
+
+    expect(html).toContain('Bounded analysis: 160 of 357 files analyzed; 197 excluded.');
+    expect(html).toContain('deterministic high-value evidence selection');
+    expect(html).not.toContain('Full scan: 160 of 357');
+  });
+
   it('uses cautious wording when human approval is unknown or not provided', () => {
     const report = buildSampleProjectReadinessReport();
     const html = generateClientReportHtml({

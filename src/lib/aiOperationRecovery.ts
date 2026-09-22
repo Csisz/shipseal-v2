@@ -1,4 +1,7 @@
-import type { RepositoryProductIntelligenceResult } from './repositoryIntelligence/productIntelligenceSchema.js';
+import {
+  classifyRepositoryProductContentIntegrity,
+  type RepositoryProductIntelligenceResult,
+} from './repositoryIntelligence/productIntelligenceSchema.js';
 import type { AiOperationLookup, AiOperationStatusSnapshot, PersistedRepositoryFutureResult } from './aiOperationRecoveryContract.js';
 export type { AiOperationLookup, AiOperationRecoveryAction, AiOperationStatusSnapshot, PersistedRepositoryFutureResult } from './aiOperationRecoveryContract.js';
 
@@ -39,7 +42,15 @@ export async function getPersistedRepositoryFutureResult(
 export function mergePersistedRepositoryFutureResult(
   persisted: PersistedRepositoryFutureResult,
 ): RepositoryProductIntelligenceResult | null {
-  return persisted.complete.result.productIntelligence || null;
+  const result = persisted.complete.result.productIntelligence || null;
+  return result && classifyRepositoryProductContentIntegrity(result) !== 'legacy-truncated' ? result : null;
+}
+
+export function persistedRepositoryFutureContentIntegrity(
+  persisted: PersistedRepositoryFutureResult,
+) {
+  const result = persisted.complete.result.productIntelligence;
+  return result ? classifyRepositoryProductContentIntegrity(result) : null;
 }
 
 export function selectRepositoryFutureRecoveryOperationId(

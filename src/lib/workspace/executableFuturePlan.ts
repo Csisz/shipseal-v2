@@ -13,6 +13,7 @@ import {
   repositoryFutureId,
   sortedUnique,
 } from './repositoryFutures/identity.js';
+import { presentEvidenceReferences, renderEvidenceReferenceList } from './evidencePresentation.js';
 
 export const EXECUTABLE_FUTURE_PLAN_VERSION = 'shipseal.executable-future-plan.omega18.5.v12' as const;
 export const EXECUTABLE_FUTURE_HANDOFF_VERSION = 'shipseal.future-agent-handoff.v1' as const;
@@ -732,7 +733,7 @@ export function renderExecutableFuturePlanMarkdown(plan: ExecutableFuturePlan) {
       'Completion criteria:',
       ...bullets(stage.completionCriteria),
       '',
-      `Evidence references: ${stage.evidenceIds.length ? stage.evidenceIds.join(', ') : 'No additional stage-specific evidence.'}`,
+      `Evidence references: ${renderEvidenceReferenceList(stage.evidenceIds, plan.evidence)}`,
       ...(stage.reviewGateIds.length ? ['', `Human-review gates: ${stage.reviewGateIds.join(', ')}`] : []),
       '',
     ]),
@@ -756,7 +757,7 @@ export function renderExecutableFuturePlanMarkdown(plan: ExecutableFuturePlan) {
     '',
     '## Evidence index',
     '',
-    ...bullets(plan.evidence.map(item => `${item.id}${item.path ? ` — ${item.path}` : ''}`)),
+    ...bullets(presentEvidenceReferences(plan.evidence.map(item => item.id), plan.evidence).map(item => item.label)),
     '',
     '## Limitations',
     '',
@@ -811,18 +812,25 @@ function renderAgentPrompt(plan: ExecutableFuturePlan, target: 'Codex' | 'Claude
     ...plan.implementationStages.flatMap(stage => [
       `${stage.order}. ${stage.title}`,
       `   Purpose: ${stage.purpose}`,
+      `   Why now: ${stage.whyNow}`,
+      `   Changes: ${stage.changes.join(' ')}`,
       `   Areas: ${stage.repositoryAreaIds.length ? stage.repositoryAreaIds.map(id => areaMarkdown(plan.affectedRepositoryAreas.find(area => area.id === id)!)).join('; ') : 'No asserted path'}`,
       `   Complete when: ${stage.completionCriteria.join(' ')}`,
-      `   Evidence: ${stage.evidenceIds.length ? stage.evidenceIds.join(', ') : 'No additional stage-specific evidence'}`,
+      `   Evidence: ${renderEvidenceReferenceList(stage.evidenceIds, plan.evidence)}`,
     ]),
     '',
     '## Repository evidence',
     '',
-    ...bullets(plan.evidence.map(item => `${item.id}${item.path ? ` — ${item.path}` : ''}`)),
+    ...bullets(presentEvidenceReferences(plan.evidence.map(item => item.id), plan.evidence).map(item => item.label)),
     '',
     '## Human-review gates',
     '',
     ...bullets(plan.reviewGates.length ? plan.reviewGates.map(gate => `${gate.title}: ${gate.reason}`) : ['No explicit human-review gate is represented.']),
+    '',
+    '## Risks and limitations',
+    '',
+    ...bullets(plan.risks.length ? plan.risks.map(risk => risk.statement) : ['No additional grounded risk is represented by the selected intelligence.']),
+    ...bullets(plan.limitations.length ? plan.limitations : ['No additional limitation was declared by the selected intelligence.']),
     '',
     '## Verification',
     '',

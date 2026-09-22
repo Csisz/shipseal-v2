@@ -121,6 +121,7 @@ export async function requestRepositoryProductIntelligenceStaged(
   let rateLimitGate: Promise<void> | null = null;
   let releaseRateLimitGate: (() => void) | null = null;
   let terminalRateLimitFailure: RepositoryIntelligenceProviderApiResponse | null = null;
+  let terminalStageFailure: RepositoryIntelligenceProviderApiResponse | null = null;
   let pendingRateLimitRecoveries = 0;
   const rateLimitRecoveryWaiters = new Set<() => void>();
   const activeChangeWaiters = new Set<() => void>();
@@ -145,6 +146,7 @@ export async function requestRepositoryProductIntelligenceStaged(
     if (rateLimitGate) await rateLimitGate;
     await waitForRateLimitRecoveries();
     if (terminalRateLimitFailure) return { response: terminalRateLimitFailure, stage };
+    if (terminalStageFailure) return { response: terminalStageFailure, stage };
     active.add(stage.batchIndex);
     options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [...active].sort(), stageAttempt: 1 });
     let response: RepositoryIntelligenceProviderApiResponse = invalidStageResponse('This pathway group could not be completed.', stage);
@@ -195,6 +197,7 @@ export async function requestRepositoryProductIntelligenceStaged(
         rateLimitDiagnostics = response.diagnostics;
       }
     }
+    if (response.state === 'fallback' && !response.retryable) terminalStageFailure = response;
     active.delete(stage.batchIndex);
     notifyActiveChange();
     if (ownsRateLimitGate && rateLimitGate) {

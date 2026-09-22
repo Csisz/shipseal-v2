@@ -7,9 +7,11 @@ import {
   type RepositoryProductProviderStage,
 } from './productionProviderContract.js';
 import type { RepositoryProductFutureEvolution, RepositoryProductIntelligenceResult } from './productIntelligenceSchema.js';
-import { REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION } from './productIntelligenceSchema.js';
+import { classifyRepositoryProductContentIntegrity, REPOSITORY_PRODUCT_INTELLIGENCE_RESULT_VERSION } from './productIntelligenceSchema.js';
 
-export const REPOSITORY_PRODUCT_EXPANSION_BATCH_SIZE = 3;
+// Two parents is the largest complete maximum-shape expansion that fits the
+// measured Product Strategist output budget with safety headroom.
+export const REPOSITORY_PRODUCT_EXPANSION_BATCH_SIZE = 2;
 export const REPOSITORY_PRODUCT_EXPANSION_CONCURRENCY = 2;
 export const REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS = 2;
 
@@ -109,7 +111,7 @@ export function isCompleteRepositoryProductIntelligenceResult(
       evolutionIds.add(evolution.id);
     }
   }
-  return true;
+  return classifyRepositoryProductContentIntegrity(product as RepositoryProductIntelligenceResult) !== 'legacy-truncated';
 }
 
 export function mergeRepositoryProductExpansionResults(

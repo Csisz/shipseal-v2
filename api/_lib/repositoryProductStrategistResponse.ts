@@ -13,6 +13,7 @@ import {
   requiresEnglishGeneratedText,
 } from '../../src/lib/repositoryIntelligence/productIntelligenceSchema.js';
 import {
+  PRODUCT_STRATEGIST_OUTPUT_BUDGET_POLICY_VERSION,
   REPOSITORY_PRODUCT_PIPELINE_VERSION,
   type RepositoryProductExpansionStageResult,
   type RepositoryProductProviderStage,
@@ -24,90 +25,248 @@ import {
 } from './repositoryProductStrategistPayload.js';
 
 export { PRODUCT_STRATEGIST_COMPACT_RESPONSE_VERSION } from './repositoryProductStrategistPayload.js';
-export const PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS = 3_800;
+export const PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS = 14_000;
+export const PRODUCT_STRATEGIST_OUTPUT_BUDGET_HEADROOM_TOKENS = 256;
 
 export const PRODUCT_STRATEGIST_COMPACT_LIMITS = Object.freeze({
   evidenceIndexes: 6,
   understanding: {
-    summaryCharacters: 88,
+    summaryCharacters: 480,
     users: 3,
-    userCharacters: 32,
-    problemCharacters: 64,
+    userCharacters: 180,
+    problemCharacters: 420,
     loopSteps: 4,
-    loopStepCharacters: 40,
+    loopStepCharacters: 220,
     capabilities: 4,
-    capabilityTitleCharacters: 32,
-    capabilityDescriptionCharacters: 48,
+    capabilityTitleCharacters: 120,
+    capabilityDescriptionCharacters: 420,
     constraints: 2,
     businessClues: 2,
     missingAreas: 3,
-    listItemCharacters: 40,
+    listItemCharacters: 320,
     limitations: 2,
   },
   opportunity: {
-    titleCharacters: 40,
-    statementCharacters: 80,
-    userValueCharacters: 64,
-    fitCharacters: 80,
+    titleCharacters: 120,
+    statementCharacters: 420,
+    userValueCharacters: 360,
+    fitCharacters: 440,
     targetUsers: 3,
-    targetUserCharacters: 32,
+    targetUserCharacters: 180,
     existingCapabilities: 3,
     newCapabilities: 2,
-    newCapabilityCharacters: 40,
+    newCapabilityCharacters: 120,
     supportingOpportunities: 2,
     conflicts: 1,
-    conflictCharacters: 40,
+    conflictCharacters: 320,
     implementationAreas: 1,
-    implementationAreaCharacters: 40,
-    verificationCharacters: 80,
+    implementationAreaCharacters: 120,
+    verificationCharacters: 420,
     caveats: 1,
-    caveatCharacters: 40,
+    caveatCharacters: 360,
     secondGenerationEvolutions: 4,
     thirdGenerationEvolutions: 2,
-    evolutionTitleCharacters: 40,
-    evolutionDescriptionCharacters: 72,
-    evolutionUserValueCharacters: 56,
+    evolutionTitleCharacters: 120,
+    evolutionDescriptionCharacters: 520,
+    evolutionUserValueCharacters: 360,
   },
 });
 
 const limits = PRODUCT_STRATEGIST_COMPACT_LIMITS;
-const compactString = (maximum: number) => z.string().trim().min(1).max(maximum);
+
+export interface ProductStrategistResponseBudgetProfile {
+  bytes: number;
+  estimatedTokens: number;
+}
+
+export interface ProductStrategistResponseBudgetMeasurement {
+  policyVersion: typeof PRODUCT_STRATEGIST_OUTPUT_BUDGET_POLICY_VERSION;
+  stage: 'roots' | 'expansion';
+  parentCount: number;
+  minimum: ProductStrategistResponseBudgetProfile;
+  typical: ProductStrategistResponseBudgetProfile;
+  maximum: ProductStrategistResponseBudgetProfile;
+  requiredTokens: number;
+}
+
+export interface ProductStrategistStageOutputBudget extends ProductStrategistResponseBudgetMeasurement {
+  configuredMaximumTokens: number;
+  outputTokenCap: number;
+  fitsConfiguredCap: boolean;
+}
+
+type BudgetShape = 'minimum' | 'typical' | 'maximum';
+
+/**
+ * Measures serialized response content against the actual compact schema.
+ * Token estimates use the same conservative three UTF-8 bytes per token rule
+ * as provider request diagnostics. The maximum profile fills every bounded
+ * collection and every string/identifier to its supported schema limit.
+ */
+export function measureProductStrategistResponseBudget(
+  stage: 'roots' | 'expansion',
+  parentCount = stage === 'expansion' ? 1 : 0,
+): ProductStrategistResponseBudgetMeasurement {
+  const safeParentCount = stage === 'expansion' ? Math.max(1, Math.min(3, Math.floor(parentCount))) : 0;
+  const profile = (shape: BudgetShape) => responseBudgetProfile(stage === 'roots'
+    ? buildRootBudgetFixture(shape)
+    : buildExpansionBudgetFixture(shape, safeParentCount));
+  const minimum = profile('minimum');
+  const typical = profile('typical');
+  const maximum = profile('maximum');
+  return {
+    policyVersion: PRODUCT_STRATEGIST_OUTPUT_BUDGET_POLICY_VERSION,
+    stage,
+    parentCount: safeParentCount,
+    minimum,
+    typical,
+    maximum,
+    requiredTokens: maximum.estimatedTokens + PRODUCT_STRATEGIST_OUTPUT_BUDGET_HEADROOM_TOKENS,
+  };
+}
+
+export function resolveProductStrategistStageOutputBudget(
+  stage: RepositoryProductProviderStage,
+  configuredMaximumTokens: number,
+): ProductStrategistStageOutputBudget {
+  const measurement = measureProductStrategistResponseBudget(
+    stage.kind,
+    stage.kind === 'expansion' ? stage.parents.length : 0,
+  );
+  return {
+    ...measurement,
+    configuredMaximumTokens,
+    outputTokenCap: Math.min(configuredMaximumTokens, measurement.requiredTokens),
+    fitsConfiguredCap: measurement.requiredTokens <= configuredMaximumTokens,
+  };
+}
+
+function responseBudgetProfile(value: unknown): ProductStrategistResponseBudgetProfile {
+  const bytes = Buffer.byteLength(JSON.stringify(value), 'utf8');
+  return { bytes, estimatedTokens: Math.ceil(bytes / 3) };
+}
+
+function budgetString(maximum: number, shape: BudgetShape) {
+  const length = shape === 'minimum' ? 1 : shape === 'typical'
+    ? Math.max(1, Math.floor(maximum * 0.58)) : maximum;
+  return 'x'.repeat(length);
+}
+
+function budgetCount(maximum: number, shape: BudgetShape, typical: number, minimum = 0) {
+  return shape === 'minimum' ? minimum : shape === 'typical' ? Math.min(maximum, typical) : maximum;
+}
+
+function budgetArray<T>(count: number, value: T | (() => T)) {
+  return Array.from({ length: count }, () => typeof value === 'function' ? (value as () => T)() : value);
+}
+
+function buildRootBudgetFixture(shape: BudgetShape) {
+  const understanding = limits.understanding;
+  const opportunity = limits.opportunity;
+  const evidence = budgetArray(budgetCount(limits.evidenceIndexes, shape, 3, 1), 59);
+  const listItem = () => budgetString(understanding.listItemCharacters, shape);
+  const product = {
+    s: budgetString(understanding.summaryCharacters, shape),
+    u: budgetArray(budgetCount(understanding.users, shape, 2, 1), () => budgetString(understanding.userCharacters, shape)),
+    p: budgetString(understanding.problemCharacters, shape),
+    loop: budgetArray(budgetCount(understanding.loopSteps, shape, 3, 1), () => budgetString(understanding.loopStepCharacters, shape)),
+    caps: budgetArray(budgetCount(understanding.capabilities, shape, 3, 1), () => ({
+      t: budgetString(understanding.capabilityTitleCharacters, shape),
+      d: budgetString(understanding.capabilityDescriptionCharacters, shape),
+      e: evidence,
+    })),
+    constraints: budgetArray(budgetCount(understanding.constraints, shape, 1), listItem),
+    business: budgetArray(budgetCount(understanding.businessClues, shape, 1), listItem),
+    missing: budgetArray(budgetCount(understanding.missingAreas, shape, 2), listItem),
+    e: evidence,
+    notes: budgetArray(budgetCount(understanding.limitations, shape, 1), listItem),
+    q: 1,
+  };
+  const opportunityValue = () => ({
+    t: budgetString(opportunity.titleCharacters, shape),
+    s: budgetString(opportunity.statementCharacters, shape),
+    v: budgetString(opportunity.userValueCharacters, shape),
+    f: budgetString(opportunity.fitCharacters, shape),
+    u: budgetArray(budgetCount(opportunity.targetUsers, shape, 2, 1), () => budgetString(opportunity.targetUserCharacters, shape)),
+    e: evidence,
+    o: 'evidence-backed',
+    x: budgetArray(budgetCount(opportunity.existingCapabilities, shape, 2), 0),
+    n: budgetArray(budgetCount(opportunity.newCapabilities, shape, 2, 1), () => budgetString(opportunity.newCapabilityCharacters, shape)),
+    evo: [],
+    support: budgetArray(budgetCount(opportunity.supportingOpportunities, shape, 1), 0),
+    conflicts: budgetArray(budgetCount(opportunity.conflicts, shape, 1), () => budgetString(opportunity.conflictCharacters, shape)),
+    areas: budgetArray(budgetCount(opportunity.implementationAreas, shape, 1), () => ({
+      l: budgetString(opportunity.implementationAreaCharacters, shape), p: -1,
+    })),
+    w: 'moderate',
+    b: 'workflow',
+    verify: budgetString(opportunity.verificationCharacters, shape),
+    caveats: budgetArray(budgetCount(opportunity.caveats, shape, 1), () => ({
+      t: budgetString(opportunity.caveatCharacters, shape), r: false,
+    })),
+    q: 1,
+  });
+  return { p: product, o: budgetArray(shape === 'minimum' ? 6 : shape === 'typical' ? 7 : 8, opportunityValue) };
+}
+
+function buildExpansionBudgetFixture(shape: BudgetShape, parentCount: number) {
+  const opportunity = limits.opportunity;
+  const leaf = () => ({
+    id: budgetString(80, shape),
+    t: budgetString(opportunity.evolutionTitleCharacters, shape),
+    s: budgetString(opportunity.evolutionDescriptionCharacters, shape),
+    v: budgetString(opportunity.evolutionUserValueCharacters, shape),
+  });
+  const branch = () => ({
+    ...leaf(),
+    next: budgetArray(budgetCount(opportunity.thirdGenerationEvolutions, shape, 1), leaf),
+  });
+  return {
+    x: budgetArray(parentCount, () => ({
+      p: budgetString(200, shape),
+      evo: budgetArray(budgetCount(opportunity.secondGenerationEvolutions, shape, 3, 2), branch),
+    })),
+  };
+}
+
+const compactLabel = (maximum: number) => z.string().trim().min(1).max(maximum);
+const compactSemanticText = (absoluteMaximum: number) => z.string().trim().min(1).max(absoluteMaximum);
 const compactEvidenceIndexesSchema = z.array(z.number().int().min(0)).min(1).max(limits.evidenceIndexes);
 
 const compactCapabilitySchema = z.object({
-  t: compactString(limits.understanding.capabilityTitleCharacters),
-  d: compactString(limits.understanding.capabilityDescriptionCharacters),
+  t: compactLabel(limits.understanding.capabilityTitleCharacters),
+  d: compactSemanticText(limits.understanding.capabilityDescriptionCharacters),
   e: compactEvidenceIndexesSchema,
 }).strict();
 
 export const productStrategistCompactUnderstandingSchema = z.object({
-  s: compactString(limits.understanding.summaryCharacters),
-  u: z.array(compactString(limits.understanding.userCharacters)).min(1).max(limits.understanding.users),
-  p: compactString(limits.understanding.problemCharacters),
-  loop: z.array(compactString(limits.understanding.loopStepCharacters)).min(1).max(limits.understanding.loopSteps),
+  s: compactSemanticText(limits.understanding.summaryCharacters),
+  u: z.array(compactSemanticText(limits.understanding.userCharacters)).min(1).max(limits.understanding.users),
+  p: compactSemanticText(limits.understanding.problemCharacters),
+  loop: z.array(compactSemanticText(limits.understanding.loopStepCharacters)).min(1).max(limits.understanding.loopSteps),
   caps: z.array(compactCapabilitySchema).min(1).max(limits.understanding.capabilities),
-  constraints: z.array(compactString(limits.understanding.listItemCharacters)).max(limits.understanding.constraints),
-  business: z.array(compactString(limits.understanding.listItemCharacters)).max(limits.understanding.businessClues),
-  missing: z.array(compactString(limits.understanding.listItemCharacters)).max(limits.understanding.missingAreas),
+  constraints: z.array(compactSemanticText(limits.understanding.listItemCharacters)).max(limits.understanding.constraints),
+  business: z.array(compactSemanticText(limits.understanding.listItemCharacters)).max(limits.understanding.businessClues),
+  missing: z.array(compactSemanticText(limits.understanding.listItemCharacters)).max(limits.understanding.missingAreas),
   e: compactEvidenceIndexesSchema,
-  notes: z.array(compactString(limits.understanding.listItemCharacters)).max(limits.understanding.limitations),
+  notes: z.array(compactSemanticText(limits.understanding.listItemCharacters)).max(limits.understanding.limitations),
   q: z.number().finite().min(0).max(1),
 }).strict();
 
 const compactImplementationAreaSchema = z.object({
-  l: compactString(limits.opportunity.implementationAreaCharacters),
+  l: compactLabel(limits.opportunity.implementationAreaCharacters),
   p: z.number().int().min(-1),
 }).strict();
 
 const compactCaveatSchema = z.object({
-  t: compactString(limits.opportunity.caveatCharacters),
+  t: compactSemanticText(limits.opportunity.caveatCharacters),
   r: z.boolean(),
 }).strict();
 
 const compactThirdGenerationEvolutionSchema = z.object({
-  t: compactString(limits.opportunity.evolutionTitleCharacters),
-  s: compactString(limits.opportunity.evolutionDescriptionCharacters),
-  v: compactString(limits.opportunity.evolutionUserValueCharacters),
+  t: compactLabel(limits.opportunity.evolutionTitleCharacters),
+  s: compactSemanticText(limits.opportunity.evolutionDescriptionCharacters),
+  v: compactSemanticText(limits.opportunity.evolutionUserValueCharacters),
 }).strict();
 
 const compactSecondGenerationEvolutionSchema = compactThirdGenerationEvolutionSchema.extend({
@@ -115,22 +274,22 @@ const compactSecondGenerationEvolutionSchema = compactThirdGenerationEvolutionSc
 }).strict();
 
 export const productStrategistCompactOpportunitySchema = z.object({
-  t: compactString(limits.opportunity.titleCharacters),
-  s: compactString(limits.opportunity.statementCharacters),
-  v: compactString(limits.opportunity.userValueCharacters),
-  f: compactString(limits.opportunity.fitCharacters),
-  u: z.array(compactString(limits.opportunity.targetUserCharacters)).min(1).max(limits.opportunity.targetUsers),
+  t: compactLabel(limits.opportunity.titleCharacters),
+  s: compactSemanticText(limits.opportunity.statementCharacters),
+  v: compactSemanticText(limits.opportunity.userValueCharacters),
+  f: compactSemanticText(limits.opportunity.fitCharacters),
+  u: z.array(compactSemanticText(limits.opportunity.targetUserCharacters)).min(1).max(limits.opportunity.targetUsers),
   e: compactEvidenceIndexesSchema,
   o: z.enum(['evidence-backed', 'strategic', 'exploratory']),
   x: z.array(z.number().int().min(0)).max(limits.opportunity.existingCapabilities),
-  n: z.array(compactString(limits.opportunity.newCapabilityCharacters)).min(1).max(limits.opportunity.newCapabilities),
+  n: z.array(compactLabel(limits.opportunity.newCapabilityCharacters)).min(1).max(limits.opportunity.newCapabilities),
   evo: z.array(compactSecondGenerationEvolutionSchema).min(2).max(limits.opportunity.secondGenerationEvolutions).optional(),
   support: z.array(z.number().int().min(0)).max(limits.opportunity.supportingOpportunities),
-  conflicts: z.array(compactString(limits.opportunity.conflictCharacters)).max(limits.opportunity.conflicts),
+  conflicts: z.array(compactSemanticText(limits.opportunity.conflictCharacters)).max(limits.opportunity.conflicts),
   areas: z.array(compactImplementationAreaSchema).max(limits.opportunity.implementationAreas),
   w: z.enum(['small', 'moderate', 'broad']),
   b: z.enum(['focused', 'workflow', 'cross-product']),
-  verify: compactString(limits.opportunity.verificationCharacters),
+  verify: compactSemanticText(limits.opportunity.verificationCharacters),
   caveats: z.array(compactCaveatSchema).max(limits.opportunity.caveats),
   q: z.number().finite().min(0).max(1),
 }).strict();
@@ -145,12 +304,16 @@ const compactResponseCollectionSchema = z.object({
   o: z.array(z.unknown()).min(3).max(8),
 }).strict();
 
-const stringJsonSchema = (maxLength: number, description: string) => ({
+const labelJsonSchema = (maxLength: number, description: string) => ({
   type: 'string', minLength: 1, maxLength, description,
 });
-const stringArrayJsonSchema = (maximumItems: number, maximumCharacters: number, description: string, minimumItems = 0) => ({
+const semanticJsonSchema = (description: string) => ({
+  type: 'string', minLength: 1,
+  description: `${description} Write one concise but complete thought; never cut a word or phrase and never abbreviate solely for display size.`,
+});
+const semanticArrayJsonSchema = (maximumItems: number, description: string, minimumItems = 0) => ({
   type: 'array', minItems: minimumItems, maxItems: maximumItems,
-  items: stringJsonSchema(maximumCharacters, description),
+  items: semanticJsonSchema(description),
 });
 
 export function buildProductStrategistCompactJsonSchema(payload: ProductStrategistProviderPayload, options: { rootsOnly?: boolean } = {}) {
@@ -173,26 +336,26 @@ export function buildProductStrategistCompactJsonSchema(payload: ProductStrategi
         type: 'object', additionalProperties: false,
         required: ['s', 'u', 'p', 'loop', 'caps', 'constraints', 'business', 'missing', 'e', 'notes', 'q'],
         properties: {
-          s: stringJsonSchema(limits.understanding.summaryCharacters, 'One concise product summary, one or two short sentences.'),
-          u: stringArrayJsonSchema(limits.understanding.users, limits.understanding.userCharacters, 'Concise primary user group.', 1),
-          p: stringJsonSchema(limits.understanding.problemCharacters, 'One concise primary problem sentence.'),
-          loop: stringArrayJsonSchema(limits.understanding.loopSteps, limits.understanding.loopStepCharacters, 'Short current product-loop step.', 1),
+          s: semanticJsonSchema('One concise, complete product summary.'),
+          u: semanticArrayJsonSchema(limits.understanding.users, 'Concise primary user group.', 1),
+          p: semanticJsonSchema('One concise, complete primary problem sentence.'),
+          loop: semanticArrayJsonSchema(limits.understanding.loopSteps, 'Short current product-loop step.', 1),
           caps: {
             type: 'array', minItems: 1, maxItems: limits.understanding.capabilities,
             items: {
               type: 'object', additionalProperties: false, required: ['t', 'd', 'e'],
               properties: {
-                t: stringJsonSchema(limits.understanding.capabilityTitleCharacters, 'Existing capability title.'),
-                d: stringJsonSchema(limits.understanding.capabilityDescriptionCharacters, 'One concise existing-capability description.'),
+                t: labelJsonSchema(limits.understanding.capabilityTitleCharacters, 'Existing capability title; use a complete phrase.'),
+                d: semanticJsonSchema('One concise, complete existing-capability description.'),
                 e: evidenceJsonSchema,
               },
             },
           },
-          constraints: stringArrayJsonSchema(limits.understanding.constraints, limits.understanding.listItemCharacters, 'Material current constraint only.'),
-          business: stringArrayJsonSchema(limits.understanding.businessClues, limits.understanding.listItemCharacters, 'Material business-model clue only.'),
-          missing: stringArrayJsonSchema(limits.understanding.missingAreas, limits.understanding.listItemCharacters, 'Concise missing capability area.'),
+          constraints: semanticArrayJsonSchema(limits.understanding.constraints, 'Material current constraint only.'),
+          business: semanticArrayJsonSchema(limits.understanding.businessClues, 'Material business-model clue only.'),
+          missing: semanticArrayJsonSchema(limits.understanding.missingAreas, 'Concise missing capability area.'),
           e: evidenceJsonSchema,
-          notes: stringArrayJsonSchema(limits.understanding.limitations, limits.understanding.listItemCharacters, 'Material Product Understanding limitation only.'),
+          notes: semanticArrayJsonSchema(limits.understanding.limitations, 'Material Product Understanding limitation only.'),
           q: { type: 'number', minimum: 0, maximum: 1, description: 'Provider confidence.' },
         },
       },
@@ -203,11 +366,11 @@ export function buildProductStrategistCompactJsonSchema(payload: ProductStrategi
           type: 'object', additionalProperties: false,
           required: ['t', 's', 'v', 'f', 'u', 'e', 'o', 'x', 'n', 'evo', 'support', 'conflicts', 'areas', 'w', 'b', 'verify', 'caveats', 'q'],
           properties: {
-            t: stringJsonSchema(limits.opportunity.titleCharacters, 'Short user-facing opportunity title.'),
-            s: stringJsonSchema(limits.opportunity.statementCharacters, 'One concise opportunity statement.'),
-            v: stringJsonSchema(limits.opportunity.userValueCharacters, 'One concise user-value statement.'),
-            f: stringJsonSchema(limits.opportunity.fitCharacters, 'One concise explanation of product fit and strategic rationale.'),
-            u: stringArrayJsonSchema(limits.opportunity.targetUsers, limits.opportunity.targetUserCharacters, 'Concise target user group.', 1),
+            t: labelJsonSchema(limits.opportunity.titleCharacters, 'Short, complete user-facing opportunity title; never clip a word.'),
+            s: semanticJsonSchema('One concise, complete opportunity statement.'),
+            v: semanticJsonSchema('One concise, complete user-value statement.'),
+            f: semanticJsonSchema('One concise, complete explanation of product fit and strategic rationale.'),
+            u: semanticArrayJsonSchema(limits.opportunity.targetUsers, 'Concise target user group.', 1),
             e: evidenceJsonSchema,
             o: { type: 'string', enum: ['evidence-backed', 'strategic', 'exploratory'] },
             x: {
@@ -215,25 +378,28 @@ export function buildProductStrategistCompactJsonSchema(payload: ProductStrategi
               description: 'Distinct indexes into p.caps. ShipSeal validates them against the actual returned capability count.',
               items: { type: 'integer', minimum: 0, maximum: limits.understanding.capabilities - 1 },
             },
-            n: stringArrayJsonSchema(limits.opportunity.newCapabilities, limits.opportunity.newCapabilityCharacters, 'Major required new capability title.', 1),
+            n: {
+              type: 'array', minItems: 1, maxItems: limits.opportunity.newCapabilities,
+              items: labelJsonSchema(limits.opportunity.newCapabilityCharacters, 'Major required new capability title; use a complete phrase.'),
+            },
             evo: {
               type: 'array', minItems: options.rootsOnly ? 0 : 2, maxItems: options.rootsOnly ? 0 : limits.opportunity.secondGenerationEvolutions,
               description: options.rootsOnly ? 'Stage 1 must leave deep evolution empty.' : 'Two to four product evolutions that this direction could unlock next. These are user-value futures, not implementation tasks.',
               items: {
                 type: 'object', additionalProperties: false, required: ['t', 's', 'v', 'next'],
                 properties: {
-                  t: stringJsonSchema(limits.opportunity.evolutionTitleCharacters, 'Short second-generation product future title.'),
-                  s: stringJsonSchema(limits.opportunity.evolutionDescriptionCharacters, 'What becomes possible after the parent direction succeeds.'),
-                  v: stringJsonSchema(limits.opportunity.evolutionUserValueCharacters, 'Concise user value opened by this evolution.'),
+                  t: labelJsonSchema(limits.opportunity.evolutionTitleCharacters, 'Short, complete second-generation product future title.'),
+                  s: semanticJsonSchema('A complete statement of what becomes possible after the parent direction succeeds.'),
+                  v: semanticJsonSchema('A concise, complete user value opened by this evolution.'),
                   next: {
                     type: 'array', maxItems: limits.opportunity.thirdGenerationEvolutions,
                     description: 'Optional grounded third-generation product possibilities opened by this evolution.',
                     items: {
                       type: 'object', additionalProperties: false, required: ['t', 's', 'v'],
                       properties: {
-                        t: stringJsonSchema(limits.opportunity.evolutionTitleCharacters, 'Short third-generation product future title.'),
-                        s: stringJsonSchema(limits.opportunity.evolutionDescriptionCharacters, 'A later product possibility grounded in the parent evolution.'),
-                        v: stringJsonSchema(limits.opportunity.evolutionUserValueCharacters, 'Concise later-stage user value.'),
+                        t: labelJsonSchema(limits.opportunity.evolutionTitleCharacters, 'Short, complete third-generation product future title.'),
+                        s: semanticJsonSchema('A later product possibility grounded in the parent evolution.'),
+                        v: semanticJsonSchema('Concise later-stage user value.'),
                       },
                     },
                   },
@@ -245,13 +411,13 @@ export function buildProductStrategistCompactJsonSchema(payload: ProductStrategi
               description: 'Distinct indexes of earlier opportunities in o only; no self or forward references.',
               items: { type: 'integer', minimum: 0, maximum: 4 },
             },
-            conflicts: stringArrayJsonSchema(limits.opportunity.conflicts, limits.opportunity.conflictCharacters, 'Material known conflict only.'),
+            conflicts: semanticArrayJsonSchema(limits.opportunity.conflicts, 'Material known conflict only.'),
             areas: {
               type: 'array', maxItems: limits.opportunity.implementationAreas,
               items: {
                 type: 'object', additionalProperties: false, required: ['l', 'p'],
                 properties: {
-                  l: stringJsonSchema(limits.opportunity.implementationAreaCharacters, 'Concise implementation-area label.'),
+                  l: labelJsonSchema(limits.opportunity.implementationAreaCharacters, 'Concise, complete implementation-area label.'),
                   p: {
                     type: 'integer', minimum: -1, maximum: Math.max(-1, pathMaximum),
                     description: 'Index into supplied permittedCurrentPaths, or -1 when no current path is claimed.',
@@ -261,13 +427,13 @@ export function buildProductStrategistCompactJsonSchema(payload: ProductStrategi
             },
             w: { type: 'string', enum: ['small', 'moderate', 'broad'] },
             b: { type: 'string', enum: ['focused', 'workflow', 'cross-product'] },
-            verify: stringJsonSchema(limits.opportunity.verificationCharacters, 'One concise outcome-focused verification concept.'),
+            verify: semanticJsonSchema('One concise, complete outcome-focused verification concept.'),
             caveats: {
               type: 'array', maxItems: limits.opportunity.caveats,
               items: {
                 type: 'object', additionalProperties: false, required: ['t', 'r'],
                 properties: {
-                  t: stringJsonSchema(limits.opportunity.caveatCharacters, 'Material limitation or review requirement.'),
+                  t: semanticJsonSchema('Material limitation or review requirement.'),
                   r: { type: 'boolean', description: 'True only when this caveat requires explicit human review.' },
                 },
               },
@@ -293,10 +459,10 @@ export function buildProductStrategistResponseFormat(payload: ProductStrategistP
 }
 
 const expansionLeafSchema = z.object({
-  id: compactString(80),
-  t: compactString(limits.opportunity.evolutionTitleCharacters),
-  s: compactString(limits.opportunity.evolutionDescriptionCharacters),
-  v: compactString(limits.opportunity.evolutionUserValueCharacters),
+  id: compactLabel(80),
+  t: compactLabel(limits.opportunity.evolutionTitleCharacters),
+  s: compactSemanticText(limits.opportunity.evolutionDescriptionCharacters),
+  v: compactSemanticText(limits.opportunity.evolutionUserValueCharacters),
 }).strict();
 const expansionBranchSchema = expansionLeafSchema.extend({
   next: z.array(expansionLeafSchema).max(limits.opportunity.thirdGenerationEvolutions),
@@ -315,6 +481,7 @@ export type ProductStrategistExpansionRepairShape = Array<{
 
 export type ProductStrategistExpansionValidationCategory =
   | 'schema'
+  | 'content-integrity'
   | 'language'
   | 'parent-identity'
   | 'duplicate-identity';
@@ -341,6 +508,7 @@ export class ProductStrategistExpansionValidationError extends Error {
     public readonly repairShape?: ProductStrategistExpansionRepairShape,
   ) {
     super(category === 'language' ? 'Expansion response violated the English generated-language contract.'
+      : category === 'content-integrity' ? 'Expansion response contained text clipped at a ShipSeal field boundary.'
       : category === 'schema' ? 'Expansion response did not match its bounded schema.'
         : category === 'parent-identity' ? 'Expansion response did not preserve stable parent identities.'
           : 'Expansion response contained duplicate stage-local identities.');
@@ -441,10 +609,10 @@ export function buildProductStrategistExpansionResponseFormat(stage: Extract<Rep
   const leaf = {
     type: 'object', additionalProperties: false, required: ['id', 't', 's', 'v'],
     properties: {
-      id: stringJsonSchema(80, 'Stable stage-local slug identifier.'),
-      t: stringJsonSchema(limits.opportunity.evolutionTitleCharacters, 'Short product-future title.'),
-      s: stringJsonSchema(limits.opportunity.evolutionDescriptionCharacters, 'Grounded product evolution, not an implementation task.'),
-      v: stringJsonSchema(limits.opportunity.evolutionUserValueCharacters, 'Concise user value.'),
+      id: labelJsonSchema(80, 'Stable stage-local slug identifier.'),
+      t: labelJsonSchema(limits.opportunity.evolutionTitleCharacters, 'Short, complete product-future title; never clip a word.'),
+      s: semanticJsonSchema('Complete grounded product evolution, not an implementation task.'),
+      v: semanticJsonSchema('Concise, complete user value.'),
     },
   };
   return {

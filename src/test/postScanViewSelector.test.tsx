@@ -301,6 +301,32 @@ describe('premium post-scan view selector', () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 
+  it('does not claim a consumed legacy analysis was returned when a new explicit start is required', () => {
+    render(<ResultWorkspace
+      report={reportWithIdentity('2026-08-11T10:01:43.000Z')}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{
+        state: 'fallback', deepState: 'failed', category: 'operation_conflict', retryable: false,
+        message: 'This saved Future used a legacy compact contract and cannot be reopened without clipped text.',
+        diagnostics: {
+          costEstimate: 'unavailable',
+          publicOperationId: `op_${'c'.repeat(24)}`,
+          operationCompletionState: 'incomplete',
+          operationUserUnitState: 'consumed',
+          operationRecoveryAction: 'start_new_analysis',
+        },
+      }}
+      retryRepositoryProductIntelligence={vi.fn(async () => undefined)}
+    />);
+
+    const futureCard = screen.getByRole('button', { name: 'Generate Future analysis' });
+    expect(futureCard).toHaveTextContent('legacy compact contract and contains clipped text');
+    expect(futureCard).toHaveTextContent('Uses 1 Deep Analysis');
+    expect(futureCard).not.toHaveTextContent('returned to your allowance');
+  });
+
   it('shows a factual capacity cooldown and disables manual retry until it expires', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);

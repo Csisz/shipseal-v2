@@ -107,8 +107,8 @@ describe('staged Product Intelligence', () => {
     const root = buildRepositoryProductRootStage(request);
     const batches = buildRepositoryProductExpansionStages(request, rootResult.productIntelligence!);
     expect(root.kind).toBe('roots');
-    expect(batches).toHaveLength(3);
-    expect(batches.map(batch => batch.parents.length)).toEqual([3, 3, 1]);
+    expect(batches).toHaveLength(4);
+    expect(batches.map(batch => batch.parents.length)).toEqual([2, 2, 2, 1]);
     expect(new Set(batches.flatMap(batch => batch.parents.map(parent => parent.id)))).toEqual(new Set(opportunities.map(item => item.id)));
     expect(buildRepositoryProductExpansionStages(request, rootResult.productIntelligence!)).toEqual(batches);
   });
@@ -122,7 +122,7 @@ describe('staged Product Intelligence', () => {
       rootResult.productIntelligence!,
     );
 
-    expect(stages).toHaveLength(3);
+    expect(stages).toHaveLength(4);
     expect(stages.map(stage => validateRepositoryProductExpansionOwnership(
       analysisFingerprint,
       rootResult.productIntelligence!,
@@ -171,7 +171,7 @@ describe('staged Product Intelligence', () => {
         { id: 'coaching', t: 'Guided coaching', s: 'Insights guide the next decision.', v: 'Clearer progress.', next: [] },
       ] })),
     };
-    expect(buildProductStrategistExpansionResponseFormat(stage).json_schema.schema.properties.x.minItems).toBe(3);
+    expect(buildProductStrategistExpansionResponseFormat(stage).json_schema.schema.properties.x.minItems).toBe(2);
     expect(normalizeProductStrategistExpansionResponse(response, stage, 'en')).toMatchObject({
       fingerprint: stage.fingerprint,
       expansions: expect.arrayContaining([expect.objectContaining({ parentId: stage.parents[0].id })]),
@@ -251,8 +251,43 @@ describe('staged Product Intelligence', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it('does not repeat an identical completion-truncated stage or start later batches', async () => {
+    const calls: string[] = [];
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as {
+        productFinalization?: unknown;
+        productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities };
+      };
+      if (isFinalization(body)) return enhancedComplete();
+      const stage = body.productStage;
+      calls.push(stage.kind === 'roots' ? 'roots' : `batch-${stage.batchIndex}`);
+      if (stage.kind === 'roots') return enhancedRoots();
+      if (stage.batchIndex === 0) return json({
+        version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+        state: 'fallback', category: 'schema_validation_failed', retryable: false,
+        message: 'Provider completion reached its output limit.', deepState: 'rejected',
+        diagnostics: {
+          costEstimate: 'unavailable', validationReason: 'completion-truncated',
+          providerFinishReason: 'length', operationalFailureCategory: 'invalid_provider_envelope',
+          failureBoundary: 'provider-envelope',
+        },
+      });
+      return enhancedBatch(stage);
+    });
+
+    const result = await requestRepositoryProductIntelligenceStaged(request, { fetcher: fetcher as typeof fetch });
+
+    expect(result).toMatchObject({
+      state: 'fallback', retryable: false,
+      diagnostics: { validationReason: 'completion-truncated', providerFinishReason: 'length' },
+    });
+    expect(calls.filter(call => call === 'batch-0')).toHaveLength(1);
+    expect(calls).not.toContain('batch-2');
+    expect(calls).not.toContain('batch-3');
+  });
+
   it('resumes only a timed-out expansion while retaining successful roots and pathway groups', async () => {
-    const calls = { roots: 0, batches: [0, 0, 0], finalization: 0 };
+    const calls = { roots: 0, batches: [0, 0, 0, 0], finalization: 0 };
     vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as {
         productFinalization?: unknown;
@@ -275,7 +310,7 @@ describe('staged Product Intelligence', () => {
           message: 'Provider deadline reached.', deepState: 'timed-out',
           diagnostics: {
             costEstimate: 'unavailable', productStage: 'expansion',
-            expansionBatchIndex: 1, expansionBatchCount: 3,
+            expansionBatchIndex: 1, expansionBatchCount: 4,
             operationalFailureCategory: 'provider_timeout', failureBoundary: 'provider-generation',
             operationRecoveryAction: 'retry_stage',
           },
@@ -286,11 +321,11 @@ describe('staged Product Intelligence', () => {
 
     const first = await requestRepositoryProductIntelligenceStaged(request);
     expect(first).toMatchObject({ state: 'fallback', category: 'request_timeout' });
-    expect(calls).toMatchObject({ roots: 1, batches: [1, 1, 1], finalization: 0 });
+    expect(calls).toMatchObject({ roots: 1, batches: [1, 1, 1, 1], finalization: 0 });
 
     const resumed = await requestRepositoryProductIntelligenceStaged(request);
     expect(resumed.state).toBe('enhanced');
-    expect(calls).toEqual({ roots: 1, batches: [1, 2, 1], finalization: 1 });
+    expect(calls).toEqual({ roots: 1, batches: [1, 2, 1, 1], finalization: 1 });
   });
 
   it('waits for Retry-After and performs only one stage-owned 429 retry', async () => {
@@ -343,9 +378,9 @@ describe('staged Product Intelligence', () => {
 
     expect(first.state).toBe('enhanced');
     expect(duplicate.state).toBe('enhanced');
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
     expect(calls.filter(call => call === 'roots')).toHaveLength(1);
-    expect(new Set(calls)).toEqual(new Set(['roots', 'batch-0', 'batch-1', 'batch-2']));
+    expect(new Set(calls)).toEqual(new Set(['roots', 'batch-0', 'batch-1', 'batch-2', 'batch-3']));
     if (duplicate.state === 'enhanced') expect(duplicate.diagnostics.duplicateSuppressed).toBe(true);
   });
 
@@ -363,7 +398,7 @@ describe('staged Product Intelligence', () => {
       recoveryOperationId,
     });
     expect(result.state).toBe('enhanced');
-    expect(bodies).toHaveLength(5);
+    expect(bodies).toHaveLength(6);
     expect(bodies.filter(body => body.productStage).every(body => body.recoveryOperationId === recoveryOperationId)).toBe(true);
     expect(bodies.filter(body => body.productStage).every(body => body.request.fingerprint === request.fingerprint)).toBe(true);
   });
@@ -400,7 +435,7 @@ describe('staged Product Intelligence', () => {
       wait: async () => undefined,
     });
     expect(second.state).toBe('enhanced');
-    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-1', 'batch-2']);
+    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-1', 'batch-2', 'batch-3']);
   });
 
   it('preserves completed batches and retries only the failed batch', async () => {
@@ -441,18 +476,18 @@ describe('staged Product Intelligence', () => {
       state: 'fallback', category: 'schema_validation_failed',
       diagnostics: { operationalFailureCategory: 'expansion_language_failed', expansionBatchIndex: 1 },
     });
-    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-2']);
+    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-2', 'batch-3']);
 
     failBatchOne = false;
     const second = await requestRepositoryProductIntelligenceStaged(request);
     expect(second.state).toBe('enhanced');
-    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-2', 'batch-1']);
+    expect(calls).toEqual(['roots', 'batch-0', 'batch-1', 'batch-1', 'batch-2', 'batch-3', 'batch-1']);
     if (second.state === 'enhanced') {
       expect(second.result.productIntelligence?.opportunities.every(item => item.futureEvolutions.length === 3)).toBe(true);
       expect(second.result.productIntelligence?.opportunities.map(item => item.sourceId).sort())
         .toEqual(opportunities.map(item => item.sourceId).sort());
       expect(new Set(second.result.productIntelligence?.opportunities.map(item => item.sourceId)).size).toBe(7);
-      expect(second.diagnostics).toMatchObject({ expansionBatchCount: 3, acceptedSecondGenerationCount: 14, acceptedThirdGenerationCount: 7 });
+      expect(second.diagnostics).toMatchObject({ expansionBatchCount: 4, acceptedSecondGenerationCount: 14, acceptedThirdGenerationCount: 7 });
     }
   });
 });

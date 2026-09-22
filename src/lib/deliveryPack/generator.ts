@@ -9,6 +9,7 @@ import { generateClientHandoffFiles } from './clientHandoff';
 import { generateContextCompressionFiles } from './contextCompression';
 import { generateFolderAgentSuggestionFiles } from './folderAgents';
 import { generateClientReportHtml } from '../report';
+import { buildSharedExportFacts } from '../report/exportFacts';
 import {
   buildToolingRecommendationBundleFromExports,
   renderMcpRecommendationsMarkdown,
@@ -390,6 +391,7 @@ function deliveryManifest(projectName: string, scoreJson: unknown, repositoryHea
   const discoveredFiles = numberOrUnknown(evidence.discoveredFileCount);
   const warningCount = numberOrUnknown(evidence.warningCount);
   const repositoryHealth = resolveRepositoryHealth(repositoryHealthInput, scoreJson);
+  const facts = buildSharedExportFacts({ scoreJson, fallbackRepositoryName: projectName });
 
   return [
     `# Delivery Manifest - ${projectName}`,
@@ -413,6 +415,8 @@ function deliveryManifest(projectName: string, scoreJson: unknown, repositoryHea
     '',
     '## Scan Evidence',
     `- Source: ${sourceType}`,
+    `- Coverage: ${facts.coverage.label}`,
+    `- Coverage detail: ${facts.coverage.summary}`,
     `- Files analyzed: ${analyzedFiles}`,
     `- Files discovered: ${discoveredFiles}`,
     `- Warnings: ${warningCount}`,

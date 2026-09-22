@@ -9,6 +9,7 @@ import type { EntitlementSnapshot } from '@/lib/entitlements/contract';
 import {
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
   REPOSITORY_PRODUCT_PIPELINE_VERSION,
+  REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION,
   type RepositoryIntelligenceProviderApiResponse,
   type RepositoryProductProviderStage,
 } from '@/lib/repositoryIntelligence/productionProviderContract';
@@ -322,7 +323,7 @@ class TransactionalFixtureAiUsageStore implements AiUsageStore {
       repositoryIdentity: 'github:csisz/shipseal-v2',
       requestFingerprint: request.fingerprint,
       pipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION,
-      rootContractVersion: 'shipseal.repository-product-roots.v2',
+      rootContractVersion: REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION,
       executionProfile: 'product-strategist',
     });
     return this.operations.get(`${userId}:${identity}`);

@@ -46,6 +46,8 @@ export interface ClientReportSummary {
   intakeNote: string;
   scanSummary: string;
   scanEvidenceSummary: string;
+  scanMode: 'full' | 'bounded' | 'limited-fallback';
+  coverageLabel: 'Full scan' | 'Bounded analysis' | 'Limited fallback';
   scanLimited: boolean;
   scanWarning: string;
   strengths: string[];

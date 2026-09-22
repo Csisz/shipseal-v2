@@ -55,8 +55,12 @@ export function PostScanViewSelector({
   const operationActive = futureAvailability === 'running';
   const operationResumable = futureAvailability === 'resumable';
   const temporarilyUnavailable = futureAvailability === 'temporarily-unavailable';
-  const priorAnalysisReturned = recoveryAction === 'start_new_analysis'
-    || (futuresStatus && 'diagnostics' in futuresStatus && futuresStatus.diagnostics?.operationCompletionState === 'refunded');
+  const priorAnalysisReturned = futuresStatus && 'diagnostics' in futuresStatus
+    && (futuresStatus.diagnostics?.operationUserUnitState === 'released'
+      || futuresStatus.diagnostics?.operationCompletionState === 'refunded');
+  const legacyAnalysisNeedsReplacement = recoveryAction === 'start_new_analysis'
+    && futuresStatus && 'diagnostics' in futuresStatus
+    && futuresStatus.diagnostics?.operationUserUnitState === 'consumed';
   const retryLabel = analysisStartable
     ? 'Generate Future analysis'
     : recoveryAction === 'open_result'
@@ -161,7 +165,7 @@ export function PostScanViewSelector({
             index="02"
             overline="Projected state"
             title="Repository Futures"
-            description={futuresAvailable ? 'Explore product directions, future pathways and what this project could become.' : analysisStartable ? priorAnalysisReturned ? 'A previous incomplete analysis was returned to your allowance. Generate a fresh evidence-backed Future Path when you are ready.' : 'Generate validated product directions, implementation pathways and an executable Future Path when you are ready.' : upgradeRequired ? 'Discover validated product directions, implementation pathways and executable plans with Pro.' : operationResumable ? 'Continue the existing evidence-backed analysis from its last durable stage.' : 'Validated Product Futures are unavailable until Future analysis completes successfully.'}
+            description={futuresAvailable ? 'Explore product directions, future pathways and what this project could become.' : analysisStartable ? priorAnalysisReturned ? 'A previous incomplete analysis was returned to your allowance. Generate a fresh evidence-backed Future Path when you are ready.' : legacyAnalysisNeedsReplacement ? 'This saved Future used a legacy compact contract and contains clipped text. Generate a complete replacement explicitly when you are ready.' : 'Generate validated product directions, implementation pathways and an executable Future Path when you are ready.' : upgradeRequired ? 'Discover validated product directions, implementation pathways and executable plans with Pro.' : operationResumable ? 'Continue the existing evidence-backed analysis from its last durable stage.' : 'Validated Product Futures are unavailable until Future analysis completes successfully.'}
             action={futureCardAction}
             metadata={futuresAvailable
               ? [opportunityCount ? `${opportunityCount.toLocaleString()} product directions` : 'Evidence-led directions', 'Neural future pathways']

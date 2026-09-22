@@ -8,9 +8,10 @@ import type {
 } from './productIntelligenceSchema.js';
 
 export const REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION = 'shipseal.repository-intelligence-provider-api.v1' as const;
-export const REPOSITORY_PRODUCT_PIPELINE_VERSION = 'shipseal.repository-product-pipeline.v1' as const;
-export const REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION = 'shipseal.repository-product-roots.v2' as const;
-export const REPOSITORY_PRODUCT_COMPLETE_CONTRACT_VERSION = 'shipseal.repository-product-complete.v1' as const;
+export const REPOSITORY_PRODUCT_PIPELINE_VERSION = 'shipseal.repository-product-pipeline.v2' as const;
+export const REPOSITORY_PRODUCT_ROOT_CONTRACT_VERSION = 'shipseal.repository-product-roots.v4' as const;
+export const REPOSITORY_PRODUCT_COMPLETE_CONTRACT_VERSION = 'shipseal.repository-product-complete.v3' as const;
+export const PRODUCT_STRATEGIST_OUTPUT_BUDGET_POLICY_VERSION = 'shipseal.product-strategist-output-budget.v2' as const;
 
 export interface RepositoryProductExpansionParent {
   id: string;
@@ -178,6 +179,15 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   providerRequestBytes?: number;
   providerEstimatedInputTokens?: number;
   outputTokenCap?: number;
+  outputBudgetPolicyVersion?: typeof PRODUCT_STRATEGIST_OUTPUT_BUDGET_POLICY_VERSION;
+  responseBudgetMinimumBytes?: number;
+  responseBudgetMinimumTokens?: number;
+  responseBudgetTypicalBytes?: number;
+  responseBudgetTypicalTokens?: number;
+  responseBudgetMaximumBytes?: number;
+  responseBudgetMaximumTokens?: number;
+  responseBudgetRequiredTokens?: number;
+  responseBudgetFitsConfiguredCap?: boolean;
   selectedFileCount?: number;
   productUnderstandingAccepted?: boolean;
   productUnderstandingRejectionReason?: RepositoryProductUnderstandingRejectionReason;

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, ExternalLink, GitPullRequestDraft, Github, KeyRound, Plug, ShieldCheck } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, ExternalLink, FileDiff, GitPullRequestDraft, Github, KeyRound, Plug, ShieldCheck } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -32,7 +32,10 @@ import {
   createGitHubAppReadinessPr,
   createReadinessPr,
   inferGitHubRepo,
+  previewGitHubAppReadinessPr,
   readinessPrPreviewFiles,
+  type CreateGitHubAppReadinessPrPayload,
+  type CreateGitHubAppReadinessPrPreviewResponse,
 } from '@/lib/github/write';
 
 interface Props {
@@ -61,17 +64,41 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
   const [success, setSuccess] = useState<{ pullRequestUrl: string; branchName: string } | null>(null);
   const [advancedSection, setAdvancedSection] = useState<string>('');
   const [includeActiveWorkflow, setIncludeActiveWorkflow] = useState(false);
+  const [reviewPreview, setReviewPreview] = useState<CreateGitHubAppReadinessPrPreviewResponse['plan'] | null>(null);
+  const [frozenApplyPayload, setFrozenApplyPayload] = useState<CreateGitHubAppReadinessPrPayload | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [reviewSection, setReviewSection] = useState('');
 
   const prFiles = useMemo(() => readinessPrPreviewFiles(files, { includeActiveWorkflow, selectedPackages }), [files, includeActiveWorkflow, selectedPackages]);
   const hasWorkflowFile = prFiles.some(file => file.path === ACTIVE_CI_WORKFLOW_PATH);
   const currentRepository = inferred.owner && inferred.repo ? `${inferred.owner}/${inferred.repo}` : '';
   const connectedRepository = connection.owner && connection.repo ? `${connection.owner}/${connection.repo}` : '';
+  const resolvedBaseBranch = baseBranch || connection.defaultBranch || report.source.githubDefaultBranch || report.source.githubBranch || '';
+  const targetRepository = connectedRepository || currentRepository || (owner && repo ? `${owner}/${repo}` : 'Not selected');
+  const previewKey = useMemo(() => JSON.stringify({
+    repository: targetRepository,
+    baseBranch: resolvedBaseBranch,
+    branchName: plan.branchName,
+    files: prFiles.map(file => [file.path, file.content]),
+  }), [plan.branchName, prFiles, resolvedBaseBranch, targetRepository]);
+
+  useEffect(() => {
+    setReviewPreview(null);
+    setFrozenApplyPayload(null);
+    setReviewSection('');
+    setConfirmed(false);
+  }, [previewKey]);
 
   const resetTransientState = () => {
     setGithubToken('');
     setError('');
     setIsSubmitting(false);
+    setIsPreviewing(false);
     setAdvancedSection('');
+    setReviewPreview(null);
+    setFrozenApplyPayload(null);
+    setReviewSection('');
+    setConfirmed(false);
   };
 
   const connectGitHub = () => {
@@ -79,10 +106,51 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
     window.open(appConfig.installUrl, '_blank', 'noopener,noreferrer');
   };
 
+  const loadReviewPreview = async () => {
+    if (!connection.canCreatePullRequest || !connection.installationId || !connection.owner || !connection.repo) {
+      setError('Connect GitHub before preparing the immutable Pull Request review.');
+      return;
+    }
+    setError('');
+    setSuccess(null);
+    setIsPreviewing(true);
+    setConfirmed(false);
+    try {
+      const payload = buildCreateGitHubAppReadinessPrPayload({
+        report,
+        installationId: connection.installationId,
+        owner: connection.owner,
+        repo: connection.repo,
+        baseBranch: resolvedBaseBranch || undefined,
+        files: prFiles,
+        includeActiveWorkflow,
+        selectedPackages,
+      });
+      const response = await previewGitHubAppReadinessPr(payload);
+      setReviewPreview(response.plan);
+      setFrozenApplyPayload({
+        ...payload,
+        mode: 'apply',
+        confirmed: true,
+        expectedBaseSha: response.plan.baseSha,
+        reviewFingerprint: response.plan.fingerprint,
+      });
+      setReviewSection('reviewed-files');
+    } catch (requestError) {
+      setError(friendlyPrError(requestError));
+    } finally {
+      setIsPreviewing(false);
+    }
+  };
+
   const submit = async () => {
     setError('');
     setSuccess(null);
     if (connection.canCreatePullRequest && connection.installationId && connection.owner && connection.repo) {
+      if (!reviewPreview || !frozenApplyPayload) {
+        setError('Review the exact GitHub change snapshot before creating the Pull Request.');
+        return;
+      }
       if (!confirmed) {
         setError('Confirm that ShipSeal will create a branch and open a Pull Request.');
         return;
@@ -90,16 +158,7 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
 
       setIsSubmitting(true);
       try {
-        const response = await createGitHubAppReadinessPr(buildCreateGitHubAppReadinessPrPayload({
-          report,
-          installationId: connection.installationId,
-          owner: connection.owner,
-          repo: connection.repo,
-          baseBranch: baseBranch || connection.defaultBranch || undefined,
-          files: prFiles,
-          includeActiveWorkflow,
-          selectedPackages,
-        }));
+        const response = await createGitHubAppReadinessPr(frozenApplyPayload);
         setSuccess({ pullRequestUrl: response.prUrl, branchName: response.branchName });
       } catch (requestError) {
         setError(friendlyPrError(requestError));
@@ -171,23 +230,60 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
                 <Badge variant="outline" className="border-warning/50 text-warning">Human review required</Badge>
               </div>
               <div className="grid sm:grid-cols-2 gap-3 text-sm">
-                <Info label="Branch" value={plan.branchName} />
+                <Info label="Repository" value={reviewPreview?.repository || targetRepository} />
+                <Info label="Base branch" value={reviewPreview?.baseBranch || resolvedBaseBranch || 'Resolved during review'} />
+                <Info label="Generated branch" value={reviewPreview?.branchName || plan.branchName} />
                 <Info label="PR title" value={plan.title} />
                 <Info label="Selected package" value={focus.packageLabel} />
                 <Info label="Delivery Pack outputs" value={`${focus.generatedPaths.length} files`} />
                 <Info label="PR safe subset" value={`${prFiles.length} files`} />
+                {reviewPreview && <Info label="Frozen base SHA" value={reviewPreview.baseSha} />}
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                The downloadable Delivery Pack contains the full selected package: {focus.packageSummary} The PR adds only a safe reviewed subset of repository-ready files.
+                {plan.summary} The downloadable Delivery Pack contains the full selected package: {focus.packageSummary}
               </p>
-              <div className="mt-4 grid sm:grid-cols-2 gap-2">
-                {prFiles.map(file => (
-                  <div key={file.path} className="rounded-md border border-border/60 bg-background/30 px-3 py-2">
-                    <div className="font-mono text-[11px] text-foreground/90 break-all">{file.path}</div>
-                    <div className="text-[10px] text-muted-foreground mt-1">{file.readinessCategory}</div>
-                  </div>
-                ))}
-              </div>
+              {connection.canCreatePullRequest ? (
+                <div className="mt-4">
+                  <Button type="button" variant="outline" onClick={() => void loadReviewPreview()} disabled={isPreviewing || isSubmitting}>
+                    <FileDiff className="mr-2 h-4 w-4" />
+                    {isPreviewing ? 'Checking current GitHub files...' : reviewPreview ? 'Refresh reviewed changes' : `Review changes - ${prFiles.length} files`}
+                  </Button>
+                  {reviewPreview && (
+                    <div className="mt-3 rounded-xl border border-border/60 bg-background/30 p-3" aria-live="polite">
+                      <div className="text-sm font-medium text-foreground">
+                        {reviewPreview.files.length} files - {reviewPreview.additions} additions - {reviewPreview.deletions} deletions
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">This frozen snapshot will be revalidated against the same base commit immediately before mutation.</p>
+                      <Accordion type="single" collapsible value={reviewSection} onValueChange={setReviewSection} className="mt-2">
+                        <AccordionItem value="reviewed-files" className="border-border/50">
+                          <AccordionTrigger className="py-3 text-left hover:no-underline">Reviewed files and exact content</AccordionTrigger>
+                          <AccordionContent>
+                            <div className="max-h-[48vh] space-y-3 overflow-y-auto pr-1" aria-label="Reviewed Pull Request file changes">
+                              {reviewPreview.files.map(file => (
+                                <details key={`${file.path}:${file.contentFingerprint}`} className="rounded-lg border border-border/60 bg-secondary/20 p-3">
+                                  <summary className="cursor-pointer break-all font-mono text-xs text-foreground">
+                                    {file.path} - {file.action} - +{file.additions} / -{file.deletions}
+                                  </summary>
+                                  <pre aria-label={`Reviewed patch for ${file.path}`} className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md bg-background/70 p-3 text-[11px] leading-relaxed text-foreground/85">{file.unifiedDiff}</pre>
+                                </details>
+                              ))}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      </Accordion>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-4 grid sm:grid-cols-2 gap-2">
+                  {prFiles.map(file => (
+                    <div key={file.path} className="rounded-md border border-border/60 bg-background/30 px-3 py-2">
+                      <div className="font-mono text-[11px] text-foreground/90 break-all">{file.path}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1">{file.readinessCategory}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div className="mt-4 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs text-warning">
                 ShipSeal will create a new branch and open a pull request. It will not push to main, and uploaded or imported code is not executed.
               </div>
@@ -358,7 +454,7 @@ export function CreateReadinessPrDialog({ report, files, githubAppConfig, github
                       </a>
                     </Button>
                   )}
-                  <Button type="button" onClick={submit} disabled={isSubmitting} className="bg-gradient-primary border-0 shadow-glow hover:opacity-90">
+                  <Button type="button" onClick={submit} disabled={isSubmitting || (connection.canCreatePullRequest && !reviewPreview)} className="bg-gradient-primary border-0 shadow-glow hover:opacity-90">
                     {isSubmitting ? 'Creating...' : 'Create Pull Request'}
                   </Button>
                 </div>
@@ -390,6 +486,7 @@ function friendlyPrError(error: unknown) {
   if (lower.includes('installation') && lower.includes('not found')) return 'GitHub App is not installed for this repository. Reconnect GitHub or configure the ShipSeal GitHub App for the selected repo.';
   if (lower.includes('repository') && lower.includes('not found')) return 'GitHub could not find the selected repository or branch. Reconnect GitHub and select the repository again.';
   if (lower.includes('permission') || error.status === 403) return 'GitHub App does not have permission to write to this repository. Check repository access and Contents/Pull requests permissions.';
+  if (error.status === 409 || lower.includes('changed after review') || lower.includes('reviewed file plan changed')) return message;
   if (lower.includes('branch')) return 'ShipSeal could not create the readiness branch. Retry, or delete an old ShipSeal readiness branch if one already exists.';
   if (lower.includes('file') || lower.includes('contents')) return 'ShipSeal could not write one of the generated readiness files. Check repository permissions and retry.';
   if (lower.includes('pull request') || lower.includes('similar pr')) return 'GitHub could not open the Pull Request. A similar PR may already exist for this branch.';

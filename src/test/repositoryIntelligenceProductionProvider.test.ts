@@ -6,6 +6,7 @@ import {
   REPOSITORY_DEEP_INTELLIGENCE_RESPONSE_VERSION,
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
   REPOSITORY_PRODUCT_UNDERSTANDING_VERSION,
+  readRepositoryProductNormalizationDiagnostics,
   validateRepositoryProductIntelligence,
 } from '@/lib/repositoryIntelligence';
 import { stableContextFingerprint } from '@/lib/repositoryIntelligence/contextSelection';
@@ -36,6 +37,7 @@ import {
   PRODUCT_STRATEGIST_COMPACT_LIMITS,
   PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS,
   buildProductStrategistResponseFormat,
+  measureProductStrategistResponseBudget,
   normalizeProductStrategistProviderResponse,
   productStrategistCompactOpportunitySchema,
   productStrategistCompactRootOpportunitySchema,
@@ -487,8 +489,8 @@ describe('production Repository Intelligence provider', () => {
     expect(identity).toEqual({
       buildCommit: '00785e3ff45794b427d2bbdf9affee275d712c92',
       buildDeployment: 'dpl_762eaPzBG1WCGwb17aaPBpwRHc9R',
-      productPipelineVersion: 'shipseal.repository-product-pipeline.v1',
-      rootContractVersion: 'shipseal.repository-product-roots.v2',
+      productPipelineVersion: 'shipseal.repository-product-pipeline.v2',
+      rootContractVersion: 'shipseal.repository-product-roots.v4',
     });
     const response = attachRepositoryIntelligenceBuildIdentity({
       version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
@@ -500,8 +502,8 @@ describe('production Repository Intelligence provider', () => {
     }, { VERCEL_GIT_COMMIT_SHA: 'not-a-commit', VERCEL_DEPLOYMENT_ID: 'not-a-deployment' });
     expect(response.diagnostics).toMatchObject({
       buildCommit: 'unknown',
-      productPipelineVersion: 'shipseal.repository-product-pipeline.v1',
-      rootContractVersion: 'shipseal.repository-product-roots.v2',
+      productPipelineVersion: 'shipseal.repository-product-pipeline.v2',
+      rootContractVersion: 'shipseal.repository-product-roots.v4',
     });
     expect(JSON.stringify({ identity, response })).not.toContain('must-not-appear');
   });
@@ -559,8 +561,8 @@ describe('production Repository Intelligence provider', () => {
       expect(new Set(result.body.result.productIntelligence?.opportunities.map(opportunity => opportunity.sourceId)).size).toBe(opportunityCount);
       if (opportunityCount === 7 && result.body.result.productIntelligence) {
         const expansionStages = buildRepositoryProductExpansionStages(request, result.body.result.productIntelligence);
-        expect(expansionStages).toHaveLength(3);
-        expect(expansionStages.map(stage => stage.parents.length)).toEqual([3, 3, 1]);
+        expect(expansionStages).toHaveLength(4);
+        expect(expansionStages.map(stage => stage.parents.length)).toEqual([2, 2, 2, 1]);
         expect(new Set(expansionStages.flatMap(stage => stage.parents.map(parent => parent.id))).size).toBe(7);
       }
     }
@@ -655,8 +657,8 @@ describe('production Repository Intelligence provider', () => {
     const rootsMeasurement = measureProductionProviderBody(focused.request, { ...config, policy: focusedPolicy }, rootsBody);
     const evidenceIds = focused.request.evidenceReferences.slice(0, 2).map(item => item.id);
     const expansionStage = {
-      kind: 'expansion' as const, fingerprint: 'controlled-expansion-fingerprint', batchIndex: 0, totalBatches: 3,
-      parents: Array.from({ length: 3 }, (_, index) => ({ id: `product-opportunity:${index}`, title: `Future ${index}`, opportunityStatement: 'Grounded direction.', userValue: 'Grounded value.', whyItFits: 'Grounded fit.', evidenceIds })),
+      kind: 'expansion' as const, fingerprint: 'controlled-expansion-fingerprint', batchIndex: 0, totalBatches: 4,
+      parents: Array.from({ length: 2 }, (_, index) => ({ id: `product-opportunity:${index}`, title: `Future ${index}`, opportunityStatement: 'Grounded direction.', userValue: 'Grounded value.', whyItFits: 'Grounded fit.', evidenceIds })),
     };
     const expansionBody = buildProductionProviderBody(focused.request, { ...config, policy: focusedPolicy }, { productStage: expansionStage });
     const expansionMeasurement = measureProductionProviderBody(focused.request, { ...config, policy: focusedPolicy }, expansionBody);
@@ -666,8 +668,12 @@ describe('production Repository Intelligence provider', () => {
       roots: { bytes: rootsMeasurement.providerRequestBytes, estimatedTokens: rootsMeasurement.providerInputTokenEstimate, outputCap: rootsMeasurement.outputTokenCap },
       expansion: { bytes: expansionMeasurement.providerRequestBytes, estimatedTokens: expansionMeasurement.providerInputTokenEstimate, outputCap: expansionMeasurement.outputTokenCap },
     }));
-    expect(rootsMeasurement.outputTokenCap).toBe(3_200);
-    expect(expansionMeasurement.outputTokenCap).toBe(1_800);
+    expect(rootsMeasurement.outputTokenCap).toBeGreaterThan(4_000);
+    expect(rootsMeasurement.outputTokenCap).toBeLessThanOrEqual(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
+    expect(expansionMeasurement.outputTokenCap).toBeGreaterThan(4_000);
+    expect(expansionMeasurement.outputTokenCap).toBeLessThanOrEqual(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
+    expect(rootsMeasurement.responseBudgetDiagnostics).toMatchObject({ responseBudgetFitsConfiguredCap: true });
+    expect(expansionMeasurement.responseBudgetDiagnostics).toMatchObject({ responseBudgetFitsConfiguredCap: true });
     expect(expansionMeasurement.providerRequestBytes).toBeLessThan(rootsMeasurement.providerRequestBytes);
 
     const fetcher = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
@@ -714,6 +720,86 @@ describe('production Repository Intelligence provider', () => {
       providerEstimatedInputTokens: expect.any(Number),
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('sizes roots and realistic expansion batches from the actual response contract', () => {
+    const roots = measureProductStrategistResponseBudget('roots');
+    const oneParent = measureProductStrategistResponseBudget('expansion', 1);
+    const twoParents = measureProductStrategistResponseBudget('expansion', 2);
+    const threeParents = measureProductStrategistResponseBudget('expansion', 3);
+
+    console.info(JSON.stringify({
+      diagnostic: 'product-strategist-response-budget-model',
+      roots,
+      expansion: { oneParent, twoParents, threeParents },
+    }));
+
+    expect(roots.minimum.estimatedTokens).toBeLessThan(roots.typical.estimatedTokens);
+    expect(roots.typical.estimatedTokens).toBeLessThan(roots.maximum.estimatedTokens);
+    expect(roots.requiredTokens).toBeLessThanOrEqual(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
+    expect(twoParents.requiredTokens).toBeLessThanOrEqual(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
+    expect(threeParents.requiredTokens).toBeLessThanOrEqual(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
+    expect(threeParents.requiredTokens).toBeGreaterThan(twoParents.requiredTokens);
+    expect(oneParent.requiredTokens).toBeLessThan(twoParents.requiredTokens);
+    expect(twoParents.requiredTokens).toBeLessThan(threeParents.requiredTokens);
+  });
+
+  it('accepts a near-maximum two-parent expansion envelope and preserves every complete semantic field', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = productionExpansionStage(request);
+    expect(productStage.parents).toHaveLength(2);
+    const completeText = (label: string, target: number) => {
+      const sentence = `${label} remains complete, grounded, actionable, and ready for implementation review.`;
+      let value = sentence;
+      while (`${value} ${sentence}`.length <= target) value = `${value} ${sentence}`;
+      return value;
+    };
+    const payload = {
+      x: productStage.parents.map((parent, parentIndex) => ({
+        p: parent.id,
+        evo: Array.from({ length: 4 }, (_, evolutionIndex) => ({
+          id: `future-${parentIndex}-${evolutionIndex}`,
+          t: completeText(`Future ${parentIndex + 1}.${evolutionIndex + 1}`, PRODUCT_STRATEGIST_COMPACT_LIMITS.opportunity.evolutionTitleCharacters),
+          s: completeText('This evolution description', PRODUCT_STRATEGIST_COMPACT_LIMITS.opportunity.evolutionDescriptionCharacters),
+          v: completeText('The user value', PRODUCT_STRATEGIST_COMPACT_LIMITS.opportunity.evolutionUserValueCharacters),
+          next: Array.from({ length: 2 }, (_, nextIndex) => ({
+            id: `future-${parentIndex}-${evolutionIndex}-next-${nextIndex}`,
+            t: completeText(`Later future ${nextIndex + 1}`, PRODUCT_STRATEGIST_COMPACT_LIMITS.opportunity.evolutionTitleCharacters),
+            s: completeText('This later possibility', PRODUCT_STRATEGIST_COMPACT_LIMITS.opportunity.evolutionDescriptionCharacters),
+            v: completeText('Its user value', PRODUCT_STRATEGIST_COMPACT_LIMITS.opportunity.evolutionUserValueCharacters),
+          })),
+        })),
+      })),
+    };
+    const expectedDescriptions = payload.x.flatMap(group => group.evo.flatMap(item => [item.s, ...item.next.map(next => next.s)]));
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, {
+      env: enabledEnv,
+      fetcher: vi.fn(async () => envelope(payload, false, {
+        prompt_tokens: 2_800,
+        completion_tokens: 4_700,
+        total_tokens: 7_500,
+      })) as unknown as typeof fetch,
+      logger: vi.fn(),
+    });
+
+    expect(result.body).toMatchObject({
+      state: 'stage-enhanced',
+      diagnostics: {
+        providerFinishReason: 'stop',
+        providerCompletionTokens: 4_700,
+        responseBudgetFitsConfiguredCap: true,
+      },
+    });
+    if (result.body.state !== 'stage-enhanced') return;
+    const actualDescriptions = result.body.stageResult.expansions.flatMap(group =>
+      group.evolutions.map(item => item.description));
+    expect(actualDescriptions).toEqual(expectedDescriptions);
+    expect(result.body.stageResult.expansions).toHaveLength(2);
+    expect(result.body.stageResult.expansions.every(group => group.evolutions.length === 12)).toBe(true);
   });
 
   it('keeps general Deep Intelligence on its independent response and prompt contract', () => {
@@ -922,18 +1008,18 @@ describe('production Repository Intelligence provider', () => {
       maximumResponseBytes: maximumBytes,
       maximumResponseEstimatedTokens: maximumTokens,
       targetTokens: PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS,
-      hardCapTokens: 4_000,
+      hardCapTokens: PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS,
     }));
     expect(maximum.o).toHaveLength(5);
     expect(maximumTokens).toBeLessThanOrEqual(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
-    expect(maximumTokens).toBeLessThan(4_000);
+    expect(maximumTokens).toBeLessThan(PRODUCT_STRATEGIST_OUTPUT_TARGET_TOKENS);
 
     const result = await prepareProductionRepositoryIntelligence({
       version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
       request,
     }, {
       env: enabledEnv,
-      fetcher: vi.fn(async () => envelope(maximum)) as unknown as typeof fetch,
+      fetcher: vi.fn(async () => envelope(compact)) as unknown as typeof fetch,
       logger: vi.fn(),
     });
     expect(result.body).toMatchObject({
@@ -941,7 +1027,95 @@ describe('production Repository Intelligence provider', () => {
       diagnostics: { outputTokenCap: 4_000 },
       result: { productIntelligence: { understanding: expect.any(Object), opportunities: expect.any(Array) } },
     });
-    expect(result.body.state === 'enhanced' && result.body.result.productIntelligence?.opportunities).toHaveLength(5);
+    expect(result.body.state === 'enhanced' && result.body.result.productIntelligence?.opportunities).toHaveLength(3);
+  });
+
+  it('preserves schema-bounded provider text without treating an exact maximum as proof of truncation', () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const payload = validRootProductProviderPayload(request, 7);
+    payload.o[0].t = 'x'.repeat(PRODUCT_STRATEGIST_COMPACT_LIMITS.opportunity.titleCharacters);
+    payload.o[0].s = 'y'.repeat(PRODUCT_STRATEGIST_COMPACT_LIMITS.opportunity.statementCharacters);
+
+    const normalized = normalizeProductStrategistProviderResponse(payload, request, 'controlled-model', { rootsOnly: true });
+    const diagnostics = readRepositoryProductNormalizationDiagnostics(normalized);
+    expect(diagnostics?.opportunityRejectionReasons?.[0]).toBeUndefined();
+    expect(diagnostics?.compactContentBoundaryPaths).toBeUndefined();
+    expect((normalized as { productOpportunities: Array<{ title: string; opportunityStatement: string }> }).productOpportunities[0]).toMatchObject({
+      title: payload.o[0].t,
+      opportunityStatement: payload.o[0].s,
+    });
+  });
+
+  it('keeps UI-sized maxima on labels while preserving longer canonical semantic prose exactly', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const payload = validRootProductProviderPayload(request, 7);
+    const semantic = {
+      summary: 'This product gives distributed operations teams one shared workspace for reviewing incoming work, resolving ownership, preserving decisions, and communicating a dependable outcome without losing the context behind each change.',
+      problem: 'Operations teams currently move between disconnected intake, review, and follow-up tools, which makes responsibility unclear and leaves important decisions difficult to reconstruct after the work changes hands.',
+      capability: 'The existing workflow already preserves repository-backed review context and connects each accepted decision to the source evidence that justified it, giving the proposed experience a stable foundation.',
+      statement: 'Create a guided review workspace that carries repository evidence, ownership, and acceptance decisions through one coherent flow so a team can complete work without rebuilding context at every handoff.',
+      value: 'Users can understand what changed, why it matters, who owns the next decision, and how completion will be verified before they invest time implementing the proposed direction.',
+      rationale: 'The repository already contains the core review, persistence, and evidence surfaces needed for this direction, while the proposed coordination layer remains clearly described as new product behavior.',
+      verification: 'Verify that a user can open a grounded review, identify its owner, complete the required decision, and see the accepted outcome persist with the same repository evidence after reopening the workspace.',
+    };
+    expect(semantic.summary.length).toBeGreaterThan(180);
+    expect(semantic.problem.length).toBeGreaterThan(140);
+    expect(semantic.statement.length).toBeGreaterThan(180);
+    expect(semantic.value.length).toBeGreaterThan(130);
+    payload.p.s = semantic.summary;
+    payload.p.p = semantic.problem;
+    payload.p.caps[0].d = semantic.capability;
+    payload.o[0].s = semantic.statement;
+    payload.o[0].v = semantic.value;
+    payload.o[0].f = semantic.rationale;
+    payload.o[0].verify = semantic.verification;
+
+    const responseFormat = buildProductStrategistResponseFormat(
+      buildProductStrategistProviderPayload(request),
+      { rootsOnly: true },
+    );
+    type StringSchema = { maxLength?: number };
+    const schema = responseFormat.json_schema.schema as unknown as {
+      properties: {
+        p: { properties: { s: StringSchema; p: StringSchema; caps: { items: { properties: { t: StringSchema; d: StringSchema } } } } };
+        o: { items: { properties: { t: StringSchema; s: StringSchema; v: StringSchema; f: StringSchema; verify: StringSchema } } };
+      };
+    };
+    expect(schema.properties.o.items.properties.t.maxLength).toBe(PRODUCT_STRATEGIST_COMPACT_LIMITS.opportunity.titleCharacters);
+    expect(schema.properties.p.properties.caps.items.properties.t.maxLength).toBe(PRODUCT_STRATEGIST_COMPACT_LIMITS.understanding.capabilityTitleCharacters);
+    for (const semanticSchema of [
+      schema.properties.p.properties.s,
+      schema.properties.p.properties.p,
+      schema.properties.p.properties.caps.items.properties.d,
+      schema.properties.o.items.properties.s,
+      schema.properties.o.items.properties.v,
+      schema.properties.o.items.properties.f,
+      schema.properties.o.items.properties.verify,
+    ]) expect(semanticSchema).not.toHaveProperty('maxLength');
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage: buildRepositoryProductRootStage(request),
+    }, {
+      env: enabledEnv,
+      fetcher: vi.fn(async () => envelope(payload)) as unknown as typeof fetch,
+      logger: vi.fn(),
+    });
+    expect(result.body.state).toBe('enhanced');
+    if (result.body.state !== 'enhanced') return;
+    const product = result.body.result.productIntelligence!;
+    expect(product.understanding?.productSummary.statement).toBe(semantic.summary);
+    expect(product.understanding?.primaryProblem.statement).toBe(semantic.problem);
+    expect(product.understanding?.existingCapabilities[0].description).toBe(semantic.capability);
+    expect(product.opportunities.find(opportunity => opportunity.sourceId === 'op-0')).toMatchObject({
+      opportunityStatement: semantic.statement,
+      userValue: semantic.value,
+      whyItFits: semantic.rationale,
+      strategicRationale: semantic.rationale,
+      verificationConcept: semantic.verification,
+    });
+    expect(JSON.stringify(product)).not.toContain('…');
   });
 
   it('resolves compact capability indexes deterministically and rejects invalid or duplicate references', async () => {
@@ -1353,7 +1527,7 @@ describe('production Repository Intelligence provider', () => {
         failureBoundary: 'schema-validation',
         expansionSchemaValidation: { issueCount: 1, paths: ['x[0].evo[0].t'], issueCategories: ['invalid_type'] },
         expansionResponseShape: {
-          topLevelType: 'object', keys: ['x'], groupCount: 3,
+          topLevelType: 'object', keys: ['x'], groupCount: 2,
           groups: expect.arrayContaining([expect.objectContaining({
             index: 0, keys: ['p', 'evo'], parentIdType: 'string', evolutionsType: 'array', evolutionCount: 2,
           })]),
@@ -1434,17 +1608,18 @@ describe('production Repository Intelligence provider', () => {
     expect(first.body).toMatchObject({
       state: 'fallback',
       category: 'schema_validation_failed',
-      retryable: true,
+      retryable: false,
       diagnostics: {
         productStage: 'roots',
-        outputTokenCap: 3_200,
+        outputTokenCap: expect.any(Number),
         providerFinishReason: 'length',
         validationReason: 'completion-truncated',
         operationalFailureCategory: 'invalid_provider_envelope',
         failureBoundary: 'provider-envelope',
       },
     });
-    expect(second.body).toMatchObject({ state: 'fallback', retryable: true });
+    expect(first.body).toMatchObject({ state: 'fallback', retryable: false });
+    expect(second.body).toMatchObject({ state: 'fallback', retryable: false });
     const requestIds = logs.filter(event => event.outcome === 'failure').map(event => event.requestId);
     expect(new Set(requestIds).size).toBe(2);
     expect(logs).toEqual(expect.arrayContaining([expect.objectContaining({

@@ -157,7 +157,11 @@ describe('V12 deterministic Executable Future Plan', () => {
       expect(value).toContain(plan.primaryFuture.title);
       plan.implementationStages.forEach(stage => expect(value).toContain(stage.title));
       plan.requiredCapabilities.forEach(capability => expect(value).toContain(capability.title));
+      expect(value).not.toMatch(/\bevidence:[^\s,]+/i);
+      expect(value).not.toContain('[object Object]');
+      expect(value).not.toContain('undefined');
     }
+    expect([codex, claude, markdown].some(value => value.includes('Repository path:'))).toBe(true);
     expect(codex).toContain('Use repository-native inspection and editing tools.');
     expect(claude).toContain('Read repository guidance files before editing');
     expect(markdown).toContain('does not execute an agent, mutate the repository');
@@ -166,6 +170,69 @@ describe('V12 deterministic Executable Future Plan', () => {
     expect(draft).toEqual(draftBefore);
     expect(productIntelligence).toEqual(intelligenceBefore);
     fetchSpy.mockRestore();
+  });
+
+  it('preserves canonical semantic prose beyond the former compact boundaries through plan and agent exports', () => {
+    const { graph, draft, productIntelligence } = fixture();
+    const primarySourceId = graph.candidates.find(candidate => candidate.id === draft.primaryGoal.candidateId)?.sourceId;
+    const statement = 'Create a repository-grounded coordination workspace that preserves ownership, rationale, implementation boundaries, and acceptance evidence through every handoff so a developer can begin safely without reconstructing the product decision.';
+    const userValue = 'Developers receive a complete and reviewable route from the selected product direction to repository changes, explicit constraints, and verification outcomes while retaining the context needed to stop at human-review boundaries.';
+    const rationale = 'The current repository already exposes the relevant workflow and persistence seams, making this a grounded extension while keeping the proposed coordination responsibility distinct from existing files and behavior.';
+    const capabilityRationale = 'A durable decision record must connect each accepted choice to repository evidence, ownership, implementation scope, and the verification result that closes the work.';
+    const verification = 'Verify that the same accepted decision, owner, repository scope, and evidence-backed outcome remain available after the workspace is reopened and that no proposed responsibility is presented as an existing file.';
+    expect(statement.length).toBeGreaterThan(180);
+    expect(userValue.length).toBeGreaterThan(130);
+    const semanticIntelligence = {
+      ...productIntelligence,
+      fingerprint: 'product-intelligence:semantic-completeness-v4',
+      opportunities: productIntelligence.opportunities.map(opportunity => opportunity.id === primarySourceId
+        ? {
+            ...opportunity,
+            opportunityStatement: statement,
+            userValue,
+            whyItFits: rationale,
+            strategicRationale: rationale,
+            verificationConcept: verification,
+            requiredNewCapabilities: opportunity.requiredNewCapabilities.map((capability, index) => index === 0
+              ? { ...capability, rationale: capabilityRationale }
+              : capability),
+          }
+        : opportunity),
+    };
+    const semanticGraph = buildRepositoryFuturePathwaysGraph(
+      futuresQaReport,
+      buildRepositoryUniverseModel(futuresQaReport),
+      semanticIntelligence,
+    );
+    const semanticPrimary = semanticGraph.nodes.find(node => node.kind === 'future-goal'
+      && semanticGraph.candidates.find(candidate => candidate.id === node.candidateId)?.sourceId === primarySourceId);
+    const semanticDraftResult = synthesizeRepositoryFutureDraft(semanticGraph, {
+      sourceGraphFingerprint: semanticGraph.fingerprint,
+      primaryGoalIds: [semanticPrimary!.id],
+      supportingGoalIds: [],
+    });
+    expect(semanticDraftResult.ok).toBe(true);
+    if (!semanticDraftResult.ok) return;
+    const plan = buildExecutableFuturePlan({ report: futuresQaReport, graph: semanticGraph, draft: semanticDraftResult.draft, productIntelligence: semanticIntelligence });
+    const internalPlan = JSON.stringify(plan);
+    const artifacts = [
+      renderCodexFuturePlanPrompt(plan),
+      renderClaudeCodeFuturePlanPrompt(plan),
+      renderExecutableFuturePlanMarkdown(plan),
+    ];
+    for (const value of [internalPlan, ...artifacts]) {
+      expect(value).toContain(statement);
+      expect(value).toContain(userValue);
+      expect(value).toContain(rationale);
+      expect(value).toContain(verification);
+    }
+    for (const artifact of artifacts) {
+      expect(artifact).not.toMatch(/\bevidence:[^\s,]+/i);
+      expect(artifact).not.toContain('[object Object]');
+      expect(artifact).not.toContain('undefined');
+    }
+    expect(internalPlan).toContain(capabilityRationale);
+    expect(artifacts.every(artifact => artifact.includes(capabilityRationale))).toBe(true);
   });
 
   it('recomposes from the cached graph for repeated Primary and Support choices without any provider request', () => {

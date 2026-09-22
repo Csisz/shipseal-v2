@@ -346,6 +346,15 @@ export async function prepareProductionRepositoryIntelligence(
         ...(event.providerReasoningTokens === undefined ? {} : { providerReasoningTokens: event.providerReasoningTokens }),
         ...(event.providerTotalTokens === undefined ? {} : { providerTotalTokens: event.providerTotalTokens }),
         ...(event.providerModelId === undefined ? {} : { providerModelId: event.providerModelId }),
+        ...(event.outputBudgetPolicyVersion === undefined ? {} : { outputBudgetPolicyVersion: event.outputBudgetPolicyVersion }),
+        ...(event.responseBudgetMinimumBytes === undefined ? {} : { responseBudgetMinimumBytes: event.responseBudgetMinimumBytes }),
+        ...(event.responseBudgetMinimumTokens === undefined ? {} : { responseBudgetMinimumTokens: event.responseBudgetMinimumTokens }),
+        ...(event.responseBudgetTypicalBytes === undefined ? {} : { responseBudgetTypicalBytes: event.responseBudgetTypicalBytes }),
+        ...(event.responseBudgetTypicalTokens === undefined ? {} : { responseBudgetTypicalTokens: event.responseBudgetTypicalTokens }),
+        ...(event.responseBudgetMaximumBytes === undefined ? {} : { responseBudgetMaximumBytes: event.responseBudgetMaximumBytes }),
+        ...(event.responseBudgetMaximumTokens === undefined ? {} : { responseBudgetMaximumTokens: event.responseBudgetMaximumTokens }),
+        ...(event.responseBudgetRequiredTokens === undefined ? {} : { responseBudgetRequiredTokens: event.responseBudgetRequiredTokens }),
+        ...(event.responseBudgetFitsConfiguredCap === undefined ? {} : { responseBudgetFitsConfiguredCap: event.responseBudgetFitsConfiguredCap }),
         ...(event.providerJsonParsingStage === undefined ? {} : { providerJsonParsingStage: event.providerJsonParsingStage }),
         ...(event.providerHttpStatusCategory === undefined ? {} : { providerHttpStatusCategory: event.providerHttpStatusCategory }),
         ...(event.operationalFailureCategory === undefined ? {} : { operationalFailureCategory: event.operationalFailureCategory }),
@@ -442,6 +451,7 @@ export async function prepareProductionRepositoryIntelligence(
     providerRequestBytes: providerMeasurement.providerRequestBytes,
     providerEstimatedInputTokens: providerMeasurement.providerInputTokenEstimate,
     outputTokenCap: providerMeasurement.outputTokenCap,
+    ...providerMeasurement.responseBudgetDiagnostics,
     selectedFileCount: providerMeasurement.selectedFileCount,
     ...(productStage ? { productStage: productStage.kind, stageFingerprint: productStage.fingerprint } : {}),
     ...(productStrategistExecution ? {
@@ -578,14 +588,22 @@ export async function prepareProductionRepositoryIntelligence(
   if (execution.status === 'timeout') return completeAuthorizedStage(fallback(200, 'request_timeout', true, diagnostics));
   if (execution.status === 'cancelled') return completeAuthorizedStage(fallback(200, 'request_cancelled', true, diagnostics));
   const category = mapExecutionError(execution.error?.code);
-  return completeAuthorizedStage(fallback(200, category, execution.error?.retryable === true, diagnostics));
+  const completionTruncated = providerValidationReason === 'completion-truncated';
+  return completeAuthorizedStage(fallback(
+    200,
+    category,
+    execution.error?.retryable === true && !completionTruncated,
+    diagnostics,
+  ));
 }
 
 export function resolveProductionExecutionPolicy(
   request: RepositoryDeepIntelligenceRequest,
   configured: ProductionProviderPolicy,
 ): ProductionProviderPolicy {
-  if (request.executionProfile !== 'product-strategist') return configured;
+  if (request.executionProfile !== 'product-strategist') {
+    return { ...configured, maximumOutputTokens: Math.min(configured.maximumOutputTokens, 4_000) };
+  }
   return {
     ...configured,
     maximumInputTokens: Math.min(configured.maximumInputTokens, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumInputTokens),

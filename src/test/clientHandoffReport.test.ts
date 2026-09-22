@@ -77,6 +77,34 @@ describe('ShipSeal client handoff report generator', () => {
     expect(files.clientHandoffReport).toContain('not a complete client handoff audit');
   });
 
+  it('reports bounded coverage and separates Repository Health from Delivery Pack readiness', () => {
+    const report = buildSampleReport();
+    report.score = 100;
+    report.scanSummary = {
+      ...report.scanSummary,
+      scanMode: 'bounded', limited: false, totalFilesFound: 357, discoveredFiles: 357,
+      filesAnalyzed: 160, analyzedTextFiles: 160, filesIgnored: 197,
+      boundedReasons: ['selected-file-budget'],
+    };
+    report.scanEvidence = {
+      ...report.scanEvidence,
+      scanMode: 'bounded', discoveredFileCount: 357, analyzedFileCount: 160,
+      ignoredFileCount: 197, selectedTextFileCount: 160, budgetExcludedFileCount: 175,
+    };
+    report.repositoryHealth = {
+      ...report.repositoryHealth,
+      overall: { score: 84, status: 'Workable with optimization', confidence: 'High' },
+    };
+    const files = generateClientHandoffFiles(intake(), buildScoreJson(report));
+
+    expect(files.clientHandoffReport).toContain('Scan coverage: Bounded analysis');
+    expect(files.clientHandoffReport).toContain('160 of 357 files analyzed; 197 excluded');
+    expect(files.clientHandoffReport).toContain('Repository Health: 84/100');
+    expect(files.clientHandoffReport).toContain('Delivery Pack readiness: 100/100');
+    expect(files.clientHandoffReport).toContain('## Top Repository Health improvements');
+    expect(files.clientHandoffReport).not.toContain('Scan coverage: Full scan');
+  });
+
   it('keeps all outputs non-empty and client-readable', () => {
     const files = generateClientHandoffFiles(intake(), buildScoreJson(buildSampleReport()));
 
@@ -90,7 +118,7 @@ describe('ShipSeal client handoff report generator', () => {
   it('handles missing scan data without inventing facts', () => {
     const files = generateClientHandoffFiles(intake());
 
-    expect(files.clientHandoffReport).toContain('Score: Not detected');
+    expect(files.clientHandoffReport).toContain('Delivery Pack readiness: Not available');
     expect(files.clientHandoffReport).toContain('Not detected');
   });
 

@@ -9,6 +9,37 @@ import { buildSampleReport } from '@/lib/readiness';
 import { buildSuggestedReadinessFixPack } from '@/lib/readinessFixPack';
 import { buildReadinessPrPlan } from '@/lib/readinessPr';
 
+const reviewedBaseSha = 'a'.repeat(40);
+const reviewedFingerprint = 'b'.repeat(64);
+
+function connectedPreview(payload: { owner: string; repo: string; baseBranch?: string; branchName: string; prTitle: string; files: Array<{ path: string; content: string }> }) {
+  const files = payload.files.map(file => ({
+    path: file.path,
+    action: 'create' as const,
+    beforeContent: '',
+    afterContent: file.content,
+    unifiedDiff: `--- /dev/null\n+++ b/${file.path}\n@@ -0,0 +1,1 @@\n+${file.content}`,
+    additions: 1,
+    deletions: 0,
+    contentFingerprint: 'c'.repeat(64),
+  }));
+  return {
+    ok: true,
+    mode: 'preview',
+    plan: {
+      repository: `${payload.owner}/${payload.repo}`,
+      baseBranch: payload.baseBranch || 'main',
+      baseSha: reviewedBaseSha,
+      branchName: payload.branchName,
+      prTitle: payload.prTitle,
+      files,
+      additions: files.length,
+      deletions: 0,
+      fingerprint: reviewedFingerprint,
+    },
+  };
+}
+
 describe('SuggestedReadinessFixPack', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -106,7 +137,7 @@ describe('SuggestedReadinessFixPack', () => {
     expect(within(dialog).getByText('https://github.com/Csisz/shipseal/pull/12')).toBeInTheDocument();
 
     const [, request] = fetchMock.mock.calls[0];
-    const payload = JSON.parse(request.body);
+    const payload = JSON.parse(String(request?.body));
     expect(payload).toMatchObject({
       owner: 'Csisz',
       repo: 'shipseal',
@@ -165,7 +196,7 @@ describe('SuggestedReadinessFixPack', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/create-readiness-pr', expect.objectContaining({ method: 'POST' })));
     const [, request] = fetchMock.mock.calls[0];
-    const payload = JSON.parse(request.body);
+    const payload = JSON.parse(String(request?.body));
     expect(payload).toMatchObject({
       owner: 'Csisz',
       repo: 'shipseal',
@@ -240,16 +271,22 @@ describe('SuggestedReadinessFixPack', () => {
 
   it('creates a Readiness PR through the connected GitHub App without a pasted token', async () => {
     const report = buildSampleReport();
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body));
+      return {
         ok: true,
-        prUrl: 'https://github.com/Csisz/shipseal/pull/33',
-        branchName: 'shipseal/readiness-pack',
-        baseBranch: 'main',
-        fileCount: 8,
-      }),
+        status: 200,
+        json: async () => payload.mode === 'preview'
+          ? connectedPreview(payload)
+          : ({
+              ok: true,
+              mode: 'apply',
+              prUrl: 'https://github.com/Csisz/shipseal/pull/33',
+              branchName: 'shipseal/readiness-pack',
+              baseBranch: 'main',
+              fileCount: 8,
+            }),
+      };
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -276,8 +313,10 @@ describe('SuggestedReadinessFixPack', () => {
     expect(within(dialog).queryByText(/Connect GitHub before creating a Pull Request/i)).not.toBeInTheDocument();
     expect(within(dialog).getByText('Advanced: use a temporary token')).toBeInTheDocument();
 
-    fireEvent.click(within(dialog).getByRole('button', { name: /Create Pull Request/i }));
-    expect(within(dialog).getByText(/Confirm that ShipSeal will create a branch/i)).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: /Review changes/i }));
+    expect(await within(dialog).findByText('Reviewed files and exact content')).toBeInTheDocument();
+    expect(within(dialog).getByText(reviewedBaseSha)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Reviewed files and exact content' })).toBeEnabled();
 
     fireEvent.click(within(dialog).getByLabelText(/I understand ShipSeal will create a branch/i));
     fireEvent.click(within(dialog).getByRole('button', { name: /Create Pull Request/i }));
@@ -286,15 +325,23 @@ describe('SuggestedReadinessFixPack', () => {
     expect(await within(dialog).findByText(/Readiness PR created/i)).toBeInTheDocument();
     expect(within(dialog).getByText('https://github.com/Csisz/shipseal/pull/33')).toBeInTheDocument();
 
-    const [, request] = fetchMock.mock.calls[0];
-    const payload = JSON.parse(request.body);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const [, previewRequest] = fetchMock.mock.calls[0];
+    const previewPayload = JSON.parse(String(previewRequest?.body));
+    expect(previewPayload).toMatchObject({ mode: 'preview', confirmed: false });
+    const [, request] = fetchMock.mock.calls[1];
+    const payload = JSON.parse(String(request?.body));
     expect(payload).toMatchObject({
+      mode: 'apply',
+      confirmed: true,
       installationId: '123',
       owner: 'Csisz',
       repo: 'shipseal',
       baseBranch: 'main',
       branchName: 'shipseal/readiness-pack',
       prTitle: 'Add ShipSeal readiness pack',
+      expectedBaseSha: reviewedBaseSha,
+      reviewFingerprint: reviewedFingerprint,
     });
     expect(payload).not.toHaveProperty('githubToken');
     expect(payload.files.map((file: { path: string }) => file.path)).toEqual(buildReadinessPrPlan().files.map(file => file.path));
@@ -307,16 +354,15 @@ describe('SuggestedReadinessFixPack', () => {
     const report = buildSampleReport();
     const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
     const agentPackOutputCount = resolveDeliveryPackFocus(['agent-readiness'], { folderAgentPaths }).generatedPaths.length;
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      json: async () => ({
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body));
+      return {
         ok: true,
-        prUrl: 'https://github.com/Csisz/shipseal/pull/34',
-        branchName: 'shipseal/readiness-pack',
-        baseBranch: 'main',
-        fileCount: 3,
-      }),
+        status: 200,
+        json: async () => payload.mode === 'preview'
+          ? connectedPreview(payload)
+          : ({ ok: true, mode: 'apply', prUrl: 'https://github.com/Csisz/shipseal/pull/34', branchName: 'shipseal/readiness-pack', baseBranch: 'main', fileCount: 3 }),
+      };
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -342,16 +388,18 @@ describe('SuggestedReadinessFixPack', () => {
     expect(within(dialog).getByText(`${agentPackOutputCount} files`)).toBeInTheDocument();
     expect(within(dialog).getByText('PR safe subset')).toBeInTheDocument();
     expect(within(dialog).getByText('3 files')).toBeInTheDocument();
-    expect(within(dialog).getByText(/safe reviewed subset of repository-ready files/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/safe starter subset of ShipSeal-generated readiness files/i)).toBeInTheDocument();
     expect(within(dialog).queryByText('01-agent-instructions/CODEX_PROMPTS.md')).not.toBeInTheDocument();
     expect(within(dialog).queryByText('.github/workflows/ci.yml')).not.toBeInTheDocument();
 
+    fireEvent.click(within(dialog).getByRole('button', { name: /Review changes/i }));
+    expect(await within(dialog).findByText('Reviewed files and exact content')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByLabelText(/I understand ShipSeal will create a branch/i));
     fireEvent.click(within(dialog).getByRole('button', { name: /Create Pull Request/i }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/create-readiness-pr', expect.objectContaining({ method: 'POST' })));
-    const [, request] = fetchMock.mock.calls[0];
-    const payload = JSON.parse(request.body);
+    const [, request] = fetchMock.mock.calls[1];
+    const payload = JSON.parse(String(request?.body));
     const paths = payload.files.map((file: { path: string }) => file.path);
 
     expect(paths).toEqual(['AGENTS.md', 'CLAUDE.md', 'docs/CRITICAL_FILES_POLICY.md']);
@@ -365,12 +413,15 @@ describe('SuggestedReadinessFixPack', () => {
 
   it('shows friendly guidance when the connected GitHub App cannot write to the selected repo', async () => {
     const report = buildSampleReport();
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 403,
-      json: async () => ({
-        error: 'GitHub App does not have permission to write to this repository.',
-      }),
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      const payload = JSON.parse(String(init?.body));
+      return payload.mode === 'preview'
+        ? { ok: true, status: 200, json: async () => connectedPreview(payload) }
+        : {
+            ok: false,
+            status: 403,
+            json: async () => ({ error: 'GitHub App does not have permission to write to this repository.' }),
+          };
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -389,6 +440,8 @@ describe('SuggestedReadinessFixPack', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Create Readiness PR$/i }));
     const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: /Review changes/i }));
+    expect(await within(dialog).findByText('Reviewed files and exact content')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByLabelText(/I understand ShipSeal will create a branch/i));
     fireEvent.click(within(dialog).getByRole('button', { name: /Create Pull Request/i }));
 

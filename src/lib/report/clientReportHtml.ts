@@ -1,6 +1,7 @@
 ﻿import type { ClientReportHtmlInput, ClientReportSummary } from './types';
 import type { ReadinessReport } from '../types';
 import { displayReadinessLevel } from '../uiCopy';
+import { buildExportCoverageFacts, buildSharedExportFacts } from './exportFacts';
 
 const LEGAL_DISCLAIMER = 'ShipSeal does not provide legal advice. This report is a technical, product-side and preliminary readiness assessment. It is not a formal legal opinion, production security audit or compliance certification.';
 const HU_DISCLAIMER = 'A ShipSeal nem nyújt jogi tanácsadást. Ez a riport technikai, termékoldali és előzetes readiness értékelés.';
@@ -617,6 +618,7 @@ export function buildClientReportSummary(input: ClientReportHtmlInput): ClientRe
 function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
   const score = scoreSource(input.scoreJson);
   const repositoryHealth = repositoryHealthSource(input.report, score);
+  const facts = buildSharedExportFacts({ scoreJson: score, report: input.report, fallbackRepositoryName: input.intake.projectName });
   const intake = input.intake;
   const generatedAt = input.generatedAt ? new Date(input.generatedAt) : dateFromScore(input.report?.scannedAt || score.scanTimestamp) || new Date();
   const blockerCount = input.report ? input.report.blockers.length : arrayValue(score.criticalBlockers).length;
@@ -642,9 +644,9 @@ function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
     score: input.report ? `${input.report.score}/100` : typeof score.score === 'number' ? `${score.score}/100` : 'Not detected',
     status: input.report ? displayReadinessLevel(input.report.level) : displaySerializedReadinessLevel(score.status),
     goNoGo,
-    repositoryHealthScore: repositoryHealthScore(repositoryHealth),
-    repositoryHealthStatus: repositoryHealthStatus(repositoryHealth),
-    repositoryHealthConfidence: repositoryHealthConfidence(repositoryHealth),
+    repositoryHealthScore: facts.repositoryHealth.score === null ? 'Unavailable' : `${facts.repositoryHealth.score}/100`,
+    repositoryHealthStatus: facts.repositoryHealth.status,
+    repositoryHealthConfidence: facts.repositoryHealth.confidence,
     repositoryHealthSummary: repositoryHealthSummary(repositoryHealth),
     contextWasteRisk: contextWasteRisk(repositoryHealth),
     contextWasteExplanation: contextWasteExplanation(repositoryHealth),
@@ -664,9 +666,11 @@ function buildSummary(input: ClientReportHtmlInput): ClientReportSummary {
     packageChecklistTitle: checklistContent.title,
     packageChecklistItems: checklistContent.items,
     intakeNote: intakeCompletenessNote(input.intake),
-    scanSummary: input.report ? scanSummaryText(input.report.scanSummary) : scanSummaryText(score.scanSummary),
+    scanSummary: facts.coverage.summary,
     scanEvidenceSummary: input.report ? scanEvidenceText(input.report.scanEvidence) : scanEvidenceText(score.scanEvidence),
-    scanLimited: input.report ? isLimitedScan(input.report.scanSummary) : isLimitedScan(score.scanSummary),
+    scanMode: facts.coverage.mode,
+    coverageLabel: facts.coverage.label,
+    scanLimited: facts.coverage.mode === 'limited-fallback',
     scanWarning: input.report ? limitedScanWarning(input.report.scanSummary) : limitedScanWarning(score.scanSummary),
     strengths: strengthsFromScore(score, repositoryHealth),
     risks: risksFromScore(score, input.intake, repositoryHealth),
@@ -1112,6 +1116,9 @@ function risksFromScore(score: Record<string, unknown>, intake: ClientReportHtml
   if (isLimitedScan(score.scanSummary)) {
     risks.push('Limited scan warning: ShipSeal could not fully parse the repository ZIP, so this is not a complete client handoff audit.');
   }
+  if (buildExportCoverageFacts(score.scanSummary, score.scanEvidence).mode === 'bounded') {
+    risks.push('Bounded analysis: repository-wide absence claims remain scoped to analyzed evidence.');
+  }
 
   if (intake.usedInEU && intake.generatesUserFacingContent) {
     risks.push('EU use with user-facing AI output: transparency notice review is recommended.');
@@ -1177,20 +1184,6 @@ function mcpSummary(score: Record<string, unknown>) {
   return `MCP readiness status: ${displayStatus}. MCP readiness is a separate governance dimension and does not mean production-ready status. Review MCP allowlist, server recommendations, security policy, and human approval before enabling high-risk tools.`;
 }
 
-function scanSummaryText(scanSummaryValue: unknown) {
-  const scan = asRecord(scanSummaryValue);
-  const filesAnalyzed = typeof scan.filesAnalyzed === 'number' ? scan.filesAnalyzed : undefined;
-  const totalFiles = typeof scan.totalFilesFound === 'number' ? scan.totalFilesFound : undefined;
-  const warnings = arrayValue(scan.warnings).length;
-  const scanMode = isLimitedScan(scanSummaryValue) ? 'Limited scan' : 'Full scan';
-
-  if (totalFiles || filesAnalyzed) {
-    return `${scanMode}: ${filesAnalyzed ?? 'unknown'} files analyzed out of ${totalFiles ?? 'unknown'} discovered files. Warnings: ${warnings}.`;
-  }
-
-  return 'Scan summary was not provided.';
-}
-
 function scanEvidenceText(scanEvidenceValue: unknown) {
   const evidence = asRecord(scanEvidenceValue);
   const source = stringValue(evidence.sourceType) || 'unknown source';
@@ -1203,8 +1196,7 @@ function scanEvidenceText(scanEvidenceValue: unknown) {
 }
 
 function isLimitedScan(scanSummaryValue: unknown) {
-  const scan = asRecord(scanSummaryValue);
-  return scan.limited === true || stringValue(scan.scanMode) === 'limited-fallback';
+  return buildExportCoverageFacts(scanSummaryValue).mode === 'limited-fallback';
 }
 
 function limitedScanWarning(scanSummaryValue: unknown) {
