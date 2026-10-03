@@ -5,7 +5,14 @@ import type {
 
 export const FUTURES_CANVAS_WORLD = { width: 2020, height: 1320 } as const;
 export type RepositoryFuturesCanvasOrientation = 'horizontal' | 'vertical';
+export type RepositoryFuturesProjectionProfile = 'canonical' | 'desktop' | 'tablet' | 'mobile';
 export type RepositoryFuturesPresentationStream = 'strategic' | 'evidence' | 'product' | 'foundation' | 'exploratory' | 'general';
+
+export function repositoryFuturesProjectionProfile(viewport: { width: number }): RepositoryFuturesProjectionProfile {
+  if (viewport.width < 768) return 'mobile';
+  if (viewport.width < 1024) return 'tablet';
+  return 'desktop';
+}
 
 export type RepositoryFuturesCanvasNode = {
   id: string;
@@ -470,6 +477,7 @@ function layoutHorizontalBranches(
   nodes: RepositoryFuturesCanvasNode[],
   edges: RepositoryFuturesCanvasEdge[],
   mode: RepositoryFuturesLayoutMode,
+  projectionProfile: RepositoryFuturesProjectionProfile,
 ) {
   const childNodes = expansionChildrenBySource(nodes, edges);
   const goals = nodes.filter(node => node.kind === 'goal')
@@ -482,13 +490,30 @@ function layoutHorizontalBranches(
     const contentHeight = Math.max(repositoryFuturesNodeFootprint(goal, mode).height, deepestHeight + (rowCount - 1) * rowSpacing + 70);
     return { goal, children, rowCount, rowSpacing, contentHeight };
   });
-  let cursor = SPATIAL_LATTICE.horizontal.top;
-  metrics.forEach(metric => {
-    metric.goal.x = SPATIAL_LATTICE.horizontal.goal;
-    metric.goal.y = cursor + metric.contentHeight / 2;
+  let cursor: number = SPATIAL_LATTICE.horizontal.top;
+  const responsiveProjection = projectionProfile === 'canonical' ? undefined : {
+    maximumRows: projectionProfile === 'desktop' ? 4 : 3,
+    columnGap: projectionProfile === 'mobile' ? 230 : projectionProfile === 'tablet' ? 250 : 290,
+    rowGap: projectionProfile === 'mobile' ? 160 : projectionProfile === 'tablet' ? 170 : 178,
+    top: 168,
+  };
+  const responsiveColumnCount = responsiveProjection
+    ? Math.max(1, Math.ceil(metrics.length / responsiveProjection.maximumRows))
+    : 1;
+  const responsiveRowsPerColumn = Math.max(1, Math.ceil(metrics.length / responsiveColumnCount));
+  metrics.forEach((metric, index) => {
+    if (responsiveProjection) {
+      metric.goal.x = SPATIAL_LATTICE.horizontal.goal + Math.floor(index / responsiveRowsPerColumn) * responsiveProjection.columnGap;
+      metric.goal.y = responsiveProjection.top + (index % responsiveRowsPerColumn) * responsiveProjection.rowGap;
+      cursor = Math.max(cursor, metric.goal.y + repositoryFuturesNodeFootprint(metric.goal, mode).height / 2);
+    } else {
+      metric.goal.x = SPATIAL_LATTICE.horizontal.goal;
+      metric.goal.y = cursor + metric.contentHeight / 2;
+      cursor += metric.contentHeight + SPATIAL_LATTICE.horizontal.branchGap;
+    }
     setNodeLayoutBox(metric.goal, mode, { branchGoalId: metric.goal.id });
-    cursor += metric.contentHeight + SPATIAL_LATTICE.horizontal.branchGap;
   });
+  if (responsiveProjection) cursor += SPATIAL_LATTICE.horizontal.branchGap;
 
   const placed: RepositoryFuturesCanvasNode[] = [...goals];
   metrics.forEach(metric => {
@@ -497,8 +522,9 @@ function layoutHorizontalBranches(
       const row = Math.floor(index / 2);
       const centeredRow = row - (metric.rowCount - 1) / 2;
       child.x = child.depth === 3 || child.kind === 'artifact'
-        ? SPATIAL_LATTICE.horizontal.generationThree
-        : SPATIAL_LATTICE.horizontal.generationTwo + column * SPATIAL_LATTICE.horizontal.generationTwoColumnGap;
+        ? metric.goal.x + (SPATIAL_LATTICE.horizontal.generationThree - SPATIAL_LATTICE.horizontal.goal)
+        : metric.goal.x + (SPATIAL_LATTICE.horizontal.generationTwo - SPATIAL_LATTICE.horizontal.goal)
+          + column * SPATIAL_LATTICE.horizontal.generationTwoColumnGap;
       child.y = metric.goal.y + centeredRow * metric.rowSpacing + (metric.children.length > 1 ? column ? 18 : -18 : 0);
       setNodeLayoutBox(child, mode, { parentId: metric.goal.id, terminalColumn: child.depth === 3 ? 0 : undefined });
       placed.push(child);
@@ -615,10 +641,11 @@ function applyRepositoryFuturesSpatialLayout(
   edges: RepositoryFuturesCanvasEdge[],
   orientation: RepositoryFuturesCanvasOrientation,
   mode: RepositoryFuturesLayoutMode,
+  projectionProfile: RepositoryFuturesProjectionProfile,
 ) {
   const nodes = sourceNodes.map(node => ({ ...node, layoutBox: undefined }));
   const { goals, cursor } = orientation === 'horizontal'
-    ? layoutHorizontalBranches(nodes, edges, mode)
+    ? layoutHorizontalBranches(nodes, edges, mode, projectionProfile)
     : layoutVerticalBranches(nodes, edges, mode);
   const repository = nodes.find(node => node.kind === 'repository');
   if (repository) {
@@ -626,7 +653,7 @@ function applyRepositoryFuturesSpatialLayout(
       ? SPATIAL_LATTICE.horizontal.repository
       : goals.length ? (goals[0].x + goals[goals.length - 1].x) / 2 : VERTICAL_WORLD.width / 2;
     repository.y = orientation === 'horizontal'
-      ? goals.length ? (goals[0].y + goals[goals.length - 1].y) / 2 : 520
+      ? goals.length ? (Math.min(...goals.map(goal => goal.y)) + Math.max(...goals.map(goal => goal.y))) / 2 : 520
       : SPATIAL_LATTICE.vertical.repository;
     setNodeLayoutBox(repository, mode);
   }
@@ -663,6 +690,7 @@ export function buildRepositoryFuturesCanvasModel(
   overlay: Pick<RepositoryFutureStageOverlay, 'candidates' | 'projections' | 'dependencies' | 'productIntelligenceState'>
     & Partial<Pick<RepositoryFutureStageOverlay, 'mode'>>,
   orientation: RepositoryFuturesCanvasOrientation = 'horizontal',
+  projectionProfile: RepositoryFuturesProjectionProfile = 'canonical',
 ): RepositoryFuturesCanvasModel {
   const layoutMode = overlay.mode || 'quick';
   const repositoryId = `repository:${repositoryName}`;
@@ -882,7 +910,7 @@ export function buildRepositoryFuturesCanvasModel(
     });
   }
 
-  const spatial = applyRepositoryFuturesSpatialLayout(nodes, edges, orientation, layoutMode);
+  const spatial = applyRepositoryFuturesSpatialLayout(nodes, edges, orientation, layoutMode, projectionProfile);
   const orientedNodes = spatial.nodes.map(node => orientation === 'vertical' && node.canonicalPosition ? {
     ...node,
     canonicalPosition: {

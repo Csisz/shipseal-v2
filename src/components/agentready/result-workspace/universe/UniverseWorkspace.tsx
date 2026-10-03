@@ -2175,8 +2175,8 @@ function RepositoryAtlasVisualization({
         <SheetContent
           side="bottom"
           className={isMobile
-            ? 'inset-0 h-dvh max-h-none w-full max-w-none overflow-hidden rounded-none border-0 p-0 pb-[env(safe-area-inset-bottom)]'
-            : 'inset-x-[2vw] bottom-[2dvh] mx-auto h-[96dvh] max-h-[96dvh] w-[96vw] max-w-[1440px] overflow-hidden rounded-[1.75rem] border border-primary/20 p-0 shadow-2xl'}
+            ? 'inset-0 h-dvh max-h-none min-w-0 w-full max-w-full overflow-hidden rounded-none border-0 p-0 pb-[env(safe-area-inset-bottom)]'
+            : 'inset-x-[2vw] bottom-[2dvh] mx-auto h-[96dvh] max-h-[96dvh] min-w-0 w-[96vw] max-w-[1440px] overflow-hidden rounded-[1.75rem] border border-primary/20 p-0 shadow-2xl'}
           data-testid="optimization-artifact-review-sheet"
           data-review-presentation={isMobile ? 'mobile-fullscreen' : 'desktop-workspace'}
         >
@@ -2573,8 +2573,8 @@ function OptimizationPlanReview({
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-col overflow-hidden bg-[hsl(var(--universe-stage-bg))]" aria-labelledby="optimization-plan-heading">
-      <header className="flex-none border-b border-border/50 bg-background/80 px-4 py-3 pr-12 backdrop-blur-xl sm:px-6">
+    <section className="flex h-full min-h-0 min-w-0 w-full max-w-full flex-col overflow-hidden bg-[hsl(var(--universe-stage-bg))]" aria-labelledby="optimization-plan-heading">
+      <header className="min-w-0 max-w-full flex-none border-b border-border/50 bg-background/80 px-4 py-3 pr-12 backdrop-blur-xl sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] font-mono uppercase tracking-[0.16em] text-muted-foreground">Prepared plan review</div>
@@ -2635,7 +2635,7 @@ function OptimizationPlanReview({
           No selected proposals are active. Re-include a proposed improvement to restore its deterministic plan item.
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto xl:grid xl:grid-cols-[minmax(20rem,0.38fr)_minmax(0,0.62fr)] xl:overflow-hidden" data-review-layout={mobile ? 'single-pane' : 'master-detail'}>
+        <div className="min-h-0 min-w-0 max-w-full flex-1 overflow-y-auto xl:grid xl:grid-cols-[minmax(20rem,0.38fr)_minmax(0,0.62fr)] xl:overflow-hidden" data-review-layout={mobile ? 'single-pane' : 'master-detail'}>
           <section
             className={`${mobile && mobileReviewView === 'detail' ? 'hidden' : 'block'} border-border/50 bg-background/30 p-3 sm:p-4 xl:min-h-0 xl:overflow-y-auto xl:border-r`}
             aria-label="Optimization Plan artifacts"
@@ -2793,8 +2793,8 @@ function OptimizationApplyFlow({
   };
 
   return (
-    <div className="mt-4 grid gap-3 lg:grid-cols-2" aria-label="Optimization Apply Flow">
-      <section className="rounded-2xl border border-primary/20 bg-background/20 p-4">
+    <div className="mt-4 grid min-w-0 max-w-full gap-3 lg:grid-cols-2" aria-label="Optimization Apply Flow">
+      <section className="min-w-0 max-w-full rounded-2xl border border-primary/20 bg-background/20 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">Export package</div>
@@ -2824,7 +2824,7 @@ function OptimizationApplyFlow({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-primary/20 bg-background/20 p-4">
+      <section className="min-w-0 max-w-full rounded-2xl border border-primary/20 bg-background/20 p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="text-xs font-mono uppercase tracking-wider text-muted-foreground">GitHub</div>
@@ -2850,7 +2850,7 @@ function OptimizationApplyFlow({
         </div>
 
         {prPreviewOpen && (
-          <div className="mt-4 space-y-3 rounded-xl border border-border/55 bg-secondary/10 p-3" aria-label="GitHub PR confirmation preview">
+          <div className="mt-4 min-w-0 max-w-full space-y-3 rounded-xl border border-border/55 bg-secondary/10 p-3" aria-label="GitHub PR confirmation preview">
             {!prPreview.canUseGitHubApp ? (
               <div className="rounded-2xl border border-border/55 bg-secondary/15 p-3 text-sm text-muted-foreground">
                 <p>{prPreview.unavailableReason}</p>
@@ -2892,7 +2892,7 @@ function OptimizationApplyFlow({
                   </div>
                 )}
 
-                <details open className="rounded-xl border border-border/55 bg-secondary/15 p-3">
+                <details open className="min-w-0 max-w-full rounded-xl border border-border/55 bg-secondary/15 p-3">
                   <summary className="cursor-pointer text-sm font-semibold">Reviewed files and diffs</summary>
                   <div className="mt-3 space-y-2">
                     {prPreviewResult.files.map(file => <OptimizationGithubPrFilePreview key={file.path} file={file} />)}
@@ -2906,7 +2906,7 @@ function OptimizationApplyFlow({
                     <Row label="Base" value={prPreviewResult.repository.baseBranch} />
                     <Row label="Head" value={prPreviewResult.branch.suggestedName} />
                   </div>
-                  <pre className="mt-3 max-h-60 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-inset p-3 text-[11px] text-muted-foreground">{prPreviewResult.pullRequest.body}</pre>
+                  <pre className="mt-3 max-h-60 max-w-full overflow-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-lg bg-inset p-3 text-[11px] text-muted-foreground">{prPreviewResult.pullRequest.body}</pre>
                 </details>
 
                 <div className="rounded-xl border border-primary/25 bg-primary/5 p-3 text-xs text-muted-foreground">
@@ -3139,9 +3139,9 @@ function OptimizationGithubPrFilePreview({ file }: { file: OptimizationGithubApp
     }
   };
   return (
-    <article className="rounded-xl border border-border/45 bg-background/20 p-3">
+    <article className="min-w-0 max-w-full overflow-hidden rounded-xl border border-border/45 bg-background/20 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 break-words text-sm font-medium" title={file.path}>{file.path}</span>
+        <span className="min-w-0 flex-1 break-words text-sm font-medium [overflow-wrap:anywhere]" title={file.path}>{file.path}</span>
         <Badge variant="outline" className="border-border/60 text-muted-foreground">
           {optimizationActionLabel(file.action)}
         </Badge>
@@ -3155,23 +3155,23 @@ function OptimizationGithubPrFilePreview({ file }: { file: OptimizationGithubApp
         {file.previousSha && <span>Previous SHA {file.previousSha.slice(0, 12)}</span>}
       </div>
       <p className="mt-2 text-xs text-muted-foreground">{file.validationMessage}</p>
-      <details className="mt-2 rounded-lg border border-border/45 bg-secondary/10 p-2">
+      <details className="mt-2 min-w-0 max-w-full rounded-lg border border-border/45 bg-secondary/10 p-2">
         <summary className="cursor-pointer text-xs font-semibold">Diff preview</summary>
         <div className="mt-2 flex justify-end">
           <Button type="button" variant="ghost" size="sm" onClick={copyDiff} className="h-7 px-2 text-[11px]"><Copy className="mr-1.5 h-3 w-3" />{diffCopied ? 'Copied' : 'Copy diff'}</Button>
         </div>
-        <pre className="max-h-72 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">{file.diff}</pre>
+        <pre data-testid="optimization-pr-diff" tabIndex={0} aria-label={`Unified diff for ${file.path}`} className="max-h-72 max-w-full overflow-auto whitespace-pre rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">{file.diff}</pre>
         {file.diffTruncated && <p className="mt-2 text-[11px] text-warning">The rendered diff is bounded; the reviewed full content remains the write payload.</p>}
       </details>
       {file.previousContent !== undefined && (
-        <details className="mt-2 rounded-lg border border-border/45 bg-secondary/10 p-2">
+        <details className="mt-2 min-w-0 max-w-full rounded-lg border border-border/45 bg-secondary/10 p-2">
           <summary className="cursor-pointer text-xs font-semibold">Current repository content</summary>
-          <pre className="mt-2 max-h-56 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">{file.previousContent}</pre>
+          <pre className="mt-2 max-h-56 max-w-full overflow-auto whitespace-pre rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">{file.previousContent}</pre>
         </details>
       )}
-      <details className="mt-2 rounded-lg border border-border/45 bg-secondary/10 p-2">
+      <details className="mt-2 min-w-0 max-w-full rounded-lg border border-border/45 bg-secondary/10 p-2">
         <summary className="cursor-pointer text-xs font-semibold">Prepared next content</summary>
-        <pre className="mt-2 max-h-56 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">{file.nextContent}</pre>
+        <pre className="mt-2 max-h-56 max-w-full overflow-auto whitespace-pre rounded-lg bg-inset p-2 text-[11px] text-muted-foreground">{file.nextContent}</pre>
       </details>
     </article>
   );

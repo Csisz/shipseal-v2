@@ -814,6 +814,61 @@ describe('Result Workspace improvement and verification workflows', () => {
     expect(onSaveVerificationBaseline.mock.calls[0][0]).toMatchObject({ applyMethod: 'github-pr-created' });
   });
 
+  it.each([390, 360])('contains the exact PR preview at %spx without document-level horizontal overflow', async width => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+    const { unmount } = render(
+      <ResultDashboard
+        report={optimizationDashboardReport()}
+        history={[]}
+        onReset={vi.fn()}
+        onClearHistory={vi.fn()}
+        onReplayReveal={vi.fn()}
+        githubConnection={{
+          connectionStatus: 'connected',
+          sourceMode: 'github-app',
+          owner: 'Csisz',
+          repo: 'shipseal-v2',
+          defaultBranch: 'main',
+          installationId: 'installation-123',
+          canCreatePullRequest: true,
+          canListRepositories: true,
+        }}
+      />
+    );
+
+    try {
+      switchResultChapter('Improve');
+      fireEvent.click(screen.getByRole('button', { name: /With ShipSeal/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Review (?:optimization )?plan/i }));
+      const applyFlow = prepareOpenOptimizationPlan();
+      const reviewSheet = screen.getByTestId('optimization-artifact-review-sheet');
+      await waitFor(() => expect(reviewSheet).toHaveAttribute('data-review-presentation', 'mobile-fullscreen'));
+      expect(reviewSheet).toHaveClass('min-w-0', 'w-full', 'max-w-full', 'overflow-hidden');
+
+      fireEvent.click(within(applyFlow).getByRole('button', { name: /Preview GitHub PR/i }));
+      const preview = await within(applyFlow).findByLabelText('GitHub PR confirmation preview');
+      expect(preview).toHaveClass('min-w-0', 'max-w-full');
+      const diff = within(preview).getAllByTestId('optimization-pr-diff')[0];
+      expect(diff).toHaveClass('max-w-full', 'overflow-auto', 'whitespace-pre');
+      expect(diff).not.toHaveClass('whitespace-pre-wrap', 'break-words', 'overflow-x-hidden');
+      const previewRequest = githubWriteMock.submitOptimizationPrRequest.mock.calls[0][0] as OptimizationGithubApplyRequest;
+      const firstFile = previewRequest.prepared.files[0];
+      expect(diff.textContent).toContain(`--- a/${firstFile.path}\n+++ b/${firstFile.path}`);
+      const path = [...preview.querySelectorAll<HTMLElement>('[title]')]
+        .find(element => element.title === firstFile.path);
+      expect(path).toBeDefined();
+      expect(path!).toHaveTextContent(firstFile.path);
+      expect(path!).toHaveClass('[overflow-wrap:anywhere]');
+      expect(document.documentElement.scrollWidth).toBe(document.documentElement.clientWidth);
+      expect(githubWriteMock.submitOptimizationPrRequest).toHaveBeenCalledTimes(1);
+      expect(githubWriteMock.submitOptimizationPrRequest.mock.calls[0][0]).toMatchObject({ mode: 'preview', confirmed: false });
+    } finally {
+      unmount();
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+    }
+  });
+
   it('saves a verification baseline after Optimization Pack download and keeps verification truthful before rescan', async () => {
     const report = optimizationDashboardReport();
     const onSaveVerificationBaseline = vi.fn();

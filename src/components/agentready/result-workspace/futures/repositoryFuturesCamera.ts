@@ -40,7 +40,7 @@ export const FUTURES_G1_LANDMARK_FLOOR = { width: 40, height: 32 } as const;
 
 const EMPTY_INSETS: RepositoryFuturesCameraInsets = { top: 0, right: 0, bottom: 0, left: 0 };
 const SAFE_VIEWPORT_CONSTANTS = {
-  mobile: { top: 104, right: 18, bottom: 82, left: 18, inspectorGap: 18, fallbackInspectorHeight: 330 },
+  mobile: { top: 104, right: 18, bottom: 82, left: 18, inspectorGap: 18, fallbackInspectorHeight: 260 },
   tablet: { top: 108, right: 20, bottom: 22, left: 64, inspectorGap: 20, fallbackInspectorWidth: 288 },
   desktop: { top: 108, right: 24, bottom: 24, left: 72, inspectorGap: 24, fallbackInspectorWidth: 320 },
 } as const;
@@ -61,15 +61,22 @@ export function repositoryFuturesSafeInsets(
   const layout = repositoryFuturesCameraLayout(viewport);
   if (layout === 'mobile' || inspectorPresentation === 'drawer') {
     const constants = layout === 'mobile' ? SAFE_VIEWPORT_CONSTANTS.mobile : SAFE_VIEWPORT_CONSTANTS.tablet;
-    const inspectorHeight = inspector
-      ? layout === 'mobile'
-        ? Math.max(inspector.height, SAFE_VIEWPORT_CONSTANTS.mobile.fallbackInspectorHeight)
-        : inspector.height
+    const fallbackInspectorHeight = layout === 'mobile'
+      ? Math.min(SAFE_VIEWPORT_CONSTANTS.mobile.fallbackInspectorHeight, viewport.height * 0.38)
       : 0;
+    const inspectorHeight = inspector
+      ? inspector.height > 0 ? inspector.height : fallbackInspectorHeight
+      : 0;
+    const drawerReservation = inspector && inspectorPresentation === 'drawer'
+      ? Math.max(
+        inspectorHeight + constants.inspectorGap + constants.bottom,
+        Math.ceil(viewport.height * 0.38 + 68),
+      )
+      : constants.bottom + (inspector ? inspectorHeight + constants.inspectorGap : 0);
     return {
       top: constants.top,
       right: constants.right,
-      bottom: constants.bottom + (inspector ? inspectorHeight + constants.inspectorGap : 0),
+      bottom: drawerReservation,
       left: constants.left,
     };
   }

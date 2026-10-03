@@ -5,6 +5,7 @@ import type { RepositoryFutureStageOverlay } from './futurePathwaysPresentation'
 import {
   buildRepositoryFuturesCanvasModel,
   repositoryFuturesFitAllTargets,
+  repositoryFuturesProjectionProfile,
   repositoryFutureRenderedFootprint,
   repositoryFuturesEdgePath,
   repositoryFuturesSelectedPlanNodes,
@@ -72,11 +73,19 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
   const initialFramingRef = useRef(false);
   const orientationRef = useRef<'horizontal' | 'vertical'>();
   const revealedPinnedContextRef = useRef<string>();
-  const orientationPreferenceTouchedRef = useRef(false);
-  const mobile = useIsMobile();
+  const explicitFitRef = useRef(false);
+  const detectedMobile = useIsMobile();
+  const mobile = detectedMobile || (typeof window !== 'undefined' && window.innerWidth < 768);
   const reducedMotion = useReducedMotion();
-  const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>(() => mobile ? 'vertical' : 'horizontal');
-  const model = useMemo(() => buildRepositoryFuturesCanvasModel(repositoryName, overlay, orientation), [orientation, overlay, repositoryName]);
+  const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>(() => (
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'vertical' : 'horizontal'
+  ));
+  const [viewportSize, setViewportSize] = useState(DEFAULT_VIEWPORT);
+  const projectionProfile = mobile ? 'mobile' : repositoryFuturesProjectionProfile(viewportSize);
+  const model = useMemo(
+    () => buildRepositoryFuturesCanvasModel(repositoryName, overlay, orientation, projectionProfile),
+    [orientation, overlay, projectionProfile, repositoryName],
+  );
   const nodeById = useMemo(() => new Map(model.nodes.map(node => [node.id, node])), [model.nodes]);
   const semanticByNodeId = useMemo(() => new Map(model.nodes.map(node => [node.id, repositoryFutureSemanticStyle(node)])), [model.nodes]);
   const [camera, setCamera] = useState(() => fitRepositoryFuturesCamera(DEFAULT_VIEWPORT, model.world));
@@ -84,7 +93,6 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
   const [pinnedId, setPinnedId] = useState<string>();
   const [dragging, setDragging] = useState(false);
   const [cameraTransitioning, setCameraTransitioning] = useState(false);
-  const [viewportSize, setViewportSize] = useState(DEFAULT_VIEWPORT);
   cameraRef.current = camera;
   const activeId = hoveredId || pinnedId || overlay.activeTraceId;
   const activeNode = pinnedId ? nodeById.get(pinnedId) : undefined;
@@ -148,10 +156,6 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
   initialFramingBoundsRef.current = initialFramingBounds;
   pinnedIdRef.current = pinnedId;
 
-  useEffect(() => {
-    if (!orientationPreferenceTouchedRef.current) setOrientation(mobile ? 'vertical' : 'horizontal');
-  }, [mobile]);
-
   const getViewport = useCallback(() => {
     const bounds = stageRef.current?.getBoundingClientRect();
     return bounds && bounds.width > 0 && bounds.height > 0
@@ -185,6 +189,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
   const cancelCameraTransition = useCallback(() => {
     if (cameraTransitionTimerRef.current) clearTimeout(cameraTransitionTimerRef.current);
     setCameraTransitioning(false);
+    explicitFitRef.current = false;
   }, []);
 
   const constrainCamera = useCallback((next: RepositoryFuturesCamera, includeInspector = Boolean(pinnedId)) => (
@@ -204,18 +209,25 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
     );
     // Fit is an explicit camera command. Prevent the semantic-zoom change it
     // causes from immediately re-framing the pinned node and displacing G1s.
+    explicitFitRef.current = true;
     if (pinnedId) revealedPinnedContextRef.current = `${pinnedId}:${repositoryFuturesSemanticZoomLevel(next.zoom)}`;
     applyCamera(next, true);
   }, [applyCamera, getInsets, getViewport, pinnedId, selectableFutureBounds]);
 
+  useLayoutEffect(() => {
+    if (explicitFitRef.current) fitAll();
+  }, [fitAll, projectionProfile]);
+
   const fitPlan = useCallback(() => {
     if (!primary || !selectedPlanBounds) return;
+    explicitFitRef.current = false;
     applyCamera(fitRepositoryFuturesBoundsCamera(getViewport(), selectedPlanBounds, getInsets(), 58), true);
   }, [applyCamera, getInsets, getViewport, primary, selectedPlanBounds]);
 
   const backToRepository = useCallback(() => {
     const root = model.nodes.find(node => node.kind === 'repository');
     if (!root) return;
+    explicitFitRef.current = false;
     applyCamera(constrainCamera(frameRepositoryFuturesOrigin(
       getViewport(),
       root,
@@ -234,7 +246,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
       const framingBounds = overlay.mode === 'quick' && primary && selectedPlanBounds
         ? selectedPlanBounds
         : initialFramingBoundsRef.current;
-      const initialCamera = mobile && model.orientation === 'vertical' && root
+      const initialCamera = projectionProfile === 'mobile' && model.orientation === 'vertical' && root
         ? constrainRepositoryFuturesCamera(
           frameRepositoryFuturesOrigin(viewport, root, model.orientation, insets, 0.72),
           viewport,
@@ -245,7 +257,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
       applyCamera(initialCamera, orientationChanged);
       initialFramingRef.current = true;
     }
-  }, [applyCamera, getInsets, getViewport, mobile, model.nodes, model.orientation, overlay.mode, pinnedId, primary, selectedPlanBounds]);
+  }, [applyCamera, getInsets, getViewport, model.nodes, model.orientation, overlay.mode, pinnedId, primary, projectionProfile, selectedPlanBounds]);
 
   useLayoutEffect(() => {
     if (!stageRef.current || typeof ResizeObserver === 'undefined') return undefined;
@@ -288,6 +300,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
       revealedPinnedContextRef.current = undefined;
       return;
     }
+    if (explicitFitRef.current) return;
     const revealContext = `${pinnedId}:${semanticZoom}`;
     if (revealedPinnedContextRef.current === revealContext) return;
     revealedPinnedContextRef.current = revealContext;
@@ -493,6 +506,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
         data-disclosure-mode={overlay.mode}
         data-mobile-disclosure={mobile ? 'focused-pan-and-zoom' : 'full-field'}
         data-future-orientation={model.orientation}
+        data-responsive-projection={projectionProfile}
         data-reduced-motion={reducedMotion ? 'true' : 'false'}
         data-reveal-motion={reducedMotion ? 'static' : entryMotion}
         data-motion-event={reducedMotion ? 'static' : repositoryFutureEntryEvent(entryMotion)}
@@ -528,7 +542,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
           </div>
           <div role="group" aria-label="Future map orientation" className="inline-flex rounded-full border border-border/40 bg-background/[0.72] p-0.5 shadow-sm backdrop-blur-md">
             {(['horizontal', 'vertical'] as const).map(value => (
-              <button key={value} type="button" aria-label={`${value === 'horizontal' ? 'Horizontal' : 'Vertical'} Future map`} aria-pressed={orientation === value} onClick={event => { event.stopPropagation(); orientationPreferenceTouchedRef.current = true; setOrientation(value); }} className={`flex min-h-9 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${orientation === value ? 'bg-primary/15 text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button key={value} type="button" aria-label={`${value === 'horizontal' ? 'Horizontal' : 'Vertical'} Future map`} aria-pressed={orientation === value} onClick={event => { event.stopPropagation(); explicitFitRef.current = false; setOrientation(value); }} className={`flex min-h-9 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors duration-200 motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${orientation === value ? 'bg-primary/15 text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                 {value === 'horizontal' ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
                 <span className="hidden lg:inline">{value === 'horizontal' ? 'Horizontal' : 'Vertical'}</span>
               </button>

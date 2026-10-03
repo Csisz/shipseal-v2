@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { RepositoryFuturesNeuralCanvas } from '@/components/agentready/result-workspace/futures/RepositoryFuturesNeuralCanvas';
 import type { RepositoryFutureStageOverlay } from '@/components/agentready/result-workspace/futures/futurePathwaysPresentation';
@@ -101,6 +101,66 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(value.onCandidateAddSupport).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Horizontal Future map' }));
     await waitFor(() => expect(stage).toHaveAttribute('data-future-orientation', 'horizontal'));
+  });
+
+  it('preserves the chosen orientation, mode, selection, and topology across responsive projection changes', async () => {
+    const originalWidth = window.innerWidth;
+    const OriginalResizeObserver = globalThis.ResizeObserver;
+    let resizeCallback: ResizeObserverCallback | undefined;
+    class ControlledResizeObserver implements ResizeObserver {
+      constructor(callback: ResizeObserverCallback) { resizeCallback = callback; }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    globalThis.ResizeObserver = ControlledResizeObserver;
+    window.ResizeObserver = ControlledResizeObserver;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+    const value = overlay({ mode: 'deep' });
+    const { container, rerender, unmount } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    try {
+      const stage = screen.getByTestId('repository-futures-neural-canvas');
+      fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Vertical Future map' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Horizontal Future map' }));
+      let measuredWidth = 1440;
+      Object.defineProperty(stage, 'getBoundingClientRect', {
+        configurable: true,
+        value: () => ({ width: measuredWidth, height: 720, top: 0, right: measuredWidth, bottom: 720, left: 0, x: 0, y: 0, toJSON: () => ({}) }),
+      });
+      const semanticIds = [...container.querySelectorAll('[data-neural-node]')]
+        .map(node => node.getAttribute('data-future-node-id')).sort();
+
+      for (const width of [768, 390, 1440]) {
+        measuredWidth = width;
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+        rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+        act(() => resizeCallback?.([], {} as ResizeObserver));
+        await waitFor(() => expect(stage).toHaveAttribute(
+          'data-responsive-projection',
+          width < 768 ? 'mobile' : width < 1024 ? 'tablet' : 'desktop',
+        ));
+        expect(stage).toHaveAttribute('data-future-orientation', 'horizontal');
+        expect(stage).toHaveAttribute('data-disclosure-mode', 'deep');
+        expect(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i })).toHaveAttribute('aria-pressed', 'true');
+        expect([...container.querySelectorAll('[data-neural-node]')].map(node => node.getAttribute('data-future-node-id')).sort()).toEqual(semanticIds);
+      }
+    } finally {
+      unmount();
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
+      globalThis.ResizeObserver = OriginalResizeObserver;
+      window.ResizeObserver = OriginalResizeObserver;
+    }
+  });
+
+  it('keeps explicit Fit authoritative while a pinned Future remains selected', async () => {
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
+    const fitted = cameraState();
+
+    await waitFor(() => expect(cameraState()).toEqual(fitted));
+    expect(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('renders an accessible real-data topology with role grammar, selected route, and inspector', () => {

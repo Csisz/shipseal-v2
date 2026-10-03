@@ -451,9 +451,9 @@ export function RecentScans({ history, onClear }: { history: ScanHistoryItem[]; 
 
 export function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground/90 text-right truncate">{value}</span>
+    <div className="flex min-w-0 items-baseline justify-between gap-3 text-sm">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="min-w-0 text-right text-foreground/90 [overflow-wrap:anywhere]">{value}</span>
     </div>
   );
 }

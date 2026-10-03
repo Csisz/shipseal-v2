@@ -7,6 +7,7 @@ import {
   repositoryFuturesLayoutCollisions,
   repositoryFuturesNodeFootprint,
   repositoryFuturesFitAllTargets,
+  repositoryFuturesProjectionProfile,
   repositoryFuturesSelectedPlanNodes,
   repositoryFuturesTrace,
 } from '@/components/agentready/result-workspace/futures/repositoryFuturesCanvasModel';
@@ -722,7 +723,7 @@ describe('Omega 18.5-V7.2 repository futures camera', () => {
     expect(desktop.right).toBe(368);
     expect(tablet.right).toBe(328);
     expect(tablet.right).not.toBe(desktop.right);
-    expect(mobile.bottom).toBe(430);
+    expect(mobile.bottom).toBe(400);
     expect(repositoryFuturesSafeInsets({ width: 390, height: 700 }).bottom).toBe(82);
     expect(mobile.right).toBe(18);
   });
@@ -734,7 +735,7 @@ describe('Omega 18.5-V7.2 repository futures camera', () => {
     expect(repositoryFuturesInspectorPresentation({ width: 390, height: 844 }, 7, 360)).toBe('drawer');
 
     const tabletDrawer = repositoryFuturesSafeInsets({ width: 768, height: 820 }, { width: 744, height: 240 }, 'drawer');
-    expect(tabletDrawer).toEqual({ top: 108, right: 20, bottom: 282, left: 64 });
+    expect(tabletDrawer).toEqual({ top: 108, right: 20, bottom: 380, left: 64 });
   });
 
   it.each([
@@ -912,5 +913,86 @@ describe('Omega 18.5-V7.2 repository futures camera', () => {
     expect(rightExtreme.y).toBeLessThan(10000);
     expect(leftExtreme.x).toBeLessThan(0);
     expect(rightExtreme.x).toBeGreaterThan(0);
+  });
+
+  it.each([
+    [{ width: 1280, height: 720 }, { width: 320, height: 620 }],
+    [{ width: 768, height: 740 }, { width: 744, height: 240 }],
+    [{ width: 390, height: 684 }, { width: 366, height: 260 }],
+    [{ width: 360, height: 640 }, { width: 336, height: 243 }],
+  ] as const)('fits seven responsive Horizontal G1 landmarks readably at $0.width x $0.height', (viewport, inspector) => {
+    const profile = repositoryFuturesProjectionProfile(viewport);
+    const model = buildRepositoryFuturesCanvasModel(
+      'cantu',
+      { ...denseSpatialInput(7, 4, 3), mode: 'deep' },
+      'horizontal',
+      profile,
+    );
+    const presentation = repositoryFuturesInspectorPresentation(viewport, 7, inspector.width);
+    const insets = repositoryFuturesSafeInsets(viewport, inspector, presentation);
+    const safe = repositoryFuturesSafeViewport(viewport, insets);
+    const targets = repositoryFuturesFitAllTargets(model, 'deep');
+    const bounds = repositoryFuturesBounds(targets)!;
+    const camera = fitRepositoryFuturesBoundsCamera(
+      viewport,
+      bounds,
+      insets,
+      repositoryFuturesFitPadding(viewport),
+      1.15,
+      FUTURES_FIT_ALL_MINIMUM_ZOOM,
+    );
+    const projectedGoals = targets.filter(target => target.id.startsWith('goal:')).map(target => {
+      const width = Math.max(target.width * camera.zoom, FUTURES_G1_LANDMARK_FLOOR.width);
+      const height = Math.max(target.height * camera.zoom, FUTURES_G1_LANDMARK_FLOOR.height);
+      const centerX = target.x * camera.zoom + camera.x;
+      const centerY = target.y * camera.zoom + camera.y;
+      return {
+        id: target.id,
+        width,
+        height,
+        left: centerX - width / 2,
+        right: centerX + width / 2,
+        top: centerY - height / 2,
+        bottom: centerY + height / 2,
+      };
+    });
+    const toolbarTop = presentation === 'drawer'
+      ? viewport.height - viewport.height * 0.38 - 24 - 40
+      : viewport.height - 20 - 40;
+
+    expect(projectedGoals).toHaveLength(7);
+    projectedGoals.forEach(goal => {
+      expect(goal.left).toBeGreaterThanOrEqual(safe.left - 0.01);
+      expect(goal.right).toBeLessThanOrEqual(safe.right + 0.01);
+      expect(goal.top).toBeGreaterThanOrEqual(safe.top - 0.01);
+      expect(goal.bottom).toBeLessThanOrEqual(safe.bottom + 0.01);
+      expect(goal.bottom).toBeLessThanOrEqual(toolbarTop + 0.01);
+      expect(goal.width).toBeGreaterThanOrEqual(FUTURES_G1_LANDMARK_FLOOR.width);
+      expect(goal.height).toBeGreaterThanOrEqual(FUTURES_G1_LANDMARK_FLOOR.height);
+    });
+    projectedGoals.forEach((goal, index) => projectedGoals.slice(index + 1).forEach(other => {
+      const separated = goal.right <= other.left + 0.01
+        || other.right <= goal.left + 0.01
+        || goal.bottom <= other.top + 0.01
+        || other.bottom <= goal.top + 0.01;
+      expect(separated, `${goal.id} overlaps ${other.id}`).toBe(true);
+    }));
+  });
+
+  it('preserves semantic identity while responsive Horizontal geometry changes', () => {
+    const input = { ...denseSpatialInput(7, 4, 3), mode: 'deep' as const };
+    const models = (['desktop', 'tablet', 'mobile'] as const).map(profile => (
+      buildRepositoryFuturesCanvasModel('cantu', input, 'horizontal', profile)
+    ));
+    const semanticIdentity = (model: (typeof models)[number]) => ({
+      nodes: model.nodes.map(node => `${node.id}:${node.kind}:${node.role}`).sort(),
+      edges: model.edges.map(edge => `${edge.id}:${edge.sourceId}:${edge.targetId}`).sort(),
+    });
+
+    expect(semanticIdentity(models[1])).toEqual(semanticIdentity(models[0]));
+    expect(semanticIdentity(models[2])).toEqual(semanticIdentity(models[0]));
+    expect(models.every(model => model.orientation === 'horizontal')).toBe(true);
+    expect(new Set(models[0].nodes.filter(node => node.kind === 'goal').map(node => node.x)).size).toBe(2);
+    expect(new Set(models[2].nodes.filter(node => node.kind === 'goal').map(node => node.x)).size).toBe(3);
   });
 });
