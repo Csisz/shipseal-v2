@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { newDb } from 'pg-mem';
+import { DataType, newDb } from 'pg-mem';
 
 const migrationsDirectory = new URL('../db/migrations/', import.meta.url);
 const migrationFiles = (await readdir(migrationsDirectory)).filter(file => /^\d{4}_[a-z0-9_]+\.sql$/i.test(file)).sort();
@@ -28,12 +28,17 @@ const billingIntegrityMigration = migrations[billingIntegrityMigrationIndex];
 const operationalEventsMigrationFile = '0008_operational_events.sql';
 const operationalEventsMigrationIndex = migrationFiles.indexOf(operationalEventsMigrationFile);
 if (operationalEventsMigrationIndex === -1) throw new Error(`${operationalEventsMigrationFile} is missing.`);
+const productFeedbackMigrationFile = '0009_product_feedback.sql';
+const productFeedbackMigrationIndex = migrationFiles.indexOf(productFeedbackMigrationFile);
+if (productFeedbackMigrationIndex === -1) throw new Error(`${productFeedbackMigrationFile} is missing.`);
+const productFeedbackMigration = migrations[productFeedbackMigrationIndex];
 const accountTables = ['shipseal_users', 'shipseal_sessions', 'shipseal_projects', 'shipseal_scans', 'shipseal_verification_relationships', 'shipseal_schema_migrations'];
 const aiTables = ['shipseal_entitlements', 'shipseal_ai_operations', 'shipseal_ai_operation_stages', 'shipseal_ai_usage_ledger', 'shipseal_ai_budget_windows', 'shipseal_ai_provider_permits'];
 const billingIntegrityTables = ['shipseal_ai_usage_adjustments'];
 const billingTables = ['shipseal_billing_customers', 'shipseal_billing_subscriptions', 'shipseal_billing_events'];
 const operationalTables = ['shipseal_operational_events'];
-const requiredTables = [...accountTables, ...aiTables, ...billingIntegrityTables, ...billingTables, ...operationalTables];
+const productFeedbackTables = ['shipseal_product_feedback'];
+const requiredTables = [...accountTables, ...aiTables, ...billingIntegrityTables, ...billingTables, ...operationalTables, ...productFeedbackTables];
 const normalizedSecurityMigration = securityMigration.replace(/\s+/g, ' ').trim().toLowerCase();
 const rlsTables = [...securityMigration.matchAll(/alter\s+table\s+(?:public\.)?([a-z0-9_]+)\s+enable\s+row\s+level\s+security\s*;/gi)].map(match => match[1]);
 const publicRevoke = securityMigration.match(/revoke\s+all\s+privileges\s+on\s+table([\s\S]*?)from\s+public\s*;/i)?.[1] ?? '';
@@ -144,11 +149,23 @@ for (const role of ['anon', 'authenticated', 'service_role']) {
 }
 if (!normalizedBillingIntegrityMigration.includes("values ('0007_ai_billing_integrity') on conflict do nothing")) throw new Error('AI billing-integrity migration tracking must be idempotent.');
 
+const normalizedProductFeedbackMigration = productFeedbackMigration.replace(/\s+/g, ' ').trim().toLowerCase();
+if (!/alter\s+table\s+public\.shipseal_product_feedback\s+enable\s+row\s+level\s+security/i.test(productFeedbackMigration)) throw new Error('Product feedback must enable RLS.');
+if (!/revoke\s+all\s+privileges\s+on\s+table\s+public\.shipseal_product_feedback\s+from\s+public/i.test(productFeedbackMigration)) throw new Error('Product feedback must revoke PUBLIC access.');
+if (/\b(truncate|delete\s+from|disable\s+row\s+level\s+security|grant)\b/i.test(productFeedbackMigration)) throw new Error('Product feedback migration must remain additive and preserve default-deny security.');
+if (!/char_length\s*\(\s*comment\s*\)\s*<=\s*2000/i.test(productFeedbackMigration)) throw new Error('Product feedback comments must remain database-bounded.');
+if (!normalizedProductFeedbackMigration.includes("values ('0009_product_feedback') on conflict do nothing")) throw new Error('Product feedback migration tracking must be idempotent.');
+
 // pg-mem does not implement PostgreSQL RLS, privileges, roles, or PL/pgSQL DO
 // blocks. Validate that production-only contract above, then omit exactly those
 // statements while exercising the remaining migration and schema behavior twice.
 function forPgMem(file, migration) {
-  if (![securityMigrationFile, aiSecurityMigrationFile, billingSecurityMigrationFile, billingIntegrityMigrationFile, operationalEventsMigrationFile].includes(file)) return migration;
+  if (![securityMigrationFile, aiSecurityMigrationFile, billingSecurityMigrationFile, billingIntegrityMigrationFile, operationalEventsMigrationFile, productFeedbackMigrationFile].includes(file)) return migration;
+  if (file === productFeedbackMigrationFile) {
+    return migration
+      .replace(/alter\s+table\s+(?:public\.)?shipseal_product_feedback\s+enable\s+row\s+level\s+security\s*;/gi, '')
+      .replace(/revoke\s+all\s+privileges\s+on\s+table\s+public\.shipseal_product_feedback\s+from\s+public\s*;/gi, '');
+  }
   if (file === operationalEventsMigrationFile) {
     return migration
       .replace(/alter\s+table\s+(?:public\.)?[a-z0-9_]+\s+enable\s+row\s+level\s+security\s*;/gi, '')
@@ -169,6 +186,7 @@ function forPgMem(file, migration) {
 }
 
 const db = newDb({ autoCreateForeignKeyIndices: true, noAstCoverageCheck: true });
+db.public.registerFunction({ name: 'char_length', args: [DataType.text], returns: DataType.integer, implementation: value => value.length });
 const pgMemMigrations = migrations.map((migration, index) => forPgMem(migrationFiles[index], migration));
 for (const migration of pgMemMigrations) db.public.none(migration);
 for (const migration of pgMemMigrations) db.public.none(migration);

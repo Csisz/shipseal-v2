@@ -24,6 +24,10 @@ function payload(providerLimitState: 'configured' | 'not_configured' | 'invalid'
       classification: 'needs_recovery', reason: 'Lease expired; recovery is available', userUnitState: 'reserved', updatedAt: '2026-09-11T10:05:00.000Z',
     }],
     recentEvents: [{ category: 'stripe_webhook', action: 'invoice.paid', status: 'succeeded', created_at: '2026-09-11T10:05:00.000Z', deployment_id: null }],
+    feedback: {
+      recent: [{ id: 'fb_test', surface: 'repository_futures', use_case: 'plan_future', outcome: 'partly', use_again: 'yes', pricing_intent: 'maybe', comment: 'Dependency wording was unclear.', contact_allowed: true, created_at: '2026-09-11T10:05:00.000Z' }],
+      distribution: [{ dimension: 'outcome', value: 'partly', count: 1 }, { dimension: 'use_again', value: 'yes', count: 1 }, { dimension: 'pricing_intent', value: 'maybe', count: 1 }],
+    },
     operation: null,
   };
 }
@@ -49,6 +53,14 @@ describe('Admin operations presentation', () => {
     renderAdmin();
     expect(await screen.findByText('Not configured')).toBeInTheDocument();
     expect(screen.queryByText('0 / 0')).not.toBeInTheDocument();
+  });
+
+  it('shows first-party Early Access feedback and value signals without customer source data', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(payload()), { status: 200 })));
+    renderAdmin();
+    expect(await screen.findByText('Early Access feedback')).toBeInTheDocument();
+    expect(screen.getByText('Dependency wording was unclear.')).toBeInTheDocument();
+    expect(screen.getByText('maybe 1')).toBeInTheDocument();
   });
 
   it('resolves a support reference into a readable diagnosis and timeline', async () => {

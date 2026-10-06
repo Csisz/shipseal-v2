@@ -32,7 +32,7 @@ export default async function handler(req: Request, res: ServerResponse) {
       }
       const q = supportLookup(req);
       const providerLimit = resolveConfiguredProviderLimit();
-      const [overview, attentionCandidates, events, operations] = await Promise.all([
+      const [overview, attentionCandidates, events, operations, feedbackRows, feedbackDistribution] = await Promise.all([
         sql<Record<string, unknown>[]>`select
           (select count(*)::int from public.shipseal_scans where created_at >= now() - interval '24 hours') as scans_24h,
           (select count(*)::int from public.shipseal_scans where status = 'completed' and created_at >= now() - interval '24 hours') as scans_succeeded_24h,
@@ -54,6 +54,12 @@ export default async function handler(req: Request, res: ServerResponse) {
           exists (select 1 from public.shipseal_projects p where p.owner_user_id = o.owner_user_id and p.repository_identity = o.repository_identity and p.deleted_at is null) as project_exists,
           exists (select 1 from public.shipseal_ai_operations newer where newer.id <> o.id and newer.owner_user_id = o.owner_user_id and newer.operation_kind = o.operation_kind and newer.repository_identity = o.repository_identity and newer.created_at > o.created_at and newer.canonical_complete_response is not null and newer.completed_at is not null and newer.refunded_user_units = 0) as superseding_result_exists
           from public.shipseal_ai_operations o where lower(o.public_operation_id) = lower(${q}) or o.id = ${q} or ('RI-' || upper(right(regexp_replace(o.public_operation_id, '[^A-Za-z0-9]', '', 'g'), 10))) = upper(${q}) limit 1` : Promise.resolve([]),
+        sql<Record<string, unknown>[]>`select id, surface, use_case, outcome, use_again, pricing_intent, comment, contact_allowed, created_at
+          from public.shipseal_product_feedback
+          order by case outcome when 'no' then 0 when 'partly' then 1 else 2 end, created_at desc limit 50`,
+        sql<Record<string, unknown>[]>`select 'outcome' as dimension, outcome as value, count(*)::int as count from public.shipseal_product_feedback group by outcome
+          union all select 'use_again', use_again, count(*)::int from public.shipseal_product_feedback group by use_again
+          union all select 'pricing_intent', pricing_intent, count(*)::int from public.shipseal_product_feedback where pricing_intent is not null group by pricing_intent`,
       ]);
       const now = new Date();
       const overviewPayload = {
@@ -74,7 +80,7 @@ export default async function handler(req: Request, res: ServerResponse) {
         ]);
         operation = buildOperationDiagnostic(operations[0], stages, operationEvents, now);
       }
-      return send(res, 200, { overview: overviewPayload, needsAttention, recentEvents: events, operation });
+      return send(res, 200, { overview: overviewPayload, needsAttention, recentEvents: events, operation, feedback: { recent: feedbackRows, distribution: feedbackDistribution } });
     } finally { await sql.end({ timeout: 1 }); }
   } catch { return send(res, 503, { error: { code: 'admin_unavailable', message: 'Operations data is temporarily unavailable.' } }); }
 }

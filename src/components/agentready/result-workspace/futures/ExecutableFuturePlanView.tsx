@@ -35,6 +35,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { buildFuturePlanFastPathSummary } from '../fastPathPresentation';
+import { useFeedback } from '@/components/feedback/feedbackContext';
 
 type PlanReviewPhase = 'draft' | 'review' | 'ready';
 type AgentTarget = 'codex' | 'claude-code';
@@ -84,6 +85,7 @@ export function ExecutableFuturePlanEntry({
 }
 
 export default function ExecutableFuturePlanView({ plan, onBack }: { plan: ExecutableFuturePlan; onBack: () => void }) {
+  const { recordOutcome } = useFeedback();
   const [phase, setPhase] = useState<PlanReviewPhase>('draft');
   const [acknowledgedGateIds, setAcknowledgedGateIds] = useState<Set<string>>(new Set());
   const [activeTarget, setActiveTarget] = useState<AgentTarget>();
@@ -105,14 +107,19 @@ export default function ExecutableFuturePlanView({ plan, onBack }: { plan: Execu
     setAdvancedOpen(false);
   }, [plan.fingerprint]);
 
+  const markReadyForAgent = () => {
+    setPhase('ready');
+    setActiveTarget('codex');
+    recordOutcome('agent_handoff_prepared', 'agent_handoff', { premiumValue: true, prompt: true });
+  };
+
   const prepareForAgent = () => {
     if (plan.reviewGates.length > 0 && phase !== 'ready') {
       setPhase('review');
       setAdvancedOpen(true);
       return;
     }
-    setPhase('ready');
-    setActiveTarget('codex');
+    markReadyForAgent();
   };
 
   const toggleGate = (gateId: string, checked: boolean) => {
@@ -131,6 +138,7 @@ export default function ExecutableFuturePlanView({ plan, onBack }: { plan: Execu
     }
     await navigator.clipboard.writeText(prompt);
     setCopyStatus(`${activeTarget === 'codex' ? 'Codex' : 'Claude Code'} prompt copied.`);
+    recordOutcome('agent_handoff_copied', 'agent_handoff', { premiumValue: true, prompt: true });
   };
 
   const downloadPlan = () => {
@@ -297,7 +305,7 @@ export default function ExecutableFuturePlanView({ plan, onBack }: { plan: Execu
                     <span><span className="font-medium text-foreground">Reviewer identified</span><span className="mt-0.5 block text-muted-foreground">{gate.title} remains a stop point in the handoff.</span></span>
                   </label>
                 ))}
-                <Button type="button" className="min-h-11 w-full" disabled={!allGatesAcknowledged} onClick={() => setPhase('ready')}>Mark ready for agent</Button>
+                <Button type="button" className="min-h-11 w-full" disabled={!allGatesAcknowledged} onClick={markReadyForAgent}>Mark ready for agent</Button>
                 {plan.reviewGates.length > 0 && !allGatesAcknowledged && <p className="text-xs text-muted-foreground">Identify a reviewer for each gate before preparing the handoff. This does not approve the gate itself.</p>}
               </div>
             )}

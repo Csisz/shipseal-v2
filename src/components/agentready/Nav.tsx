@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Braces, Menu, X } from 'lucide-react';
+import { Braces, Menu, MessageSquareText, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
+import { Badge } from '@/components/ui/badge';
+import { useFeedback } from '@/components/feedback/feedbackContext';
 
 const links = [
   { label: 'Product', href: '#intelligence' },
@@ -17,6 +19,7 @@ interface Props {
 }
 
 export function Nav({ onNavigateAnchor, onHome }: Props) {
+  const { openFeedback } = useFeedback();
   const location = useLocation();
   const onLanding = location.pathname === '/';
   const [scrolled, setScrolled] = useState(false);
@@ -55,6 +58,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
             <Braces className="h-4 w-4 text-primary-foreground sm:h-5 sm:w-5" />
           </span>
           <span className="font-display text-lg font-bold tracking-tight sm:text-xl">ShipSeal</span>
+          <Badge variant="outline" className="hidden border-primary/25 bg-primary/5 px-2 text-[9px] font-medium uppercase tracking-[0.12em] text-primary sm:inline-flex">Early Access</Badge>
         </Link>
         <nav className="hidden items-center gap-6 lg:flex" aria-label="Primary navigation">
           {links.map((l) => (
@@ -65,6 +69,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
         </nav>
         <div className="hidden items-center gap-2 lg:flex">
           <ThemeToggle />
+          <Button type="button" variant="ghost" onClick={() => openFeedback()}><MessageSquareText className="mr-2 h-4 w-4" />Send feedback</Button>
           <Button asChild variant="ghost">
             <Link to="/projects" aria-current={location.pathname.startsWith('/projects') ? 'page' : undefined}>My projects</Link>
           </Button>
@@ -88,6 +93,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
               </a>
             ))}
             <Link to="/projects" onClick={() => setOpen(false)} aria-current={location.pathname.startsWith('/projects') ? 'page' : undefined} className="flex min-h-11 items-center rounded-lg px-2 text-sm text-muted-foreground hover:bg-secondary/30 hover:text-foreground">My projects</Link>
+            <button type="button" onClick={() => { setOpen(false); openFeedback(); }} className="flex min-h-11 items-center rounded-lg px-2 text-left text-sm text-muted-foreground hover:bg-secondary/30 hover:text-foreground"><MessageSquareText className="mr-2 h-4 w-4" />Send feedback</button>
             <Button asChild className="mt-2 bg-primary text-primary-foreground hover:bg-primary/90"><a href={onLanding ? '#scan' : '/#scan'} onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a></Button>
           </nav>
         </div>

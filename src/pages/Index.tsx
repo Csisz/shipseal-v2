@@ -28,6 +28,7 @@ import {
   resolveRepositoryFormationPhase,
   type RepositoryFuturePreparationState,
 } from '@/lib/workspace/repositoryFormationPipeline';
+import { useFeedback } from '@/components/feedback/feedbackContext';
 
 type PendingSource =
   | { type: 'zip'; file: File; projectName: string }
@@ -137,6 +138,7 @@ function importErrorTitle(category?: string | null) {
 
 const Index = () => {
   const account = useOptionalAccount();
+  const { recordOutcome } = useFeedback();
   const [repositoryIntelligenceVerificationBaseline, setRepositoryIntelligenceVerificationBaseline] = useState<RepositoryIntelligenceVerificationBaseline | null>(null);
   const [verificationProjectContext, setVerificationProjectContext] = useState<{ projectId: string; baselineScanId: string } | null>(null);
   const [verificationContextMessage, setVerificationContextMessage] = useState('');
@@ -183,6 +185,11 @@ const Index = () => {
   const productIntelligencePreparationState = scan.repositoryProductIntelligenceStatus?.state;
   const productIntelligenceReady = Boolean(scan.repositoryProductIntelligence?.opportunities.length)
     && productIntelligencePreparationState === 'enhanced';
+
+  useEffect(() => {
+    if (!scan.report || scan.status !== 'completed') return;
+    recordOutcome('scan_completed', 'scan_result', { prompt: true });
+  }, [recordOutcome, scan.report, scan.status]);
 
   useEffect(() => {
     if (!activeReport || !activeReportKey) return;

@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { Sql } from 'postgres';
 import { operationSupportReference } from '../../src/lib/supportReference.js';
 
-export type OperationalEventCategory = 'auth' | 'github' | 'ingestion' | 'scan' | 'persistence' | 'ai_operation' | 'ai_stage' | 'provider' | 'billing' | 'stripe_webhook' | 'github_mutation' | 'export' | 'system';
+export type OperationalEventCategory = 'auth' | 'github' | 'ingestion' | 'scan' | 'persistence' | 'ai_operation' | 'ai_stage' | 'provider' | 'billing' | 'stripe_webhook' | 'github_mutation' | 'export' | 'system' | 'product';
 export type OperationalEventStatus = 'started' | 'succeeded' | 'failed' | 'retryable' | 'duplicate' | 'ignored';
 export interface OperationalEventInput {
   category: OperationalEventCategory;

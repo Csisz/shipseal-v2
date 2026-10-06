@@ -39,6 +39,7 @@ import {
   severityClass,
 } from '../model/deliveryWorkspaceSelectors';
 import { resolveFastPathAgentArtifact } from '../fastPathPresentation';
+import { useFeedback } from '@/components/feedback/feedbackContext';
 
 const DeliveryPackPreview = lazy(() => import('@/components/agentready/DeliveryPackPreview').then(module => ({ default: module.DeliveryPackPreview })));
 
@@ -69,6 +70,7 @@ export default function DeliverWorkspace({
   agentOperatingMode,
   onCreatePullRequest,
 }: DeliverWorkspaceProps) {
+  const { recordOutcome } = useFeedback();
   const fullPackageSelected = resolvedPackages.includes(FULL_PACKAGE_ID);
   const folderAgentPaths = getFolderAgentSuggestionPaths(report.repoContextPack);
   const deliveryFocus = resolveDeliveryPackFocus(resolvedPackages, { folderAgentPaths });
@@ -109,6 +111,10 @@ export default function DeliverWorkspace({
     setAgentArtifactCopied(false);
   }, [initialIntake, intakeSkipped, report.repoName, report.scannedAt]);
 
+  useEffect(() => {
+    if (active) recordOutcome('delivery_opened', 'delivery', { prompt: true });
+  }, [active, recordOutcome]);
+
   const intakeDirty = !sameProjectIntake(appliedIntake, draftIntake);
   const regenerateReport = () => {
     setAppliedIntake(normalizeProjectIntake(draftIntake, report.repoName));
@@ -125,7 +131,9 @@ export default function DeliverWorkspace({
     await navigator.clipboard.writeText(fastPathAgentArtifact.content);
     setAgentArtifactCopied(true);
     setTimeout(() => setAgentArtifactCopied(false), 1500);
+    recordOutcome('agent_handoff_copied', 'agent_handoff', { premiumValue: true, prompt: true });
   };
+  const recordDeliveryDownload = () => recordOutcome('delivery_downloaded', 'delivery', { prompt: true });
 
   return (
     <>
@@ -273,7 +281,7 @@ export default function DeliverWorkspace({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => readinessReport && downloadTextFile('AGENT_READINESS_REPORT.md', readinessReport.content)}
+                onClick={() => { if (readinessReport) { downloadTextFile('AGENT_READINESS_REPORT.md', readinessReport.content); recordDeliveryDownload(); } }}
                 className="border-border/60"
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export report
@@ -281,7 +289,7 @@ export default function DeliverWorkspace({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => downloadJsonFile('score.json', buildScoreJson(report, { selectedPackages: resolvedPackages, agentOperatingMode: resolvedAgentMode }))}
+                onClick={() => { downloadJsonFile('score.json', buildScoreJson(report, { selectedPackages: resolvedPackages, agentOperatingMode: resolvedAgentMode })); recordDeliveryDownload(); }}
                 className="border-border/60"
               >
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Export score.json
@@ -564,10 +572,10 @@ export default function DeliverWorkspace({
                 {contextCopied ? <Check className="h-3.5 w-3.5 mr-1.5 text-success" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
                 {contextCopied ? 'Copied' : 'Copy'}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => downloadTextFile('REPO_CONTEXT_PACK.md', report.contextPack)}>
+              <Button variant="ghost" size="sm" onClick={() => { downloadTextFile('REPO_CONTEXT_PACK.md', report.contextPack); recordDeliveryDownload(); }}>
                 <Download className="h-3.5 w-3.5 mr-1.5" /> MD
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => downloadJsonFile('repo-context-pack.json', repoContextJson)}>
+              <Button variant="ghost" size="sm" onClick={() => { downloadJsonFile('repo-context-pack.json', repoContextJson); recordDeliveryDownload(); }}>
                 <Download className="h-3.5 w-3.5 mr-1.5" /> JSON
               </Button>
             </div>

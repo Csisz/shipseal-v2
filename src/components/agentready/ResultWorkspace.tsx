@@ -39,6 +39,7 @@ import { RepositoryFormation } from './RepositoryFormation';
 import { operationSupportReference } from '@/lib/supportReference';
 import { PanelsTopLeft } from 'lucide-react';
 import type { RepositoryFuturesEntryMotion } from './result-workspace/futures/repositoryFuturesMotion';
+import { useFeedback } from '@/components/feedback/feedbackContext';
 const RepositoryFuturesWorkspace = lazy(() => import('./result-workspace/futures/RepositoryFuturesWorkspace'));
 const ImproveChapter = lazy(() => import('./result-dashboard/chapters/ImproveChapter'));
 const VerifyChapter = lazy(() => import('./result-dashboard/chapters/VerifyChapter'));
@@ -122,6 +123,7 @@ export function ResultWorkspace({
   onRescanRepositoryIntelligence,
   persistenceControl,
 }: Props) {
+  const { recordOutcome } = useFeedback();
   const reportIdentity = `${report.repoName}:${report.scannedAt}`;
   const repositoryHealth = report.repositoryHealth;
   const resolvedPackages = resolveSelectedPackages(selectedPackages ?? []);
@@ -140,6 +142,7 @@ export function ResultWorkspace({
   const [futureEntryIntent, setFutureEntryIntent] = useState<FutureEntryIntent | null>(null);
   const [futureEntryMotion, setFutureEntryMotion] = useState<RepositoryFuturesEntryMotion>('cached-result');
   const billingFutureFocusConsumed = useRef(false);
+  const signalledFutureIdentity = useRef('');
   const repositoryUniverseRef = useRef<HTMLDivElement>(null);
   const repositoryIntelligenceReviewRef = useRef<HTMLDivElement>(null);
   const workspaceStory = useMemo(() => buildWorkspaceStory(report), [report]);
@@ -217,6 +220,14 @@ export function ResultWorkspace({
     setPendingDashboardFocus(null);
     handleResultChapterChange('improve');
   }, [handleResultChapterChange]);
+
+  useEffect(() => {
+    if (effectiveEntryView !== 'futures') return;
+    const identity = `${reportIdentity}:${repositoryProductIntelligence?.fingerprint || 'deterministic'}`;
+    if (signalledFutureIdentity.current === identity) return;
+    signalledFutureIdentity.current = identity;
+    recordOutcome('future_opened', 'repository_futures', { premiumValue: true, prompt: true });
+  }, [effectiveEntryView, recordOutcome, reportIdentity, repositoryProductIntelligence?.fingerprint]);
   const clearRepositoryIntelligenceFocus = useCallback(() => setPendingDashboardFocus(current => current === 'repository-intelligence' ? null : current), []);
 
   useEffect(() => {
@@ -270,11 +281,12 @@ export function ResultWorkspace({
   useEffect(() => {
     if (!futureEntryIntent || !futuresReady) return;
     setFutureEntryMotion('new-result');
+    recordOutcome('future_generated', 'repository_futures', { premiumValue: true, prompt: true });
     setFutureEntryIntent(null);
     runRepositoryPerspectiveTransition(() => setEntryView('futures'));
     setPendingDashboardFocus(null);
     handleResultChapterChange('improve');
-  }, [futureEntryIntent, futuresReady, handleResultChapterChange]);
+  }, [futureEntryIntent, futuresReady, handleResultChapterChange, recordOutcome]);
 
   useEffect(() => {
     if (billingFutureFocusConsumed.current || !futuresReady || typeof window === 'undefined') return;

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type Overview = Record<string, number | string | null>;
 type AttentionItem = {
@@ -42,7 +43,9 @@ type OperationDiagnostic = {
   timeline: TimelineItem[];
 };
 type SafeEvent = { category?: unknown; action?: unknown; status?: unknown; created_at?: unknown; deployment_id?: unknown };
-type AdminPayload = { overview: Overview; needsAttention: AttentionItem[]; recentEvents: SafeEvent[]; operation: OperationDiagnostic | null };
+type FeedbackRow = { id: string; surface: string; use_case: string; outcome: string; use_again: string; pricing_intent: string | null; comment: string | null; contact_allowed: boolean; created_at: string };
+type FeedbackDistribution = { dimension: 'outcome' | 'use_again' | 'pricing_intent'; value: string; count: number };
+type AdminPayload = { overview: Overview; needsAttention: AttentionItem[]; recentEvents: SafeEvent[]; operation: OperationDiagnostic | null; feedback?: { recent: FeedbackRow[]; distribution: FeedbackDistribution[] } };
 
 export default function Admin() {
   const [data, setData] = useState<AdminPayload | null>(null);
@@ -50,6 +53,9 @@ export default function Admin() {
   const [query, setQuery] = useState('');
   const [searched, setSearched] = useState(false);
   const [actionMessage, setActionMessage] = useState('');
+  const [feedbackOutcome, setFeedbackOutcome] = useState('all');
+  const [feedbackUseCase, setFeedbackUseCase] = useState('all');
+  const [feedbackPricing, setFeedbackPricing] = useState('all');
   useEffect(() => { void load(); }, []);
   async function load(search = '') {
     try {
@@ -90,6 +96,14 @@ export default function Admin() {
     ['GitHub failures', metric('github_failures_24h')],
     ['Stripe events · 24h', metric('stripe_events_24h')],
   ];
+  const feedback = data.feedback || { recent: [], distribution: [] };
+  const filteredFeedback = feedback.recent.filter(item => (feedbackOutcome === 'all' || item.outcome === feedbackOutcome)
+    && (feedbackUseCase === 'all' || item.use_case === feedbackUseCase)
+    && (feedbackPricing === 'all' || (feedbackPricing === 'none' ? !item.pricing_intent : item.pricing_intent === feedbackPricing)));
+  const distribution = (dimension: FeedbackDistribution['dimension']) => ['yes', 'partly', 'maybe', 'no'].map(value => {
+    const match = feedback.distribution.find(item => item.dimension === dimension && item.value === value);
+    return match ? `${humanize(value)} ${Number(match.count).toLocaleString()}` : null;
+  }).filter(Boolean).join(' · ') || 'No responses yet';
 
   return <div className="min-h-screen bg-background"><Nav /><main className="container max-w-7xl pb-20 pt-28">
     <div className="text-xs font-mono uppercase tracking-wider text-primary">Internal operations</div>
@@ -117,10 +131,35 @@ export default function Admin() {
     </Card>
 
     <Card className="mt-8 bg-card/50">
+      <CardHeader><CardTitle className="font-display text-xl">Early Access feedback</CardTitle><CardDescription>Are people getting enough value to use ShipSeal again and eventually pay for it? Partial and negative responses are shown first.</CardDescription></CardHeader>
+      <CardContent>
+        <dl className="grid gap-3 md:grid-cols-3">
+          <FeedbackSummary label="Did it help?" value={distribution('outcome')} />
+          <FeedbackSummary label="Would use again?" value={distribution('use_again')} />
+          <FeedbackSummary label="$19 / 10 analyses?" value={distribution('pricing_intent')} />
+        </dl>
+        <div className="mt-5 grid gap-2 sm:grid-cols-3" aria-label="Feedback filters">
+          <AdminFilter label="Outcome" value={feedbackOutcome} onChange={setFeedbackOutcome} options={['all', 'yes', 'partly', 'no']} />
+          <AdminFilter label="Use case" value={feedbackUseCase} onChange={setFeedbackUseCase} options={['all', 'understand_repository', 'find_improvements', 'plan_future', 'prepare_agent_work', 'prepare_delivery', 'other']} />
+          <AdminFilter label="Pricing intent" value={feedbackPricing} onChange={setFeedbackPricing} options={['all', 'yes', 'maybe', 'no', 'none']} />
+        </div>
+        {filteredFeedback.length ? <div className="mt-5 overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Outcome</TableHead><TableHead>Use again</TableHead><TableHead>Pricing</TableHead><TableHead>Use case / surface</TableHead><TableHead>Comment</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{filteredFeedback.map(item => <TableRow key={item.id}><TableCell><Badge variant={item.outcome === 'no' ? 'destructive' : 'outline'}>{humanize(item.outcome)}</Badge></TableCell><TableCell>{humanize(item.use_again)}</TableCell><TableCell>{item.pricing_intent ? humanize(item.pricing_intent) : 'Not asked'}</TableCell><TableCell><div>{humanize(item.use_case)}</div><div className="text-xs text-muted-foreground">{humanize(item.surface)}</div></TableCell><TableCell className="min-w-64 whitespace-pre-wrap break-words">{item.comment || '—'}</TableCell><TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(item.created_at)}</TableCell></TableRow>)}</TableBody></Table></div> : <p className="mt-5 text-sm text-muted-foreground">No feedback matches these filters.</p>}
+      </CardContent>
+    </Card>
+
+    <Card className="mt-8 bg-card/50">
       <CardHeader><CardTitle className="font-display text-xl">Recent safe events</CardTitle><CardDescription>Operational and Stripe event metadata only; no source, prompt, provider, or webhook payloads.</CardDescription></CardHeader>
       <CardContent><Table><TableHeader><TableRow><TableHead>Area</TableHead><TableHead>Action</TableHead><TableHead>Status</TableHead><TableHead>Deployment</TableHead><TableHead>Time</TableHead></TableRow></TableHeader><TableBody>{data.recentEvents.slice(0, 12).map((event, index) => <TableRow key={index}><TableCell>{String(event.category || 'system')}</TableCell><TableCell>{String(event.action || 'event')}</TableCell><TableCell>{String(event.status || 'unknown')}</TableCell><TableCell className="font-mono text-xs text-muted-foreground">{event.deployment_id ? String(event.deployment_id).slice(0, 12) : 'Unavailable'}</TableCell><TableCell className="whitespace-nowrap text-muted-foreground">{formatDate(event.created_at)}</TableCell></TableRow>)}</TableBody></Table></CardContent>
     </Card>
   </main></div>;
+}
+
+function FeedbackSummary({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl border border-border/60 bg-background/25 p-3"><dt className="text-xs text-muted-foreground">{label}</dt><dd className="mt-1 text-sm font-medium">{value}</dd></div>;
+}
+
+function AdminFilter({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: string[] }) {
+  return <label className="grid gap-1 text-xs text-muted-foreground">{label}<Select value={value} onValueChange={onChange}><SelectTrigger aria-label={label}><SelectValue /></SelectTrigger><SelectContent><SelectGroup>{options.map(option => <SelectItem key={option} value={option}>{option === 'all' ? 'All' : option === 'none' ? 'Not asked' : humanize(option)}</SelectItem>)}</SelectGroup></SelectContent></Select></label>;
 }
 
 function OperationResult({ operation, actionMessage, onRelease }: { operation: OperationDiagnostic; actionMessage: string; onRelease: (publicOperationId: string) => Promise<void> }) {

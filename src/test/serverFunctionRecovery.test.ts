@@ -102,6 +102,7 @@ describe('production server-function recovery', () => {
       'api/audit-request.ts',
       'api/billing-router.ts',
       'api/create-readiness-pr.ts',
+      'api/feedback.ts',
       'api/github-app-router.ts',
       'api/github-archive.ts',
       'api/persistence-router.ts',

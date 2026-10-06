@@ -40,6 +40,7 @@ export default function Privacy() {
             <li><strong>Derived intelligence:</strong> readiness results, repository maps, recommendations, verification relationships, exports, and canonical Future analyses.</li>
             <li><strong>Usage and billing:</strong> entitlements, Deep Analysis operations and adjustments, Stripe customer/subscription identifiers, status, billing period, and webhook event identifiers.</li>
             <li><strong>Operations:</strong> request IDs, hashed/fingerprinted repository identities, stage state, timing, counts, and safe error categories in database records or hosting logs.</li>
+            <li><strong>Early Access feedback:</strong> your selected use case, usefulness, reuse and optional pricing responses, the text you submit, optional follow-up consent, and the product surface where you responded. When signed in, safe internal account, project, and scan IDs may be associated with the response. Repository source is not automatically attached to feedback.</li>
             <li><strong>Contact:</strong> the current landing contact form prepares an email in your mail client; it does not submit the entered message to ShipSeal's server.</li>
           </ul>
         </TrustSection>
@@ -54,8 +55,8 @@ export default function Privacy() {
           <ul className="space-y-3">
             <li>The production account session is an opaque, HTTP-only, SameSite=Lax, Secure cookie. Its database record and cookie expire after 14 days unless revoked sooner. OAuth state cookies expire after 10 minutes.</li>
             <li>Browser local storage holds the theme preference, a metadata-only recent-scan list (up to five items), and the selected GitHub installation ID. These can be cleared through browser controls; recent scan history also has an in-product clear action.</li>
-            <li>ShipSeal has no implemented analytics or marketing tracker and sets no analytics or marketing cookie. Google-hosted fonts are requested by public pages and may expose ordinary request metadata to Google.</li>
-            <li>Account projects, snapshots, Future results, and usage records currently have no automatic age-based deletion window. They remain until the applicable project, scan, or account deletion path is used.</li>
+            <li>ShipSeal has no third-party analytics or marketing tracker and sets no analytics or marketing cookie. During Early Access, it records a small first-party set of product outcome events without repository source or customer secrets. Google-hosted fonts are requested by public pages and may expose ordinary request metadata to Google.</li>
+            <li>Account projects, snapshots, Future results, usage records, and submitted feedback currently have no automatic age-based deletion window. Account deletion removes feedback associated with that account; anonymous feedback cannot be connected to an account deletion request.</li>
             <li>Hosting logs and infrastructure backups follow the hosting/database provider configuration; no fixed ShipSeal retention duration is encoded. AI-provider retention is contract-dependent and must be reviewed for the configured provider.</li>
           </ul>
         </TrustSection>
@@ -68,7 +69,7 @@ export default function Privacy() {
           <ul className="space-y-3">
             <li><strong>Scan deletion</strong> removes that saved scan snapshot and dependent verification relationships. Account-level AI operation history is not deleted by scan deletion.</li>
             <li><strong>Project deletion</strong> removes the project and its saved scan history. AI usage operations and durable Future records tied to the account remain until account deletion so billing and recovery history stays coherent.</li>
-            <li><strong>Account deletion</strong> requires an active, trialing, or past-due Stripe subscription to be ended first. It removes ShipSeal projects, scans, Future/AI operations, usage adjustments, entitlements, sessions, and the local Stripe customer mapping; the ShipSeal user row is retained in anonymized form. Processed Stripe webhook event identifiers can remain linked only to that anonymized internal user ID for idempotency/audit.</li>
+            <li><strong>Account deletion</strong> requires an active, trialing, or past-due Stripe subscription to be ended first. It removes ShipSeal projects, scans, Future/AI operations, usage adjustments, submitted account-associated feedback, entitlements, sessions, and the local Stripe customer mapping; the ShipSeal user row is retained in anonymized form. Processed Stripe webhook event identifiers can remain linked only to that anonymized internal user ID for idempotency/audit.</li>
             <li>ShipSeal deletion does not remove GitHub repositories, installations, branches, or Pull Requests, and it does not delete Stripe's customer/payment records. Remove the GitHub App in GitHub and manage Stripe through the Customer Portal where needed.</li>
           </ul>
         </TrustSection>

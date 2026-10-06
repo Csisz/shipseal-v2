@@ -54,6 +54,7 @@ import { RepositoryFuturesNeuralCanvas } from './RepositoryFuturesNeuralCanvas';
 import { buildRepositoryFuturePathwaysGraph } from './repositoryFuturePathwaysGraph';
 import ExecutableFuturePlanView, { ExecutableFuturePlanEntry } from './ExecutableFuturePlanView';
 import type { RepositoryFuturesEntryMotion } from './repositoryFuturesMotion';
+import { useFeedback } from '@/components/feedback/feedbackContext';
 
 interface RepositoryFuturePathwaysProps {
   report: ReadinessReport;
@@ -68,6 +69,7 @@ type RoleFilter = 'all' | 'selected' | 'saved' | 'available' | 'blocked';
 type Focus = { kind: 'goal'; id: string } | { kind: 'dependency'; id: string } | null;
 
 export default function RepositoryFuturePathways({ report, universe, productIntelligence, providerStatus, onStageOverlayChange, entryMotion = 'cached-result' }: RepositoryFuturePathwaysProps) {
+  const { recordOutcome } = useFeedback();
   const rootRef = useRef<HTMLElement | null>(null);
   const composerRef = useRef<HTMLDetailsElement | null>(null);
   const [mode, setMode] = useState<RepositoryFuturePathwaysMode>('quick');
@@ -156,8 +158,11 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   }, [acceptResult, draft, graph]);
 
   const buildSelectedFuture = useCallback((goalId: string) => {
-    if (choosePrimary(goalId)) setPlanOpen(true);
-  }, [choosePrimary]);
+    if (choosePrimary(goalId)) {
+      setPlanOpen(true);
+      recordOutcome('future_opened', 'executable_plan', { premiumValue: true, prompt: true });
+    }
+  }, [choosePrimary, recordOutcome]);
 
   const addSupport = useCallback((goalId: string) => {
     if (!draft) {
@@ -462,7 +467,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         <RepositoryFuturesNeuralCanvas repositoryName={report.repoName} overlay={overlay} entryMotion={entryMotion} />
       </div>
 
-      <ExecutableFuturePlanEntry plan={executablePlan} onOpen={() => setPlanOpen(true)} />
+      <ExecutableFuturePlanEntry plan={executablePlan} onOpen={() => { setPlanOpen(true); recordOutcome('future_opened', 'executable_plan', { premiumValue: true, prompt: true }); }} />
 
       <details ref={composerRef} data-secondary-surface="configure-path" className="group mt-4 scroll-mt-20 border-t border-border/40 bg-transparent">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:px-3">

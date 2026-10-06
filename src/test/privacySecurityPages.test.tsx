@@ -19,7 +19,8 @@ describe('Trust pages', () => {
     expect(screen.getByText('Local ZIP sources')).toBeInTheDocument();
     expect(screen.getByText('Private project history')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Storage, cookies, and retention/i })).toBeInTheDocument();
-    expect(screen.getByText(/no implemented analytics or marketing tracker/i)).toBeInTheDocument();
+    expect(screen.getByText(/no third-party analytics or marketing tracker/i)).toBeInTheDocument();
+    expect(screen.getByText(/repository source is not automatically attached/i)).toBeInTheDocument();
     expect(screen.getByText(/Stripe hosts Checkout/i)).toBeInTheDocument();
     expect(screen.getByText(/does not remove GitHub repositories/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back to ShipSeal/i })).toHaveAttribute('href', '/');
