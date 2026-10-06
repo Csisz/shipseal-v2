@@ -13,6 +13,7 @@ import { Reveal } from './landing/Reveal';
 import { UpgradeToProButton } from '@/components/billing/BillingActionButton';
 import { formatMonthlyPlanPrice, PUBLIC_BILLING_CATALOG } from '@/lib/billing/catalog';
 import { SHIPSEAL_PUBLIC_CONTACT_EMAIL } from '@/lib/trust/publicTrust';
+import { useOptionalAccount } from '@/components/account/accountContext';
 
 interface Props {
   onSampleReport: () => void;
@@ -22,6 +23,8 @@ interface Props {
 }
 
 export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot }: Props) {
+  const account = useOptionalAccount();
+  const earlyAccessFree = account.productMode?.earlyAccessFree === true;
   const pickPackage = (id: string) => {
     if (onPickPackage) onPickPackage(id);
     else onScrollScan();
@@ -160,12 +163,39 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
       <section id="pricing" className="container scroll-mt-20 py-16 md:py-24">
         <Reveal className="mx-auto max-w-3xl text-center">
           <Eyebrow>Simple pricing</Eyebrow>
-          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">Map the repository for free. Explore its futures with Pro.</h2>
-          <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">Pro includes a bounded monthly Deep Analysis allowance. ShipSeal never promises unlimited AI usage.</p>
+          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight md:text-4xl">{earlyAccessFree ? 'Full ShipSeal access during Early Access.' : 'Map the repository for free. Explore its futures with Pro.'}</h2>
+          <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">{earlyAccessFree ? 'No payment method is required. Deep Analysis remains bounded to protect provider capacity.' : 'Pro includes a bounded monthly Deep Analysis allowance. ShipSeal never promises unlimited AI usage.'}</p>
         </Reveal>
-        <div className="mx-auto mt-10 grid max-w-4xl gap-4 md:grid-cols-2">
-          {PRICING.map(item => (
-            <Card key={item.name} className="h-full">
+        {account.productMode === null ? (
+          <Card className="mx-auto mt-10 max-w-xl">
+            <CardHeader>
+              <CardTitle>Loading the current access offer</CardTitle>
+              <CardDescription>Confirming the server-authoritative product mode.</CardDescription>
+            </CardHeader>
+          </Card>
+        ) : earlyAccessFree ? (
+          <Card className="mx-auto mt-10 max-w-2xl">
+            <CardHeader>
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <CardTitle>Early Access</CardTitle>
+                  <CardDescription>Free while the controlled Early Access period is active.</CardDescription>
+                </div>
+                <Badge>Early Access</Badge>
+              </div>
+              <div className="pt-3 font-display text-3xl font-semibold">$0</div>
+            </CardHeader>
+            <CardContent>
+              <ul className="grid gap-3 text-sm sm:grid-cols-2">
+                {earlyAccessFeatures(account.productMode.earlyAccessDeepAnalysisLimit).map(feature => <li key={feature} className="flex items-start gap-2"><Check className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" /><span>{feature}</span></li>)}
+              </ul>
+            </CardContent>
+            <CardFooter><Button size="lg" onClick={onScrollScan}>Scan my repository</Button></CardFooter>
+          </Card>
+        ) : (
+          <div className="mx-auto mt-10 grid max-w-4xl gap-4 md:grid-cols-2">
+            {PRICING.map(item => (
+              <Card key={item.name} className="h-full">
               <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex flex-col gap-1">
@@ -184,11 +214,12 @@ export function Landing({ onSampleReport, onScrollScan, onPickPackage, scanSlot 
               <CardFooter>
                 {item.id === 'pro' ? <UpgradeToProButton size="lg" returnTo="/#pricing" label="Upgrade to Pro" /> : <Button size="lg" variant="outline" onClick={onScrollScan}>Scan a repository</Button>}
               </CardFooter>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
+        )}
         <p className="mx-auto mt-4 max-w-4xl text-xs leading-relaxed text-muted-foreground">
-          Pro is billed monthly. Stripe processes payment information and hosts subscription management. Deep Analysis allowance corrections after technical failure are not monetary subscription refunds. See <a href="/terms" className="text-primary hover:underline">Terms</a>.
+          {earlyAccessFree ? 'Future commercial pricing may change after Early Access. The feedback pricing question is research only and never starts Checkout or changes access.' : <>Pro is billed monthly. Stripe processes payment information and hosts subscription management. Deep Analysis allowance corrections after technical failure are not monetary subscription refunds. See <a href="/terms" className="text-primary hover:underline">Terms</a>.</>}
         </p>
       </section>
 
@@ -292,6 +323,19 @@ const PRICING = [
     ],
   },
 ] as const;
+
+function earlyAccessFeatures(limit: number | null) {
+  return [
+    'Repository scanning',
+    'Deterministic Repository Intelligence',
+    'Project Universe',
+    'Repository Futures',
+    'Executable Future Plans',
+    `${limit ?? 10} Deep Analyses per usage period`,
+    'Saved projects',
+    'Agent handoff and delivery capabilities',
+  ];
+}
 
 function ContactDisclosure() {
   const [open, setOpen] = useState(false);

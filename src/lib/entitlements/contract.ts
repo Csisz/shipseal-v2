@@ -1,10 +1,10 @@
-export const SHIPSEAL_PLANS = ['free', 'pro', 'team', 'internal'] as const;
+export const SHIPSEAL_PLANS = ['free', 'early_access', 'pro', 'team', 'internal'] as const;
 export type ShipSealPlan = typeof SHIPSEAL_PLANS[number];
 
 export const ENTITLEMENT_STATUSES = ['active', 'trialing', 'past_due', 'expired', 'disabled'] as const;
 export type EntitlementStatus = typeof ENTITLEMENT_STATUSES[number];
 
-export const ENTITLEMENT_SOURCES = ['default', 'internal', 'billing'] as const;
+export const ENTITLEMENT_SOURCES = ['default', 'early_access', 'internal', 'billing'] as const;
 export type EntitlementSource = typeof ENTITLEMENT_SOURCES[number];
 
 export const AI_USAGE_DENIAL_CATEGORIES = [

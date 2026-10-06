@@ -40,7 +40,7 @@ export default function Security() {
         </SecuritySection>
 
         <SecuritySection title="Payments and secrets">
-          Stripe webhook signatures are verified before subscription state updates. Checkout and Customer Portal sessions are created by authenticated server endpoints from an allowlisted price and trusted return origin. Stripe handles payment-card data; ShipSeal stores no card number. Stripe, GitHub, database, and AI-provider secrets are server-only and are not exposed through Vite variables.
+          Stripe webhook signatures are verified before subscription state updates. While free Early Access is enabled, the server rejects customer Checkout creation before any Stripe session can be created. When commercial billing is enabled, Checkout and Customer Portal sessions use authenticated server endpoints, an allowlisted price, and a trusted return origin. Stripe handles payment-card data; ShipSeal stores no card number. Stripe, GitHub, database, and AI-provider secrets are server-only and are not exposed through Vite variables.
         </SecuritySection>
 
         <SecuritySection title="What is not claimed">

@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AccountContext, type AccountContextValue } from '@/components/account/accountContext';
+import { STANDARD_PRODUCT_MODE } from '@/lib/productMode';
 
 vi.mock('@/lib/persistence/sessionClient', () => ({
   getCurrentUserAiUsage: vi.fn(),
@@ -14,6 +15,7 @@ function accountValue(): AccountContextValue {
   return {
     user: { id: `usr_${'a'.repeat(24)}`, email: null, displayName: 'Ada', avatarUrl: null },
     status: 'authenticated', availabilityMessage: '', usage: null, usageStatus: 'ready',
+    productMode: STANDARD_PRODUCT_MODE,
     refresh: vi.fn(async () => undefined), refreshUsage: vi.fn(async () => undefined),
     beginSignIn: vi.fn(), logout: vi.fn(async () => undefined),
   };

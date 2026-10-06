@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AccountContext, type AccountContextValue } from '@/components/account/accountContext';
 import { FeedbackProvider } from '@/components/feedback/FeedbackProvider';
 import { useFeedback } from '@/components/feedback/feedbackContext';
 import { Nav } from '@/components/agentready/Nav';
+import { STANDARD_PRODUCT_MODE } from '@/lib/productMode';
 
 function Harness() {
   const feedback = useFeedback();
@@ -19,6 +20,7 @@ function renderFeedback(authenticated = false) {
   const account: AccountContextValue = {
     user: authenticated ? { id: `usr_${'a'.repeat(24)}`, email: 'owner@example.test', displayName: 'Owner', avatarUrl: null } : null,
     status: authenticated ? 'authenticated' : 'anonymous', availabilityMessage: '', usage: null, usageStatus: 'idle',
+    productMode: STANDARD_PRODUCT_MODE,
     refresh: async () => undefined, refreshUsage: async () => undefined, beginSignIn: vi.fn(), logout: async () => undefined,
   };
   return render(<AccountContext.Provider value={account}><MemoryRouter><FeedbackProvider><Harness /></FeedbackProvider></MemoryRouter></AccountContext.Provider>);
@@ -133,6 +135,22 @@ describe('Early Access feedback UX', () => {
     expect(screen.getByText(/Would you pay \$19\/month for 10 Deep Analyses/i)).toBeInTheDocument();
   });
 
+  it('keeps the $19 research answer isolated from Stripe and entitlement workflows', () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ ok: true }), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetcher);
+    renderFeedback(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Premium outcome' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+    const pricing = screen.getByRole('group', { name: /Would you pay \$19\/month/i });
+    fireEvent.click(within(pricing).getByRole('radio', { name: 'Maybe' }));
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls.map(([input]) => String(input))).toEqual(['/api/feedback']);
+    expect(fetcher.mock.calls.some(([input]) => /billing|stripe/i.test(String(input)))).toBe(false);
+  });
+
   it('dismisses the micro prompt and does not repeat it in the same session', () => {
     renderFeedback();
     fireEvent.click(screen.getByRole('button', { name: 'Scan outcome' }));
@@ -156,14 +174,14 @@ describe('Early Access feedback UX', () => {
   });
 
   it('keeps a persistent feedback action and calm Early Access label in navigation', () => {
-    const account: AccountContextValue = { user: null, status: 'anonymous', availabilityMessage: '', usage: null, usageStatus: 'idle', refresh: async () => undefined, refreshUsage: async () => undefined, beginSignIn: vi.fn(), logout: async () => undefined };
+    const account: AccountContextValue = { user: null, status: 'anonymous', availabilityMessage: '', usage: null, usageStatus: 'idle', productMode: STANDARD_PRODUCT_MODE, refresh: async () => undefined, refreshUsage: async () => undefined, beginSignIn: vi.fn(), logout: async () => undefined };
     render(<AccountContext.Provider value={account}><MemoryRouter><FeedbackProvider><Nav /></FeedbackProvider></MemoryRouter></AccountContext.Provider>);
     expect(screen.getByText('Early Access')).toBeInTheDocument();
     expect(screen.getAllByText('Send feedback').length).toBeGreaterThan(0);
   });
 
   it('returns focus to the persistent Send feedback navigation action', async () => {
-    const account: AccountContextValue = { user: null, status: 'anonymous', availabilityMessage: '', usage: null, usageStatus: 'idle', refresh: async () => undefined, refreshUsage: async () => undefined, beginSignIn: vi.fn(), logout: async () => undefined };
+    const account: AccountContextValue = { user: null, status: 'anonymous', availabilityMessage: '', usage: null, usageStatus: 'idle', productMode: STANDARD_PRODUCT_MODE, refresh: async () => undefined, refreshUsage: async () => undefined, beginSignIn: vi.fn(), logout: async () => undefined };
     render(<AccountContext.Provider value={account}><MemoryRouter><FeedbackProvider><Nav /></FeedbackProvider></MemoryRouter></AccountContext.Provider>);
     const trigger = screen.getAllByRole('button', { name: 'Send feedback' })[0];
     trigger.focus();
@@ -176,7 +194,7 @@ describe('Early Access feedback UX', () => {
   });
 
   it('returns focus to the mobile Send feedback action without collapsing its navigation context', async () => {
-    const account: AccountContextValue = { user: null, status: 'anonymous', availabilityMessage: '', usage: null, usageStatus: 'idle', refresh: async () => undefined, refreshUsage: async () => undefined, beginSignIn: vi.fn(), logout: async () => undefined };
+    const account: AccountContextValue = { user: null, status: 'anonymous', availabilityMessage: '', usage: null, usageStatus: 'idle', productMode: STANDARD_PRODUCT_MODE, refresh: async () => undefined, refreshUsage: async () => undefined, beginSignIn: vi.fn(), logout: async () => undefined };
     render(<AccountContext.Provider value={account}><MemoryRouter><FeedbackProvider><Nav /></FeedbackProvider></MemoryRouter></AccountContext.Provider>);
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }));
     const trigger = screen.getAllByRole('button', { name: 'Send feedback' }).at(-1) as HTMLButtonElement;

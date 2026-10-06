@@ -27,6 +27,7 @@ import type {
   ShipSealPlan,
 } from '../../src/lib/entitlements/contract.js';
 import { validateAccountDatabaseUrl } from './authConfig.js';
+import { earlyAccessEntitlement, resolveEarlyAccessConfig } from './earlyAccess.js';
 import type {
   AiOperationLookup,
   AiUsageReconciliationReport,
@@ -305,13 +306,13 @@ export class AiUsageAuthorizationService {
 }
 
 export class PostgresAiUsageStore implements AiUsageStore {
-  constructor(private readonly sql: Sql) {}
+  constructor(private readonly sql: Sql, private readonly env: NodeJS.ProcessEnv = process.env) {}
 
   static fromEnvironment(env: NodeJS.ProcessEnv = process.env) {
     const connectionString = (env.DATABASE_URL || '').trim();
     if (!connectionString) throw temporaryUsageError();
     try { validateAccountDatabaseUrl(connectionString); } catch { throw temporaryUsageError(); }
-    return new PostgresAiUsageStore(postgres(connectionString, { max: 2, idle_timeout: 20, connect_timeout: 10, prepare: false }));
+    return new PostgresAiUsageStore(postgres(connectionString, { max: 2, idle_timeout: 20, connect_timeout: 10, prepare: false }), env);
   }
 
   async getEntitlement(userId: string, now: Date) {
@@ -353,7 +354,7 @@ export class PostgresAiUsageStore implements AiUsageStore {
           periodEnd: entitlement.periodEnd,
         },
         billing: {
-          customerPortalAvailable: Boolean(billing?.stripe_customer_id),
+          customerPortalAvailable: entitlement.plan !== 'early_access' && Boolean(billing?.stripe_customer_id),
           cancelAtPeriodEnd: Boolean(billing?.cancel_at_period_end),
           stripeStatus: billing?.status ? String(billing.status) : null,
           currentPeriodEnd: billing?.current_period_end ? asIsoDate(billing.current_period_end) : null,
@@ -907,6 +908,8 @@ export class PostgresAiUsageStore implements AiUsageStore {
   async close() { await this.sql.end({ timeout: 5 }); }
 
   private async resolveEntitlement(transaction: TransactionSql, userId: string, now: Date, lock: boolean): Promise<EntitlementSnapshot> {
+    const earlyAccess = earlyAccessEntitlement(userId, now, resolveEarlyAccessConfig(this.env));
+    if (earlyAccess) return earlyAccess;
     const period = defaultUtcMonthPeriod(now);
     await transaction`
       insert into public.shipseal_entitlements (

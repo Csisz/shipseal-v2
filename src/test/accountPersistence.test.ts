@@ -49,12 +49,18 @@ describe('Omega 18.1 account sessions', () => {
     const anonymous = response();
     await sessionHandler(request() as never, anonymous as never);
     expect(anonymous.statusCode).toBe(200);
-    expect(anonymous.json()).toEqual({ user: null });
+    expect(anonymous.json()).toEqual({
+      user: null,
+      productMode: { mode: 'standard', earlyAccessFree: false, earlyAccessDeepAnalysisLimit: null },
+    });
 
     const userA = await setupUser(store, 'a');
     const authenticated = response();
     await sessionHandler(request(userA.cookie) as never, authenticated as never);
-    expect(authenticated.json()).toEqual({ user: { id: userA.user.id, email: 'a@example.test', displayName: 'User a', avatarUrl: null } });
+    expect(authenticated.json()).toEqual({
+      user: { id: userA.user.id, email: 'a@example.test', displayName: 'User a', avatarUrl: null },
+      productMode: { mode: 'standard', earlyAccessFree: false, earlyAccessDeepAnalysisLimit: null },
+    });
     expect(authenticated.body).not.toContain(userA.token);
   });
 

@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { useUpgradeToProAction } from '@/components/billing/useUpgradeToProAction';
 import { operationSupportReference } from '@/lib/supportReference';
 import { ScanCoverageDisclosure } from './ScanCoverageDisclosure';
+import { useOptionalAccount } from '@/components/account/accountContext';
 
 export type PostScanEntryView = 'universe' | 'futures';
 
@@ -34,7 +35,9 @@ export function PostScanViewSelector({
   onSelect: (view: PostScanEntryView) => void;
 }) {
   const rootRef = useRef<HTMLElement>(null);
+  const account = useOptionalAccount();
   const upgrade = useUpgradeToProAction();
+  const earlyAccess = account.usage?.plan === 'early_access' || account.productMode?.earlyAccessFree === true;
   const bounded = report.scanSummary.scanMode === 'bounded';
   const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;
   const futuresRetrying = futuresStatus?.state === 'preparing';
@@ -46,8 +49,11 @@ export function PostScanViewSelector({
     : futuresStatus && 'diagnostics' in futuresStatus ? futuresStatus.diagnostics?.rateLimitRetryAt : undefined;
   const cooldownSeconds = useCooldownSeconds(rateLimitRetryAt);
   const rateLimitWaiting = Boolean(rateLimitRetryAt && cooldownSeconds > 0);
-  const upgradeRequired = futuresStatus?.state === 'fallback' && futuresStatus.category === 'upgrade_required';
-  const futureAvailability = suppliedFutureAvailability ?? resolveRepositoryFutureAvailability(futuresStatus);
+  const paymentGateStatus = futuresStatus?.state === 'fallback' && futuresStatus.category === 'upgrade_required';
+  const upgradeRequired = paymentGateStatus && !earlyAccess;
+  const futureAvailability = paymentGateStatus && earlyAccess
+    ? 'startable'
+    : suppliedFutureAvailability ?? resolveRepositoryFutureAvailability(futuresStatus);
   const analysisStartable = futureAvailability === 'startable';
   const recoveryAction = futuresStatus && 'diagnostics' in futuresStatus
     ? futuresStatus.diagnostics?.operationRecoveryAction
@@ -169,9 +175,9 @@ export function PostScanViewSelector({
             action={futureCardAction}
             metadata={futuresAvailable
               ? [opportunityCount ? `${opportunityCount.toLocaleString()} product directions` : 'Evidence-led directions', 'Neural future pathways']
-              : analysisStartable ? ['Explicit start', 'Completion-billed'] : upgradeRequired ? ['Pro feature', 'Evidence-backed AI'] : ['No incomplete Futures shown', futuresRetrying ? rateLimitWaiting ? 'Capacity cooldown' : 'Analysis running' : rateLimitWaiting ? 'Retry cooling down' : operationResumable ? 'Resume saved stages' : 'Unavailable']}
-            badge={!futuresAvailable && (analysisStartable || upgradeRequired || operationResumable) ? 'Pro AI analysis' : undefined}
-            footnote={analysisStartable ? 'Uses 1 Deep Analysis · charged only on completion' : operationResumable ? 'Resumes the existing analysis · no second reservation' : undefined}
+              : analysisStartable ? ['Explicit start', earlyAccess ? 'Completion-counted' : 'Completion-billed'] : upgradeRequired ? ['Pro feature', 'Evidence-backed AI'] : ['No incomplete Futures shown', futuresRetrying ? rateLimitWaiting ? 'Capacity cooldown' : 'Analysis running' : rateLimitWaiting ? 'Retry cooling down' : operationResumable ? 'Resume saved stages' : 'Unavailable']}
+            badge={!futuresAvailable && (analysisStartable || upgradeRequired || operationResumable) ? earlyAccess ? 'Early Access AI' : 'Pro AI analysis' : undefined}
+            footnote={analysisStartable ? earlyAccess ? 'Uses 1 Deep Analysis · counted only on durable completion' : 'Uses 1 Deep Analysis · charged only on completion' : operationResumable ? 'Resumes the existing analysis · no second reservation' : undefined}
             motif={<FuturesMotif />}
             onActivate={activateFutureCard}
             disabled={futureCardDisabled}
@@ -179,7 +185,7 @@ export function PostScanViewSelector({
         </div>
         {(analysisStartable || operationResumable) && (
           <p className="mx-auto mt-3 max-w-3xl text-center text-xs leading-relaxed text-muted-foreground">
-            Deep Analysis sends selected, bounded repository evidence to the configured AI provider after server-side preparation and best-effort redaction. A unit is charged only after successful durable completion. <a href="/privacy#deterministic-ai" className="text-primary hover:underline">How AI processing works</a>
+            Deep Analysis sends selected, bounded repository evidence to the configured AI provider after server-side preparation and best-effort redaction. A unit is {earlyAccess ? 'counted as used' : 'charged'} only after successful durable completion. <a href="/privacy#deterministic-ai" className="text-primary hover:underline">How AI processing works</a>
           </p>
         )}
       </div>

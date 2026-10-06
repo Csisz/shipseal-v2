@@ -1,8 +1,35 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { Landing } from '@/components/agentready/Landing';
+import { AccountContext, type AccountContextValue } from '@/components/account/accountContext';
 
 describe('ShipSeal landing', () => {
+  it('shows the server-selected $0 Early Access offer without a payment CTA', () => {
+    const account: AccountContextValue = {
+      user: null,
+      status: 'anonymous',
+      availabilityMessage: '',
+      usage: null,
+      usageStatus: 'idle',
+      productMode: { mode: 'early_access', earlyAccessFree: true, earlyAccessDeepAnalysisLimit: 10 },
+      refresh: async () => undefined,
+      refreshUsage: async () => undefined,
+      beginSignIn: vi.fn(),
+      logout: async () => undefined,
+    };
+    render(<AccountContext.Provider value={account}><Landing onSampleReport={vi.fn()} onScrollScan={vi.fn()} scanSlot={null} /></AccountContext.Provider>);
+
+    const pricing = document.querySelector<HTMLElement>('section#pricing')!;
+    const offer = within(pricing);
+    expect(offer.getByRole('heading', { name: 'Early Access' })).toBeInTheDocument();
+    expect(offer.getByText('$0')).toBeInTheDocument();
+    expect(offer.getByText('Full ShipSeal access during Early Access.')).toBeInTheDocument();
+    expect(offer.getByText('10 Deep Analyses per usage period')).toBeInTheDocument();
+    expect(offer.getByRole('button', { name: 'Scan my repository' })).toBeEnabled();
+    expect(offer.queryByRole('button', { name: /upgrade|checkout/i })).not.toBeInTheDocument();
+    expect(offer.queryByText('$19/month')).not.toBeInTheDocument();
+  });
+
   it('keeps the first viewport focused and progressively reveals the full product story', () => {
     const { container } = render(
       <Landing

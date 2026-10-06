@@ -255,7 +255,11 @@ const Index = () => {
     && (sampleReport || scan.repositoryIntelligenceReview)
     && (futureProviderTerminal || activeFuturePreparationState === 'failed')
   );
-  const accountAwareFuturesStatus: RepositoryIntelligenceProviderStatus = scan.repositoryProductIntelligenceStatus.state === 'deterministic'
+  const accountAwareFuturesStatus: RepositoryIntelligenceProviderStatus = account.productMode?.earlyAccessFree
+    && scan.repositoryProductIntelligenceStatus.state === 'fallback'
+    && scan.repositoryProductIntelligenceStatus.category === 'upgrade_required'
+    ? { state: 'deterministic', retryable: false, message: 'Repository evidence is ready for Early Access Deep Analysis.' }
+    : scan.repositoryProductIntelligenceStatus.state === 'deterministic'
     && !sampleReport
     && account.status !== 'loading'
     && (!account.user || account.usage && !account.usage.capabilities.repositoryFutures)

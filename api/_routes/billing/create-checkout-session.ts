@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAccountPersistenceStore } from '../../_lib/accountPersistence.js';
 import { handleAccountRouteError, readJsonBody, requireAccount, sendAccountError, sendAccountJson, type VercelAccountRequest } from '../../_lib/accountHttp.js';
 import { BillingRequestError, BillingService, isBillingConfigurationError } from '../../_lib/stripeBilling.js';
+import { resolveEarlyAccessConfig } from '../../_lib/earlyAccess.js';
 
 const checkoutSchema = z.object({
   plan: z.literal('pro'),
@@ -13,6 +14,9 @@ const checkoutSchema = z.object({
 export default async function handler(req: VercelAccountRequest, res: ServerResponse) {
   try {
     if (req.method !== 'POST') { res.statusCode = 405; res.end(); return; }
+    if (resolveEarlyAccessConfig().enabled) {
+      return sendAccountError(res, 409, 'early_access_free', 'Full ShipSeal access is free during Early Access. Checkout is disabled.');
+    }
     const session = await requireAccount(req, getAccountPersistenceStore());
     const input = checkoutSchema.parse(await readJsonBody(req, 10_000)) as {
       plan: 'pro'; returnTo: string; checkoutAttemptId: string;

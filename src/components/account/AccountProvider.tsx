@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { PersistedUser } from '@/lib/persistence/schema';
-import { getCurrentUserAiUsage, getCurrentUserSession, logoutCurrentUserSession } from '@/lib/persistence/sessionClient';
+import { getCurrentAccountSession, getCurrentUserAiUsage, logoutCurrentUserSession } from '@/lib/persistence/sessionClient';
 import type { AccountAiUsageSummary } from '@/lib/entitlements/contract';
+import type { ProductModeSnapshot } from '@/lib/productMode';
 import { AccountContext, type AccountContextValue } from './accountContext';
 
 export function AccountProvider({ children }: { children: ReactNode }) {
@@ -10,6 +11,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [availabilityMessage, setAvailabilityMessage] = useState('');
   const [usage, setUsage] = useState<AccountAiUsageSummary | null>(null);
   const [usageStatus, setUsageStatus] = useState<AccountContextValue['usageStatus']>('idle');
+  const [productMode, setProductMode] = useState<ProductModeSnapshot | null>(null);
   const lastResumeRefresh = useRef(0);
   const refreshUsage = useCallback(async () => {
     setUsageStatus('loading');
@@ -18,11 +20,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, []);
   const refresh = useCallback(async () => {
     try {
-      const current = await getCurrentUserSession();
-      setUser(current);
-      setStatus(current ? 'authenticated' : 'anonymous');
+      const current = await getCurrentAccountSession();
+      setUser(current.user);
+      setProductMode(current.productMode);
+      setStatus(current.user ? 'authenticated' : 'anonymous');
       setAvailabilityMessage('');
-      if (current) await refreshUsage();
+      if (current.user) await refreshUsage();
       else { setUsage(null); setUsageStatus('idle'); }
     } catch {
       setUser(null);
@@ -67,6 +70,6 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     if (!popup) window.location.assign('/api/account/login?returnTo=%2F');
   }, []);
   const logout = useCallback(async () => { await logoutCurrentUserSession(); setUser(null); setStatus('anonymous'); setUsage(null); setUsageStatus('idle'); }, []);
-  const value = useMemo(() => ({ user, status, availabilityMessage, usage, usageStatus, refresh, refreshUsage, beginSignIn, logout }), [user, status, availabilityMessage, usage, usageStatus, refresh, refreshUsage, beginSignIn, logout]);
+  const value = useMemo(() => ({ user, status, availabilityMessage, usage, usageStatus, productMode, refresh, refreshUsage, beginSignIn, logout }), [user, status, availabilityMessage, usage, usageStatus, productMode, refresh, refreshUsage, beginSignIn, logout]);
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
 }

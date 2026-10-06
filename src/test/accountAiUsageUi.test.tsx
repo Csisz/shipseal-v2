@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AccountContext, type AccountContextValue } from '@/components/account/accountContext';
 import { AccountUsageCard } from '@/components/account/AccountUsageCard';
+import { STANDARD_PRODUCT_MODE } from '@/lib/productMode';
 
 function accountValue(overrides: Partial<AccountContextValue> = {}): AccountContextValue {
   return {
@@ -9,6 +10,7 @@ function accountValue(overrides: Partial<AccountContextValue> = {}): AccountCont
     status: 'authenticated',
     availabilityMessage: '',
     usageStatus: 'ready',
+    productMode: STANDARD_PRODUCT_MODE,
     usage: {
       plan: 'pro',
       entitlementStatus: 'active',
@@ -31,6 +33,32 @@ function accountValue(overrides: Partial<AccountContextValue> = {}): AccountCont
 }
 
 describe('Omega 19.1 account AI usage UI', () => {
+  it('presents Early Access as free full access without a billing or Portal action', () => {
+    const earlyAccess = accountValue({
+      productMode: { mode: 'early_access', earlyAccessFree: true, earlyAccessDeepAnalysisLimit: 10 },
+      usage: {
+        plan: 'early_access',
+        entitlementStatus: 'active',
+        capabilities: { repositoryFutures: true, executableFuturePlan: true },
+        deepAnalysis: {
+          limit: 10, used: 0, reserved: 1, remaining: 9,
+          periodStart: '2026-10-01T00:00:00.000Z', periodEnd: '2026-11-01T00:00:00.000Z',
+        },
+        billing: {
+          customerPortalAvailable: false, cancelAtPeriodEnd: false, stripeStatus: 'active', currentPeriodEnd: '2026-10-27T00:00:00.000Z',
+        },
+      },
+    });
+    render(<AccountContext.Provider value={earlyAccess}><AccountUsageCard /></AccountContext.Provider>);
+    const card = screen.getByTestId('account-ai-usage');
+    expect(card).toHaveTextContent('Early Access');
+    expect(card).toHaveTextContent('9 of 10');
+    expect(card).toHaveTextContent('0 used · 1 held (not consumed)');
+    expect(card).toHaveTextContent('Full ShipSeal access is free during Early Access.');
+    expect(screen.queryByText(/Pro billing/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Manage subscription|Upgrade to Pro/i })).not.toBeInTheDocument();
+  });
+
   it('shows the server allowance without exposing operational provider limits', () => {
     render(<AccountContext.Provider value={accountValue()}><AccountUsageCard /></AccountContext.Provider>);
     expect(screen.getByTestId('account-ai-usage')).toHaveTextContent('Pro');

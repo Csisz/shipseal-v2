@@ -152,6 +152,19 @@ class TransactionalFixtureAiUsageStore implements AiUsageStore {
     });
   }
 
+  setEarlyAccessEntitlement(userId: string, limit = 10) {
+    this.entitlements.set(userId, {
+      userId,
+      plan: 'early_access',
+      status: 'active',
+      capabilities: { repositoryFutures: true, executableFuturePlan: true },
+      deepAnalysisLimit: limit,
+      periodStart: '2026-08-01T00:00:00.000Z',
+      periodEnd: '2026-09-01T00:00:00.000Z',
+      source: 'early_access',
+    });
+  }
+
   reconcileBillingIntegrity(userId: string) {
     return this.locked(() => {
       const report = { inspected: 0, reconstructed: 0, refunded: 0, reviewRequired: 0, unchanged: 0 };
@@ -439,6 +452,33 @@ function deferred<T>() {
 }
 
 describe('Omega 19.1 transactional Deep Analysis lifecycle', () => {
+  it('uses the bounded Early Access entitlement without Stripe and preserves reservation integrity', async () => {
+    const store = new TransactionalFixtureAiUsageStore();
+    store.setEarlyAccessEntitlement('early-access');
+    const service = new AiUsageAuthorizationService(store, ENV, () => NOW);
+    const successful = request('early-access-success');
+
+    const root = await service.authorize('early-access', successful, roots(successful));
+    expect((await service.getUsageSummary('early-access'))).toMatchObject({
+      plan: 'early_access',
+      deepAnalysis: { limit: 10, used: 0, reserved: 1, remaining: 9 },
+    });
+    await service.complete(root, 'early-access', enhanced());
+    await service.finalizeRepositoryFutures('early-access', { publicOperationId: root.publicOperationId });
+    expect((await service.getUsageSummary('early-access')).deepAnalysis).toMatchObject({ used: 1, reserved: 0, remaining: 9 });
+
+    const cached = await service.authorize('early-access', successful, roots(successful));
+    expect(cached.cachedResponse?.state).toBe('enhanced');
+    expect((await service.getUsageSummary('early-access')).deepAnalysis).toMatchObject({ used: 1, reserved: 0, remaining: 9 });
+
+    const failed = request('early-access-failure');
+    const failedRoot = await service.authorize('early-access', failed, roots(failed));
+    await service.complete(failedRoot, 'early-access', fallback(true));
+    const retry = await service.authorize('early-access', failed, roots(failed));
+    await service.complete(retry, 'early-access', fallback(false));
+    expect((await service.getUsageSummary('early-access')).deepAnalysis).toMatchObject({ used: 1, reserved: 0, remaining: 9 });
+  });
+
   it('keeps one unit reserved after root success and consumes only after complete Future finalization', async () => {
     const store = new TransactionalFixtureAiUsageStore();
     store.setEntitlement('paid', 2);

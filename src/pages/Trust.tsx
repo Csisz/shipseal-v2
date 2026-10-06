@@ -9,7 +9,7 @@ const entries = [
   { icon: FileArchive, title: 'Privacy and persistence', body: 'Local ZIP scanning is browser-local; signed-in completed scans save private derived snapshots. Deep Analysis sends selected evidence only after explicit action.', to: '/privacy', action: 'See the data flow' },
   { icon: Github, title: 'GitHub permissions', body: 'Scanning is read-only. Repository changes are separate, confirmed Pull Request actions on a review branch.', to: '/trust/github', action: 'Review each permission' },
   { icon: Brain, title: 'AI processing', body: SHIPSEAL_DEEP_ANALYSIS_DISCLOSURE, to: '/privacy#deterministic-ai', action: 'Understand Deep Analysis' },
-  { icon: CreditCard, title: 'Billing boundary', body: 'Stripe processes card details. ShipSeal synchronizes subscription identifiers and consumes a Deep Analysis unit only after durable completion.', to: '/terms', action: 'Review subscription terms' },
+  { icon: CreditCard, title: 'Access and billing boundary', body: 'Free Early Access can grant full product capabilities without payment. When commercial billing is enabled, Stripe processes card details. A Deep Analysis unit is counted only after durable completion.', to: '/terms', action: 'Review access terms' },
 ] as const;
 
 export default function Trust() {
@@ -29,7 +29,7 @@ export default function Trust() {
         </div>
         <section id="ai-processing" className="mt-5 rounded-2xl border border-primary/25 bg-primary/5 p-5 md:p-6">
           <h2 className="font-display text-xl font-semibold">Deterministic first. AI only when requested.</h2>
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Repository indexing, static intelligence, and Universe do not start paid Product Strategist execution. A Pro user explicitly starts Repository Futures. Selected bounded evidence is prepared and redacted server-side, then sent to the configured provider. The allowance unit is charged only after a complete result is validated and durably recoverable.</p>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">Repository indexing, static intelligence, and Universe do not start provider-funded Product Strategist execution. An eligible signed-in user explicitly starts Repository Futures. Selected bounded evidence is prepared and redacted server-side, then sent to the configured provider. The allowance unit is counted as used only after a complete result is validated and durably recoverable.</p>
         </section>
       </SecondaryPageShell>
     </>

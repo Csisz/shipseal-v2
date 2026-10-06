@@ -5,6 +5,7 @@ import { UpgradeToProButton } from '@/components/billing/BillingActionButton';
 import { createBillingPortalSession, createProCheckoutSession } from '@/lib/billing/client';
 import { PostScanViewSelector } from '@/components/agentready/result-dashboard/PostScanViewSelector';
 import { buildSampleReport } from '@/lib/readiness';
+import { STANDARD_PRODUCT_MODE } from '@/lib/productMode';
 
 function accountValue(overrides: Partial<AccountContextValue> = {}): AccountContextValue {
   return {
@@ -12,6 +13,7 @@ function accountValue(overrides: Partial<AccountContextValue> = {}): AccountCont
     status: 'authenticated',
     availabilityMessage: '',
     usageStatus: 'ready',
+    productMode: STANDARD_PRODUCT_MODE,
     usage: null,
     refresh: vi.fn(async () => undefined),
     refreshUsage: vi.fn(async () => undefined),
@@ -27,6 +29,41 @@ afterEach(() => {
 });
 
 describe('Omega 19.2 billing UI', () => {
+  it('turns a historical payment gate into the Early Access Generate action', () => {
+    const onRetryFutures = vi.fn();
+    render(
+      <AccountContext.Provider value={accountValue({
+        productMode: { mode: 'early_access', earlyAccessFree: true, earlyAccessDeepAnalysisLimit: 10 },
+        usage: {
+          plan: 'early_access', entitlementStatus: 'active',
+          capabilities: { repositoryFutures: true, executableFuturePlan: true },
+          deepAnalysis: {
+            limit: 10, used: 0, reserved: 0, remaining: 10,
+            periodStart: '2026-10-01T00:00:00.000Z', periodEnd: '2026-11-01T00:00:00.000Z',
+          },
+        },
+      })}>
+        <PostScanViewSelector
+          report={buildSampleReport()}
+          futuresAvailable={false}
+          futuresStatus={{
+            state: 'fallback', deepState: 'failed', category: 'upgrade_required', retryable: false,
+            message: 'Full Repository Futures is a paid AI feature.',
+            diagnostics: { costEstimate: 'unavailable' },
+          }}
+          onRetryFutures={onRetryFutures}
+          onSelect={vi.fn()}
+        />
+      </AccountContext.Provider>,
+    );
+    const generate = screen.getByRole('button', { name: 'Generate Future analysis' });
+    expect(generate).toBeEnabled();
+    expect(screen.getByText('Early Access AI')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Upgrade to Pro' })).not.toBeInTheDocument();
+    fireEvent.click(generate);
+    expect(onRetryFutures).toHaveBeenCalledTimes(1);
+  });
+
   it('turns the upgrade_required Futures denial into a Pro conversion surface', () => {
     render(
       <AccountContext.Provider value={accountValue()}>

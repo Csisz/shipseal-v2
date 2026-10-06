@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { PersistedUser } from '@/lib/persistence';
 import type { AccountAiUsageSummary } from '@/lib/entitlements/contract';
+import { STANDARD_PRODUCT_MODE, type ProductModeSnapshot } from '@/lib/productMode';
 
 export interface AccountContextValue {
   user: PersistedUser | null;
@@ -8,6 +9,7 @@ export interface AccountContextValue {
   availabilityMessage: string;
   usage: AccountAiUsageSummary | null;
   usageStatus: 'idle' | 'loading' | 'ready' | 'unavailable';
+  productMode: ProductModeSnapshot | null;
   refresh: () => Promise<void>;
   refreshUsage: () => Promise<void>;
   beginSignIn: () => void;
@@ -30,6 +32,7 @@ export function useOptionalAccount(): AccountContextValue {
     availabilityMessage: '',
     usage: null,
     usageStatus: 'idle',
+    productMode: STANDARD_PRODUCT_MODE,
     refresh: async () => undefined,
     refreshUsage: async () => undefined,
     beginSignIn: () => window.location.assign('/api/account/login?returnTo=%2F'),
