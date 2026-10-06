@@ -20,7 +20,11 @@ describe('Trust pages', () => {
     expect(screen.getByText('Private project history')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Storage, cookies, and retention/i })).toBeInTheDocument();
     expect(screen.getByText(/no third-party analytics or marketing tracker/i)).toBeInTheDocument();
-    expect(screen.getByText(/repository source is not automatically attached/i)).toBeInTheDocument();
+    expect(screen.getByText(/Feedback you submit may be used to improve ShipSeal/i)).toBeInTheDocument();
+    expect(screen.getByText(/ShipSeal stores your selected use case/i)).toBeInTheDocument();
+    expect(screen.getByText(/safe internal account, project, and scan IDs may be associated/i)).toBeInTheDocument();
+    expect(screen.getByText(/only when you explicitly allow it/i)).toBeInTheDocument();
+    expect(screen.getByText(/Repository source and file contents are not automatically attached/i)).toBeInTheDocument();
     expect(screen.getByText(/Stripe hosts Checkout/i)).toBeInTheDocument();
     expect(screen.getByText(/does not remove GitHub repositories/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back to ShipSeal/i })).toHaveAttribute('href', '/');

@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { MessageSquareText, X } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { useOptionalAccount } from '@/components/account/accountContext';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -51,6 +51,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [prefilledOutcome, setPrefilledOutcome] = useState<FeedbackOutcome>();
   const [premiumValue, setPremiumValue] = useState(() => sessionHas(PREMIUM_KEY));
   const [prompt, setPrompt] = useState<{ surface: FeedbackSurface; premiumValue: boolean } | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
   const routeContext = useMemo(() => {
     const match = location.pathname.match(/^\/projects\/(prj_[A-Za-z0-9_-]{20,80})(?:\/scans\/(scn_[A-Za-z0-9_-]{20,80}))?/);
@@ -58,6 +59,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   }, [location.pathname]);
 
   const openFeedback = useCallback((options: FeedbackOpenOptions = {}) => {
+    returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const nextPremium = premiumValue || Boolean(options.premiumValue) || sessionHas(PREMIUM_KEY);
     if (nextPremium) { markSession(PREMIUM_KEY); setPremiumValue(true); }
     setSurface(options.surface || surfaceForPath(location.pathname));
@@ -90,6 +92,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
         premiumValue={premiumValue}
         authenticated={Boolean(account.user)}
         routeContext={routeContext}
+        returnFocusRef={returnFocusRef}
         onSubmitted={() => markSession(SUBMITTED_KEY)}
       />
     </FeedbackContext.Provider>
@@ -106,7 +109,7 @@ function MicroFeedback({ onAnswer, onDismiss }: { onAnswer: (outcome: FeedbackOu
   </section>;
 }
 
-function FeedbackDialog({ open, onOpenChange, surface, prefilledOutcome, premiumValue, authenticated, routeContext, onSubmitted }: {
+function FeedbackDialog({ open, onOpenChange, surface, prefilledOutcome, premiumValue, authenticated, routeContext, returnFocusRef, onSubmitted }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   surface: FeedbackSurface;
@@ -114,9 +117,10 @@ function FeedbackDialog({ open, onOpenChange, surface, prefilledOutcome, premium
   premiumValue: boolean;
   authenticated: boolean;
   routeContext: { projectId: string | null; scanId: string | null };
+  returnFocusRef: { current: HTMLElement | null };
   onSubmitted: () => void;
 }) {
-  const [useCase, setUseCase] = useState<FeedbackUseCase>();
+  const [useCase, setUseCase] = useState<FeedbackUseCase | ''>('');
   const [outcome, setOutcome] = useState<FeedbackOutcome>();
   const [useAgain, setUseAgain] = useState<FeedbackUseAgain>();
   const [pricingIntent, setPricingIntent] = useState<FeedbackPricingIntent>();
@@ -126,11 +130,12 @@ function FeedbackDialog({ open, onOpenChange, surface, prefilledOutcome, premium
 
   useEffect(() => {
     if (!open) return;
-    setUseCase(undefined); setOutcome(prefilledOutcome); setUseAgain(undefined); setPricingIntent(undefined);
+    setUseCase(''); setOutcome(prefilledOutcome); setUseAgain(undefined); setPricingIntent(undefined);
     setComment(''); setContactAllowed(false); setStatus('idle');
   }, [open, prefilledOutcome]);
 
   const handleOpenChange = (next: boolean) => {
+    if (!next && status === 'sending') return;
     onOpenChange(next);
   };
   const onSubmit = async (event: FormEvent) => {
@@ -144,8 +149,27 @@ function FeedbackDialog({ open, onOpenChange, surface, prefilledOutcome, premium
   };
 
   return <Dialog open={open} onOpenChange={handleOpenChange}>
-    <DialogContent className="max-w-xl p-4 sm:p-6">
-      {status === 'sent' ? <div className="py-6 text-center" role="status"><DialogHeader><DialogTitle>Thank you for the feedback</DialogTitle><DialogDescription>Your feedback was saved and will be used to improve ShipSeal Early Access.</DialogDescription></DialogHeader><Button className="mt-5" onClick={() => onOpenChange(false)}>Done</Button></div> : <form onSubmit={onSubmit} className="grid gap-5">
+    <DialogContent
+      className="max-w-xl p-4 sm:p-6"
+      closeDisabled={status === 'sending'}
+      onKeyDown={event => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (status !== 'sending') handleOpenChange(false);
+      }}
+      onEscapeKeyDown={event => {
+        event.preventDefault();
+        if (status !== 'sending') handleOpenChange(false);
+      }}
+      onCloseAutoFocus={event => {
+        const returnFocusTarget = returnFocusRef.current;
+        if (!returnFocusTarget?.isConnected) return;
+        event.preventDefault();
+        returnFocusTarget.focus();
+      }}
+    >
+      {status === 'sent' ? <div className="py-6 text-center" role="status"><DialogHeader><DialogTitle>Thank you for the feedback</DialogTitle><DialogDescription>Your feedback was saved and will be used to improve ShipSeal Early Access.</DialogDescription></DialogHeader><DialogClose asChild><Button className="mt-5">Done</Button></DialogClose></div> : <form onSubmit={onSubmit} className="grid gap-5">
         <DialogHeader><DialogTitle>Send feedback</DialogTitle><DialogDescription>Help shape ShipSeal Early Access. Repository source is not attached to this feedback.</DialogDescription></DialogHeader>
         <Field label="What were you trying to achieve?">
           <Select value={useCase} onValueChange={value => setUseCase(value as FeedbackUseCase)} required>
@@ -162,7 +186,7 @@ function FeedbackDialog({ open, onOpenChange, surface, prefilledOutcome, premium
         </Field>
         {authenticated && <label className="flex cursor-pointer items-start gap-3 text-sm"><Checkbox checked={contactAllowed} onCheckedChange={checked => setContactAllowed(checked === true)} aria-label="You may contact me about this feedback" /><span>You may contact me about this feedback.</span></label>}
         {status === 'error' && <p role="alert" className="text-sm text-destructive">Feedback could not be saved. Please try again.</p>}
-        <DialogFooter className="gap-2 sm:gap-0"><Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit" disabled={status === 'sending' || !useCase || !outcome || !useAgain || premiumValue && !pricingIntent}>{status === 'sending' ? 'Sending…' : 'Send feedback'}</Button></DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0"><DialogClose asChild><Button type="button" variant="ghost" disabled={status === 'sending'}>Cancel</Button></DialogClose><Button type="submit" disabled={status === 'sending' || !useCase || !outcome || !useAgain || premiumValue && !pricingIntent}>{status === 'sending' ? 'Sending…' : 'Send feedback'}</Button></DialogFooter>
       </form>}
     </DialogContent>
   </Dialog>;

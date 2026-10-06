@@ -35,7 +35,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape' && !document.querySelector('[role="dialog"][data-state="open"]')) setOpen(false);
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -93,7 +93,7 @@ export function Nav({ onNavigateAnchor, onHome }: Props) {
               </a>
             ))}
             <Link to="/projects" onClick={() => setOpen(false)} aria-current={location.pathname.startsWith('/projects') ? 'page' : undefined} className="flex min-h-11 items-center rounded-lg px-2 text-sm text-muted-foreground hover:bg-secondary/30 hover:text-foreground">My projects</Link>
-            <button type="button" onClick={() => { setOpen(false); openFeedback(); }} className="flex min-h-11 items-center rounded-lg px-2 text-left text-sm text-muted-foreground hover:bg-secondary/30 hover:text-foreground"><MessageSquareText className="mr-2 h-4 w-4" />Send feedback</button>
+            <button type="button" onClick={() => openFeedback()} className="flex min-h-11 items-center rounded-lg px-2 text-left text-sm text-muted-foreground hover:bg-secondary/30 hover:text-foreground"><MessageSquareText className="mr-2 h-4 w-4" />Send feedback</button>
             <Button asChild className="mt-2 bg-primary text-primary-foreground hover:bg-primary/90"><a href={onLanding ? '#scan' : '/#scan'} onClick={(event) => { setOpen(false); if (onNavigateAnchor) { event.preventDefault(); onNavigateAnchor('#scan'); } }}>Scan my repository</a></Button>
           </nav>
         </div>
