@@ -568,6 +568,44 @@ describe('production Repository Intelligence provider', () => {
     }
   });
 
+  it('keeps all seven evidence-grounded roots when optional capability links exceed the returned capability set', async () => {
+    const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
+    const productStage = buildRepositoryProductRootStage(request);
+    const payload = validRootProductProviderPayload(request, 7);
+    payload.o = payload.o.map(opportunity => ({ ...opportunity, x: [1] }));
+    const logger = vi.fn();
+
+    const result = await prepareProductionRepositoryIntelligence({
+      version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
+      request,
+      productStage,
+    }, {
+      env: enabledEnv,
+      fetcher: vi.fn(async () => envelope(payload)) as unknown as typeof fetch,
+      logger,
+    });
+
+    expect(result.body).toMatchObject({
+      state: 'enhanced',
+      diagnostics: {
+        acceptedRootCount: 7,
+        rejectedRootCount: 0,
+        compactCapabilityReferenceRejectedCount: 7,
+      },
+      result: { productIntelligence: { opportunities: expect.any(Array) } },
+    });
+    if (result.body.state === 'enhanced') {
+      expect(result.body.result.productIntelligence?.opportunities).toHaveLength(7);
+      expect(result.body.result.productIntelligence?.opportunities.every(item => item.existingCapabilityIds.length === 0)).toBe(true);
+    }
+    expect(logger).toHaveBeenCalledWith(expect.objectContaining({
+      outcome: 'validated',
+      acceptedRootCount: 7,
+      rejectedRootCount: 0,
+      compactCapabilityReferenceRejectedCount: 7,
+    }));
+  });
+
   it('classifies roots compact-shape rejection separately from real evidence-reference rejection', async () => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const productStage = buildRepositoryProductRootStage(request);
@@ -595,9 +633,10 @@ describe('production Repository Intelligence provider', () => {
 
     const invalidEvidence = validRootProductProviderPayload(request, 7);
     invalidEvidence.o = invalidEvidence.o.map(opportunity => ({ ...opportunity, e: [999] }));
+    const evidenceLogger = vi.fn();
     const evidenceResult = await prepareProductionRepositoryIntelligence({
       version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request, productStage,
-    }, { env: enabledEnv, fetcher: vi.fn(async () => envelope(invalidEvidence)) as typeof fetch, logger: vi.fn() });
+    }, { env: enabledEnv, fetcher: vi.fn(async () => envelope(invalidEvidence)) as typeof fetch, logger: evidenceLogger });
     expect(evidenceResult.body).toMatchObject({
       state: 'fallback',
       category: 'evidence_validation_failed',
@@ -608,6 +647,12 @@ describe('production Repository Intelligence provider', () => {
         compactEvidenceReferenceRejectedCount: 7,
       },
     });
+    expect(evidenceLogger).toHaveBeenCalledWith(expect.objectContaining({
+      outcome: 'failure',
+      operationalFailureCategory: 'evidence_validation_failed',
+      compactEvidenceReferenceRejectedCount: 7,
+      rejectedProductOpportunityReasonCounts: { 'compact-evidence-index-out-of-range': 7 },
+    }));
   });
 
   it('reduces a 40-file Production-shape request to the focused Product Strategist profile before transmission', async () => {
@@ -1118,7 +1163,7 @@ describe('production Repository Intelligence provider', () => {
     expect(JSON.stringify(product)).not.toContain('…');
   });
 
-  it('resolves compact capability indexes deterministically and rejects invalid or duplicate references', async () => {
+  it('resolves compact capability indexes and drops invalid optional capability links without rejecting a direction', async () => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const valid = validProductProviderPayload(request, 3);
     valid.p.caps.push(
@@ -1155,9 +1200,9 @@ describe('production Repository Intelligence provider', () => {
         .toEqual(first.body.result.productIntelligence?.opportunities[0].existingCapabilityIds);
     }
 
-    for (const [references, reason] of [
-      [[1], 'compact-capability-index-out-of-range'],
-      [[0, 0], 'compact-capability-reference-duplicate'],
+    for (const [references, expectedCapabilityCount] of [
+      [[1], 0],
+      [[0, 0], 1],
     ] as const) {
       const payload = validProductProviderPayload(request, 5);
       payload.o[4].x = [...references];
@@ -1169,12 +1214,15 @@ describe('production Repository Intelligence provider', () => {
       expect(result.body).toMatchObject({
         state: 'enhanced',
         diagnostics: {
-          acceptedProductOpportunityCount: 4,
-          rejectedProductOpportunityCount: 1,
+          acceptedProductOpportunityCount: 5,
+          rejectedProductOpportunityCount: 0,
           compactCapabilityReferenceRejectedCount: 1,
-          rejectedProductOpportunityReasonCounts: { [reason]: 1 },
         },
       });
+      if (result.body.state === 'enhanced') {
+        expect(result.body.result.productIntelligence?.opportunities.find(item => item.sourceId === 'op-4')?.existingCapabilityIds)
+          .toHaveLength(expectedCapabilityCount);
+      }
     }
 
     const zeroCapabilities = validProductProviderPayload(request);
@@ -1193,7 +1241,7 @@ describe('production Repository Intelligence provider', () => {
     });
   });
 
-  it('resolves earlier supporting-opportunity indexes and rejects unsafe graph references by reason', async () => {
+  it('resolves earlier supporting-opportunity indexes and drops unsafe optional graph links', async () => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const valid = validProductProviderPayload(request, 5);
     valid.o[1].support = [0];
@@ -1205,10 +1253,10 @@ describe('production Repository Intelligence provider', () => {
     expect(accepted.body).toMatchObject({ state: 'enhanced', diagnostics: { acceptedProductOpportunityCount: 5 } });
 
     const cases = [
-      { opportunityIndex: 4, support: [4], reason: 'compact-support-self-reference' },
-      { opportunityIndex: 3, support: [4], reason: 'compact-support-forward-reference' },
-      { opportunityIndex: 4, support: [5], reason: 'compact-support-index-out-of-range' },
-      { opportunityIndex: 4, support: [0, 0], reason: 'compact-support-reference-duplicate' },
+      { opportunityIndex: 4, support: [4], expectedSupportCount: 0 },
+      { opportunityIndex: 3, support: [4], expectedSupportCount: 0 },
+      { opportunityIndex: 4, support: [5], expectedSupportCount: 0 },
+      { opportunityIndex: 4, support: [0, 0], expectedSupportCount: 1 },
     ] as const;
     for (const testCase of cases) {
       const payload = validProductProviderPayload(request, 5);
@@ -1221,12 +1269,15 @@ describe('production Repository Intelligence provider', () => {
       expect(result.body).toMatchObject({
         state: 'enhanced',
         diagnostics: {
-          acceptedProductOpportunityCount: 4,
-          rejectedProductOpportunityCount: 1,
+          acceptedProductOpportunityCount: 5,
+          rejectedProductOpportunityCount: 0,
           compactSupportReferenceRejectedCount: 1,
-          rejectedProductOpportunityReasonCounts: { [testCase.reason]: 1 },
         },
       });
+      if (result.body.state === 'enhanced') {
+        expect(result.body.result.productIntelligence?.opportunities.find(item => item.sourceId === `op-${testCase.opportunityIndex}`)?.optionalSupportingOpportunityIds)
+          .toHaveLength(testCase.expectedSupportCount);
+      }
     }
   });
 
@@ -1881,26 +1932,23 @@ describe('production Repository Intelligence provider', () => {
     expect(invalidTarget.body).toMatchObject({ state: 'fallback', category: 'schema_validation_failed' });
   });
 
-  it('distinguishes Product Opportunity schema rejection and accepts valid Product Intelligence', async () => {
+  it('keeps optional-link repair distinct from mandatory Product Intelligence validation', async () => {
     const { request } = fixtureRequest(['product-opportunity-analysis', 'structured-output']);
     const invalidProduct = validProductProviderPayload(request);
     invalidProduct.o[0].x = [9];
-    const rejected = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
+    const repaired = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv,
       fetcher: vi.fn(async () => envelope(invalidProduct)) as unknown as typeof fetch,
       logger: vi.fn(),
     });
-    expect(rejected.body).toMatchObject({
-      state: 'fallback',
-      category: 'evidence_validation_failed',
+    expect(repaired.body).toMatchObject({
+      state: 'enhanced',
       diagnostics: {
-        validationCategory: 'insufficient-product-opportunities',
         parsedProductOpportunityCount: 3,
-        acceptedProductOpportunityCount: 2,
-        rejectedProductOpportunityCount: 1,
+        acceptedProductOpportunityCount: 3,
+        rejectedProductOpportunityCount: 0,
         productUnderstandingAccepted: true,
         compactCapabilityReferenceRejectedCount: 1,
-        rejectedProductOpportunityReasonCounts: { 'compact-capability-index-out-of-range': 1 },
       },
     });
 

@@ -323,6 +323,34 @@ describe('premium post-scan view selector', () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 
+  it('offers a fresh retry after a failed generation released the Deep Analysis reservation', () => {
+    const start = vi.fn(async () => undefined);
+    render(<ResultWorkspace
+      report={reportWithIdentity('2026-08-11T10:01:42.500Z')}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{
+        state: 'fallback', deepState: 'rejected', category: 'evidence_validation_failed', retryable: false,
+        message: 'Repository Futures could not be completed. Your Deep Analysis allowance was not used.',
+        diagnostics: {
+          costEstimate: 'unavailable',
+          publicOperationId: `op_${'x'.repeat(24)}`,
+          operationCompletionState: 'terminal',
+          operationUserUnitState: 'released',
+          operationRecoveryAction: 'terminal_failure',
+        },
+      }}
+      retryRepositoryProductIntelligence={start}
+    />);
+
+    const futureCard = screen.getByRole('button', { name: 'Generate Future analysis' });
+    expect(futureCard).toBeEnabled();
+    expect(futureCard).toHaveTextContent('A previous incomplete analysis was returned to your allowance');
+    fireEvent.click(futureCard);
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
   it('does not claim a consumed legacy analysis was returned when a new explicit start is required', () => {
     render(<ResultWorkspace
       report={reportWithIdentity('2026-08-11T10:01:43.000Z')}

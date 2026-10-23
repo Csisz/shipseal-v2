@@ -38,6 +38,7 @@ export function resolveRepositoryFutureAvailability(
   const diagnostics = status && 'diagnostics' in status ? status.diagnostics : undefined;
   const completionState = operationState.completionState ?? diagnostics?.operationCompletionState;
   const recoveryAction = operationState.recoveryAction ?? diagnostics?.operationRecoveryAction;
+  const userUnitState = diagnostics?.operationUserUnitState;
 
   if (!status || status.state === 'enhanced' || completionState === 'ready' || recoveryAction === 'open_result') {
     return 'ready';
@@ -46,6 +47,7 @@ export function resolveRepositoryFutureAvailability(
     status.state === 'deterministic'
     || completionState === 'refunded'
     || recoveryAction === 'start_new_analysis'
+    || userUnitState === 'released'
   ) {
     return 'startable';
   }

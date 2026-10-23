@@ -524,6 +524,11 @@ export async function prepareProductionRepositoryIntelligence(
       stageFingerprint: productStage?.fingerprint,
       acceptedRootCount: productStage?.kind === 'roots' ? acceptedProductOpportunityCount : undefined,
       rejectedRootCount: productStage?.kind === 'roots' ? productIntelligence?.rejectedOpportunities.length || 0 : undefined,
+      rejectedProductOpportunityReasonCounts: enhancedDiagnostics.rejectedProductOpportunityReasonCounts,
+      compactEvidenceReferenceRejectedCount: enhancedDiagnostics.compactEvidenceReferenceRejectedCount,
+      compactCapabilityReferenceRejectedCount: enhancedDiagnostics.compactCapabilityReferenceRejectedCount,
+      compactPathReferenceRejectedCount: enhancedDiagnostics.compactPathReferenceRejectedCount,
+      compactSupportReferenceRejectedCount: enhancedDiagnostics.compactSupportReferenceRejectedCount,
     });
     return completeAuthorizedStage({
       status: 200,
@@ -580,6 +585,11 @@ export async function prepareProductionRepositoryIntelligence(
       compactOpportunityContract: failureDiagnostics.compactOpportunityContract,
       compactOpportunityShapeRejectedCount: failureDiagnostics.compactOpportunityShapeRejectedCount,
       compactOpportunityShapeIssueFields: failureDiagnostics.compactOpportunityShapeIssueFields,
+      rejectedProductOpportunityReasonCounts: failureDiagnostics.rejectedProductOpportunityReasonCounts,
+      compactEvidenceReferenceRejectedCount: failureDiagnostics.compactEvidenceReferenceRejectedCount,
+      compactCapabilityReferenceRejectedCount: failureDiagnostics.compactCapabilityReferenceRejectedCount,
+      compactPathReferenceRejectedCount: failureDiagnostics.compactPathReferenceRejectedCount,
+      compactSupportReferenceRejectedCount: failureDiagnostics.compactSupportReferenceRejectedCount,
       operationalFailureCategory: failureDiagnostics.operationalFailureCategory,
       failureBoundary: failureDiagnostics.failureBoundary,
     });

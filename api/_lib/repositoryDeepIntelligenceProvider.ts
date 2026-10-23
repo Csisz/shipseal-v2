@@ -157,6 +157,11 @@ export type ProductionProviderLogEvent = {
   compactOpportunityContract?: 'roots' | 'full';
   compactOpportunityShapeRejectedCount?: number;
   compactOpportunityShapeIssueFields?: string[];
+  rejectedProductOpportunityReasonCounts?: Partial<Record<string, number>>;
+  compactEvidenceReferenceRejectedCount?: number;
+  compactCapabilityReferenceRejectedCount?: number;
+  compactPathReferenceRejectedCount?: number;
+  compactSupportReferenceRejectedCount?: number;
   languageValidation?: {
     scriptCategories: Array<'CJK'>;
     violatingFieldCount: number;

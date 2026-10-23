@@ -759,11 +759,14 @@ export function normalizeProductStrategistProviderResponse(
       return collection.data.o[index];
     }
     diagnostics.compactEvidenceReferenceCount = (diagnostics.compactEvidenceReferenceCount || 0) + result.data.e.length;
-    const reason = auditOpportunityReferences(result.data, index, {
-      evidenceCount: payload.evidenceIndex.length,
+    const normalizedReferences = normalizeOptionalOpportunityReferences(result.data, index, {
       capabilityCount: understandingResult.success ? understandingResult.data.caps.length : 0,
-      pathCount: payload.responseContract.permittedCurrentPaths.length,
       opportunities: opportunityValues,
+      diagnostics,
+    });
+    const reason = auditRequiredOpportunityReferences(normalizedReferences, {
+      evidenceCount: payload.evidenceIndex.length,
+      pathCount: payload.responseContract.permittedCurrentPaths.length,
       diagnostics,
     });
     if (reason) {
@@ -771,7 +774,7 @@ export function normalizeProductStrategistProviderResponse(
       return collection.data.o[index];
     }
     return normalizeOpportunity(
-      result.data,
+      normalizedReferences,
       index,
       payload,
     );
@@ -878,25 +881,26 @@ function normalizeOpportunity(
   };
 }
 
-function auditOpportunityReferences(
+/**
+ * Capability and supporting-opportunity links are optional graph enrichment.
+ * A model can return an otherwise valid, evidence-grounded direction with a
+ * stale, duplicate, self, or forward optional link. Drop only those invalid
+ * links rather than discarding the whole direction; mandatory evidence and
+ * claimed current paths continue to fail closed below.
+ */
+function normalizeOptionalOpportunityReferences(
   value: ProductStrategistCompactOpportunity,
   opportunityIndex: number,
   context: {
-    evidenceCount: number;
     capabilityCount: number;
-    pathCount: number;
     opportunities: Array<ProductStrategistCompactOpportunity | undefined>;
     diagnostics: RepositoryProductNormalizationDiagnostics;
   },
-): RepositoryProductOpportunityRejectionReason | undefined {
-  const evidenceRejected = countOutOfRange(value.e, context.evidenceCount);
-  context.diagnostics.compactEvidenceReferenceRejectedCount = (context.diagnostics.compactEvidenceReferenceRejectedCount || 0) + evidenceRejected;
+): ProductStrategistCompactOpportunity {
   const capabilityOutOfRange = value.x.filter(index => index >= context.capabilityCount).length;
   const capabilityDuplicates = duplicateCount(value.x);
   context.diagnostics.compactCapabilityReferenceRejectedCount = (context.diagnostics.compactCapabilityReferenceRejectedCount || 0)
     + capabilityOutOfRange + capabilityDuplicates;
-  const pathRejected = value.areas.filter(area => area.p < -1 || area.p >= context.pathCount && area.p !== -1).length;
-  context.diagnostics.compactPathReferenceRejectedCount = (context.diagnostics.compactPathReferenceRejectedCount || 0) + pathRejected;
   const supportOutOfRange = value.support.filter(index => index >= context.opportunities.length).length;
   const supportInvalidTarget = value.support.filter(index => index < context.opportunities.length && !context.opportunities[index]).length;
   const supportSelf = value.support.filter(index => index === opportunityIndex).length;
@@ -904,15 +908,27 @@ function auditOpportunityReferences(
   const supportDuplicates = duplicateCount(value.support);
   context.diagnostics.compactSupportReferenceRejectedCount = (context.diagnostics.compactSupportReferenceRejectedCount || 0)
     + supportOutOfRange + supportInvalidTarget + supportSelf + supportForward + supportDuplicates;
+  return {
+    ...value,
+    x: [...new Set(value.x.filter(index => index < context.capabilityCount))],
+    support: [...new Set(value.support.filter(index => index < opportunityIndex && Boolean(context.opportunities[index])))],
+  };
+}
+
+function auditRequiredOpportunityReferences(
+  value: ProductStrategistCompactOpportunity,
+  context: {
+    evidenceCount: number;
+    pathCount: number;
+    diagnostics: RepositoryProductNormalizationDiagnostics;
+  },
+): RepositoryProductOpportunityRejectionReason | undefined {
+  const evidenceRejected = countOutOfRange(value.e, context.evidenceCount);
+  context.diagnostics.compactEvidenceReferenceRejectedCount = (context.diagnostics.compactEvidenceReferenceRejectedCount || 0) + evidenceRejected;
+  const pathRejected = value.areas.filter(area => area.p < -1 || area.p >= context.pathCount && area.p !== -1).length;
+  context.diagnostics.compactPathReferenceRejectedCount = (context.diagnostics.compactPathReferenceRejectedCount || 0) + pathRejected;
   if (evidenceRejected) return 'compact-evidence-index-out-of-range';
-  if (capabilityOutOfRange) return 'compact-capability-index-out-of-range';
-  if (capabilityDuplicates) return 'compact-capability-reference-duplicate';
   if (pathRejected) return 'compact-path-index-out-of-range';
-  if (supportOutOfRange) return 'compact-support-index-out-of-range';
-  if (supportInvalidTarget) return 'compact-support-target-invalid';
-  if (supportSelf) return 'compact-support-self-reference';
-  if (supportForward) return 'compact-support-forward-reference';
-  if (supportDuplicates) return 'compact-support-reference-duplicate';
   return undefined;
 }
 

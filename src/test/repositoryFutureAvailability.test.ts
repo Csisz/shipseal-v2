@@ -19,11 +19,26 @@ const refundedStatus: RepositoryIntelligenceProviderStatus = {
   },
 };
 
+const releasedStatus: RepositoryIntelligenceProviderStatus = {
+  state: 'fallback',
+  deepState: 'rejected',
+  category: 'evidence_validation_failed',
+  retryable: false,
+  message: 'The prior generation failed without using the allowance.',
+  diagnostics: {
+    costEstimate: 'unavailable',
+    operationCompletionState: 'terminal',
+    operationUserUnitState: 'released',
+    operationRecoveryAction: 'terminal_failure',
+  },
+};
+
 describe('Repository Future availability', () => {
   it.each([
     [{ state: 'enhanced', retryable: false, message: 'Ready', providerId: 'fixture' } as const, 'ready'],
     [{ state: 'deterministic', retryable: false, message: 'Not started' } as const, 'startable'],
     [refundedStatus, 'startable'],
+    [releasedStatus, 'startable'],
     [{ state: 'preparing', retryable: false, message: 'Running' } as const, 'running'],
     [{ state: 'fallback', deepState: 'failed', category: 'operation_conflict', retryable: false, message: 'Active', diagnostics: { costEstimate: 'unavailable', operationRecoveryAction: 'wait_for_active_lease' } } as const, 'running'],
     [{ state: 'fallback', deepState: 'failed', category: 'operation_conflict', retryable: true, message: 'Resume', diagnostics: { costEstimate: 'unavailable', operationRecoveryAction: 'resume_stale_lease' } } as const, 'resumable'],
@@ -36,6 +51,11 @@ describe('Repository Future availability', () => {
   it('treats a refunded completion as startable even though it is not retryable', () => {
     expect(refundedStatus.retryable).toBe(false);
     expect(resolveRepositoryFutureAvailability(refundedStatus)).toBe('startable');
+  });
+
+  it('offers a fresh explicit start after a failed generation released its reservation', () => {
+    expect(releasedStatus.retryable).toBe(false);
+    expect(resolveRepositoryFutureAvailability(releasedStatus)).toBe('startable');
   });
 
   it('keeps a canonical complete result ahead of historical recovery metadata', () => {
