@@ -36,7 +36,7 @@ export function PostScanViewSelector({
 }) {
   const rootRef = useRef<HTMLElement>(null);
   const account = useOptionalAccount();
-  const upgrade = useUpgradeToProAction();
+  const upgrade = useUpgradeToProAction(undefined, 'scan_result');
   const earlyAccess = account.usage?.plan === 'early_access' || account.productMode?.earlyAccessFree === true;
   const bounded = report.scanSummary.scanMode === 'bounded';
   const fileCount = report.fileCount || report.scanSummary.filesAnalyzed || report.scanSummary.totalFilesFound;

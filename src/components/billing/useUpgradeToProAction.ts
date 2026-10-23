@@ -1,12 +1,14 @@
 import { useCallback, useState } from 'react';
 import { useOptionalAccount } from '@/components/account/accountContext';
 import { createProCheckoutSession } from '@/lib/billing/client';
+import { recordProductSignal, type FeedbackSurface } from '@/lib/feedback';
 
-export function useUpgradeToProAction(returnTo?: string) {
+export function useUpgradeToProAction(returnTo?: string, surface: FeedbackSurface = 'global') {
   const account = useOptionalAccount();
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const start = useCallback(async () => {
+    void recordProductSignal('upgrade_intent', { surface }).catch(() => undefined);
     if (!account.user) {
       account.beginSignIn();
       return;
@@ -20,7 +22,7 @@ export function useUpgradeToProAction(returnTo?: string) {
       setState('error');
       setMessage(error instanceof Error ? error.message : 'Billing is temporarily unavailable. Please try again.');
     }
-  }, [account, returnTo]);
+  }, [account, returnTo, surface]);
   return {
     start,
     state,

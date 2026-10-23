@@ -33,7 +33,8 @@ afterEach(() => { vi.restoreAllMocks(); });
 
 describe('Omega 18.1 account and persistence UI', () => {
   it('keeps an anonymous scan open and requests sign-in only when private saving is chosen', async () => {
-    vi.stubGlobal('fetch', vi.fn(() => json({ user: null })));
+    const fetcher = vi.fn((input: RequestInfo | URL, _init?: RequestInit) => String(input) === '/api/feedback' ? json({ ok: true }, 201) : json({ user: null }));
+    vi.stubGlobal('fetch', fetcher);
     const open = vi.spyOn(window, 'open').mockReturnValue({} as Window);
     const report = buildSampleReport();
     render(<AccountProvider><SaveProjectControl report={report} /></AccountProvider>);
@@ -41,6 +42,9 @@ describe('Omega 18.1 account and persistence UI', () => {
     expect(screen.queryByText(/An account is needed only/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in to save' }));
     expect(open).toHaveBeenCalledWith(expect.stringContaining('/api/account/login'), 'shipseal-account', expect.any(String));
+    await waitFor(() => expect(fetcher.mock.calls.some(call => String(call[0]) === '/api/feedback')).toBe(true));
+    const signalCall = fetcher.mock.calls.find(call => String(call[0]) === '/api/feedback');
+    expect(JSON.parse(String(signalCall?.[1]?.body))).toMatchObject({ kind: 'signal', event: 'signup_intent', surface: 'account' });
     expect(screen.getByText(/This result remains open/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in to save' })).toBeEnabled();
   });

@@ -4,6 +4,7 @@ import { getCurrentAccountSession, getCurrentUserAiUsage, logoutCurrentUserSessi
 import type { AccountAiUsageSummary } from '@/lib/entitlements/contract';
 import type { ProductModeSnapshot } from '@/lib/productMode';
 import { AccountContext, type AccountContextValue } from './accountContext';
+import { recordProductSignal } from '@/lib/feedback';
 
 export function AccountProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<PersistedUser | null>(null);
@@ -65,6 +66,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   }, [refreshUsage, user]);
 
   const beginSignIn = useCallback(() => {
+    void recordProductSignal('signup_intent', { surface: 'account' }).catch(() => undefined);
     setAvailabilityMessage('');
     const popup = window.open('/api/account/login?returnTo=%2Faccount%2Fcomplete', 'shipseal-account', 'popup=yes,width=620,height=720,resizable=yes,scrollbars=yes');
     if (!popup) window.location.assign('/api/account/login?returnTo=%2F');

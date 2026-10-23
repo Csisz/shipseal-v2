@@ -1,3 +1,5 @@
+import { firstTouchCampaignAttribution, type CampaignAttribution } from './growthAnalytics';
+
 export const FEEDBACK_COMMENT_MAX_LENGTH = 2000;
 
 export type FeedbackSurface = 'global' | 'scan_result' | 'repository_futures' | 'executable_plan' | 'agent_handoff' | 'delivery' | 'projects' | 'account';
@@ -5,7 +7,7 @@ export type FeedbackUseCase = 'understand_repository' | 'find_improvements' | 'p
 export type FeedbackOutcome = 'yes' | 'partly' | 'no';
 export type FeedbackUseAgain = 'yes' | 'maybe' | 'no';
 export type FeedbackPricingIntent = 'yes' | 'maybe' | 'no';
-export type ProductSignal = 'scan_completed' | 'future_opened' | 'future_generated' | 'agent_handoff_prepared' | 'agent_handoff_copied' | 'delivery_opened' | 'delivery_downloaded';
+export type ProductSignal = 'demo_started' | 'scan_completed' | 'future_explored' | 'signup_intent' | 'upgrade_intent' | 'future_opened' | 'future_generated' | 'agent_handoff_prepared' | 'agent_handoff_copied' | 'delivery_opened' | 'delivery_downloaded';
 
 export interface FeedbackContext {
   surface: FeedbackSurface;
@@ -25,7 +27,8 @@ export async function submitFeedback(input: FeedbackContext & {
 }
 
 export async function recordProductSignal(event: ProductSignal, context: FeedbackContext) {
-  return postFeedback({ kind: 'signal', event, ...context });
+  const attribution: CampaignAttribution | null = firstTouchCampaignAttribution();
+  return postFeedback({ kind: 'signal', event, ...context, ...(attribution || {}) });
 }
 
 async function postFeedback(body: Record<string, unknown>) {

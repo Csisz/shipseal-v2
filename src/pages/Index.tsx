@@ -168,6 +168,7 @@ const Index = () => {
   const savedReportKey = useRef<string | null>(null);
   const lastError = useRef<string | null>(null);
   const scanStartInFlight = useRef(false);
+  const signalledScanIdentity = useRef('');
   const scanSectionRef = useRef<HTMLDivElement>(null);
   const futurePreparationIdentityRef = useRef('');
 
@@ -188,6 +189,9 @@ const Index = () => {
 
   useEffect(() => {
     if (!scan.report || scan.status !== 'completed') return;
+    const identity = `${scan.report.repoName}:${scan.report.scannedAt}`;
+    if (signalledScanIdentity.current === identity) return;
+    signalledScanIdentity.current = identity;
     recordOutcome('scan_completed', 'scan_result', { prompt: true });
   }, [recordOutcome, scan.report, scan.status]);
 
@@ -524,6 +528,7 @@ const Index = () => {
   const beginScanForSource = useCallback((source: PendingSource) => {
     if (scanStartInFlight.current) return;
     scanStartInFlight.current = true;
+    recordOutcome('demo_started', 'global');
 
     setSampleReport(null);
     setIntelligenceReveal(null);
@@ -545,7 +550,7 @@ const Index = () => {
     } else {
       void scan.startGitHubScan(source.url, source.branch);
     }
-  }, [scan]);
+  }, [recordOutcome, scan]);
 
   const handleFile = useCallback((file: File) => {
     const projectName = file.name.replace(/\.zip$/i, '') || 'repository';
@@ -609,6 +614,7 @@ const Index = () => {
   }, [beginScanForSource, pendingSource]);
 
   const handleSample = useCallback(() => {
+    recordOutcome('demo_started', 'global');
     scanStartInFlight.current = false;
     scan.resetScan();
     setPendingSource(null);
@@ -623,7 +629,7 @@ const Index = () => {
     setIntelligenceReveal({ key, visible: true });
     setHistory(saveScanHistory(report));
     queueMicrotask(() => scrollWindowToTop('smooth'));
-  }, [scan]);
+  }, [recordOutcome, scan]);
 
   const reset = useCallback(() => {
     scanStartInFlight.current = false;

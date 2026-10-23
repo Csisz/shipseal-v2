@@ -87,6 +87,36 @@ describe('Early Access feedback API', () => {
     expect(feedbackStore.feedback).toHaveLength(0);
   });
 
+  it('accepts the launch funnel contract with bounded campaign attribution', async () => {
+    for (const event of ['demo_started', 'scan_completed', 'future_explored', 'signup_intent', 'upgrade_intent'] as const) {
+      const res = response();
+      await feedbackHandler(request({
+        kind: 'signal', event, surface: 'global',
+        utmSource: 'linkedin', utmMedium: 'paid_social', utmCampaign: 'launch_sprint_01',
+      }) as never, res as never);
+      expect(res.statusCode).toBe(201);
+    }
+    expect(feedbackStore.signals.map(({ input }) => input.event)).toEqual([
+      'demo_started', 'scan_completed', 'future_explored', 'signup_intent', 'upgrade_intent',
+    ]);
+    expect(feedbackStore.signals[0]?.input).toMatchObject({
+      utmSource: 'linkedin', utmMedium: 'paid_social', utmCampaign: 'launch_sprint_01',
+    });
+  });
+
+  it('rejects arbitrary campaign values and private analytics fields', async () => {
+    for (const body of [
+      { kind: 'signal', event: 'demo_started', surface: 'global', utmSource: 'customer@example.com' },
+      { kind: 'signal', event: 'scan_completed', surface: 'scan_result', privateUrl: '/projects/prj_secret' },
+      { kind: 'signal', event: 'future_explored', surface: 'repository_futures', repositoryName: 'private-repo' },
+    ]) {
+      const res = response();
+      await feedbackHandler(request(body) as never, res as never);
+      expect(res.statusCode).toBe(400);
+    }
+    expect(feedbackStore.signals).toHaveLength(0);
+  });
+
   it('does not expose Admin feedback to an authenticated non-admin', async () => {
     const user = await accountStore.upsertOAuthUser({ providerSubject: 'non-admin', email: null, displayName: 'Non Admin', avatarUrl: null });
     const token = 'non-admin-feedback-token-value-1234567890';

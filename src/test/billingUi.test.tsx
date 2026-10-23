@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AccountContext, type AccountContextValue } from '@/components/account/accountContext';
 import { UpgradeToProButton } from '@/components/billing/BillingActionButton';
@@ -87,11 +87,19 @@ describe('Omega 19.2 billing UI', () => {
     expect(screen.getAllByRole('button', { name: 'Upgrade to Pro' })).toHaveLength(1);
   });
 
-  it('asks an anonymous visitor to sign in instead of opening Checkout', () => {
+  it('asks an anonymous visitor to sign in instead of opening Checkout', async () => {
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ ok: true }), {
+      status: 201, headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetcher);
     const account = accountValue({ user: null, status: 'anonymous' });
     render(<AccountContext.Provider value={account}><UpgradeToProButton /></AccountContext.Provider>);
     fireEvent.click(screen.getByRole('button', { name: 'Sign in to upgrade' }));
     expect(account.beginSignIn).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      const signalCall = fetcher.mock.calls.find(call => String(call[0]) === '/api/feedback');
+      expect(JSON.parse(String(signalCall?.[1]?.body))).toMatchObject({ kind: 'signal', event: 'upgrade_intent', surface: 'global' });
+    });
   });
 
   it('sends only plan, safe return context, and an attempt ID to Checkout', async () => {

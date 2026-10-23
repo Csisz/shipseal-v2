@@ -1,9 +1,10 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { buildSampleReport } from '@/lib/readiness';
 import type { ReadinessReport } from '@/lib/types';
 import type { RepositoryProductIntelligenceResult } from '@/lib/repositoryIntelligence';
+import { FeedbackContext } from '@/components/feedback/feedbackContext';
 
 vi.mock('@/components/agentready/result-workspace/universe/UniverseWorkspace', () => ({
   AiWorkspaceHero: ({ activeResultChapter }: { activeResultChapter: string }) => (
@@ -84,6 +85,27 @@ describe('premium post-scan view selector', () => {
     fireEvent.click(screen.getByRole('button', { name: /Change view/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Open Project Universe' }));
     expect(screen.getByTestId('universe-experience')).toHaveAttribute('data-active-chapter', 'understand');
+  });
+
+  it('records the launch Future exploration once while preserving the historical open event', async () => {
+    const recordOutcome = vi.fn();
+    const report = reportWithIdentity('2026-08-11T10:00:30.000Z');
+    const feedback = { openFeedback: vi.fn(), recordOutcome };
+    const view = (
+      <FeedbackContext.Provider value={feedback}>
+        <ResultWorkspace report={report} history={[]} onReset={vi.fn()} onClearHistory={vi.fn()} />
+      </FeedbackContext.Provider>
+    );
+    const { rerender } = render(view);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Repository Futures' }));
+    await screen.findByTestId('futures-experience');
+    rerender(view);
+
+    await waitFor(() => {
+      expect(recordOutcome.mock.calls.filter(([event]) => event === 'future_opened')).toHaveLength(1);
+      expect(recordOutcome.mock.calls.filter(([event]) => event === 'future_explored')).toHaveLength(1);
+    });
   });
 
   it('resets the selector synchronously when a new report identity is loaded', () => {

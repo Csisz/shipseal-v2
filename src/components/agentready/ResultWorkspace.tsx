@@ -227,6 +227,7 @@ export function ResultWorkspace({
     if (signalledFutureIdentity.current === identity) return;
     signalledFutureIdentity.current = identity;
     recordOutcome('future_opened', 'repository_futures', { premiumValue: true, prompt: true });
+    recordOutcome('future_explored', 'repository_futures', { premiumValue: true });
   }, [effectiveEntryView, recordOutcome, reportIdentity, repositoryProductIntelligence?.fingerprint]);
   const clearRepositoryIntelligenceFocus = useCallback(() => setPendingDashboardFocus(current => current === 'repository-intelligence' ? null : current), []);
 

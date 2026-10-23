@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import Index from '@/pages/Index';
 import type React from 'react';
 import type { GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
+import { FeedbackContext } from '@/components/feedback/feedbackContext';
 
 function MemoryRouter({ children }: { children: React.ReactNode }) {
   return <RouterMemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{children}</RouterMemoryRouter>;
@@ -184,6 +185,24 @@ describe('ShipSeal direct scan entry', () => {
     expect(screen.queryByRole('heading', { name: /Understand this repository/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Scan project$/i })).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Scan setup progress')).not.toBeInTheDocument();
+  });
+
+  it('records one demo start and one completion when a duplicate source callback resolves the same scan', async () => {
+    scanMocks.completeWithReport = true;
+    const recordOutcome = vi.fn();
+    render(
+      <MemoryRouter>
+        <FeedbackContext.Provider value={{ openFeedback: vi.fn(), recordOutcome }}>
+          <Index />
+        </FeedbackContext.Provider>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Choose valid ZIP/i }));
+
+    await waitFor(() => expect(recordOutcome.mock.calls.filter(([event]) => event === 'scan_completed')).toHaveLength(1));
+    expect(recordOutcome.mock.calls.filter(([event]) => event === 'demo_started')).toHaveLength(1);
+    expect(scanMocks.startScan).toHaveBeenCalledTimes(1);
   });
 
   it('starts an accepted public GitHub URL immediately with its branch', () => {

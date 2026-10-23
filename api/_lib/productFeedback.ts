@@ -10,7 +10,10 @@ export const feedbackUseCaseSchema = z.enum(['understand_repository', 'find_impr
 export const feedbackOutcomeSchema = z.enum(['yes', 'partly', 'no']);
 export const feedbackUseAgainSchema = z.enum(['yes', 'maybe', 'no']);
 export const feedbackPricingIntentSchema = z.enum(['yes', 'maybe', 'no']);
-export const productSignalSchema = z.enum(['scan_completed', 'future_opened', 'future_generated', 'agent_handoff_prepared', 'agent_handoff_copied', 'delivery_opened', 'delivery_downloaded']);
+export const productSignalSchema = z.enum(['demo_started', 'scan_completed', 'future_explored', 'signup_intent', 'upgrade_intent', 'future_opened', 'future_generated', 'agent_handoff_prepared', 'agent_handoff_copied', 'delivery_opened', 'delivery_downloaded']);
+export const utmSourceSchema = z.enum(['github', 'google', 'linkedin', 'newsletter', 'product_hunt', 'reddit', 'x', 'youtube', 'other']);
+export const utmMediumSchema = z.enum(['cpc', 'email', 'organic', 'paid_social', 'referral', 'social', 'other']);
+export const utmCampaignSchema = z.enum(['early_access', 'launch', 'launch_sprint_01', 'product_launch', 'other']);
 
 const safeId = z.string().regex(/^(?:prj|scn)_[A-Za-z0-9_-]{20,80}$/);
 export const feedbackSubmissionSchema = z.object({
@@ -32,6 +35,9 @@ export const productSignalSubmissionSchema = z.object({
   surface: feedbackSurfaceSchema,
   projectId: safeId.nullable().optional(),
   scanId: safeId.nullable().optional(),
+  utmSource: utmSourceSchema.optional(),
+  utmMedium: utmMediumSchema.optional(),
+  utmCampaign: utmCampaignSchema.optional(),
 }).strict();
 
 export const feedbackRequestSchema = z.discriminatedUnion('kind', [feedbackSubmissionSchema, productSignalSubmissionSchema]);
@@ -53,6 +59,9 @@ export interface ProductSignalSubmission {
   surface: z.infer<typeof feedbackSurfaceSchema>;
   projectId?: string | null;
   scanId?: string | null;
+  utmSource?: z.infer<typeof utmSourceSchema>;
+  utmMedium?: z.infer<typeof utmMediumSchema>;
+  utmCampaign?: z.infer<typeof utmCampaignSchema>;
 }
 export type FeedbackRequest = FeedbackSubmission | ProductSignalSubmission;
 
@@ -110,7 +119,13 @@ export class PostgresProductFeedbackStore implements ProductFeedbackStore {
     const context = await ownedContext(this.sql, userId, input.projectId, input.scanId);
     await recordOperationalEvent(this.sql, {
       category: 'product', action: input.event, status: 'succeeded', userId: userId || undefined,
-      projectId: context.projectId || undefined, scanId: context.scanId || undefined, metadata: { surface: input.surface },
+      projectId: context.projectId || undefined, scanId: context.scanId || undefined,
+      metadata: {
+        surface: input.surface,
+        campaignChannel: input.utmSource || null,
+        campaignMedium: input.utmMedium || null,
+        campaignName: input.utmCampaign || null,
+      },
     });
   }
 

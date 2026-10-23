@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { lazy, Suspense } from "react";
+import { Analytics } from "@vercel/analytics/react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,6 +10,7 @@ import { AccountProvider } from "./components/account/AccountProvider.tsx";
 import { ThemeProvider } from "./components/theme/ThemeProvider.tsx";
 import { SurfaceState } from "./components/agentready/SurfaceState.tsx";
 import { FeedbackProvider } from "./components/feedback/FeedbackProvider.tsx";
+import { filterAnalyticsPageview } from "./lib/growthAnalytics.ts";
 
 const Projects = lazy(() => import('./pages/Projects.tsx'));
 const Project = lazy(() => import('./pages/Project.tsx'));
@@ -53,6 +55,7 @@ const App = () => (
                 </Routes>
               </Suspense>
             </FeedbackProvider>
+            <Analytics beforeSend={filterAnalyticsPageview} />
           </BrowserRouter>
         </AccountProvider>
       </TooltipProvider>

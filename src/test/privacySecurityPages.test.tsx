@@ -19,7 +19,9 @@ describe('Trust pages', () => {
     expect(screen.getByText('Local ZIP sources')).toBeInTheDocument();
     expect(screen.getByText('Private project history')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /Storage, cookies, and retention/i })).toBeInTheDocument();
-    expect(screen.getByText(/no third-party analytics or marketing tracker/i)).toBeInTheDocument();
+    expect(screen.getByText(/Vercel Web Analytics provides anonymous, aggregated pageview/i)).toBeInTheDocument();
+    expect(screen.getByText(/replaces project and scan IDs with route placeholders/i)).toBeInTheDocument();
+    expect(screen.getByText(/No advertising pixel or cross-site marketing tracker/i)).toBeInTheDocument();
     expect(screen.getByText(/Feedback you submit may be used to improve ShipSeal/i)).toBeInTheDocument();
     expect(screen.getByText(/ShipSeal stores your selected use case/i)).toBeInTheDocument();
     expect(screen.getByText(/safe internal account, project, and scan IDs may be associated/i)).toBeInTheDocument();

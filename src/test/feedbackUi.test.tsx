@@ -26,7 +26,12 @@ function renderFeedback(authenticated = false) {
   return render(<AccountContext.Provider value={account}><MemoryRouter><FeedbackProvider><Harness /></FeedbackProvider></MemoryRouter></AccountContext.Provider>);
 }
 
-beforeEach(() => { window.sessionStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  window.sessionStorage.clear();
+  window.history.replaceState({}, '', '/');
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('Early Access feedback UX', () => {
   it('opens from Send feedback and closes an empty dialog with Escape', async () => {
@@ -159,6 +164,25 @@ describe('Early Access feedback UX', () => {
     expect(screen.queryByRole('region', { name: 'Quick feedback' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Scan outcome' }));
     expect(screen.queryByRole('region', { name: 'Quick feedback' })).not.toBeInTheDocument();
+  });
+
+  it('sends only normalized first-touch campaign dimensions with a product signal', async () => {
+    window.history.replaceState({}, '', '/?utm_source=LinkedIn&utm_medium=paid-social&utm_campaign=launch-sprint-01&repository=private');
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ ok: true }), {
+      status: 201, headers: { 'Content-Type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetcher);
+    renderFeedback();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scan outcome' }));
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(String(fetcher.mock.calls[0]?.[1]?.body));
+    expect(body).toEqual({
+      kind: 'signal', event: 'scan_completed', surface: 'scan_result', projectId: null, scanId: null,
+      utmSource: 'linkedin', utmMedium: 'paid_social', utmCampaign: 'launch_sprint_01',
+    });
+    expect(JSON.stringify(body)).not.toMatch(/repository|private|url|oauth/i);
   });
 
   it('provides keyboard-operable fields, bounded text, authenticated consent, and mobile-contained dialog styling', () => {
