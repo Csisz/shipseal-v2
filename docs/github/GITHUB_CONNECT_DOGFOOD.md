@@ -36,7 +36,7 @@ Required Vercel variables:
 - `GITHUB_APP_CLIENT_SECRET`
 - `GITHUB_APP_CALLBACK_URL=https://shipseal-v2.vercel.app/api/github-app/oauth-callback`
 - `GITHUB_APP_SLUG` or `GITHUB_APP_INSTALL_URL`
-- `VITE_GITHUB_APP_SLUG` or `VITE_GITHUB_APP_INSTALL_URL`
+- server-side `GITHUB_APP_SLUG` and optional `GITHUB_APP_INSTALL_URL`; frontend values are display-only compatibility
 
 GitHub App settings checklist:
 

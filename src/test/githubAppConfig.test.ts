@@ -12,7 +12,7 @@ describe('GitHub App client config', () => {
     expect(config).toEqual({
       appName: 'ShipSeal Demo',
       appSlug: 'shipseal-demo',
-      installUrl: 'https://github.com/apps/shipseal-demo/installations/new?state=demo',
+      installUrl: '/api/github-app/login?flow=install',
       loginUrl: '/api/github-app/login',
       isConfigured: true,
     });
@@ -24,21 +24,21 @@ describe('GitHub App client config', () => {
     });
 
     expect(config.appName).toBe('ShipSeal');
-    expect(config.installUrl).toBe('https://github.com/apps/shipseal-demo/installations/new');
+    expect(config.installUrl).toBe('/api/github-app/login?flow=install');
     expect(config.loginUrl).toBe('/api/github-app/login');
     expect(config.isConfigured).toBe(true);
-    expect(buildGitHubAppInstallUrl('shipseal-demo')).toBe(config.installUrl);
+    expect(buildGitHubAppInstallUrl('shipseal-demo')).toBe('https://github.com/apps/shipseal-demo/installations/new');
   });
 
-  it('returns a disabled config when no install env is present', () => {
+  it('uses server-routed install and connect endpoints without exposing client configuration', () => {
     const config = getGitHubAppClientConfig({});
 
     expect(config).toEqual({
       appName: 'ShipSeal',
       appSlug: '',
-      installUrl: '',
+      installUrl: '/api/github-app/login?flow=install',
       loginUrl: '/api/github-app/login',
-      isConfigured: false,
+      isConfigured: true,
     });
   });
 });

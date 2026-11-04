@@ -10,7 +10,7 @@ export interface GitHubAppRepository {
   updatedAt?: string;
 }
 
-export type GitHubAppRepositoryListStatus = 'idle' | 'loading' | 'loaded' | 'not_configured' | 'error';
+export type GitHubAppRepositoryListStatus = 'idle' | 'authorizing' | 'loading' | 'loaded' | 'reconnect_required' | 'not_configured' | 'error';
 
 export interface GitHubAppInstallation {
   id: string;
@@ -26,6 +26,7 @@ export type GitHubAppConnectionMessage =
       status: 'ok';
       installationId?: string;
       setupAction?: 'oauth' | string;
+      githubLogin?: string;
       installations?: GitHubAppInstallation[];
     }
   | {
@@ -34,4 +35,5 @@ export type GitHubAppConnectionMessage =
       status: 'error';
       code?: string;
       message?: string;
+      githubLogin?: string;
     };

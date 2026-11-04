@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../../_lib/githubAppTypes.js';
 import { createGitHubInstallationClient, type GitHubInstallationClient } from '../../_lib/githubAppClient.js';
+import { GitHubConnectionSessionError, requireAuthorizedGitHubInstallation } from '../../_lib/githubConnectionSession.js';
 
 const OWNER_REPO_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const BRANCH_PATTERN = /^[A-Za-z0-9._/-]+$/;
@@ -389,6 +390,17 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   const validated = validateGitHubAppPrRequest(body);
   if (isValidationError(validated)) {
     sendJson(res, validated.status, { error: validated.error });
+    return;
+  }
+
+  try {
+    requireAuthorizedGitHubInstallation(req, validated.installationId);
+  } catch (error) {
+    if (error instanceof GitHubConnectionSessionError) {
+      sendJson(res, error.status, { status: 'reconnect_required', code: error.code, error: error.message });
+      return;
+    }
+    sendJson(res, 401, { status: 'reconnect_required', code: 'github_session_expired', error: 'Reconnect GitHub.' });
     return;
   }
 

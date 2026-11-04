@@ -154,7 +154,7 @@ When a scan came from GitHub import, ShipSeal can auto-fill repository owner and
 
 ShipSeal creates a separate branch such as `shipseal/readiness-pack` or a timestamped fallback branch, uploads the Readiness Fix Pack files, and opens a Pull Request for human review. ShipSeal never pushes directly to `main`.
 
-Recommended flow: `Connect GitHub -> select repository -> scan -> generate -> create PR`. The current GitHub App uses scoped installation tokens server-side for repository listing, selective tree/blob reads, and explicit PR creation. GitHub App installation authorization remains separate from the implemented GitHub OAuth account session. Account sessions and private scan history are stored server-side; installation webhooks and lifecycle audit-log hardening are not implemented.
+Recommended flow: `Connect GitHub -> select repositories -> scan -> generate -> create PR`. The current GitHub App uses scoped installation tokens server-side for repository listing, selective tree/blob reads, and explicit PR creation. GitHub authorization identifies the intended user before ShipSeal discovers, installs, or configures that user's GitHub App installations. Account sessions and private scan history are stored server-side; installation webhooks and lifecycle audit-log hardening are not implemented.
 
 Workflow files such as `.github/workflows/ci.yml` are sensitive and should be reviewed carefully before merging. See [Create Readiness PR Plan](docs/implementation/CREATE_READINESS_PR_PLAN.md).
 
@@ -173,24 +173,26 @@ Current MVP:
 - public GitHub import for scan inputs,
 - private repository support through GitHub App installation when the app and server credentials are configured,
 - temporary token mode for developer/testing PR creation,
-- `Connect GitHub` opens the GitHub App install page when frontend app env is configured,
-- `/api/github-app/callback` reads `installation_id` and redirects to `/?githubInstallationId=...#scan`,
+- `Connect GitHub` opens state-validated GitHub App OAuth and identifies the authenticated GitHub user,
+- `/api/github-app/callback` validates one-time setup state and verifies the returned installation before attaching it to the current GitHub connection,
 - `/api/github-app/repositories` returns `not_configured` without server credentials and can list repositories when GitHub App server env is configured,
 - `/api/repository-evidence` resolves an immutable commit and returns selected evidence for public or connected GitHub scans,
 - `/api/github-app/archive` remains a legacy compatibility route and is not used by normal connected scanning,
 - `/api/github-app/create-readiness-pr` creates the ShipSeal branch, writes Readiness Fix Pack files, and opens a PR with a server-side installation token,
 - shared GitHub connection state tracks source mode, owner/repo, repository listing capability, and PR creation capability,
-- no stored tokens,
+- an eight-hour signed HttpOnly cookie binds the GitHub user to authorized installation ids; a separate authenticated-encryption HttpOnly cookie temporarily retains the GitHub user token only to verify installation ownership, while installation tokens are never stored,
 - database-backed account sessions and private owner-scoped scan history when account services are configured,
 - no installation webhook handling, automatic merge, or direct `main` push.
 
-Frontend demo env:
+Optional frontend display env (authorization/setup routing is server-owned):
 
 - `VITE_GITHUB_APP_SLUG`
 - `VITE_GITHUB_APP_NAME` optional
 - `VITE_GITHUB_APP_INSTALL_URL` optional
 
-The primary `Connect GitHub` action opens `/api/github-app/login` and uses server-side OAuth to discover existing GitHub App installations. `VITE_GITHUB_APP_INSTALL_URL` or `VITE_GITHUB_APP_SLUG` powers the secondary `Install or configure ShipSeal GitHub App` action for first-time installation or changing repository access.
+The primary `Connect GitHub` action opens `/api/github-app/login` and uses state-validated server-side OAuth to identify the GitHub user and discover that user's existing GitHub App installations. Installation/setup is routed through `/api/github-app/login?flow=install` so setup state is validated before an installation is attached to the HttpOnly connection session. Browser storage does not hold installation authorization.
+
+The connection UI reuses existing installations, displays the connected GitHub username, and uses `prompt=select_account` only when the user explicitly chooses **Switch GitHub account**. OAuth continues directly into installation when repository access is missing. Same-origin callback messaging, focus/visibility synchronization, and bounded active-flow polling refresh the server-authoritative connection and repository list without a manual page reload; blocked popups fall back to same-tab completion while preserving non-sensitive scan options.
 
 Server-side Vercel env for OAuth connect, repository listing, selective repository evidence, and App PR creation:
 
@@ -198,6 +200,7 @@ Server-side Vercel env for OAuth connect, repository listing, selective reposito
 - `GITHUB_APP_PRIVATE_KEY`
 - `GITHUB_APP_CLIENT_ID`
 - `GITHUB_APP_CLIENT_SECRET`
+- `GITHUB_CONNECTION_SESSION_SECRET` optional but recommended for independent connection-session signing
 - `GITHUB_APP_CALLBACK_URL`
 - `GITHUB_API_BASE_URL` optional, defaults to `https://api.github.com`
 
@@ -257,7 +260,7 @@ Repository permissions:
 - Pull requests: read/write
 - Workflows: read/write optional, only if ShipSeal writes CI workflow files
 
-Install the app only on selected repositories. For a Vercel demo, configure `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_CALLBACK_URL`, `GITHUB_APP_ID`, and `GITHUB_APP_PRIVATE_KEY` as server-side environment variables. Configure `VITE_GITHUB_APP_SLUG` and optionally `VITE_GITHUB_APP_INSTALL_URL` for the secondary install/configure action. Keep the private key and OAuth secret out of frontend env vars. OAuth callback URL should be `https://YOUR_DOMAIN/api/github-app/oauth-callback`; setup callback URL should be `https://YOUR_DOMAIN/api/github-app/callback`.
+Install the app only on selected repositories. For a Vercel demo, configure `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_CALLBACK_URL`, `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_APP_SLUG` as server-side environment variables. Keep the private key and OAuth secret out of frontend env vars. OAuth callback URL should be `https://YOUR_DOMAIN/api/github-app/oauth-callback`; setup callback URL should be `https://YOUR_DOMAIN/api/github-app/callback`.
 
 ## MVP Validation Offer
 

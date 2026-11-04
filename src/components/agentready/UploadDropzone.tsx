@@ -1,9 +1,11 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { GitBranch, Github, Search, Upload, FileArchive, Plug, ShieldCheck, Play } from 'lucide-react';
+import { AlertCircle, CheckCircle2, GitBranch, Github, Search, Upload, FileArchive, Plug, ShieldCheck, Play } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { validateZipUpload } from '@/lib/uploadValidation';
 import { parseGitHubUrl } from '@/lib/github/parseGitHubUrl';
@@ -21,8 +23,10 @@ interface Props {
   repositories?: GitHubAppRepository[];
   repositoryListMessage?: string;
   githubInstallations?: GitHubAppInstallation[];
+  githubLogin?: string;
   onGitHubAppRepositorySelect?: (repository: GitHubAppRepository) => void;
   onGitHubConnect?: () => void;
+  onGitHubSwitch?: () => void;
   onGitHubInstall?: () => void;
   onGitHubDisconnect?: () => void;
   onGitHubRepositoryRetry?: () => void;
@@ -40,8 +44,10 @@ export function UploadDropzone({
   repositories = [],
   repositoryListMessage,
   githubInstallations = [],
+  githubLogin,
   onGitHubAppRepositorySelect,
   onGitHubConnect,
+  onGitHubSwitch,
   onGitHubInstall,
   onGitHubDisconnect,
   onGitHubRepositoryRetry,
@@ -156,36 +162,57 @@ export function UploadDropzone({
               <div className="text-sm text-muted-foreground">
                 Connect before scanning so ShipSeal can later create a Pull Request for the same selected repository.
               </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2" aria-live="polite">
+                {repositoryListStatus === 'authorizing' ? <Badge variant="secondary">Authorizing</Badge>
+                  : repositoryListStatus === 'loading' ? <Badge variant="secondary">Loading repositories</Badge>
+                    : repositoryListStatus === 'loaded' ? <Badge><CheckCircle2 data-icon="inline-start" />Connected</Badge>
+                      : repositoryListStatus === 'reconnect_required' ? <Badge variant="destructive">Reconnect required</Badge>
+                        : githubLogin && !githubInstallationId ? <Badge variant="outline">Select repositories</Badge>
+                          : <Badge variant="outline">Connect GitHub</Badge>}
+                {githubLogin && <span className="text-xs text-muted-foreground">Connected as @{githubLogin}</span>}
+              </div>
               {githubInstallationId && repositoryListStatus === 'loading' && (
-                <div className="mt-2 text-xs text-primary-glow">
-                  GitHub App installation detected. Loading repositories...
-                </div>
+                <div className="mt-2 text-xs text-primary-glow">Checking repository access...</div>
               )}
-              {githubInstallationId && repositoryListStatus === 'loaded' && (
-                <div className="mt-2 text-xs text-success">
-                  GitHub connected. Select a repository to scan.
-                </div>
+              {githubInstallationId && repositoryListStatus === 'loaded' && repositories.length > 0 && (
+                <div className="mt-2 text-xs text-success">{repositoryListMessage || 'Authorized repositories are ready.'}</div>
               )}
               {repositoryListStatus === 'not_configured' && (
                 <div className="mt-2 text-xs text-warning">
                   {repositoryListMessage || 'GitHub connection is unavailable on this deployment. Upload a ZIP or use a public repository URL.'}
                 </div>
               )}
-              {repositoryListStatus === 'error' && repositoryListMessage && (
-                <div className="mt-2 text-xs text-destructive">{repositoryListMessage}</div>
+              {(repositoryListStatus === 'error' || repositoryListStatus === 'reconnect_required') && repositoryListMessage && (
+                <Alert variant="destructive" className="mt-3">
+                  <AlertCircle />
+                  <AlertTitle>{repositoryListStatus === 'reconnect_required' ? 'Reconnect required' : 'GitHub connection needs attention'}</AlertTitle>
+                  <AlertDescription>{repositoryListMessage}</AlertDescription>
+                </Alert>
               )}
               {repositoryListStatus === 'loaded' && repositories.length === 0 && (
                 <div className="mt-2 text-xs text-warning">
-                  {repositoryListMessage || 'No repositories are available for this GitHub App installation. Configure the ShipSeal GitHub App and choose All repositories or add the missing repository.'}
+                  {repositoryListMessage || 'No repositories are available for this GitHub App installation. Manage repository access and use Only select repositories to add the repository you need.'}
                 </div>
               )}
             </div>
-            {!githubInstallationId && repositoryListStatus !== 'loading' && (
+            {!githubInstallationId && !githubLogin && repositoryListStatus !== 'loading' && repositoryListStatus !== 'authorizing' && (
               <Button type="button" disabled={disabled} onClick={onGitHubConnect}>
-                <Plug className="mr-2 h-4 w-4" /> Connect GitHub
+                <Plug data-icon="inline-start" /> Connect GitHub
               </Button>
             )}
+            {githubLogin && !githubInstallationId && repositoryListStatus !== 'authorizing' && (
+              <Button type="button" disabled={disabled} onClick={onGitHubInstall}>Manage repository access</Button>
+            )}
           </div>
+          {githubLogin && (
+            <Alert className="mb-4">
+              <ShieldCheck />
+              <AlertTitle>Repository access is usually a one-time setup</AlertTitle>
+              <AlertDescription>
+                GitHub asks once per personal or organization installation. For least privilege, choose <strong>Only select repositories</strong>; use Manage repository access whenever you need to add or remove one.
+              </AlertDescription>
+            </Alert>
+          )}
           {githubInstallations.length > 1 && (
             <label className="mb-4 block">
               <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">GitHub account</span>
@@ -194,11 +221,13 @@ export function UploadDropzone({
                   <SelectValue placeholder="Select GitHub account" />
                 </SelectTrigger>
                 <SelectContent className={shipSealSelectContentClass}>
-                  {githubInstallations.map(installation => (
-                    <SelectItem key={installation.id} value={installation.id} className={shipSealSelectItemClass}>
-                      {installation.accountLogin}
-                    </SelectItem>
-                  ))}
+                  <SelectGroup>
+                    {githubInstallations.map(installation => (
+                      <SelectItem key={installation.id} value={installation.id} className={shipSealSelectItemClass}>
+                        {installation.accountLogin || `Installation ${installation.id}`}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </label>
@@ -206,7 +235,7 @@ export function UploadDropzone({
           <div className="block">
             <span className="block text-xs font-mono uppercase tracking-wider text-muted-foreground mb-1.5">Select repository</span>
             {repositoryListStatus === 'loaded' && repositories.length > 0 ? (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -229,19 +258,21 @@ export function UploadDropzone({
                     <SelectValue placeholder={filteredRepositories.length ? 'Choose a repository' : 'No matching repositories'} />
                   </SelectTrigger>
                   <SelectContent className={shipSealSelectContentClass}>
-                    {filteredRepositories.map(repository => (
-                      <SelectItem key={repository.fullName} value={repository.fullName} className={shipSealSelectItemClass}>
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <span className="truncate font-medium">{repository.fullName}</span>
-                          <span className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-                            <span>{repository.private ? 'Private' : 'Public'}</span>
-                            <span className="inline-flex items-center gap-1">
-                              <GitBranch className="h-3 w-3" /> {repository.defaultBranch || 'default branch'}
+                    <SelectGroup>
+                      {filteredRepositories.map(repository => (
+                        <SelectItem key={repository.fullName} value={repository.fullName} className={shipSealSelectItemClass}>
+                          <div className="flex min-w-0 flex-col gap-1">
+                            <span className="truncate font-medium">{repository.fullName}</span>
+                            <span className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                              <span>{repository.private ? 'Private' : 'Public'}</span>
+                              <span className="inline-flex items-center gap-1">
+                                <GitBranch className="h-3 w-3" /> {repository.defaultBranch || 'default branch'}
+                              </span>
                             </span>
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
                 {filteredRepositories.length === 0 && (
@@ -254,7 +285,7 @@ export function UploadDropzone({
               <Input aria-label="Select repository" disabled placeholder="Connect GitHub to list repositories" />
             )}
           </div>
-          {(repositoryListStatus === 'error' || repositoryListStatus === 'not_configured') && (
+           {(repositoryListStatus === 'error' || repositoryListStatus === 'reconnect_required' || repositoryListStatus === 'not_configured') && (
             <div className="mt-4 rounded-xl border border-warning/25 bg-warning/5 p-3">
               <p className="mb-2 text-xs text-muted-foreground">Your scan is not blocked. Continue without connected GitHub:</p>
               <div className="flex flex-wrap gap-2">
@@ -273,17 +304,22 @@ export function UploadDropzone({
               </div>
             </div>
           )}
-          {(githubInstallationId || appConfig.installUrl) && (
+          {(githubInstallationId || githubLogin || repositoryListStatus === 'reconnect_required') && (
             <details className="group mt-4 rounded-xl border border-border/50 bg-background/20">
               <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground">GitHub connection controls</summary>
               <div className="flex flex-wrap gap-2 border-t border-border/45 p-3">
                 {githubInstallationId && (
                   <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubConnect}>Reconnect</Button>
                 )}
-                <Button type="button" variant="ghost" size="sm" disabled={disabled || !githubInstallationId} onClick={onGitHubDisconnect}>Disconnect</Button>
-                {appConfig.installUrl && (
+                {githubLogin && (
+                  <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubSwitch}>
+                    Switch GitHub account
+                  </Button>
+                )}
+                <Button type="button" variant="ghost" size="sm" disabled={disabled || !githubLogin} onClick={onGitHubDisconnect}>Disconnect</Button>
+                {githubLogin && appConfig.installUrl && (
                   <Button type="button" variant="ghost" size="sm" disabled={disabled} onClick={onGitHubInstall}>
-                    Install or configure ShipSeal GitHub App
+                    Manage repository access
                   </Button>
                 )}
               </div>

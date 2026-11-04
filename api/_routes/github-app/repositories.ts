@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { GitHubAppAuthOptions } from '../../_lib/githubAppTypes.js';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../../_lib/githubAppTypes.js';
 import { listGitHubAppRepositories } from '../../_lib/githubAppClient.js';
+import { GitHubConnectionSessionError, requireAuthorizedGitHubInstallation, selectGitHubInstallation } from '../../_lib/githubConnectionSession.js';
 
 type QueryValue = string | string[] | undefined;
 type VercelLikeRequest = IncomingMessage & {
@@ -81,6 +82,22 @@ export async function listInstallationRepositories(installationId: string, optio
 
 export default async function handler(req: VercelLikeRequest, res: ServerResponse) {
   const installationId = (firstValue(queryFromRequest(req).installationId) || '').trim();
+  if (!/^\d+$/.test(installationId)) {
+    const result = await listInstallationRepositories(installationId);
+    sendJson(res, result.status, result.body);
+    return;
+  }
+  try {
+    requireAuthorizedGitHubInstallation(req, installationId);
+  } catch (error) {
+    if (error instanceof GitHubConnectionSessionError) {
+      sendJson(res, error.status, { status: 'reconnect_required', code: error.code, message: error.message });
+      return;
+    }
+    sendJson(res, 401, { status: 'reconnect_required', code: 'github_session_expired', message: 'Reconnect GitHub.' });
+    return;
+  }
   const result = await listInstallationRepositories(installationId);
+  if (result.status === 200) selectGitHubInstallation(req, res, installationId);
   sendJson(res, result.status, result.body);
 }

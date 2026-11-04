@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createGitHubInstallationClient } from './_lib/githubAppClient.js';
+import { GitHubConnectionSessionError, requireAuthorizedGitHubInstallation } from './_lib/githubConnectionSession.js';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from './_lib/githubAppTypes.js';
 import {
   finalizeRepositoryEvidence,
@@ -253,6 +254,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   req.once('aborted', () => controller.abort());
   try {
     const request = await readJson(req);
+    if (request.source === 'github-app') requireAuthorizedGitHubInstallation(req, request.installationId || '');
     const result = await acquireGitHubRepositoryEvidence(request, { signal: controller.signal });
     sendJson(res, 200, result);
   } catch (error) {
@@ -263,6 +265,9 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
 }
 
 function repositoryEvidenceFailure(error: unknown): { status: number; payload: RepositoryEvidenceApiFailure } {
+  if (error instanceof GitHubConnectionSessionError) {
+    return { status: error.status, payload: { error: error.message, category: 'permission_denied' } };
+  }
   if (error instanceof RepositoryEvidenceSourceError) {
     return { status: error.status, payload: { error: error.message, category: error.category } };
   }

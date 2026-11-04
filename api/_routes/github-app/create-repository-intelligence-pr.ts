@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createGitHubInstallationClient, type GitHubInstallationClient } from '../../_lib/githubAppClient.js';
+import { GitHubConnectionSessionError, requireAuthorizedGitHubInstallation } from '../../_lib/githubConnectionSession.js';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../../_lib/githubAppTypes.js';
 import {
   buildRepositoryIntelligenceGithubApplyPlan,
@@ -212,6 +213,18 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   try { body = await readJsonBody(req); } catch (error) { return sendJson(res, error instanceof Error && error.message === 'payload-too-large' ? 413 : 400, { error: { code: 'invalid-payload', message: 'The request is invalid or too large.', nextAction: 'Rebuild a smaller reviewed selection.' } }); }
   const validation = validateRepositoryIntelligenceGithubApplyRequest(body);
   if (!validation.valid || !validation.request) return sendJson(res, 400, { error: validation.issues[0], issues: validation.issues });
+  try {
+    requireAuthorizedGitHubInstallation(req, validation.request.installationId);
+  } catch (error) {
+    const status = error instanceof GitHubConnectionSessionError ? error.status : 401;
+    return sendJson(res, status, {
+      error: {
+        code: 'github-connection-required',
+        message: 'GitHub connection expired or does not authorize this installation.',
+        nextAction: 'Reconnect GitHub and select the repository again.',
+      },
+    });
+  }
   try {
     const result = await prepareOrApplyRepositoryIntelligencePr(validation.request);
     return sendJson(res, 200, result);

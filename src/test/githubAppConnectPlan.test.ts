@@ -18,13 +18,19 @@ import {
   normalizeGitHubAppPrivateKey,
 } from '../../api/_lib/githubAppAuth';
 import { GitHubAppNotConfiguredError } from '../../api/_lib/githubAppTypes';
+import { writeGitHubConnectionSession } from '../../api/_lib/githubConnectionSession';
 
 function createResponse() {
-  return {
+  const response = {
     statusCode: 0,
     body: '',
-    headers: {} as Record<string, string>,
-    setHeader: vi.fn(),
+    headers: {} as Record<string, string | string[]>,
+    setHeader: vi.fn(function (this: { headers: Record<string, string | string[]> }, name: string, value: string | string[]) {
+      this.headers[name] = value;
+    }),
+    getHeader(name: string) {
+      return this.headers[name];
+    },
     end(value = '') {
       this.body = value;
     },
@@ -32,6 +38,37 @@ function createResponse() {
       return JSON.parse(this.body);
     },
   };
+  return response;
+}
+
+function responseCookies(response: ReturnType<typeof createResponse>) {
+  const values = response.headers['Set-Cookie'];
+  return (Array.isArray(values) ? values : values ? [values] : [])
+    .map(value => String(value).split(';')[0])
+    .join('; ');
+}
+
+async function beginOAuth(host = 'shipseal.test') {
+  const response = createResponse();
+  await startHandler({ method: 'GET', headers: { host, 'x-forwarded-proto': 'https' } } as never, response as never);
+  const location = new URL(String(response.headers.Location));
+  return { response, state: location.searchParams.get('state') || '', cookie: responseCookies(response), location };
+}
+
+function authorizedCookie(installationId = '123', secure = false) {
+  process.env.GITHUB_CONNECTION_SESSION_SECRET ||= 'test-only-github-connection-secret-32-bytes';
+  const response = createResponse();
+  writeGitHubConnectionSession(
+    { headers: secure ? { 'x-forwarded-proto': 'https' } : {} } as never,
+    response as never,
+    {
+      githubUserId: '42',
+      githubLogin: 'octocat',
+      installations: [{ id: installationId, accountLogin: 'octocat', accountType: 'User' }],
+      selectedInstallationId: installationId,
+    },
+  );
+  return responseCookies(response);
 }
 
 function githubRepositoryPayload(overrides: Partial<Record<string, unknown>> = {}) {
@@ -109,8 +146,34 @@ describe('GitHub App Connect plan', () => {
       expect(location).toContain('client_id=Iv1.0123456789abcdef');
       expect(location).toContain('redirect_uri=https%3A%2F%2Fshipseal.test%2Fapi%2Fgithub-app%2Foauth-callback');
       expect(location).toContain('state=');
+      expect(location).not.toContain('prompt=');
       expect(location).not.toContain('github.com/settings/installations');
       expect(location).not.toContain('client-secret');
+    } finally {
+      process.env = originalEnv;
+    }
+  });
+
+  it('/api/github-app/login requests account selection only for an explicit switch', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'Iv1.0123456789abcdef',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+      GITHUB_APP_SLUG: 'shipseal-demo',
+    };
+    const res = createResponse();
+
+    try {
+      await startHandler({
+        method: 'GET',
+        url: '/api/github-app/login?prompt=select_account',
+        headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https' },
+      } as never, res as never);
+
+      const location = (res.setHeader as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0] === 'Location')?.[1] as string;
+      expect(res.statusCode).toBe(302);
+      expect(location).toContain('prompt=select_account');
     } finally {
       process.env = originalEnv;
     }
@@ -382,33 +445,33 @@ describe('GitHub App Connect plan', () => {
     const res = createResponse();
 
     try {
+      const cookie = authorizedCookie('123', true);
       await startHandler({
         method: 'GET',
         url: '/api/github-app/login?flow=install',
-        headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https' },
+        headers: { host: 'shipseal-v2.vercel.app', 'x-forwarded-proto': 'https', cookie },
       } as never, res as never);
 
       expect(res.statusCode).toBe(302);
-      expect(res.setHeader).toHaveBeenCalledWith('Location', 'https://github.com/apps/shipseal-demo/installations/new');
+      const location = new URL(String(res.headers.Location));
+      expect(`${location.origin}${location.pathname}`).toBe('https://github.com/apps/shipseal-demo/installations/new');
+      expect(location.searchParams.get('state')).toBeTruthy();
       expect(res.body).not.toContain('client-secret');
     } finally {
       process.env = originalEnv;
     }
   });
 
-  it('/api/github-app/callback rejects missing installation_id', async () => {
+  it('/api/github-app/callback rejects an unverified setup callback', async () => {
     const res = createResponse();
 
     await callbackHandler({ method: 'GET', url: '/api/github-app/callback' } as never, res as never);
 
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toEqual({
-      status: 'invalid_request',
-      message: 'GitHub App callback is missing a valid installation_id.',
-    });
+    expect(res.body).toContain('invalid_oauth_state');
   });
 
-  it('/api/github-app/callback redirects installation_id back to the frontend scan flow', async () => {
+  it('/api/github-app/callback rejects installation_id without setup state', async () => {
     const res = createResponse();
 
     await callbackHandler({
@@ -416,8 +479,8 @@ describe('GitHub App Connect plan', () => {
       url: '/api/github-app/callback?installation_id=12345&setup_action=install',
     } as never, res as never);
 
-    expect(res.statusCode).toBe(302);
-    expect(res.setHeader).toHaveBeenCalledWith('Location', '/?githubInstallationId=12345&githubSetupAction=install#scan');
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('invalid_oauth_state');
   });
 
   it('/api/github-app/repositories validates installationId and reports missing server env', async () => {
@@ -610,13 +673,9 @@ describe('GitHub App Connect plan', () => {
     expect(missing.json()).toMatchObject({ status: 'invalid_request' });
 
     const notConfigured = createResponse();
-    await archiveHandler({ method: 'GET', url: '/api/github-app/archive?installationId=123&owner=Csisz&repo=shipseal' } as never, notConfigured as never);
+    await archiveHandler({ method: 'GET', url: '/api/github-app/archive?installationId=123&owner=Csisz&repo=shipseal', headers: { cookie: authorizedCookie('123') } } as never, notConfigured as never);
     expect(notConfigured.statusCode).toBe(501);
-    expect(notConfigured.json()).toEqual({
-      status: 'not_configured',
-      code: 'missing_app_id',
-      message: 'GitHub App server credentials are not configured yet.',
-    });
+    expect(notConfigured.json()).toMatchObject({ status: 'not_configured', code: 'missing_app_id' });
   });
 
   it('/api/github-app/oauth-callback returns postMessage HTML for existing installations', async () => {
@@ -636,6 +695,11 @@ describe('GitHub App Connect plan', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({ id: 42, login: 'octocat' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: async () => ({
           installations: [{
             id: 12345,
@@ -648,7 +712,12 @@ describe('GitHub App Connect plan', () => {
     const res = createResponse();
 
     try {
-      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
+      const started = await beginOAuth();
+      await oauthCallbackHandler({
+        method: 'GET',
+        url: `/api/github-app/oauth-callback?code=abc&state=${encodeURIComponent(started.state)}`,
+        headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https', cookie: started.cookie },
+      } as never, res as never);
 
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain('window.opener.postMessage');
@@ -668,7 +737,7 @@ describe('GitHub App Connect plan', () => {
         client_id: 'client-id',
         client_secret: 'client-secret',
         code: 'abc',
-        redirect_uri: 'http://localhost:8080/api/github-app/oauth-callback',
+        redirect_uri: 'https://shipseal.test/api/github-app/oauth-callback',
       });
     } finally {
       process.env = originalEnv;
@@ -693,6 +762,11 @@ describe('GitHub App Connect plan', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({ id: 84, login: 'multi-user' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: async () => ({
           installations: [
             { id: 123, account: { login: 'Personal', type: 'User' } },
@@ -704,7 +778,12 @@ describe('GitHub App Connect plan', () => {
     const res = createResponse();
 
     try {
-      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
+      const started = await beginOAuth();
+      await oauthCallbackHandler({
+        method: 'GET',
+        url: `/api/github-app/oauth-callback?code=abc&state=${encodeURIComponent(started.state)}`,
+        headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https', cookie: started.cookie },
+      } as never, res as never);
 
       expect(res.statusCode).toBe(200);
       expect(res.body).toContain('"type":"shipseal:github-installations"');
@@ -737,21 +816,29 @@ describe('GitHub App Connect plan', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
+        json: async () => ({ id: 21, login: 'new-user' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
         json: async () => ({ installations: [] }),
       });
     vi.stubGlobal('fetch', fetchMock);
     const res = createResponse();
 
     try {
-      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
+      const started = await beginOAuth();
+      await oauthCallbackHandler({
+        method: 'GET',
+        url: `/api/github-app/oauth-callback?code=abc&state=${encodeURIComponent(started.state)}`,
+        headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https', cookie: started.cookie },
+      } as never, res as never);
 
       expect(res.statusCode).toBe(200);
-      expect(res.body).toContain('"type":"shipseal:github-install-required"');
-      expect(res.body).toContain('"status":"error"');
-      expect(res.body).toContain('"code":"no_installations"');
-      expect(res.body).toContain('Install ShipSeal GitHub App');
-      expect(res.body).toContain('https://github.com/apps/shipseal-demo/installations/new');
-      expect(res.body).not.toContain('window.setTimeout(function () { window.close(); }, 100);');
+      expect(res.body).toContain('Opening repository selection');
+      expect(res.body).toContain('/api/github-app/login?flow=install');
+      expect(res.body).toContain('window.location.replace("/api/github-app/login?flow=install")');
+      expect(res.body).toContain('if (hasOpener && false)');
       expect(res.body).not.toContain('user-token');
     } finally {
       process.env = originalEnv;
@@ -759,34 +846,123 @@ describe('GitHub App Connect plan', () => {
     }
   });
 
+  it('keeps first-time users without a ShipSeal session on the OAuth-then-install path', async () => {
+    const originalEnv = process.env;
+    process.env = {
+      ...originalEnv,
+      GITHUB_APP_CLIENT_ID: 'Iv1.0123456789abcdef',
+      GITHUB_APP_CLIENT_SECRET: 'client-secret',
+      GITHUB_APP_CALLBACK_URL: 'https://www.getshipseal.com/api/github-app/oauth-callback',
+      GITHUB_APP_SLUG: 'shipseal-demo',
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'temporary-user-token' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 23, login: 'hvdev23' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ installations: [] }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const login = createResponse();
+      await startHandler({
+        method: 'GET',
+        url: '/api/github-app/login',
+        headers: {
+          host: 'www.getshipseal.com',
+          'x-forwarded-host': 'www.getshipseal.com',
+          'x-forwarded-proto': 'https',
+        },
+      } as never, login as never);
+
+      expect(login.statusCode).toBe(302);
+      const authorizeLocation = new URL((login.setHeader as ReturnType<typeof vi.fn>).mock.calls.find(call => call[0] === 'Location')?.[1] as string);
+      expect(authorizeLocation.origin).toBe('https://github.com');
+      expect(authorizeLocation.pathname).toBe('/login/oauth/authorize');
+      expect(authorizeLocation.searchParams.get('client_id')).toBe('Iv1.0123456789abcdef');
+      expect(authorizeLocation.searchParams.get('redirect_uri')).toBe('https://www.getshipseal.com/api/github-app/oauth-callback');
+      expect(authorizeLocation.searchParams.get('state')).toBeTruthy();
+      expect(authorizeLocation.searchParams.get('scope')).toBeNull();
+
+      const authorizationCallback = createResponse();
+      await oauthCallbackHandler({
+        method: 'GET',
+        url: `/api/github-app/oauth-callback?code=first-time-code&state=${encodeURIComponent(authorizeLocation.searchParams.get('state') || '')}`,
+        headers: {
+          host: 'www.getshipseal.com',
+          'x-forwarded-host': 'www.getshipseal.com',
+          'x-forwarded-proto': 'https',
+          cookie: responseCookies(login),
+        },
+      } as never, authorizationCallback as never);
+
+      expect(authorizationCallback.statusCode).toBe(200);
+      expect(authorizationCallback.body).toContain('"code":"no_installations"');
+      expect(authorizationCallback.body).toContain('/api/github-app/login?flow=install');
+      expect(responseCookies(authorizationCallback)).toContain('shipseal_github_connection=');
+      expect(authorizationCallback.body).not.toContain('temporary-user-token');
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      process.env = originalEnv;
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('/api/github-app/oauth-callback returns a safe error page when code is missing', async () => {
-    const res = createResponse();
+    const originalEnv = process.env;
+    process.env = { ...originalEnv, GITHUB_APP_CLIENT_ID: 'client-id', GITHUB_APP_CLIENT_SECRET: 'client-secret' };
+    try {
+      const started = await beginOAuth();
+      const res = createResponse();
+      await oauthCallbackHandler({
+        method: 'GET', url: `/api/github-app/oauth-callback?state=${encodeURIComponent(started.state)}`,
+        headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https', cookie: started.cookie },
+      } as never, res as never);
 
-    await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback' } as never, res as never);
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('missing_oauth_code');
-    expect(res.body).toContain('Return to ShipSeal');
-    expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
-    expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain('missing_oauth_code');
+      expect(res.body).toContain('Continue to ShipSeal');
+      expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
+      expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+    } finally {
+      process.env = originalEnv;
+    }
   });
 
   it('/api/github-app/oauth-callback returns a structured error page for GitHub error params', async () => {
-    const res = createResponse();
+    const originalEnv = process.env;
+    process.env = { ...originalEnv, GITHUB_APP_CLIENT_ID: 'client-id', GITHUB_APP_CLIENT_SECRET: 'client-secret' };
+    try {
+      const started = await beginOAuth();
+      const res = createResponse();
+      await oauthCallbackHandler({
+        method: 'GET',
+        url: `/api/github-app/oauth-callback?error=access_denied&error_description=The+user+cancelled+authorization&state=${encodeURIComponent(started.state)}`,
+        headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https', cookie: started.cookie },
+      } as never, res as never);
 
-    await oauthCallbackHandler({
-      method: 'GET',
-      url: '/api/github-app/oauth-callback?error=access_denied&error_description=The+user+cancelled+authorization',
-    } as never, res as never);
-
-    expect(res.statusCode).toBe(400);
-    expect(res.body).toContain('window.opener.postMessage');
-    expect(res.body).toContain('"source":"shipseal-github-connect"');
-    expect(res.body).toContain('"status":"error"');
-    expect(res.body).toContain('"code":"github_oauth_denied"');
-    expect(res.body).toContain('The user cancelled authorization');
-    expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
-    expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain('window.opener.postMessage');
+      expect(res.body).toContain('"source":"shipseal-github-connect"');
+      expect(res.body).toContain('"status":"error"');
+      expect(res.body).toContain('"code":"github_oauth_denied"');
+      expect(res.body).toContain('The user cancelled authorization');
+      expect(res.body).not.toContain('GITHUB_APP_CLIENT_SECRET');
+      expect(res.body).not.toContain('GITHUB_APP_PRIVATE_KEY');
+    } finally {
+      process.env = originalEnv;
+    }
   });
 
   it('/api/github-app/oauth-callback returns a friendly error when token exchange is non-200', async () => {
@@ -805,11 +981,12 @@ describe('GitHub App Connect plan', () => {
     const res = createResponse();
 
     try {
-      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=bad' } as never, res as never);
+      const started = await beginOAuth();
+      await oauthCallbackHandler({ method: 'GET', url: `/api/github-app/oauth-callback?code=bad&state=${encodeURIComponent(started.state)}`, headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https', cookie: started.cookie } } as never, res as never);
 
       expect(res.statusCode).toBe(400);
       expect(res.body).toContain('"code":"oauth_token_exchange_failed"');
-      expect(res.body).toContain('Return to ShipSeal');
+      expect(res.body).toContain('Continue to ShipSeal');
       expect(res.body).not.toContain('bad_verification_code');
       expect(res.body).not.toContain('leaked-token');
       expect(res.body).not.toContain('client-secret');
@@ -837,7 +1014,8 @@ describe('GitHub App Connect plan', () => {
     const res = createResponse();
 
     try {
-      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
+      const started = await beginOAuth();
+      await oauthCallbackHandler({ method: 'GET', url: `/api/github-app/oauth-callback?code=abc&state=${encodeURIComponent(started.state)}`, headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https', cookie: started.cookie } } as never, res as never);
 
       expect(res.statusCode).toBe(502);
       expect(res.body).toContain('"code":"oauth_token_invalid_json"');
@@ -865,7 +1043,8 @@ describe('GitHub App Connect plan', () => {
     const res = createResponse();
 
     try {
-      await oauthCallbackHandler({ method: 'GET', url: '/api/github-app/oauth-callback?code=abc' } as never, res as never);
+      const started = await beginOAuth();
+      await oauthCallbackHandler({ method: 'GET', url: `/api/github-app/oauth-callback?code=abc&state=${encodeURIComponent(started.state)}`, headers: { host: 'shipseal.test', 'x-forwarded-proto': 'https', cookie: started.cookie } } as never, res as never);
 
       expect(res.statusCode).toBe(401);
       expect(res.body).toContain('"code":"github_oauth_error"');
@@ -914,7 +1093,7 @@ describe('GitHub App Connect plan', () => {
     }
   });
 
-  it('/api/github-app/installations discovers already-installed app accounts from user authorization', async () => {
+  it('/api/github-app/installations rejects the legacy code exchange endpoint', async () => {
     const originalEnv = process.env;
     process.env = {
       ...originalEnv,
@@ -935,12 +1114,10 @@ describe('GitHub App Connect plan', () => {
     try {
       await installationsHandler({ method: 'GET', url: '/api/github-app/installations?code=abc' } as never, res as never);
 
-      expect(res.statusCode).toBe(200);
-      expect(res.json()).toEqual({
-        status: 'ok',
-        installations: [{ id: '7', accountLogin: 'Acme', accountType: 'Organization', htmlUrl: undefined }],
-      });
+      expect(res.statusCode).toBe(410);
+      expect(res.json()).toMatchObject({ status: 'deprecated', code: 'user_authorization_failed' });
       expect(res.body).not.toContain('user-token');
+      expect(fetchMock).not.toHaveBeenCalled();
     } finally {
       process.env = originalEnv;
       vi.unstubAllGlobals();
@@ -960,7 +1137,7 @@ describe('GitHub App Connect plan', () => {
     vi.stubGlobal('fetch', fetchMock);
     const res = createResponse();
 
-    await archiveHandler({ method: 'GET', url: '/api/github-app/archive?installationId=123&owner=Csisz&repo=shipseal&ref=main' } as never, res as never);
+    await archiveHandler({ method: 'GET', url: '/api/github-app/archive?installationId=123&owner=Csisz&repo=shipseal&ref=main', headers: { cookie: authorizedCookie('123') } } as never, res as never);
 
     expect(res.statusCode).toBe(200);
     expect(res.body).not.toContain('installation-token');
@@ -989,11 +1166,13 @@ describe('GitHub App Connect plan', () => {
   it('/api/github-app/create-readiness-pr reports missing server env as structured not_configured JSON', async () => {
     const originalEnv = process.env;
     process.env = {};
+    process.env.GITHUB_CONNECTION_SESSION_SECRET = 'test-only-github-connection-secret-32-bytes';
     const res = createResponse();
 
     try {
       await createGitHubAppPrHandler({
         method: 'POST',
+        headers: { cookie: authorizedCookie('123') },
         body: {
           installationId: '123',
           owner: 'Csisz',
@@ -1147,7 +1326,7 @@ describe('GitHub App Connect plan', () => {
     expect(readme).toContain('Repository source modes');
     expect(readme).toContain('GitHub App connected repo: scan + PR creation');
     expect(readme).toContain('The primary `Connect GitHub` action opens `/api/github-app/login`');
-    expect(readme).toContain('Install or configure ShipSeal GitHub App');
+    expect(readme).toContain('select repositories');
     expect(readme).toContain('Create a GitHub App for local/demo testing');
     expect(readme).toContain('temporary token mode');
     expect(readme).toContain('private repository support through GitHub App installation');

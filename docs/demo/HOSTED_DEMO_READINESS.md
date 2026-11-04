@@ -38,8 +38,8 @@ No environment variables are required for the core local-first scan/export demo.
 Optional:
 
 - `CONTACT_WEBHOOK_URL`: used by the legacy `POST /api/audit-request` endpoint to forward contact/request-access messages to a configured webhook.
-- `VITE_GITHUB_APP_SLUG`: enables the source-level Connect GitHub install URL.
-- `VITE_GITHUB_APP_INSTALL_URL`: optional explicit GitHub App install URL.
+- `VITE_GITHUB_APP_SLUG`: optional display compatibility only; secure redirects are server-owned.
+- `VITE_GITHUB_APP_INSTALL_URL`: legacy display compatibility only; do not rely on it for secure setup routing.
 - `VITE_GITHUB_APP_NAME`: optional display name for the GitHub App.
 - `GITHUB_APP_ID`: server-side GitHub App id for repository listing, archive download, and App PR creation.
 - `GITHUB_APP_PRIVATE_KEY`: server-side GitHub App private key for repository listing, archive download, and App PR creation.
@@ -60,10 +60,10 @@ For a hosted GitHub App demo:
 2. Set Callback URL to `https://YOUR_DOMAIN/api/github-app/callback`.
 3. Give repository permissions: Metadata read, Contents read/write, Pull requests read/write, and Workflows read/write only if workflow files are written.
 4. Install only on selected repositories.
-5. Set `VITE_GITHUB_APP_SLUG` or `VITE_GITHUB_APP_INSTALL_URL`.
+5. Set server-side `GITHUB_APP_SLUG` and optionally the canonical `GITHUB_APP_INSTALL_URL`.
 6. Set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` when repository listing, archive download, and App PR creation should call GitHub.
 
-After install, GitHub returns to `/api/github-app/callback?installation_id=...&setup_action=...`. ShipSeal redirects to `/?githubInstallationId=...&githubSetupAction=...#scan`, then calls `/api/github-app/repositories?installationId=...`.
+After install, GitHub returns to `/api/github-app/callback?installation_id=...&setup_action=...&state=...`. ShipSeal validates setup state, verifies the installation, binds it to the current signed connection session, and then lists repositories. The installation authorization is not stored in browser storage.
 
 If server credentials are missing, the repository selector shows that listing is not configured. If credentials are present, ShipSeal lists `{ id, owner, name, fullName, defaultBranch, private, htmlUrl }` metadata. The selected repository can then be scanned through `/api/github-app/archive`, and the Create Readiness PR modal can create a PR through `/api/github-app/create-readiness-pr` without a pasted token. The MVP still has no session database, webhook processing, audit log, automatic merge, or direct `main` push.
 

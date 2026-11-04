@@ -115,8 +115,8 @@ describe('SuggestedReadinessFixPack', () => {
     fireEvent.click(within(dialog).getByLabelText('Include active GitHub Actions workflow'));
     expect(within(dialog).getAllByText('Connect GitHub').length).toBeGreaterThan(0);
     expect(within(dialog).getByText(/Connect GitHub before creating a Pull Request/i)).toBeInTheDocument();
-    expect(within(dialog).getByText(/GitHub App install is not configured in this demo/i)).toBeInTheDocument();
-    expect(within(dialog).getByRole('button', { name: /^Connect GitHub$/i })).toBeDisabled();
+    expect(within(dialog).queryByText(/GitHub App install is not configured in this demo/i)).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /^Connect GitHub$/i })).toBeEnabled();
     expect(within(dialog).getByText('Advanced: use a temporary token')).toBeInTheDocument();
     expect(within(dialog).queryByLabelText('GitHub token')).not.toBeInTheDocument();
 

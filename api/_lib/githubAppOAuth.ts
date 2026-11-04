@@ -1,4 +1,4 @@
-import type { GitHubAppAuthOptions, GitHubAppInstallationSummary, GitHubAppOAuthConfig } from './githubAppTypes.js';
+import type { GitHubAppAuthOptions, GitHubAppInstallationSummary, GitHubAppOAuthConfig, GitHubAppUserIdentity } from './githubAppTypes.js';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from './githubAppTypes.js';
 import { AuthConfigurationError, getGitHubOAuthConfig as readGitHubOAuthConfig } from './authConfig.js';
 
@@ -78,31 +78,37 @@ export async function listUserInstallations(
 ): Promise<GitHubAppInstallationSummary[]> {
   const fetcher = options.fetcher || fetch;
   const apiBaseUrl = (options.apiBaseUrl || options.env?.GITHUB_API_BASE_URL || 'https://api.github.com').trim().replace(/\/+$/, '');
-  let response: Response;
-  try {
-    response = await fetcher(`${apiBaseUrl}/user/installations`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    });
-  } catch {
-    throw new GitHubAppApiError(502, 'GitHub installation discovery failed.', 'network_error');
-  }
+  const discovered: Array<Record<string, unknown>> = [];
+  for (let page = 1; page <= 10; page += 1) {
+    let response: Response;
+    try {
+      response = await fetcher(`${apiBaseUrl}/user/installations?per_page=100&page=${page}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+    } catch {
+      throw new GitHubAppApiError(502, 'GitHub installation discovery failed.', 'network_error');
+    }
 
-  if (!response.ok) {
-    throw new GitHubAppApiError(response.status, 'GitHub installation discovery failed.', 'github_api_error');
-  }
+    if (!response.ok) {
+      throw new GitHubAppApiError(response.status, 'GitHub installation discovery failed.', response.status === 401 ? 'user_authorization_failed' : 'github_api_error');
+    }
 
-  let payload: { installations?: Array<Record<string, unknown>> };
-  try {
-    payload = await response.json() as { installations?: Array<Record<string, unknown>> };
-  } catch {
-    throw new GitHubAppApiError(502, 'GitHub installation discovery response was not valid JSON.', 'github_api_error');
+    let payload: { installations?: Array<Record<string, unknown>> };
+    try {
+      payload = await response.json() as { installations?: Array<Record<string, unknown>> };
+    } catch {
+      throw new GitHubAppApiError(502, 'GitHub installation discovery response was not valid JSON.', 'github_api_error');
+    }
+    const pageInstallations = payload.installations || [];
+    discovered.push(...pageInstallations);
+    if (pageInstallations.length < 100) break;
   }
-  return (payload.installations || []).map(installation => {
+  return discovered.map(installation => {
     const account = installation.account && typeof installation.account === 'object'
       ? installation.account as Record<string, unknown>
       : {};
@@ -113,6 +119,48 @@ export async function listUserInstallations(
       htmlUrl: typeof installation.html_url === 'string' ? installation.html_url : undefined,
     };
   }).filter(installation => installation.id && installation.accountLogin);
+}
+
+export async function getGitHubUserIdentity(
+  token: string,
+  options: GitHubAppAuthOptions & { apiBaseUrl?: string } = {},
+): Promise<GitHubAppUserIdentity> {
+  const fetcher = options.fetcher || fetch;
+  const apiBaseUrl = (options.apiBaseUrl || options.env?.GITHUB_API_BASE_URL || 'https://api.github.com').trim().replace(/\/+$/, '');
+  let response: Response;
+  try {
+    response = await fetcher(`${apiBaseUrl}/user`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    });
+  } catch {
+    throw new GitHubAppApiError(502, 'GitHub user identity lookup failed.', 'network_error');
+  }
+  if (!response.ok) {
+    throw new GitHubAppApiError(response.status, 'GitHub user identity could not be verified.', 'user_authorization_failed');
+  }
+  let payload: { id?: number; login?: string };
+  try {
+    payload = await response.json() as { id?: number; login?: string };
+  } catch {
+    throw new GitHubAppApiError(502, 'GitHub user identity response was not valid JSON.', 'github_api_error');
+  }
+  if (!payload.id || !payload.login) {
+    throw new GitHubAppApiError(502, 'GitHub user identity response was incomplete.', 'github_api_error');
+  }
+  return { id: payload.id, login: payload.login };
+}
+
+export async function authorizeGitHubConnection(code: string, options: GitHubAppAuthOptions = {}) {
+  const access = await exchangeCodeForUserToken(code, options);
+  const [user, installations] = await Promise.all([
+    getGitHubUserIdentity(access.token, { ...options, apiBaseUrl: access.apiBaseUrl }),
+    listUserInstallations(access.token, { ...options, apiBaseUrl: access.apiBaseUrl }),
+  ]);
+  return { user, installations, accessToken: access.token, apiBaseUrl: access.apiBaseUrl };
 }
 
 export async function authorizeAndListInstallations(code: string, options: GitHubAppAuthOptions = {}) {

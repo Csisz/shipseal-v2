@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { DEFAULT_AGENT_OPERATING_MODE } from '@/lib/agentOperatingMode';
 import { getGitHubAppClientConfig } from '@/lib/githubApp/config';
 import type { GitHubAppConnectionMessage, GitHubAppInstallation, GitHubAppRepository, GitHubAppRepositoryListStatus } from '@/lib/githubApp/types';
+import { addGitHubFlowQuery, launchGitHubBrowserFlow, restoreGitHubFlowDraft, saveGitHubFlowDraft } from '@/lib/githubApp/browserFlow';
 import { createConnectedGitHubConnection, type GitHubConnectionState } from '@/lib/githubConnection/types';
 import type { RepositoryVerificationBaseline, WorkspaceStoryChapterId } from '@/lib/workspace';
 import { validateRepositoryIntelligenceVerificationBaseline, type RepositoryIntelligenceProviderStatus, type RepositoryIntelligenceVerificationBaseline } from '@/lib/repositoryIntelligence';
@@ -55,14 +56,12 @@ const RepositoryFutureRecoveryQa = import.meta.env.DEV
 const RepositoryRootContractQa = import.meta.env.DEV
   ? lazy(() => import('@/dev/RepositoryRootContractQa'))
   : null;
-const GITHUB_INSTALLATION_STORAGE_KEY = 'shipseal.githubInstallationId';
-
 function scrollWindowToTop(behavior: ScrollBehavior) {
   if (window.navigator.userAgent.toLowerCase().includes('jsdom')) return;
   window.scrollTo({ top: 0, behavior });
 }
 
-function repositoryListFriendlyMessage(code?: string, fallback?: string) {
+function repositoryListFriendlyMessage(code?: string, _fallback?: string) {
   switch (code) {
     case 'missing_app_id':
       return 'GitHub App ID is missing in Vercel.';
@@ -83,29 +82,26 @@ function repositoryListFriendlyMessage(code?: string, fallback?: string) {
     case 'user_authorization_failed':
       return 'GitHub authorization was not completed. Reconnect GitHub.';
     case 'no_installations':
-      return 'No ShipSeal GitHub App installation was found for this account. Use Install or configure ShipSeal GitHub App.';
+      return 'No ShipSeal GitHub App installation was found for this account. Select repositories to continue.';
+    case 'invalid_oauth_state':
+    case 'github_session_expired':
+    case 'installation_not_authorized':
+      return 'Your GitHub connection is no longer valid. Reconnect GitHub and select the repository again.';
+    case 'app_identity_mismatch':
+    case 'app_slug_mismatch':
+      return 'ShipSeal GitHub configuration does not use one consistent GitHub App. An operator must correct the production settings.';
     case 'network_error':
       return 'ShipSeal could not reach GitHub. Retry repository listing.';
     case 'github_api_error':
       return 'GitHub connection is configured, but ShipSeal could not create an installation token.';
     default:
-      return fallback || 'GitHub repository listing failed. Retry or reconnect GitHub.';
+      return 'GitHub repository listing failed. Retry or reconnect GitHub.';
   }
 }
 
-const EMPTY_GITHUB_APP_REPOSITORIES_MESSAGE = 'No repositories are available for this GitHub App installation. Configure the ShipSeal GitHub App and choose All repositories or add the missing repository.';
-
-function openCenteredPopup(url: string, name: string) {
-  const width = 620;
-  const height = 720;
-  const left = Math.max(0, window.screenX + (window.outerWidth - width) / 2);
-  const top = Math.max(0, window.screenY + (window.outerHeight - height) / 2);
-  return window.open(
-    url,
-    name,
-    `popup=yes,width=${width},height=${height},left=${Math.round(left)},top=${Math.round(top)},resizable=yes,scrollbars=yes`
-  );
-}
+const EMPTY_GITHUB_APP_REPOSITORIES_MESSAGE = 'No repositories are available for this GitHub App installation. Manage repository access and choose Only select repositories to add the repository you need.';
+const GITHUB_FLOW_POLL_MS = 1_000;
+const GITHUB_FLOW_MAX_MS = 2 * 60 * 1_000;
 
 function importErrorTitle(category?: string | null) {
   switch (category) {
@@ -155,6 +151,7 @@ const Index = () => {
   const [repositoryListStatus, setRepositoryListStatus] = useState<GitHubAppRepositoryListStatus>('idle');
   const [githubRepositories, setGithubRepositories] = useState<GitHubAppRepository[]>([]);
   const [githubInstallations, setGithubInstallations] = useState<GitHubAppInstallation[]>([]);
+  const [githubLogin, setGithubLogin] = useState('');
   const [repositoryListMessage, setRepositoryListMessage] = useState('');
   const [intelligenceReveal, setIntelligenceReveal] = useState<{ key: string; visible: boolean } | null>(null);
   const [activeStoryChapterId, setActiveStoryChapterId] = useState<WorkspaceStoryChapterId | null>(null);
@@ -171,6 +168,13 @@ const Index = () => {
   const signalledScanIdentity = useRef('');
   const scanSectionRef = useRef<HTMLDivElement>(null);
   const futurePreparationIdentityRef = useRef('');
+  const repositoryLoadRequestRef = useRef(0);
+  const connectionRefreshRequestRef = useRef(0);
+  const githubFlowRef = useRef<{ popup: Window | null; startedAt: number; phase: 'oauth' | 'install' | 'switch'; priorSessionId: string } | null>(null);
+  const githubFlowTimerRef = useRef<number | null>(null);
+  const githubSuccessIdentityRef = useRef('');
+  const githubLoginRef = useRef('');
+  const githubConnectionSessionIdRef = useRef('');
 
   const activeReport = sampleReport || scan.report;
   const activeGithubConnection = pendingSource?.type === 'github-app' ? pendingSource.connection : undefined;
@@ -364,18 +368,30 @@ const Index = () => {
 
   const loadRepositories = useCallback((installationId: string) => {
     if (!installationId) return;
+    const requestId = ++repositoryLoadRequestRef.current;
     setGithubInstallationId(installationId);
-    window.localStorage.setItem(GITHUB_INSTALLATION_STORAGE_KEY, installationId);
     setRepositoryListStatus('loading');
     setRepositoryListMessage('');
 
     fetch(`/api/github-app/repositories?installationId=${encodeURIComponent(installationId)}`)
       .then(async response => {
         const payload = await response.json().catch(() => null);
+        if (requestId !== repositoryLoadRequestRef.current) return;
         if (response.ok && payload?.status === 'ok' && Array.isArray(payload.repositories)) {
           setGithubRepositories(payload.repositories);
           setRepositoryListStatus('loaded');
-          setRepositoryListMessage(payload.repositories.length ? '' : EMPTY_GITHUB_APP_REPOSITORIES_MESSAGE);
+          setRepositoryListMessage(payload.repositories.length
+            ? 'GitHub connected. Authorized repositories are ready.'
+            : EMPTY_GITHUB_APP_REPOSITORIES_MESSAGE);
+          return;
+        }
+        if (response.status === 401 || response.status === 403 || payload?.status === 'reconnect_required'
+          || ['installation_not_found', 'user_authorization_failed'].includes(payload?.code || '')) {
+          setGithubInstallationId('');
+          setGithubRepositories([]);
+          setGithubInstallations([]);
+          setRepositoryListStatus('reconnect_required');
+          setRepositoryListMessage(repositoryListFriendlyMessage(payload?.code, payload?.message));
           return;
         }
         if (payload?.status === 'not_configured') {
@@ -389,50 +405,192 @@ const Index = () => {
         setRepositoryListMessage(repositoryListFriendlyMessage(payload?.code, payload?.message));
       })
       .catch(() => {
+        if (requestId !== repositoryLoadRequestRef.current) return;
         setGithubRepositories([]);
         setRepositoryListStatus('error');
         setRepositoryListMessage(repositoryListFriendlyMessage('network_error'));
       });
   }, []);
 
+  const stopGitHubFlowSync = useCallback(() => {
+    if (githubFlowTimerRef.current !== null) {
+      window.clearInterval(githubFlowTimerRef.current);
+      githubFlowTimerRef.current = null;
+    }
+    githubFlowRef.current = null;
+  }, []);
+
+  const refreshGitHubConnection = useCallback(async (options: { announce?: boolean; activeFlow?: boolean } = {}) => {
+    const requestId = ++connectionRefreshRequestRef.current;
+    try {
+      const response = await fetch('/api/github-app/connection', {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+      const payload = await response.json().catch(() => null);
+      if (requestId !== connectionRefreshRequestRef.current) return false;
+      if (!response.ok || payload?.status !== 'connected') {
+        if (!options.activeFlow && (response.status === 401 || payload?.status === 'reconnect_required') && githubLoginRef.current) {
+          setRepositoryListStatus('reconnect_required');
+          setRepositoryListMessage(repositoryListFriendlyMessage(payload?.code, payload?.message));
+        }
+        return false;
+      }
+
+      const connection = payload.connection;
+      const sessionId = typeof connection?.sessionId === 'string' ? connection.sessionId : '';
+      const activeFlow = githubFlowRef.current;
+      if (options.activeFlow && activeFlow?.priorSessionId && sessionId === activeFlow.priorSessionId) return false;
+      const login = typeof connection?.githubLogin === 'string' ? connection.githubLogin : '';
+      const installations = Array.isArray(connection?.installations) ? connection.installations : [];
+      setGithubLogin(login);
+      githubLoginRef.current = login;
+      githubConnectionSessionIdRef.current = sessionId;
+      setGithubInstallations(installations);
+      const installationId = typeof connection?.selectedInstallationId === 'string'
+        ? connection.selectedInstallationId
+        : installations.length === 1 ? installations[0].id : '';
+
+      if (installationId) {
+        loadRepositories(installationId);
+      } else if (installations.length === 0) {
+        setGithubInstallationId('');
+        setGithubRepositories([]);
+        setRepositoryListStatus(options.activeFlow ? 'authorizing' : 'idle');
+        setRepositoryListMessage(options.activeFlow
+          ? 'GitHub is connected. Opening repository selection…'
+          : 'Select repositories to finish connecting GitHub.');
+      } else {
+        setGithubInstallationId('');
+        setGithubRepositories([]);
+        setRepositoryListStatus('idle');
+        setRepositoryListMessage('Choose a GitHub installation to list repositories.');
+      }
+
+      if (options.announce && installations.length > 0) {
+        const identity = `${login}:${installations.map((installation: GitHubAppInstallation) => installation.id).join(',')}`;
+        if (githubSuccessIdentityRef.current !== identity) {
+          githubSuccessIdentityRef.current = identity;
+          toast({ title: `GitHub connected as @${login}`, description: 'Authorized repositories are ready.' });
+        }
+      }
+      return installations.length > 0;
+    } catch {
+      if (!options.activeFlow) {
+        setRepositoryListStatus('error');
+        setRepositoryListMessage(repositoryListFriendlyMessage('network_error'));
+      }
+      return false;
+    }
+  }, [loadRepositories]);
+
+  const synchronizeActiveGitHubFlow = useCallback(async (announce = false) => {
+    const activeFlow = githubFlowRef.current;
+    if (!activeFlow) return;
+    const connected = await refreshGitHubConnection({ announce, activeFlow: true });
+    if (connected) {
+      try { activeFlow.popup?.close(); } catch { /* Browser controls popup closure. */ }
+      stopGitHubFlowSync();
+      try { window.focus(); } catch { /* Some embedded browsers do not expose focus control. */ }
+      return;
+    }
+    const elapsed = Date.now() - activeFlow.startedAt;
+    if (elapsed >= GITHUB_FLOW_MAX_MS) {
+      stopGitHubFlowSync();
+      setRepositoryListStatus('error');
+      setRepositoryListMessage('GitHub is taking longer than expected. Retry connection or continue with a public URL.');
+      return;
+    }
+    if (activeFlow.popup?.closed && elapsed > GITHUB_FLOW_POLL_MS * 4) {
+      stopGitHubFlowSync();
+      setRepositoryListStatus('error');
+      setRepositoryListMessage('The GitHub window closed before connection completed. Retry when you are ready.');
+    }
+  }, [refreshGitHubConnection, stopGitHubFlowSync]);
+
+  const beginGitHubFlowSync = useCallback((popup: Window, phase: 'oauth' | 'install' | 'switch') => {
+    stopGitHubFlowSync();
+    githubFlowRef.current = { popup, phase, startedAt: Date.now(), priorSessionId: githubConnectionSessionIdRef.current };
+    githubFlowTimerRef.current = window.setInterval(() => {
+      void synchronizeActiveGitHubFlow(false);
+    }, GITHUB_FLOW_POLL_MS);
+  }, [stopGitHubFlowSync, synchronizeActiveGitHubFlow]);
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const installationId = params.get('githubInstallationId') || window.localStorage.getItem(GITHUB_INSTALLATION_STORAGE_KEY) || '';
+    const connectionResult = params.get('githubConnection');
     const setupAction = params.get('githubSetupAction') || '';
-    if (!installationId) return;
-
     setGithubSetupAction(setupAction);
-    loadRepositories(installationId);
-  }, [loadRepositories]);
+
+    if (connectionResult) {
+      const draft = restoreGitHubFlowDraft();
+      if (draft) {
+        setSelectedPackages(draft.selectedPackages);
+        if (draft.agentOperatingMode) setAgentOperatingMode(draft.agentOperatingMode as AgentOperatingModeId);
+      }
+      params.delete('githubConnection');
+      params.delete('githubSetupAction');
+      params.delete('githubError');
+      const query = params.toString();
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+    }
+
+    if (connectionResult === 'reconnect-required') {
+      setRepositoryListStatus('reconnect_required');
+      setRepositoryListMessage('GitHub setup did not complete. Reconnect GitHub when you are ready.');
+      return;
+    }
+    void refreshGitHubConnection({ announce: connectionResult === 'connected' });
+  }, [refreshGitHubConnection]);
+
+  useEffect(() => {
+    const synchronizeOnReturn = () => {
+      if (githubFlowRef.current) void synchronizeActiveGitHubFlow(true);
+    };
+    const synchronizeOnVisibility = () => {
+      if (document.visibilityState === 'visible') synchronizeOnReturn();
+    };
+    window.addEventListener('focus', synchronizeOnReturn);
+    document.addEventListener('visibilitychange', synchronizeOnVisibility);
+    return () => {
+      window.removeEventListener('focus', synchronizeOnReturn);
+      document.removeEventListener('visibilitychange', synchronizeOnVisibility);
+    };
+  }, [synchronizeActiveGitHubFlow]);
 
   useEffect(() => {
     const onMessage = (event: MessageEvent<GitHubAppConnectionMessage>) => {
       if (event.origin !== window.location.origin) return;
       const data = event.data;
       if (!data || data.source !== 'shipseal-github-connect') return;
+      const activePopup = githubFlowRef.current?.popup;
+      if (activePopup && event.source && event.source !== activePopup) return;
       if (data.status === 'error') {
+        setGithubLogin(data.githubLogin || '');
+        githubLoginRef.current = data.githubLogin || '';
+        if (data.code === 'no_installations') {
+          setGithubInstallationId('');
+          setGithubRepositories([]);
+          setRepositoryListStatus('authorizing');
+          setRepositoryListMessage('GitHub is connected. Opening repository selection…');
+          return;
+        }
+        stopGitHubFlowSync();
         setGithubRepositories([]);
-        setRepositoryListStatus(['missing_client_id', 'missing_client_secret', 'invalid_client_id_format', 'invalid_callback_url', 'invalid_api_base_url'].includes(data.code || '') ? 'not_configured' : 'error');
+        setRepositoryListStatus(['missing_client_id', 'missing_client_secret', 'invalid_client_id_format', 'invalid_callback_url', 'invalid_api_base_url', 'app_identity_mismatch', 'app_slug_mismatch'].includes(data.code || '')
+          ? 'not_configured'
+          : ['invalid_oauth_state', 'github_session_expired', 'installation_not_authorized', 'user_authorization_failed'].includes(data.code || '') ? 'reconnect_required' : 'error');
         setRepositoryListMessage(repositoryListFriendlyMessage(data.code, data.message));
         return;
       }
 
-      const installations = data.installations || [];
-      setGithubInstallations(installations);
-      const installationId = data.installationId || (installations.length === 1 ? installations[0].id : '');
-      if (installationId) {
-        loadRepositories(installationId);
-      } else if (installations.length > 1) {
-        setRepositoryListStatus('idle');
-        setRepositoryListMessage('Choose a GitHub account to list repositories.');
-      } else {
-        setRepositoryListStatus('error');
-        setRepositoryListMessage('No ShipSeal GitHub App installation was found for this account. Use Install or configure ShipSeal GitHub App.');
-      }
+      void synchronizeActiveGitHubFlow(true);
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [loadRepositories]);
+  }, [stopGitHubFlowSync, synchronizeActiveGitHubFlow]);
+
+  useEffect(() => () => stopGitHubFlowSync(), [stopGitHubFlowSync]);
 
   useEffect(() => {
     if (!scan.report) return;
@@ -579,27 +737,68 @@ const Index = () => {
     });
   }, [beginScanForSource, githubInstallationId]);
 
-  const handleGitHubConnect = useCallback(() => {
+  const startGitHubConnectionFlow = useCallback((phase: 'oauth' | 'switch') => {
+    repositoryLoadRequestRef.current += 1;
+    connectionRefreshRequestRef.current += 1;
+    setGithubInstallationId('');
+    setGithubInstallations([]);
+    setGithubRepositories([]);
+    setGithubLogin('');
+    githubLoginRef.current = '';
+    setRepositoryListStatus('authorizing');
+    setRepositoryListMessage(phase === 'switch'
+      ? 'Choose the GitHub account you want to connect.'
+      : 'Complete GitHub authorization in the secure window.');
     const config = getGitHubAppClientConfig();
-    openCenteredPopup(config.loginUrl, 'shipseal-github-connect');
-  }, []);
+    const url = phase === 'switch'
+      ? addGitHubFlowQuery(config.loginUrl, 'prompt', 'select_account')
+      : config.loginUrl;
+    const launch = launchGitHubBrowserFlow({
+      url,
+      name: 'shipseal-github-connect',
+      beforeSameTab: () => saveGitHubFlowDraft({ selectedPackages, agentOperatingMode }),
+    });
+    if (launch.mode === 'popup' && launch.popup) {
+      beginGitHubFlowSync(launch.popup, phase);
+    }
+  }, [agentOperatingMode, beginGitHubFlowSync, selectedPackages]);
+
+  const handleGitHubConnect = useCallback(() => {
+    startGitHubConnectionFlow('oauth');
+  }, [startGitHubConnectionFlow]);
+
+  const handleGitHubSwitch = useCallback(() => {
+    startGitHubConnectionFlow('switch');
+  }, [startGitHubConnectionFlow]);
 
   const handleGitHubInstall = useCallback(() => {
     const config = getGitHubAppClientConfig();
     if (!config.installUrl) return;
-    openCenteredPopup(config.installUrl, 'shipseal-github-install');
-  }, []);
+    setRepositoryListStatus('authorizing');
+    setRepositoryListMessage('Opening GitHub repository access…');
+    const launch = launchGitHubBrowserFlow({
+      url: config.installUrl,
+      name: 'shipseal-github-install',
+      beforeSameTab: () => saveGitHubFlowDraft({ selectedPackages, agentOperatingMode }),
+    });
+    if (launch.mode === 'popup' && launch.popup) beginGitHubFlowSync(launch.popup, 'install');
+  }, [agentOperatingMode, beginGitHubFlowSync, selectedPackages]);
 
   const handleGitHubDisconnect = useCallback(() => {
-    window.localStorage.removeItem(GITHUB_INSTALLATION_STORAGE_KEY);
+    stopGitHubFlowSync();
+    repositoryLoadRequestRef.current += 1;
+    void fetch('/api/github-app/connection', { method: 'DELETE', headers: { Accept: 'application/json' } });
     setGithubInstallationId('');
     setGithubSetupAction('');
     setGithubInstallations([]);
+    setGithubLogin('');
+    githubLoginRef.current = '';
+    githubConnectionSessionIdRef.current = '';
     setGithubRepositories([]);
     setRepositoryListStatus('idle');
     setRepositoryListMessage('');
     setPendingSource(null);
-  }, []);
+  }, [stopGitHubFlowSync]);
 
   const handleGitHubRepositoryRetry = useCallback(() => {
     if (githubInstallationId) loadRepositories(githubInstallationId);
@@ -806,9 +1005,11 @@ const Index = () => {
                   repositoryListStatus={repositoryListStatus}
                   repositories={githubRepositories}
                   githubInstallations={githubInstallations}
+                  githubLogin={githubLogin}
                   repositoryListMessage={repositoryListMessage || (githubSetupAction ? `GitHub setup action: ${githubSetupAction}` : '')}
                   onGitHubAppRepositorySelect={handleGitHubAppRepository}
                   onGitHubConnect={handleGitHubConnect}
+                  onGitHubSwitch={handleGitHubSwitch}
                   onGitHubInstall={handleGitHubInstall}
                   onGitHubDisconnect={handleGitHubDisconnect}
                   onGitHubRepositoryRetry={handleGitHubRepositoryRetry}

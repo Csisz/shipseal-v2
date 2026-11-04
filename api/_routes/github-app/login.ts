@@ -1,5 +1,8 @@
 import type { ServerResponse, IncomingMessage } from 'node:http';
 import { AuthConfigurationError, getGitHubOAuthConfig, resolveGitHubOAuthCallbackUrl, validateGitHubClientId } from '../../_lib/authConfig.js';
+import { verifyGitHubAppIdentity } from '../../_lib/githubAppAuth.js';
+import { GitHubAppApiError } from '../../_lib/githubAppTypes.js';
+import { clearGitHubConnectionSession, createGitHubFlowState, requireGitHubConnectionSession } from '../../_lib/githubConnectionSession.js';
 
 type QueryValue = string | string[] | undefined;
 type VercelLikeRequest = IncomingMessage & {
@@ -14,6 +17,9 @@ type LoginErrorCode =
   | 'invalid_api_base_url'
   | 'invalid_oauth_config'
   | 'invalid_callback_url'
+  | 'app_identity_mismatch'
+  | 'app_slug_mismatch'
+  | 'github_session_expired'
   | 'missing_install_url'
   | 'login_redirect_failed';
 
@@ -55,6 +61,7 @@ function queryFromRequest(req: VercelLikeRequest): Record<string, QueryValue> {
     debug: parsed.searchParams.get('debug') || undefined,
     redirectUri: parsed.searchParams.get('redirectUri') || undefined,
     flow: parsed.searchParams.get('flow') || undefined,
+    prompt: parsed.searchParams.get('prompt') || undefined,
   };
 }
 
@@ -176,13 +183,23 @@ function clientIdInvalidReasons(clientId: string) {
   return clientId && !validateGitHubClientId(clientId) ? ['GITHUB_APP_CLIENT_ID'] : [];
 }
 
-function buildInstallUrl(input: { installUrl?: string; slug?: string }) {
-  if (input.installUrl?.trim()) return assertGitHubUrl(input.installUrl.trim(), '/apps/');
-  if (input.slug?.trim()) return `https://github.com/apps/${encodeURIComponent(input.slug.trim())}/installations/new`;
-  return '';
+function buildInstallUrl(input: { installUrl?: string; slug?: string; state?: string }) {
+  let value = '';
+  if (input.installUrl?.trim()) {
+    try {
+      value = assertGitHubUrl(input.installUrl.trim(), '/apps/');
+    } catch (error) {
+      if (!input.slug?.trim()) throw error;
+    }
+  }
+  if (!value && input.slug?.trim()) value = `https://github.com/apps/${encodeURIComponent(input.slug.trim())}/installations/new`;
+  if (!value || !input.state) return value;
+  const parsed = new URL(value);
+  parsed.searchParams.set('state', input.state);
+  return parsed.toString();
 }
 
-function tryBuildInstallUrl(input: { installUrl?: string; slug?: string }) {
+function tryBuildInstallUrl(input: { installUrl?: string; slug?: string; state?: string }) {
   try {
     return { url: buildInstallUrl(input) };
   } catch (error) {
@@ -220,21 +237,13 @@ export function resolveCallbackUrl(req: VercelLikeRequest, explicit?: string, co
   }
 }
 
-async function createState() {
-  try {
-    const crypto = await import('node:crypto');
-    return crypto.randomBytes(12).toString('hex');
-  } catch {
-    return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
-  }
-}
-
-export function buildGitHubLoginAuthorizeUrl(input: { clientId: string; redirectUri: string; state: string }) {
+export function buildGitHubLoginAuthorizeUrl(input: { clientId: string; redirectUri: string; state: string; prompt?: 'select_account' }) {
   const params = new URLSearchParams({
     client_id: input.clientId,
     redirect_uri: input.redirectUri,
     state: input.state,
   });
+  if (input.prompt === 'select_account') params.set('prompt', input.prompt);
   return `https://github.com/login/oauth/authorize?${params.toString()}`;
 }
 
@@ -247,7 +256,7 @@ function safeUrlParts(value?: string) {
   };
 }
 
-async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
+async function decideLogin(req: VercelLikeRequest, state: string): Promise<LoginDecision> {
   const query = queryFromRequest(req);
   const env = serverEnv();
   const missingEnv: string[] = [];
@@ -261,7 +270,7 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
   const callbackUrlUsable = true;
   const requiredCallbackUrl = redirectUri;
   const requestedFlow = firstValue(query.flow);
-  const fallback = tryBuildInstallUrl({ installUrl: env.installUrl, slug: env.slug });
+  const fallback = tryBuildInstallUrl({ installUrl: env.installUrl, slug: env.slug, state: requestedFlow === 'install' ? state : undefined });
   const fallbackInstallUrl = fallback.url;
   invalidFields.push(...clientIdInvalid);
 
@@ -310,7 +319,8 @@ async function decideLogin(req: VercelLikeRequest): Promise<LoginDecision> {
     const authorizeUrl = buildGitHubLoginAuthorizeUrl({
       clientId: env.clientId,
       redirectUri,
-      state: await createState(),
+      state,
+      prompt: firstValue(query.prompt) === 'select_account' ? 'select_account' : undefined,
     });
     return {
       ok: true,
@@ -392,9 +402,23 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
 
     const query = queryFromRequest(req);
     const debug = firstValue(query.debug) === '1';
+    const requestedFlow = firstValue(query.flow) === 'install' ? 'install' : 'oauth';
+    if (!debug && requestedFlow === 'oauth') clearGitHubConnectionSession(req, res);
+    if (!debug && requestedFlow === 'install') {
+      try {
+        requireGitHubConnectionSession(req);
+      } catch {
+        sendPopupError(res, 401, {
+          code: 'github_session_expired',
+          message: 'Reconnect GitHub before installing or changing repository access.',
+        });
+        return;
+      }
+    }
+    const state = debug ? 'debug-state-not-used' : createGitHubFlowState(req, res, requestedFlow === 'install' ? 'setup' : 'oauth');
     let decision: LoginDecision;
     try {
-      decision = await decideLogin(req);
+      decision = await decideLogin(req, state);
     } catch (error) {
       if (debug) {
         sendDebugError(res, error);
@@ -415,6 +439,18 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
         missingEnv: decision.missingEnv,
       });
       return;
+    }
+
+    if (process.env.GITHUB_APP_ID?.trim() && process.env.GITHUB_APP_PRIVATE_KEY?.trim()) {
+      try {
+        await verifyGitHubAppIdentity();
+      } catch (error) {
+        if (error instanceof GitHubAppApiError && (error.code === 'app_identity_mismatch' || error.code === 'app_slug_mismatch')) {
+          sendPopupError(res, 503, { code: error.code, message: error.message });
+          return;
+        }
+        throw error;
+      }
     }
 
     res.statusCode = 302;

@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { authorizeAndListInstallations } from '../../_lib/githubAppOAuth.js';
+import { authorizeGitHubConnection } from '../../_lib/githubAppOAuth.js';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../../_lib/githubAppTypes.js';
 import { AuthConfigurationError, resolveGitHubOAuthCallbackUrl, safeAuthDiagnostic } from '../../_lib/authConfig.js';
+import { consumeGitHubFlowState, writeGitHubConnectionSession, writePendingGitHubUserToken } from '../../_lib/githubConnectionSession.js';
+import { renderGitHubTransitionPage } from '../../_lib/githubCallbackPage.js';
 
 type QueryValue = string | string[] | undefined;
 type VercelLikeRequest = IncomingMessage & {
@@ -19,30 +21,9 @@ function queryFromRequest(req: VercelLikeRequest) {
     code: parsed.searchParams.get('code') || undefined,
     error: parsed.searchParams.get('error') || undefined,
     error_description: parsed.searchParams.get('error_description') || undefined,
+    state: parsed.searchParams.get('state') || undefined,
     debug: parsed.searchParams.get('debug') || undefined,
   };
-}
-
-function htmlEscape(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function getInstallFallbackUrl(env: NodeJS.ProcessEnv = process.env) {
-  const installUrl = (env.GITHUB_APP_INSTALL_URL || env.VITE_GITHUB_APP_INSTALL_URL || '').trim();
-  const slug = (env.GITHUB_APP_SLUG || env.VITE_GITHUB_APP_SLUG || '').trim();
-  if (installUrl) {
-    try {
-      const parsed = new URL(installUrl);
-      if (parsed.protocol === 'https:' && parsed.hostname === 'github.com') return parsed.toString();
-    } catch {
-      return '';
-    }
-  }
-  return slug ? `https://github.com/apps/${encodeURIComponent(slug)}/installations/new` : '';
 }
 
 function sendHtml(
@@ -50,34 +31,20 @@ function sendHtml(
   status: number,
   payload: Record<string, unknown>,
   title: string,
-  options: { actionHref?: string; actionLabel?: string; autoClose?: boolean } = {}
+  options: { nextUrl?: string; fallbackUrl?: string; message?: string; notifyOpener?: boolean; closePopup?: boolean } = {}
 ) {
-  const safeJson = JSON.stringify(payload).replace(/</g, '\\u003c');
-  const autoClose = options.autoClose !== false;
   res.statusCode = status;
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.end(`<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${htmlEscape(title)}</title>
-  </head>
-  <body>
-    <p>${htmlEscape(title)}</p>
-    <p><a href="/#scan">Return to ShipSeal</a></p>
-    ${options.actionHref && options.actionLabel ? `<p><a href="${htmlEscape(options.actionHref)}">${htmlEscape(options.actionLabel)}</a></p>` : ''}
-    <script>
-      (function () {
-        var message = ${safeJson};
-        if (window.opener && !window.opener.closed) {
-          window.opener.postMessage(message, window.location.origin);
-        }
-        ${autoClose ? 'window.setTimeout(function () { window.close(); }, 100);' : ''}
-      }());
-    </script>
-  </body>
-</html>`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(renderGitHubTransitionPage({
+    payload,
+    title,
+    message: options.message || 'Returning to ShipSeal…',
+    nextUrl: options.nextUrl,
+    fallbackUrl: options.fallbackUrl,
+    notifyOpener: options.notifyOpener,
+    closePopup: options.closePopup,
+  }));
 }
 
 function errorPayload(code: string, message: string) {
@@ -151,6 +118,7 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
     const error = (firstValue(query.error) || '').trim();
     const errorDescription = (firstValue(query.error_description) || '').trim();
     const code = (firstValue(query.code) || '').trim();
+    const state = (firstValue(query.state) || '').trim();
     const callbackUrl = resolveCallbackUrl(req);
 
     if (debug) {
@@ -160,6 +128,16 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
         installationsAttempted: false,
         safeErrorCode: error ? (error === 'access_denied' ? 'github_oauth_denied' : 'github_oauth_error') : !code ? 'missing_oauth_code' : undefined,
       });
+      return;
+    }
+
+    if (!consumeGitHubFlowState(req, res, 'oauth', state)) {
+      sendHtml(
+        res,
+        400,
+        errorPayload('invalid_oauth_state', 'GitHub authorization expired or could not be verified. Start Connect GitHub again.'),
+        'GitHub authorization expired.'
+      );
       return;
     }
 
@@ -194,18 +172,34 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
       return;
     }
 
-    const installations = await authorizeAndListInstallations(code, { redirectUri: callbackUrl });
+    const connection = await authorizeGitHubConnection(code, { redirectUri: callbackUrl });
+    const installations = connection.installations;
+    writeGitHubConnectionSession(req, res, {
+      githubUserId: String(connection.user.id),
+      githubLogin: connection.user.login,
+      installations,
+      selectedInstallationId: installations.length === 1 ? String(installations[0].id) : undefined,
+    });
+    writePendingGitHubUserToken(req, res, {
+      githubUserId: String(connection.user.id),
+      token: connection.accessToken,
+      apiBaseUrl: connection.apiBaseUrl,
+    });
     if (installations.length === 0) {
-      const installUrl = getInstallFallbackUrl();
       sendHtml(
         res,
         200,
-        errorPayload('no_installations', 'No ShipSeal GitHub App installations were found for this GitHub account.'),
+        {
+          ...errorPayload('no_installations', 'No ShipSeal GitHub App installations were found for this GitHub account.'),
+          githubLogin: connection.user.login,
+        },
         'Install ShipSeal GitHub App to choose repositories.',
         {
-          actionHref: installUrl || undefined,
-          actionLabel: installUrl ? 'Install ShipSeal GitHub App' : undefined,
-          autoClose: false,
+          nextUrl: '/api/github-app/login?flow=install',
+          fallbackUrl: '/?githubConnection=reconnect-required#scan',
+          message: 'GitHub is connected. Opening repository selection…',
+          notifyOpener: false,
+          closePopup: false,
         }
       );
       return;
@@ -216,13 +210,17 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
       source: 'shipseal-github-connect',
       status: 'ok',
       setupAction: 'oauth',
+      githubLogin: connection.user.login,
       installationId: installations.length === 1 ? String(installations[0].id) : undefined,
       installations: installations.map(installation => ({
         ...installation,
         id: String(installation.id),
       })),
     };
-    sendHtml(res, 200, payload, 'GitHub connected. You can return to ShipSeal.');
+    sendHtml(res, 200, payload, 'GitHub connected', {
+      message: 'Your authorized repositories are ready in ShipSeal.',
+      fallbackUrl: '/?githubConnection=connected#scan',
+    });
   } catch (err) {
     console.error('[shipseal-github-oauth-callback]', safeAuthDiagnostic(err));
     sendSafeFailure(res, err);

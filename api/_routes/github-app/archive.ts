@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../../_lib/githubAppTypes.js';
 import { createGitHubInstallationClient } from '../../_lib/githubAppClient.js';
+import { GitHubConnectionSessionError, requireAuthorizedGitHubInstallation } from '../../_lib/githubConnectionSession.js';
 
 const OWNER_REPO_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const REF_PATTERN = /^[A-Za-z0-9._/-]+$/;
@@ -80,6 +81,16 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   }
   if (!isSafeRef(ref)) {
     sendJson(res, 400, { status: 'invalid_request', message: 'A valid ref query parameter is required.' });
+    return;
+  }
+  try {
+    requireAuthorizedGitHubInstallation(req, installationId);
+  } catch (error) {
+    if (error instanceof GitHubConnectionSessionError) {
+      sendJson(res, error.status, { status: 'reconnect_required', code: error.code, message: error.message });
+      return;
+    }
+    sendJson(res, 401, { status: 'reconnect_required', code: 'github_session_expired', message: 'Reconnect GitHub.' });
     return;
   }
 

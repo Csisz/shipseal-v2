@@ -127,8 +127,10 @@ vi.mock('@/components/agentready/UploadDropzone', () => ({
     repositoryListMessage,
     onGitHubAppRepositorySelect,
     onGitHubConnect,
+    onGitHubSwitch,
     onGitHubDisconnect,
     onGitHubRepositoryRetry,
+    githubLogin,
   }: {
     onFile: (file: File) => void;
     onGitHubImport?: (url: string, branch?: string) => void;
@@ -138,8 +140,10 @@ vi.mock('@/components/agentready/UploadDropzone', () => ({
     repositoryListMessage?: string;
     onGitHubAppRepositorySelect?: (repo: GitHubAppRepository) => void;
     onGitHubConnect?: () => void;
+    onGitHubSwitch?: () => void;
     onGitHubDisconnect?: () => void;
     onGitHubRepositoryRetry?: () => void;
+    githubLogin?: string;
   }) => (
     <div>
       <button type="button" onClick={() => {
@@ -152,6 +156,7 @@ vi.mock('@/components/agentready/UploadDropzone', () => ({
       {repositoryListStatus === 'loading' && <div>GitHub App installation detected. Loading repositories...</div>}
       {(repositoryListStatus === 'not_configured' || repositoryListStatus === 'error') && <div>{repositoryListMessage}</div>}
       <button type="button" onClick={onGitHubConnect}>Connect GitHub</button>
+      {githubLogin && <button type="button" onClick={onGitHubSwitch}>Switch GitHub account</button>}
       <button type="button" onClick={onGitHubRepositoryRetry}>Retry repository listing</button>
       <button type="button" onClick={onGitHubDisconnect}>Disconnect GitHub</button>
       {repositoryListStatus === 'loaded' && repositories[0] && (
@@ -218,15 +223,19 @@ describe('ShipSeal direct scan entry', () => {
 
   it('starts a connected GitHub scan on repository selection and preserves defaults and connection metadata', async () => {
     scanMocks.completeWithReport = true;
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        status: 'ok',
-        repositories: [{ id: 1, owner: 'Csisz', name: 'shipseal', fullName: 'Csisz/shipseal', defaultBranch: 'main', private: true, htmlUrl: 'https://github.com/Csisz/shipseal' }],
-      }),
-    });
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'connected', connection: { githubLogin: 'Csisz', selectedInstallationId: '12345', installations: [{ id: '12345', accountLogin: 'Csisz' }] } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          status: 'ok',
+          repositories: [{ id: 1, owner: 'Csisz', name: 'shipseal', fullName: 'Csisz/shipseal', defaultBranch: 'main', private: true, htmlUrl: 'https://github.com/Csisz/shipseal' }],
+        }),
+      });
     vi.stubGlobal('fetch', fetchMock);
-    window.history.pushState({}, '', '/?githubInstallationId=12345');
     render(<MemoryRouter><Index /></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole('button', { name: /Select repository: Csisz\/shipseal/i }));
@@ -268,36 +277,119 @@ describe('ShipSeal direct scan entry', () => {
     expect(scanMocks.startGitHubAppScan).not.toHaveBeenCalled();
   });
 
-  it('opens popup connect, receives postMessage, persists installation, retries and disconnects', async () => {
-    const openMock = vi.spyOn(window, 'open').mockImplementation(() => null);
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ status: 'ok', repositories: [{ id: 1, owner: 'Csisz', name: 'shipseal', fullName: 'Csisz/shipseal', defaultBranch: 'main', private: false, htmlUrl: 'https://github.com/Csisz/shipseal' }] }),
+  it('opens popup connect, receives postMessage, keeps authorization out of localStorage, retries and disconnects', async () => {
+    vi.spyOn(window, 'focus').mockImplementation(() => undefined);
+    const popup = { closed: false, close: vi.fn() } as unknown as Window;
+    const openMock = vi.spyOn(window, 'open').mockImplementation(() => popup);
+    let connected = false;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/github-app/connection' && init?.method === 'DELETE') {
+        return { ok: true, status: 200, json: async () => ({ status: 'disconnected' }) };
+      }
+      if (url === '/api/github-app/connection') {
+        return connected
+          ? { ok: true, status: 200, json: async () => ({ status: 'connected', connection: { githubLogin: 'Csisz', selectedInstallationId: '777', installations: [{ id: '777', accountLogin: 'Csisz' }] } }) }
+          : { ok: false, status: 401, json: async () => ({ status: 'reconnect_required' }) };
+      }
+      if (url === '/api/github-app/repositories?installationId=777') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ status: 'ok', repositories: [{ id: 1, owner: 'Csisz', name: 'shipseal', fullName: 'Csisz/shipseal', defaultBranch: 'main', private: false, htmlUrl: 'https://github.com/Csisz/shipseal' }] }),
+        };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
     });
     vi.stubGlobal('fetch', fetchMock);
     render(<MemoryRouter><Index /></MemoryRouter>);
 
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/connection', expect.any(Object)));
     fireEvent.click(screen.getByRole('button', { name: /^Connect GitHub$/i }));
     expect(openMock).toHaveBeenCalledWith('/api/github-app/login', 'shipseal-github-connect', expect.stringContaining('popup=yes'));
+    connected = true;
     act(() => window.dispatchEvent(new MessageEvent('message', {
       origin: window.location.origin,
+      source: popup,
       data: { source: 'shipseal-github-connect', status: 'ok', installationId: '777', installations: [{ id: '777', accountLogin: 'Csisz' }] },
     })));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/repositories?installationId=777'));
-    expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBe('777');
+    expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Retry repository listing/i }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/repositories?'))).toHaveLength(2));
     fireEvent.click(screen.getByRole('button', { name: /Disconnect GitHub/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('/api/github-app/connection', expect.objectContaining({ method: 'DELETE' })));
     expect(window.localStorage.getItem('shipseal.githubInstallationId')).toBeNull();
   });
 
-  it('maps repository listing backend errors to actionable recovery copy', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: false,
-      json: async () => ({ status: 'not_configured', code: 'invalid_private_key_format', message: 'raw backend message' }),
+  it('synchronizes a completed popup on focus even when postMessage is missed', async () => {
+    vi.spyOn(window, 'focus').mockImplementation(() => undefined);
+    const popup = { closed: false, close: vi.fn() } as unknown as Window;
+    vi.spyOn(window, 'open').mockImplementation(() => popup);
+    let connected = false;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/github-app/connection') {
+        return connected
+          ? { ok: true, status: 200, json: async () => ({ status: 'connected', connection: { githubLogin: 'hvdev23', selectedInstallationId: '202', installations: [{ id: '202', accountLogin: 'hvdev23' }] } }) }
+          : { ok: false, status: 401, json: async () => ({ status: 'reconnect_required' }) };
+      }
+      if (url === '/api/github-app/repositories?installationId=202') {
+        return { ok: true, status: 200, json: async () => ({ status: 'ok', repositories: [{ id: 2, owner: 'hvdev23', name: 'shipseal-test-repo', fullName: 'hvdev23/shipseal-test-repo', defaultBranch: 'main', private: true, htmlUrl: 'https://github.com/hvdev23/shipseal-test-repo' }] }) };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
     }));
-    window.localStorage.setItem('shipseal.githubInstallationId', '999');
+    render(<MemoryRouter><Index /></MemoryRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Connect GitHub$/i }));
+    connected = true;
+    act(() => window.dispatchEvent(new Event('focus')));
+
+    expect(await screen.findByRole('button', { name: /Select repository: hvdev23\/shipseal-test-repo/i })).toBeInTheDocument();
+    expect(popup.close).toHaveBeenCalledOnce();
+  });
+
+  it('adds GitHub account selection only for the explicit switch action', async () => {
+    const popup = { closed: false, close: vi.fn() } as unknown as Window;
+    const openMock = vi.spyOn(window, 'open').mockImplementation(() => popup);
+    vi.spyOn(window, 'focus').mockImplementation(() => undefined);
+    let sessionId = 'session-before-switch';
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/github-app/connection') {
+        const responseSessionId = sessionId;
+        return { ok: true, status: 200, json: async () => ({ status: 'connected', connection: { sessionId: responseSessionId, githubLogin: 'first-user', selectedInstallationId: '101', installations: [{ id: '101', accountLogin: 'first-user' }] } }) };
+      }
+      if (url === '/api/github-app/repositories?installationId=101') {
+        return { ok: true, status: 200, json: async () => ({ status: 'ok', repositories: [] }) };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+    render(<MemoryRouter><Index /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole('button', { name: /Switch GitHub account/i }));
+
+    expect(openMock).toHaveBeenCalledWith('/api/github-app/login?prompt=select_account', 'shipseal-github-connect', expect.stringContaining('popup=yes'));
+    act(() => window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(popup.close).not.toHaveBeenCalled());
+
+    sessionId = 'session-after-switch';
+    act(() => window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(popup.close).toHaveBeenCalledOnce());
+  });
+
+  it('maps repository listing backend errors to actionable recovery copy', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status: 'connected', connection: { githubLogin: 'Csisz', selectedInstallationId: '999', installations: [{ id: '999', accountLogin: 'Csisz' }] } }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 501,
+        json: async () => ({ status: 'not_configured', code: 'invalid_private_key_format', message: 'raw backend message' }),
+      }));
     render(<MemoryRouter><Index /></MemoryRouter>);
 
     expect(await screen.findByText('GitHub App private key is missing or invalid in Vercel.')).toBeInTheDocument();

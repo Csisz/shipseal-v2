@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createGitHubInstallationClient, type GitHubInstallationClient } from '../../_lib/githubAppClient.js';
+import { GitHubConnectionSessionError, requireAuthorizedGitHubInstallation } from '../../_lib/githubConnectionSession.js';
 import { GitHubAppApiError, GitHubAppNotConfiguredError } from '../../_lib/githubAppTypes.js';
 import {
   OPTIMIZATION_GITHUB_APPLY_LIMITS,
@@ -240,6 +241,18 @@ export default async function handler(req: VercelLikeRequest, res: ServerRespons
   try { body = await readJsonBody(req); } catch (error) { return sendJson(res, error instanceof Error && error.message === 'payload-too-large' ? 413 : 400, { error: { code: 'invalid-payload', message: 'The request is invalid or too large.', nextAction: 'Prepare a smaller reviewed plan.' } }); }
   const issues = validateOptimizationGithubApplyRequest(body);
   if (issues.length) return sendJson(res, 400, { error: issues[0], issues });
+  try {
+    requireAuthorizedGitHubInstallation(req, (body as OptimizationGithubApplyRequest).installationId);
+  } catch (error) {
+    const status = error instanceof GitHubConnectionSessionError ? error.status : 401;
+    return sendJson(res, status, {
+      error: {
+        code: 'installation-unavailable',
+        message: 'GitHub connection expired or does not authorize this installation.',
+        nextAction: 'Reconnect GitHub and select the repository again.',
+      },
+    });
+  }
   try {
     const result = await prepareOrApplyOptimizationPr(body as OptimizationGithubApplyRequest);
     return sendJson(res, 200, result);

@@ -141,9 +141,10 @@ describe('UploadDropzone GitHub import copy', () => {
     expect(onConnect).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps install or configure as a separate secondary action', () => {
+  it('offers repository selection only after GitHub account authorization', () => {
     const onConnect = vi.fn();
     const onInstall = vi.fn();
+    const onSwitch = vi.fn();
 
     render(
       <UploadDropzone
@@ -151,6 +152,7 @@ describe('UploadDropzone GitHub import copy', () => {
         onGitHubImport={vi.fn()}
         onGitHubConnect={onConnect}
         onGitHubInstall={onInstall}
+        onGitHubSwitch={onSwitch}
         githubAppConfig={{
           appName: 'ShipSeal Demo',
           appSlug: 'shipseal-demo',
@@ -158,15 +160,21 @@ describe('UploadDropzone GitHub import copy', () => {
           loginUrl: '/api/github-app/login',
           isConfigured: true,
         }}
+        githubLogin="hvdev23"
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^Connect GitHub$/i }));
-    expect(onConnect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /^Connect GitHub$/i })).not.toBeInTheDocument();
+    expect(onConnect).not.toHaveBeenCalled();
     expect(onInstall).not.toHaveBeenCalled();
+    expect(screen.getByText(/Connected as @hvdev23/i)).toBeInTheDocument();
+    expect(screen.getByText(/one-time setup/i)).toBeInTheDocument();
+    expect(screen.getByText(/Only select repositories/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Install or configure ShipSeal GitHub App/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Manage repository access/i })[0]);
     expect(onInstall).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: /Switch GitHub account/i }));
+    expect(onSwitch).toHaveBeenCalledTimes(1);
   });
 
   it('starts a connected scan directly from the searchable repository picker', async () => {

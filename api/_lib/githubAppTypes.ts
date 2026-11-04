@@ -36,6 +36,11 @@ export interface GitHubAppInstallationSummary {
   htmlUrl?: string;
 }
 
+export interface GitHubAppUserIdentity {
+  id: number;
+  login: string;
+}
+
 export type GitHubAppErrorCode =
   | 'missing_app_id'
   | 'missing_private_key'
@@ -44,6 +49,11 @@ export type GitHubAppErrorCode =
   | 'invalid_client_id_format'
   | 'invalid_callback_url'
   | 'invalid_api_base_url'
+  | 'app_identity_mismatch'
+  | 'app_slug_mismatch'
+  | 'invalid_oauth_state'
+  | 'github_session_expired'
+  | 'installation_not_authorized'
   | 'missing_oauth_code'
   | 'github_oauth_denied'
   | 'github_oauth_error'

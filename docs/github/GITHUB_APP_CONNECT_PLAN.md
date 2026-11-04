@@ -49,10 +49,10 @@ Workflow writes should stay visibly warned in the UI because CI workflow files a
 
 1. User chooses repository source.
 2. User clicks Connect GitHub.
-3. User installs or authorizes the ShipSeal GitHub App.
-4. GitHub redirects to the callback URL.
-5. Backend receives the installation id. Session hardening is still future work.
-6. Backend requests an installation access token server-side.
+3. GitHub authenticates the intended user through GitHub App OAuth.
+4. ShipSeal validates OAuth state, identifies the GitHub user, and discovers existing installations.
+5. If needed, the user installs the App or changes repository access through the separately state-validated setup flow.
+6. ShipSeal binds authorized installation ids to the GitHub user in a signed, short-lived HttpOnly session and requests installation access tokens server-side.
 7. UI lists accessible repositories.
 8. User selects a repository.
 9. ShipSeal scans the repository archive.
@@ -64,6 +64,9 @@ Workflow writes should stay visibly warned in the UI because CI workflow files a
 - Do not store user PAT tokens.
 - Keep installation access tokens short-lived and server-side.
 - Limit access to selected repositories.
+- Validate OAuth and installation setup state.
+- Reject installation ids that are not bound to the current GitHub connection session.
+- Do not persist GitHub authorization in browser storage.
 - Never push directly to `main`.
 - PR only; no automatic merge.
 - Show a separate warning when a workflow file will be created or changed.
@@ -71,19 +74,19 @@ Workflow writes should stay visibly warned in the UI because CI workflow files a
 
 ## Vercel Environment Variables
 
-Frontend MVP configuration:
+Optional frontend display configuration:
 
 - `VITE_GITHUB_APP_SLUG`
 - `VITE_GITHUB_APP_NAME`
 - `VITE_GITHUB_APP_INSTALL_URL`
 
-The primary `Connect GitHub` action opens `/api/github-app/login`, which uses server-side OAuth configuration and redirects to GitHub user authorization. The installation flow is a secondary `Install or configure ShipSeal GitHub App` action. If `VITE_GITHUB_APP_INSTALL_URL` is set, ShipSeal uses that URL for the secondary action. If it is not set but `VITE_GITHUB_APP_SLUG` is present, the frontend builds:
+The primary `Connect GitHub` action opens `/api/github-app/login`. The repository installation action opens `/api/github-app/login?flow=install`; the server adds and validates setup state before redirecting to GitHub. Client-side values no longer control these security-sensitive redirects.
 
 ```text
 https://github.com/apps/{slug}/installations/new
 ```
 
-If neither value is configured, the secondary install/configure action is hidden. The primary Connect action still opens the server-side OAuth endpoint, which returns a friendly popup error if OAuth env is missing.
+The primary and installation actions return a friendly popup error if server configuration is missing or inconsistent.
 
 Server-side MVP configuration:
 
@@ -92,15 +95,18 @@ Server-side MVP configuration:
 - `GITHUB_APP_CLIENT_ID`
 - `GITHUB_APP_CLIENT_SECRET`
 - `GITHUB_APP_CALLBACK_URL`
+- `GITHUB_APP_SLUG`
+- `GITHUB_APP_INSTALL_URL` optional
+- `GITHUB_CONNECTION_SESSION_SECRET` optional but recommended
 - `GITHUB_API_BASE_URL` optional, defaults to `https://api.github.com`
 
 Planned production hardening:
 
 - `GITHUB_APP_WEBHOOK_SECRET`
 
-The current MVP exchanges OAuth codes only to discover GitHub App installations available to the signed-in user. It does not store sessions, handle webhooks, or persist repository selections beyond local browser state. It does generate GitHub App JWTs server-side, requests short-lived installation tokens, and uses those tokens for repository listing, archive download, and Readiness PR creation.
+The current implementation exchanges OAuth codes to identify the GitHub user and discover that user's installations. It stores only identity and installation ids in a signed eight-hour HttpOnly cookie, does not handle installation webhooks, generates GitHub App JWTs server-side, and uses short-lived installation tokens for repository reads and reviewed PR workflows.
 
-The repository listing MVP handles callback `installation_id`, calls `/api/github-app/repositories?installationId=...`, and returns `not_configured` when server credentials are missing. When server credentials are present, the endpoint returns minimized repository metadata only.
+The repository listing endpoint accepts an installation id only when it is present in the current signed connection session. When server credentials are present, it returns minimized repository metadata only.
 
 ## Create a GitHub App For Local/Demo Testing
 
@@ -110,15 +116,15 @@ Use GitHub Developer settings to create a demo app:
 2. Create a new GitHub App.
 3. Set App name to something like `ShipSeal Demo`.
 4. Set Homepage URL to the Vercel demo URL or local development URL.
-5. Set Callback URL to `https://YOUR_DOMAIN/api/github-app/callback`. For local Vercel dev experiments, use the matching `vercel dev` URL plus `/api/github-app/callback`.
+5. Set OAuth Callback URL to `https://YOUR_DOMAIN/api/github-app/oauth-callback` and Setup URL to `https://YOUR_DOMAIN/api/github-app/callback`.
 6. Configure repository permissions:
    - Metadata: read
    - Contents: read/write
    - Pull requests: read/write
    - Workflows: read/write, optional and only needed if ShipSeal writes CI workflow files
 7. Install only on selected repositories.
-8. Copy the app slug from the GitHub App URL and set `VITE_GITHUB_APP_SLUG`.
-9. Optionally set `VITE_GITHUB_APP_INSTALL_URL` if the demo should use a fixed install URL.
+8. Copy the exact app slug into server-side `GITHUB_APP_SLUG`.
+9. Optionally set server-side `GITHUB_APP_INSTALL_URL` to the canonical `/apps/{slug}/installations/new` URL.
 
 For Vercel demo testing, add the frontend env vars in Vercel Project Settings -> Environment Variables, then redeploy. Add `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` when repository listing, archive download, and App-based PR creation should call GitHub for real. Store the private key only as a server-side Vercel env var. If Vercel stores the key on one line, preserve newlines as `\n`; ShipSeal normalizes escaped newlines before signing the GitHub App JWT.
 
@@ -130,13 +136,14 @@ The current codebase uses these API route locations:
 
 - `GET /api/github-app/start`
 - `GET /api/github-app/callback`
+- `GET|POST|DELETE /api/github-app/connection`
 - `GET /api/github-app/repositories`
 - `GET /api/github-app/archive`
 - `POST /api/github-app/create-readiness-pr`
 
-`/api/github-app/callback` now redirects back to `/?githubInstallationId={installation_id}&githubSetupAction={setup_action}#scan`. The installation id is not an access token; it lets the frontend request repository listing from the backend.
+`/api/github-app/callback` validates setup state, verifies the installation through the configured App, adds it to the signed connection session, and notifies the opener without persisting the id in browser storage.
 
-`/api/github-app/start` remains a `501 not_implemented` placeholder because the frontend opens the GitHub install URL directly in this MVP.
+`/api/github-app/start` aliases the state-validating OAuth login route.
 
 `/api/github-app/repositories` returns `501 not_configured` without server credentials. With credentials, it requests an installation access token server-side and returns repositories as `{ id, owner, name, fullName, defaultBranch, private, htmlUrl }`.
 
@@ -144,5 +151,5 @@ The current codebase uses these API route locations:
 
 `/api/github-app/create-readiness-pr` creates a `shipseal/...` branch, writes the Readiness Fix Pack files, and opens a Pull Request with the installation token. It rejects direct target branches such as `main`, `master`, `develop`, and `trunk`, and it never returns the installation token.
 
-The next milestone should harden callback/session state, improve private repository scanning UX, add PR conflict reuse/update behavior, and add audit logging.
+The next milestone should add installation webhook reconciliation and audit logging.
 

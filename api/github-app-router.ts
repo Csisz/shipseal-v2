@@ -8,6 +8,7 @@ type GitHubAppModule = { default: GitHubAppHandler };
 const loaders: Readonly<Record<string, () => Promise<GitHubAppModule>>> = {
   archive: () => import('./_routes/github-app/archive.js'),
   callback: () => import('./_routes/github-app/callback.js'),
+  connection: () => import('./_routes/github-app/connection.js'),
   'create-readiness-pr': () => import('./_routes/github-app/create-readiness-pr.js'),
   'create-repository-intelligence-pr': () => import('./_routes/github-app/create-repository-intelligence-pr.js'),
   'create-optimization-pr': () => import('./_routes/github-app/create-optimization-pr.js'),
