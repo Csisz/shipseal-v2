@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reconstructCompleteFutureFromRecords } from '../../api/_lib/aiUsage';
+import { buildRepositoryFutureProgressFromRecords, reconstructCompleteFutureFromRecords } from '../../api/_lib/aiUsage';
 import { stableContextFingerprint } from '@/lib/repositoryIntelligence/contextSelection';
 import {
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
@@ -87,5 +87,27 @@ describe('Deep Analysis complete-result reconstruction', () => {
       ? { ...stage, stage_fingerprint: stableContextFingerprint({ wrong: true }) }
       : stage);
     expect(reconstructCompleteFutureFromRecords(fixture.operation, corrupted)).toEqual({ state: 'incomplete' });
+  });
+
+  it('returns only exact durable batches in the progressive owner snapshot', () => {
+    const fixture = records();
+    const operation = {
+      ...fixture.operation,
+      public_id: 'RI-progress-history', state: 'running', root_stage_state: 'succeeded',
+      cache_available: false, root_cache_available: true, retryable: true,
+      completion_state: 'partial', consumed_user_units: 0, refunded_user_units: 0,
+      integrity_recovery_attempt_count: 0, reconciliation_outcome: 'not-required',
+      updated_at: '2026-11-04T16:00:00.000Z',
+    };
+    const partialStages = fixture.stages.slice(0, 3).map(stage => ({
+      ...stage, updated_at: '2026-11-04T16:00:00.000Z', lease_expires_at: null,
+    }));
+
+    const progress = buildRepositoryFutureProgressFromRecords(operation, partialStages, new Date('2026-11-04T16:01:00.000Z'));
+
+    expect(progress.root?.state).toBe('enhanced');
+    expect(progress.expansionBatches).toHaveLength(2);
+    expect(progress.operation.completedExpansionCount).toBe(2);
+    expect(progress.operation.expectedExpansionCount).toBe(3);
   });
 });

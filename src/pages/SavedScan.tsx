@@ -15,11 +15,13 @@ import {
   type RepositoryProductIntelligenceResult,
 } from '@/lib/repositoryIntelligence';
 import {
+  getPersistedRepositoryFutureProgress,
   getPersistedRepositoryFutureResult,
-  getRepositoryFutureOperationStatus,
+  mergePersistedRepositoryFutureProgress,
   mergePersistedRepositoryFutureResult,
   persistedRepositoryFutureContentIntegrity,
   selectRepositoryFutureRecoveryOperationId,
+  watchRepositoryFutureOperation,
 } from '@/lib/aiOperationRecovery';
 
 const ResultDashboard = lazy(() => import('@/components/agentready/ResultDashboard').then(module => ({ default: module.ResultDashboard })));
@@ -41,6 +43,7 @@ export default function SavedScan() {
   useEffect(() => {
     if (!account.user) return;
     let active = true;
+    const controller = new AbortController();
     getScan(scanId).then(saved => {
       if (!active) return;
       if (saved.scan.projectId !== projectId) throw new Error('Saved scan does not belong to this project.');
@@ -52,14 +55,55 @@ export default function SavedScan() {
       void getPersistedRepositoryFutureResult({ repositoryIdentity }).then(persisted => {
         if (!active) return;
         if (!persisted) {
-          void getRepositoryFutureOperationStatus({ repositoryIdentity }).then(operation => {
+          void getPersistedRepositoryFutureProgress({ repositoryIdentity }).then(async initialProgress => {
             if (!active) return;
+            const operation = initialProgress?.operation;
             if (!operation) {
               setProductStatus({
                 state: 'deterministic', deepState: 'disabled', retryable: false,
                 message: 'Repository evidence is ready for an explicit Future analysis.',
               });
               return;
+            }
+            const applyProgress = (progress: NonNullable<typeof initialProgress>) => {
+              if (!active) return;
+              const partial = mergePersistedRepositoryFutureProgress(progress);
+              if (partial) setProductIntelligence(partial);
+              setProductStatus({
+                state: 'preparing', deepState: 'pending', retryable: false,
+                productStage: progress.operation.rootCacheAvailable ? 'expansion' : 'roots',
+                completedBatches: progress.operation.completedExpansionCount,
+                totalBatches: progress.operation.expectedExpansionCount || 0,
+                lastServerConfirmedAt: progress.lastServerConfirmedAt,
+                publicOperationId: progress.operation.publicOperationId,
+                message: partial
+                  ? 'Initial directions are available. Detailed pathways are still expanding.'
+                  : 'Future analysis is active. Waiting for validated directions.',
+              });
+            };
+            if (initialProgress && operation.recoveryAction === 'wait_for_active_lease') {
+              applyProgress(initialProgress);
+              const settled = await watchRepositoryFutureOperation({
+                publicOperationId: operation.publicOperationId,
+                signal: controller.signal,
+                onProgress: applyProgress,
+              });
+              if (!active || !settled) return;
+              if (settled.operation.recoveryAction === 'open_result') {
+                const completed = await getPersistedRepositoryFutureResult({ publicOperationId: operation.publicOperationId });
+                const restored = completed && mergePersistedRepositoryFutureResult(completed);
+                if (completed && restored) {
+                  setProductIntelligence(restored);
+                  setProductStatus({
+                    state: 'enhanced', deepState: 'completed', retryable: false,
+                    message: 'Your saved Future analysis is ready.', providerId: completed.complete.providerId,
+                    modelId: completed.complete.modelId,
+                    diagnostics: { ...completed.complete.diagnostics, cacheUsed: true, publicOperationId: completed.publicOperationId, operationRecoveryAction: 'open_result' },
+                  });
+                  void refreshAccountUsage();
+                  return;
+                }
+              }
             }
             setProductStatus({
               state: 'fallback', deepState: 'failed', category: 'operation_conflict', retryable: operation.retryable,
@@ -109,8 +153,8 @@ export default function SavedScan() {
         });
       });
     }).catch(() => { if (active) setError('This saved scan is unavailable, corrupt, or uses an unsupported data version.'); });
-    return () => { active = false; };
-  }, [account.user, projectId, scanId]);
+    return () => { active = false; controller.abort(); };
+  }, [account.user, projectId, refreshAccountUsage, scanId]);
   const resumeFutureAnalysis = useCallback(async () => {
     if (!report) return;
     if (!report.source.githubOwner || !report.source.githubRepo) {
@@ -134,7 +178,30 @@ export default function SavedScan() {
       const recoveryOperationId = publicOperationId && recoveryAction
         ? selectRepositoryFutureRecoveryOperationId({ publicOperationId, recoveryAction })
         : undefined;
-      const response = await requestRepositoryProductIntelligenceStaged(request, { recoveryOperationId });
+      const response = await requestRepositoryProductIntelligenceStaged(request, {
+        recoveryOperationId,
+        onProgress: progress => setProductStatus({
+          state: 'preparing', deepState: 'pending', retryable: false,
+          productStage: progress.stage,
+          completedBatches: progress.completedBatches,
+          totalBatches: progress.totalBatches,
+          activeBatchIndexes: progress.activeBatchIndexes,
+          message: progress.stage === 'roots'
+            ? 'Understanding the product and finding grounded directions.'
+            : 'Building detailed pathways from validated directions.',
+        }),
+        onPartialResult: (partial, progress) => {
+          setProductIntelligence(partial);
+          setProductStatus({
+            state: 'preparing', deepState: 'pending', retryable: false,
+            productStage: progress.stage,
+            completedBatches: progress.completedBatches,
+            totalBatches: progress.totalBatches,
+            activeBatchIndexes: progress.activeBatchIndexes,
+            message: 'Initial directions are available. Detailed pathways are still expanding.',
+          });
+        },
+      });
       if (response.state === 'enhanced' && response.result.productIntelligence) {
         setProductIntelligence(response.result.productIntelligence);
         setProductStatus({ state: 'enhanced', deepState: response.deepState, retryable: false, message: 'Your Future analysis is ready.', providerId: response.providerId, modelId: response.modelId, diagnostics: response.diagnostics });

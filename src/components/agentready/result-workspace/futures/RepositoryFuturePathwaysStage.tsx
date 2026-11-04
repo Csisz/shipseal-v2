@@ -50,6 +50,7 @@ export function RepositoryFuturePathwaysStage({ overlay }: { overlay: Repository
         </div>
         <span className="w-fit shrink-0 rounded-full border border-border/45 bg-background/35 px-3 py-1.5 text-[10px] text-muted-foreground">
           {overlay.productIntelligenceState === 'enhanced' ? 'Product opportunities enhanced'
+            : overlay.productIntelligenceState === 'initial' ? 'Initial directions · details expanding'
             : overlay.productIntelligenceState === 'analysing' ? 'Analysing product opportunities'
               : 'Repository evidence fallback'}
         </span>

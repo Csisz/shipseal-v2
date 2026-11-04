@@ -1,4 +1,7 @@
-import type { RepositoryIntelligenceProviderApiResponse } from './repositoryIntelligence/productionProviderContract.js';
+import type {
+  RepositoryIntelligenceProviderApiResponse,
+  RepositoryProductExpansionStageResult,
+} from './repositoryIntelligence/productionProviderContract.js';
 
 export type AiOperationRecoveryAction =
   | 'open_result'
@@ -32,6 +35,19 @@ export interface AiOperationStatusSnapshot {
   recoveryAction: AiOperationRecoveryAction;
   integrityRecoveryAttemptsUsed: number;
   reconciliationOutcome: 'not-required' | 'reconstructed' | 'refunded' | 'review-required';
+  /** Latest durable operation or stage update observed by the server. */
+  lastServerConfirmedAt?: string;
+  activeStageKinds?: Array<'analysis' | 'roots' | 'expansion'>;
+  retryableStageKinds?: Array<'analysis' | 'roots' | 'expansion'>;
+}
+
+export interface PersistedRepositoryFutureProgress {
+  operation: AiOperationStatusSnapshot;
+  /** Validated durable root response. It is intentionally not described as a complete Future. */
+  root: Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }> | null;
+  /** Only expansion batches whose identity matches the validated root contract. */
+  expansionBatches: RepositoryProductExpansionStageResult[];
+  lastServerConfirmedAt: string;
 }
 
 export interface PersistedRepositoryFutureResult {

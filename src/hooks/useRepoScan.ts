@@ -627,18 +627,81 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           }
         }
         if (operation?.recoveryAction === 'wait_for_active_lease') {
-            setState(current => ({
-              ...current,
-              repositoryProductIntelligenceStatus: {
-                state: 'fallback', deepState: 'failed', category: 'operation_conflict', retryable: true,
-                message: 'Future analysis is already running.',
-                diagnostics: {
-                  costEstimate: 'unavailable', publicOperationId: operation.publicOperationId,
-                  operationRecoveryAction: operation.recoveryAction,
-                  ...(operation.leaseExpiresAt ? { operationLeaseExpiresAt: operation.leaseExpiresAt } : {}),
+          setState(current => ({
+            ...current,
+            repositoryProductIntelligenceStatus: {
+              state: 'preparing', deepState: 'pending', retryable: false,
+              productStage: operation.rootCacheAvailable ? 'expansion' : 'roots',
+              completedBatches: operation.completedExpansionCount,
+              totalBatches: operation.expectedExpansionCount || 0,
+              lastServerConfirmedAt: operation.lastServerConfirmedAt,
+              publicOperationId: operation.publicOperationId,
+              message: operation.rootCacheAvailable
+                ? 'Initial directions are ready. Detailed pathways are still expanding.'
+                : 'Future analysis is active. ShipSeal is waiting for validated directions.',
+            },
+          }));
+          const settled = await recoveryModule.watchRepositoryFutureOperation({
+            publicOperationId: operation.publicOperationId,
+            signal: controller.signal,
+            onProgress: progress => {
+              if (scanTokenRef.current !== token || productRequestIdentityRef.current !== requestIdentity || controller.signal.aborted) return;
+              const partial = recoveryModule.mergePersistedRepositoryFutureProgress(progress);
+              setState(current => ({
+                ...current,
+                repositoryProductIntelligence: partial || current.repositoryProductIntelligence,
+                repositoryProductIntelligenceStatus: {
+                  state: 'preparing', deepState: 'pending', retryable: false,
+                  productStage: progress.operation.rootCacheAvailable ? 'expansion' : 'roots',
+                  completedBatches: progress.operation.completedExpansionCount,
+                  totalBatches: progress.operation.expectedExpansionCount || 0,
+                  lastServerConfirmedAt: progress.lastServerConfirmedAt,
+                  publicOperationId: progress.operation.publicOperationId,
+                  message: partial
+                    ? 'Initial directions are available. Detailed pathways are still expanding.'
+                    : 'Future analysis is active. ShipSeal is waiting for validated directions.',
                 },
+              }));
+            },
+          });
+          if (!settled || controller.signal.aborted) return;
+          if (settled.operation.recoveryAction === 'open_result') {
+            const persisted = await recoveryModule.getPersistedRepositoryFutureResult({
+              publicOperationId: settled.operation.publicOperationId,
+            }).catch(() => null);
+            const restored = persisted ? recoveryModule.mergePersistedRepositoryFutureResult(persisted) : null;
+            if (persisted && restored) {
+              setState(current => ({
+                ...current,
+                repositoryProductIntelligence: restored,
+                repositoryProductIntelligenceStatus: {
+                  state: 'enhanced', deepState: 'completed', retryable: false,
+                  message: 'Repository Futures is ready.', providerId: persisted.complete.providerId,
+                  modelId: persisted.complete.modelId,
+                  diagnostics: { ...persisted.complete.diagnostics, cacheUsed: true, publicOperationId: settled.operation.publicOperationId, operationRecoveryAction: 'open_result' },
+                },
+              }));
+              return;
+            }
+          }
+          setState(current => ({
+            ...current,
+            repositoryProductIntelligenceStatus: {
+              state: 'fallback', deepState: 'failed', category: 'operation_conflict',
+              retryable: settled.operation.retryable,
+              message: settled.operation.retryable
+                ? 'ShipSeal can safely resume the incomplete Future analysis. Completed stages remain saved.'
+                : 'Repository Futures could not be completed. The reservation has been reconciled.',
+              diagnostics: {
+                costEstimate: 'unavailable', publicOperationId: settled.operation.publicOperationId,
+                operationRecoveryAction: settled.operation.recoveryAction,
+                operationCompletionState: settled.operation.completionState,
+                operationUserUnitState: settled.operation.userUnitState,
+                completedBatchCount: settled.operation.completedExpansionCount,
+                ...(settled.operation.expectedExpansionCount === null ? {} : { totalBatchCount: settled.operation.expectedExpansionCount }),
               },
-            }));
+            },
+          }));
             return;
         }
         const recoveryOperationId = recoveryModule.selectRepositoryFutureRecoveryOperationId(operation);
@@ -669,6 +732,21 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
                     : progress.stage === 'merging'
                       ? 'Validating the complete Future map.'
                       : 'Saving the completed Future analysis.',
+              },
+            }));
+          },
+          onPartialResult: (partial, progress) => {
+            if (scanTokenRef.current !== token || productRequestIdentityRef.current !== requestIdentity || controller.signal.aborted) return;
+            setState(current => ({
+              ...current,
+              repositoryProductIntelligence: partial,
+              repositoryProductIntelligenceStatus: {
+                state: 'preparing', deepState: 'pending', retryable: false,
+                productStage: progress.stage,
+                completedBatches: progress.completedBatches,
+                totalBatches: progress.totalBatches,
+                activeBatchIndexes: progress.activeBatchIndexes,
+                message: 'Initial directions are available. Detailed pathways are still expanding.',
               },
             }));
           },

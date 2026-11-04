@@ -155,6 +155,44 @@ export function mergeRepositoryProductExpansionResults(
   return { ...resultCore, fingerprint: stableContextFingerprint(resultCore) };
 }
 
+/**
+ * Merges only validated expansion batches that are already available. Missing
+ * parents keep their validated root direction and remain visibly unexpanded.
+ * This never claims the complete-result contract.
+ */
+export function mergeAvailableRepositoryProductExpansionResults(
+  rootResult: RepositoryDeepIntelligenceValidatedResult,
+  batches: readonly RepositoryProductExpansionStageResult[],
+): RepositoryDeepIntelligenceValidatedResult {
+  const product = rootResult.productIntelligence;
+  if (!product) throw new Error('Validated Product Understanding and Future roots are required before expansion.');
+  const evolutionsByParent = new Map(batches.flatMap(batch => batch.expansions.map(item => [item.parentId, item.evolutions] as const)));
+  const opportunities = product.opportunities.map(opportunity => {
+    const expanded = evolutionsByParent.get(opportunity.id);
+    if (!expanded) return opportunity;
+    const futureEvolutions: RepositoryProductFutureEvolution[] = expanded.map(evolution => ({
+      id: `product-future-evolution:${stableContextFingerprint({
+        report: product.sourceAnalysisFingerprint,
+        parent: opportunity.id,
+        source: evolution.sourceId,
+        generation: evolution.generation,
+      })}`,
+      sourceId: evolution.sourceId,
+      parentSourceId: evolution.parentSourceId,
+      generation: evolution.generation,
+      title: evolution.title,
+      description: evolution.description,
+      userValue: evolution.userValue,
+    }));
+    const core = { ...opportunity, futureEvolutions };
+    return { ...core, fingerprint: stableContextFingerprint(core) };
+  });
+  const productCore = { ...product, opportunities };
+  const mergedProduct = { ...productCore, fingerprint: stableContextFingerprint(productCore) };
+  const resultCore = { ...rootResult, productIntelligence: mergedProduct };
+  return { ...resultCore, fingerprint: stableContextFingerprint(resultCore) };
+}
+
 export async function mapWithBoundedConcurrency<T, R>(
   values: readonly T[],
   limit: number,

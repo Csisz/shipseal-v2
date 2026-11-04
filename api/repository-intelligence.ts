@@ -93,6 +93,8 @@ export async function prepareProductionRepositoryIntelligence(
   input: unknown,
   options: PrepareProductionRepositoryIntelligenceOptions = {},
 ): Promise<{ status: number; body: RepositoryIntelligenceProviderApiResponse }> {
+  const pipelineStartedAt = Date.now();
+  let authorizationMs = 0;
   const logger = options.logger || safeOperationalLogger;
   const earlyMetadata = readSafeStageMetadata(input);
   const earlyRequestId = createOperationalRequestId(earlyMetadata.fingerprint || 'unvalidated', earlyMetadata.stage);
@@ -140,11 +142,13 @@ export async function prepareProductionRepositoryIntelligence(
     ...config,
     policy: { ...executionPolicy, timeoutMs: configuredProviderTimeoutMs },
   };
+  const contextPreparationStartedAt = Date.now();
   const preparedContext = prepareProductionDeepIntelligenceContext({
     request: requestValidation.request,
     policy: executionPolicy,
     maximumOutputTokens: executionPolicy.maximumOutputTokens,
   });
+  const contextPreparationMs = Math.max(0, Date.now() - contextPreparationStartedAt);
   if (preparedContext.state !== 'ready') {
     const category = preparedContext.state === 'budget-exceeded' ? 'budget_exceeded' : 'redaction_failed';
     return fallback(200, category, false, diagnosticsFor(preparedContext.budget, preparedContext.redaction));
@@ -153,6 +157,7 @@ export async function prepareProductionRepositoryIntelligence(
   const fingerprintDiagnostics = {
     analysisFingerprint,
     providerTransmissionFingerprint,
+    contextPreparationMs,
     ...(timedProductStage ? {
       configuredProviderTimeoutMs,
       clientDeadlineMs: REPOSITORY_FUTURES_TIMING.browserStageTimeoutMs,
@@ -225,6 +230,7 @@ export async function prepareProductionRepositoryIntelligence(
   }
   let authorizedStage: AuthorizedAiStage | undefined;
   if (options.aiAuthorization) {
+    const authorizationStartedAt = Date.now();
     try {
       authorizedStage = await options.aiAuthorization.service.authorize(
         options.aiAuthorization.userId,
@@ -238,6 +244,7 @@ export async function prepareProductionRepositoryIntelligence(
         },
       );
     } catch (error) {
+      authorizationMs = Math.max(0, Date.now() - authorizationStartedAt);
       if (error instanceof AiUsageDeniedError) return usageDenialFallback(error, fingerprintDiagnostics);
       return usageDenialFallback(new AiUsageDeniedError(
         'usage_temporarily_unavailable',
@@ -246,6 +253,7 @@ export async function prepareProductionRepositoryIntelligence(
         'AI usage authorization is temporarily unavailable.',
       ), fingerprintDiagnostics);
     }
+    authorizationMs = Math.max(0, Date.now() - authorizationStartedAt);
     if (authorizedStage.cachedResponse) {
       return {
         status: 200,
@@ -255,6 +263,8 @@ export async function prepareProductionRepositoryIntelligence(
             ...(authorizedStage.cachedResponse.diagnostics || { costEstimate: 'unavailable' as const }),
             ...fingerprintDiagnostics,
             cacheUsed: true,
+            authorizationMs,
+            totalServerMs: Math.max(0, Date.now() - pipelineStartedAt),
             publicOperationId: authorizedStage.publicOperationId,
             stageAttempt: authorizedStage.stageAttemptCount,
             operationRecoveryAction: 'open_result',
@@ -272,12 +282,14 @@ export async function prepareProductionRepositoryIntelligence(
         diagnostics: {
           ...(result.body.diagnostics || { costEstimate: 'unavailable' as const }),
           ...fingerprintDiagnostics,
+          authorizationMs,
           publicOperationId: authorizedStage.publicOperationId,
           stageAttempt: authorizedStage.stageAttemptCount,
           ...(authorizedStage.integrityRecovery ? { operationRecoveryAction: 'integrity_recovery' as const } : {}),
         },
       } as RepositoryIntelligenceProviderApiResponse,
     };
+    const persistenceStartedAt = Date.now();
     try {
       await options.aiAuthorization.service.complete(authorizedStage, options.aiAuthorization.userId, durableResult.body);
     } catch {
@@ -288,11 +300,22 @@ export async function prepareProductionRepositoryIntelligence(
         'AI usage authorization is temporarily unavailable.',
       ), fingerprintDiagnostics);
     }
+    const durablePersistenceMs = Math.max(0, Date.now() - persistenceStartedAt);
     const operation = await options.aiAuthorization.service.getOperationStatus(
       options.aiAuthorization.userId,
       { publicOperationId: authorizedStage.publicOperationId },
     ).catch(() => null);
-    if (!operation) return durableResult;
+    const timingDiagnostics = {
+      durablePersistenceMs,
+      totalServerMs: Math.max(0, Date.now() - pipelineStartedAt),
+    };
+    if (!operation) return {
+      ...durableResult,
+      body: {
+        ...durableResult.body,
+        diagnostics: { ...durableResult.body.diagnostics, ...timingDiagnostics },
+      } as RepositoryIntelligenceProviderApiResponse,
+    };
     return {
       ...durableResult,
       body: {
@@ -305,6 +328,7 @@ export async function prepareProductionRepositoryIntelligence(
           completedBatchCount: operation.completedExpansionCount,
           ...(operation.expectedExpansionCount === null ? {} : { totalBatchCount: operation.expectedExpansionCount }),
           ...(operation.leaseExpiresAt ? { operationLeaseExpiresAt: operation.leaseExpiresAt } : {}),
+          ...timingDiagnostics,
         },
       } as RepositoryIntelligenceProviderApiResponse,
     };

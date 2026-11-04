@@ -32,6 +32,7 @@ import type {
   AiOperationLookup,
   AiUsageReconciliationReport,
   AiOperationStatusSnapshot,
+  PersistedRepositoryFutureProgress,
   PersistedRepositoryFutureResult,
 } from '../../src/lib/aiOperationRecoveryContract.js';
 import { recordOperationalEvent } from './operationalEvents.js';
@@ -112,6 +113,7 @@ export interface AiUsageStore extends EntitlementStore {
   acquireProviderPermit(input: AcquireProviderPermitInput): Promise<ProviderPermit>;
   releaseProviderPermit(permit: ProviderPermit, now: Date): Promise<void>;
   getOperationStatus(userId: string, lookup: AiOperationLookup, now: Date): Promise<AiOperationStatusSnapshot | null>;
+  getOperationProgress?(userId: string, lookup: AiOperationLookup, now: Date): Promise<PersistedRepositoryFutureProgress | null>;
   getOperationResult(userId: string, lookup: AiOperationLookup, now: Date): Promise<PersistedRepositoryFutureResult | null>;
   close?(): Promise<void>;
 }
@@ -219,6 +221,17 @@ export class AiUsageAuthorizationService {
 
   async getOperationResult(userId: string, lookup: AiOperationLookup) {
     return this.store.getOperationResult(userId, lookup, this.now());
+  }
+
+  async getOperationProgress(userId: string, lookup: AiOperationLookup) {
+    if (this.store.getOperationProgress) return this.store.getOperationProgress(userId, lookup, this.now());
+    const operation = await this.store.getOperationStatus(userId, lookup, this.now());
+    return operation ? {
+      operation,
+      root: null,
+      expansionBatches: [],
+      lastServerConfirmedAt: operation.lastServerConfirmedAt || this.now().toISOString(),
+    } : null;
   }
 
   async finalizeRepositoryFutures(userId: string, lookup: AiOperationLookup) {
@@ -373,6 +386,19 @@ export class PostgresAiUsageStore implements AiUsageStore {
         where operation_id = ${String(operation.id)} order by created_at asc
       `;
       return mapOperationStatus(operation, stages, now);
+    });
+  }
+
+  async getOperationProgress(userId: string, lookup: AiOperationLookup, now: Date): Promise<PersistedRepositoryFutureProgress | null> {
+    return this.sql.begin(async transaction => {
+      await this.reconcileHistoricalOperations(transaction, userId, now);
+      const operation = await this.findOwnedOperation(transaction, userId, lookup, false);
+      if (!operation) return null;
+      const stages = await transaction<Record<string, unknown>[]>`
+        select * from public.shipseal_ai_operation_stages
+        where operation_id = ${String(operation.id)} order by created_at asc
+      `;
+      return buildRepositoryFutureProgressFromRecords(operation, stages, now);
     });
   }
 
@@ -1518,6 +1544,11 @@ function mapOperationStatus(
   const staleStage = runningStages.find(stage => !stage.lease_expires_at
     || new Date(String(stage.lease_expires_at)).getTime() <= now.getTime());
   const retryableStage = stages.find(stage => stage.state === 'retryable_failure');
+  const activeStageKinds = uniqueStageKinds(stages.filter(stage => stage.state === 'running'
+    && stage.lease_expires_at && new Date(String(stage.lease_expires_at)).getTime() > now.getTime()));
+  const retryableStageKinds = uniqueStageKinds(stages.filter(stage => stage.state === 'retryable_failure'
+    || stage.state === 'running' && (!stage.lease_expires_at
+      || new Date(String(stage.lease_expires_at)).getTime() <= now.getTime())));
   const leaseExpiresAt = activeStage?.lease_expires_at ? asIsoDate(activeStage.lease_expires_at) : null;
   const consumed = Number(operation.consumed_user_units) === 1;
   const refunded = Number(operation.refunded_user_units) === 1;
@@ -1560,7 +1591,63 @@ function mapOperationStatus(
     recoveryAction,
     integrityRecoveryAttemptsUsed: Number(operation.integrity_recovery_attempt_count || 0),
     reconciliationOutcome: (operation.reconciliation_outcome || 'not-required') as AiOperationStatusSnapshot['reconciliationOutcome'],
+    lastServerConfirmedAt: latestServerConfirmedAt(operation, stages),
+    activeStageKinds,
+    retryableStageKinds,
   };
+}
+
+export function buildRepositoryFutureProgressFromRecords(
+  operation: Record<string, unknown>,
+  stages: Record<string, unknown>[],
+  now: Date,
+): PersistedRepositoryFutureProgress {
+  const rootCandidates = [
+    operation.canonical_root_response,
+    ...stages.filter(stage => stage.stage_kind === 'roots' && stage.state === 'succeeded')
+      .map(stage => stage.cached_response),
+  ];
+  const root = rootCandidates.map(reusableRootResponse).find(Boolean) || null;
+  const expected = root?.result.productIntelligence
+    ? buildRepositoryProductExpansionStagesForFingerprint(
+      String(operation.request_fingerprint),
+      root.result.productIntelligence,
+    )
+    : [];
+  const expansionBatches = expected.flatMap(expectedStage => {
+    const stage = stages.find(candidate => candidate.stage_kind === 'expansion'
+      && candidate.stage_fingerprint === expectedStage.fingerprint
+      && candidate.state === 'succeeded'
+      && isReusableExpansionResponse(candidate.cached_response));
+    if (!stage || !isReusableExpansionResponse(stage.cached_response)) return [];
+    const result = stage.cached_response.stageResult;
+    if (result.fingerprint !== expectedStage.fingerprint
+      || result.batchIndex !== expectedStage.batchIndex
+      || result.totalBatches !== expectedStage.totalBatches
+      || !sameStringSet(result.expansions.map(item => item.parentId), expectedStage.parents.map(parent => parent.id))) return [];
+    return [result];
+  }).sort((left, right) => left.batchIndex - right.batchIndex);
+  const operationStatus = mapOperationStatus(operation, stages, now);
+  return {
+    operation: operationStatus,
+    root,
+    expansionBatches,
+    lastServerConfirmedAt: operationStatus.lastServerConfirmedAt || now.toISOString(),
+  };
+}
+
+function uniqueStageKinds(stages: Record<string, unknown>[]): AiStageKind[] {
+  return [...new Set(stages.map(stage => stage.stage_kind)
+    .filter((kind): kind is AiStageKind => ['analysis', 'roots', 'expansion'].includes(String(kind))))];
+}
+
+function latestServerConfirmedAt(operation: Record<string, unknown>, stages: Record<string, unknown>[]) {
+  const values = [operation.updated_at, ...stages.map(stage => stage.updated_at)]
+    .filter(Boolean)
+    .map(value => new Date(String(value)))
+    .filter(value => Number.isFinite(value.getTime()))
+    .sort((left, right) => right.getTime() - left.getTime());
+  return values[0]?.toISOString() || new Date(0).toISOString();
 }
 
 function validFingerprint(value: string | undefined) {

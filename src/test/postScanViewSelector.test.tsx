@@ -275,6 +275,37 @@ describe('premium post-scan view selector', () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 
+  it('opens validated initial Futures while server-confirmed expansion continues', async () => {
+    const report = reportWithIdentity('2026-08-11T10:01:41.250Z');
+    const start = vi.fn(async () => undefined);
+    const { rerender } = render(<ResultWorkspace
+      report={report}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{ state: 'deterministic', retryable: false, message: 'Repository evidence is ready.' }}
+      retryRepositoryProductIntelligence={start}
+    />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Future analysis' }));
+    const product = { opportunities: [{ id: 'future.initial' }] } as unknown as RepositoryProductIntelligenceResult;
+    rerender(<ResultWorkspace
+      report={report}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligence={product}
+      repositoryProductIntelligenceStatus={{
+        state: 'preparing', deepState: 'pending', retryable: false, productStage: 'expansion',
+        completedBatches: 1, totalBatches: 4, message: 'Initial directions are available.',
+      }}
+      retryRepositoryProductIntelligence={start}
+    />);
+
+    expect(await screen.findByTestId('futures-experience')).toBeInTheDocument();
+    expect(start).toHaveBeenCalledTimes(1);
+  });
+
   it('does not auto-enter a cached Future without current explicit intent', () => {
     const product = { opportunities: [{ id: 'future.cached' }] } as unknown as RepositoryProductIntelligenceResult;
     render(<ResultWorkspace

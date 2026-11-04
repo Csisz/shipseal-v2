@@ -11,6 +11,7 @@ import {
   REPOSITORY_PRODUCT_STAGE_MAX_ATTEMPTS,
   buildRepositoryProductExpansionStages,
   buildRepositoryProductRootStage,
+  mergeAvailableRepositoryProductExpansionResults,
   mapWithBoundedConcurrency,
   type RepositoryProductPipelineProgress,
 } from './stagedProductIntelligence';
@@ -27,6 +28,10 @@ interface ProductStageRequestOptions {
   fetcher?: typeof fetch;
   timeoutMs?: number;
   onProgress?: (progress: RepositoryProductPipelineProgress) => void;
+  onPartialResult?: (
+    result: NonNullable<Extract<RepositoryIntelligenceProviderApiResponse, { state: 'enhanced' }>['result']['productIntelligence']>,
+    progress: RepositoryProductPipelineProgress,
+  ) => void;
   random?: () => number;
   now?: () => number;
   wait?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
@@ -116,7 +121,11 @@ export async function requestRepositoryProductIntelligenceStaged(
   if (!roots.result.productIntelligence) return invalidStageResponse('Product Understanding was unavailable.', rootsStage);
 
   const stages = buildRepositoryProductExpansionStages(request, roots.result.productIntelligence);
-  let completed = stages.filter(stage => completedProductBatches.has(stage.fingerprint)).length;
+  const availableBatches = new Map(stages.flatMap(stage => {
+    const cached = cacheEligible ? completedProductBatches.get(stage.fingerprint) : undefined;
+    return cached ? [[stage.fingerprint, cached.stageResult] as const] : [];
+  }));
+  let completed = availableBatches.size;
   const active = new Set<number>();
   let rateLimitGate: Promise<void> | null = null;
   let releaseRateLimitGate: (() => void) | null = null;
@@ -125,6 +134,13 @@ export async function requestRepositoryProductIntelligenceStaged(
   let pendingRateLimitRecoveries = 0;
   const rateLimitRecoveryWaiters = new Set<() => void>();
   const activeChangeWaiters = new Set<() => void>();
+  const emitPartialResult = (progress: RepositoryProductPipelineProgress) => {
+    const merged = mergeAvailableRepositoryProductExpansionResults(
+      roots!.result,
+      [...availableBatches.values()].sort((left, right) => left.batchIndex - right.batchIndex),
+    );
+    if (merged.productIntelligence) options.onPartialResult?.(merged.productIntelligence, progress);
+  };
   const notifyActiveChange = () => {
     for (const resolve of activeChangeWaiters) resolve();
     activeChangeWaiters.clear();
@@ -139,7 +155,9 @@ export async function requestRepositoryProductIntelligenceStaged(
       await new Promise<void>(resolve => rateLimitRecoveryWaiters.add(resolve));
     }
   };
-  options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [], stageAttempt: 1 });
+  const initialExpansionProgress = { stage: 'expansion' as const, completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [], stageAttempt: 1 };
+  options.onProgress?.(initialExpansionProgress);
+  emitPartialResult(initialExpansionProgress);
   const responses = await mapWithBoundedConcurrency(stages, REPOSITORY_PRODUCT_EXPANSION_CONCURRENCY, async stage => {
     const cached = cacheEligible ? completedProductBatches.get(stage.fingerprint) : undefined;
     if (cached) return { response: cached, stage };
@@ -215,9 +233,12 @@ export async function requestRepositoryProductIntelligenceStaged(
     }
     if (response.state === 'stage-enhanced') {
       completed += 1;
+      availableBatches.set(stage.fingerprint, response.stageResult);
       if (cacheEligible) completedProductBatches.set(stage.fingerprint, response);
     }
-    options.onProgress?.({ stage: 'expansion', completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [...active].sort(), stageAttempt: response.diagnostics?.stageRetryCount === 1 ? 2 : 1 });
+    const settledProgress = { stage: 'expansion' as const, completedBatches: completed, totalBatches: stages.length, activeBatchIndexes: [...active].sort(), stageAttempt: response.diagnostics?.stageRetryCount === 1 ? 2 : 1 };
+    options.onProgress?.(settledProgress);
+    if (response.state === 'stage-enhanced') emitPartialResult(settledProgress);
     return { response, stage };
   });
   const failed = responses.find(item => item.response.state !== 'stage-enhanced');

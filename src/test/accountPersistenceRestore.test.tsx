@@ -168,7 +168,7 @@ describe('Omega 18.1 saved scan restoration', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Generate Future analysis' }));
     await waitFor(() => expect(savedScanMocks.requestRepositoryProductIntelligenceStaged).toHaveBeenCalledTimes(1));
-    expect(savedScanMocks.requestRepositoryProductIntelligenceStaged.mock.calls[0]?.[1]).toEqual({ recoveryOperationId: undefined });
+    expect(savedScanMocks.requestRepositoryProductIntelligenceStaged.mock.calls[0]?.[1]).toEqual(expect.objectContaining({ recoveryOperationId: undefined }));
     expect(savedScanMocks.importGitHubAppEvidence).toHaveBeenCalledTimes(1);
   });
 });

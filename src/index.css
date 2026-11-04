@@ -823,8 +823,15 @@
   from { opacity: 0.32; transform: scale(0.94); }
 }
 
+@keyframes futures-primary-breathe {
+  0%, 100% { opacity: 0.58; transform: scale(0.985); }
+  50% { opacity: 0.76; transform: scale(1.018); }
+}
+
 .future-field-node[data-primary-alive='subtle-halo']::before {
-  animation: futures-primary-resolve 360ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 both;
+  animation:
+    futures-primary-resolve 360ms cubic-bezier(0.2, 0.72, 0.28, 1) 1 both,
+    futures-primary-breathe 6.8s ease-in-out 900ms infinite;
 }
 
 .future-field-node[data-neural-role='supporting']::before,

@@ -86,7 +86,7 @@ export interface RepositoryFutureStageOverlay {
   activeTraceId?: string;
   tracePinned?: boolean;
   supportCount: number;
-  productIntelligenceState: 'analysing' | 'enhanced' | 'deterministic-fallback' | 'unavailable';
+  productIntelligenceState: 'analysing' | 'initial' | 'enhanced' | 'deterministic-fallback' | 'unavailable';
   notice?: string;
   onModeChange: (mode: RepositoryFuturePathwaysMode) => void;
   onCandidateFocus: (goalId: string) => void;

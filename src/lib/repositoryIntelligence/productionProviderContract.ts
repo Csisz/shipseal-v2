@@ -289,6 +289,10 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   operationCompletionState?: import('../aiOperationRecoveryContract.js').AiOperationCompletionState;
   operationUserUnitState?: import('../aiOperationRecoveryContract.js').AiOperationStatusSnapshot['userUnitState'];
   operationLeaseExpiresAt?: string;
+  contextPreparationMs?: number;
+  authorizationMs?: number;
+  durablePersistenceMs?: number;
+  totalServerMs?: number;
 }
 
 export interface RepositoryIntelligenceDeepInsightSummary {
@@ -323,7 +327,7 @@ export type RepositoryIntelligenceProviderFailureCategory =
 
 export type RepositoryIntelligenceProviderStatus =
   | { state: 'deterministic'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false }
-  | { state: 'preparing'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; productStage?: 'roots' | 'expansion' | 'merging' | 'finalizing'; completedBatches?: number; totalBatches?: number; activeBatchIndexes?: number[]; rateLimitRetryAt?: number; rateLimitAttempt?: number }
+  | { state: 'preparing'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; productStage?: 'roots' | 'expansion' | 'merging' | 'finalizing'; completedBatches?: number; totalBatches?: number; activeBatchIndexes?: number[]; rateLimitRetryAt?: number; rateLimitAttempt?: number; lastServerConfirmedAt?: string; publicOperationId?: string }
   | { state: 'enhanced'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: false; providerId: string; modelId?: string; diagnostics?: RepositoryIntelligenceSafeDiagnostics; insights?: RepositoryIntelligenceDeepInsightSummary[] }
   | { state: 'fallback'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: boolean; category: RepositoryIntelligenceProviderFailureCategory; diagnostics?: RepositoryIntelligenceSafeDiagnostics }
   | { state: 'cancelled'; deepState?: RepositoryDeepIntelligenceState; message: string; retryable: true; category: 'request_cancelled'; diagnostics?: RepositoryIntelligenceSafeDiagnostics };

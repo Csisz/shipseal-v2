@@ -9,6 +9,7 @@ import type { RepositoryUniverseModel } from '@/lib/workspace';
 import { ResultWorkspaceDisclosure } from '../ResultWorkspaceDisclosure';
 import RepositoryFuturePathways from './RepositoryFuturePathways';
 import type { RepositoryFuturesEntryMotion } from './repositoryFuturesMotion';
+import { RepositoryFuturesAnalysisStatus } from './RepositoryFuturesAnalysisStatus';
 
 interface RepositoryFuturesWorkspaceProps {
   report: ReadinessReport;
@@ -56,6 +57,14 @@ export default function RepositoryFuturesWorkspace({
               : 'grounded directions from the current scan'}
           </p>
         </header>
+
+        {productIntelligenceStatus?.state === 'preparing' && (
+          <RepositoryFuturesAnalysisStatus
+            status={productIntelligenceStatus}
+            hasInitialDirections={Boolean(productIntelligence?.opportunities.length)}
+            repositoryName={report.repoName}
+          />
+        )}
 
         <div data-testid="repository-futures-stage" data-primary-surface="neural-canvas" data-stage-shell="immersive" className="min-h-[72dvh] w-full">
           <RepositoryFuturePathways

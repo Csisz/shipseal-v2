@@ -35,11 +35,10 @@ import {
   selectLimitedScanReason,
 } from './result-workspace/model/resultWorkspaceSelectors';
 import { AiWorkspaceHero } from './result-workspace/universe/UniverseWorkspace';
-import { RepositoryFormation } from './RepositoryFormation';
-import { operationSupportReference } from '@/lib/supportReference';
 import { PanelsTopLeft } from 'lucide-react';
 import type { RepositoryFuturesEntryMotion } from './result-workspace/futures/repositoryFuturesMotion';
 import { useFeedback } from '@/components/feedback/feedbackContext';
+import { RepositoryFuturesAnalysisStatus } from './result-workspace/futures/RepositoryFuturesAnalysisStatus';
 const RepositoryFuturesWorkspace = lazy(() => import('./result-workspace/futures/RepositoryFuturesWorkspace'));
 const ImproveChapter = lazy(() => import('./result-dashboard/chapters/ImproveChapter'));
 const VerifyChapter = lazy(() => import('./result-dashboard/chapters/VerifyChapter'));
@@ -254,6 +253,8 @@ export function ResultWorkspace({
   const futureAvailability: RepositoryFutureAvailability = resolveRepositoryFutureAvailability(repositoryProductIntelligenceStatus);
   const futuresReady = futureAvailability === 'ready' && (!repositoryProductIntelligenceStatus
     || Boolean(repositoryProductIntelligence?.opportunities.length));
+  const initialFuturesReady = Boolean(repositoryProductIntelligence?.opportunities.length);
+  const futuresBrowsable = futuresReady || initialFuturesReady;
   const futureTerminalFailure = Boolean(repositoryProductIntelligenceStatus
     && ['fallback', 'cancelled'].includes(repositoryProductIntelligenceStatus.state));
   const futuresCanRetry = futureAvailability === 'resumable'
@@ -280,17 +281,17 @@ export function ResultWorkspace({
   }, [futureEntryIntent, futureTerminalFailure]);
 
   useEffect(() => {
-    if (!futureEntryIntent || !futuresReady) return;
+    if (!futureEntryIntent || !futuresBrowsable) return;
     setFutureEntryMotion('new-result');
     recordOutcome('future_generated', 'repository_futures', { premiumValue: true, prompt: true });
     setFutureEntryIntent(null);
     runRepositoryPerspectiveTransition(() => setEntryView('futures'));
     setPendingDashboardFocus(null);
     handleResultChapterChange('improve');
-  }, [futureEntryIntent, futuresReady, handleResultChapterChange, recordOutcome]);
+  }, [futureEntryIntent, futuresBrowsable, handleResultChapterChange, recordOutcome]);
 
   useEffect(() => {
-    if (billingFutureFocusConsumed.current || !futuresReady || typeof window === 'undefined') return;
+    if (billingFutureFocusConsumed.current || !futuresBrowsable || typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     if (params.get('open') !== 'futures') return;
     billingFutureFocusConsumed.current = true;
@@ -298,33 +299,24 @@ export function ResultWorkspace({
     runRepositoryPerspectiveTransition(() => setEntryView('futures'));
     setPendingDashboardFocus(null);
     handleResultChapterChange('improve');
-  }, [futuresReady, handleResultChapterChange]);
+  }, [futuresBrowsable, handleResultChapterChange]);
 
   useEffect(() => {
     if (futureTerminalFailure) setFutureDegradedAccess(true);
   }, [futureTerminalFailure]);
 
   useEffect(() => {
-    if (effectiveEntryView === 'futures' && !futuresReady) setEntryView(null);
-  }, [effectiveEntryView, futuresReady]);
+    if (effectiveEntryView === 'futures' && !futuresBrowsable) setEntryView(null);
+  }, [effectiveEntryView, futuresBrowsable]);
 
-  const selectorReady = futureAvailability !== 'running' || futureDegradedAccess || futureTerminalFailure;
+  const selectorReady = futureAvailability !== 'running' || initialFuturesReady || futureDegradedAccess || futureTerminalFailure;
 
   if (!effectiveEntryView && !selectorReady) {
-    const terminalFailure = ['fallback', 'cancelled'].includes(repositoryProductIntelligenceStatus.state);
     return (
-      <RepositoryFormation
+      <RepositoryFuturesAnalysisStatus
+        status={repositoryProductIntelligenceStatus}
+        hasInitialDirections={false}
         repositoryName={report.repoName}
-        sourceLabel="Repository scan"
-        stage="directions"
-        title="Forming future pathways"
-        action={repositoryProductIntelligenceStatus?.message || 'Connecting repository evidence to grounded future directions.'}
-        failure={terminalFailure ? {
-          message: repositoryProductIntelligenceStatus.message,
-          reference: 'diagnostics' in repositoryProductIntelligenceStatus
-            ? operationSupportReference(repositoryProductIntelligenceStatus.diagnostics?.publicOperationId)
-            : null,
-        } : undefined}
         fullScreen
       />
     );
@@ -335,7 +327,7 @@ export function ResultWorkspace({
       <PostScanViewSelector
         report={report}
         opportunityCount={repositoryProductIntelligence?.opportunities.length || 0}
-        futuresAvailable={futuresReady}
+        futuresAvailable={futuresBrowsable}
         futuresStatus={repositoryProductIntelligenceStatus}
         futureAvailability={futureAvailability}
         onRetryFutures={retryRepositoryProductIntelligence && (futuresCanRetry || futuresCanStart) ? handleFutureAction : undefined}

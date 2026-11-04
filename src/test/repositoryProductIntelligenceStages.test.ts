@@ -9,6 +9,7 @@ import {
   buildRepositoryProductExpansionStages,
   buildRepositoryProductExpansionStagesForFingerprint,
   buildRepositoryProductRootStage,
+  mergeAvailableRepositoryProductExpansionResults,
   mergeRepositoryProductExpansionResults,
 } from '@/lib/repositoryIntelligence/stagedProductIntelligence';
 import { validateRepositoryProductExpansionOwnership } from '../../api/_lib/aiUsage';
@@ -111,6 +112,28 @@ describe('staged Product Intelligence', () => {
     expect(batches.map(batch => batch.parents.length)).toEqual([2, 2, 2, 1]);
     expect(new Set(batches.flatMap(batch => batch.parents.map(parent => parent.id)))).toEqual(new Set(opportunities.map(item => item.id)));
     expect(buildRepositoryProductExpansionStages(request, rootResult.productIntelligence!)).toEqual(batches);
+  });
+
+  it('merges validated expansion batches without pretending missing batches are complete', () => {
+    const [stage] = buildRepositoryProductExpansionStages(request, rootResult.productIntelligence!);
+    const batch = {
+      pipelineVersion: REPOSITORY_PRODUCT_PIPELINE_VERSION,
+      stage: 'expansion' as const,
+      fingerprint: stage.fingerprint,
+      batchIndex: stage.batchIndex,
+      totalBatches: stage.totalBatches,
+      expansions: stage.parents.map(parent => ({ parentId: parent.id, evolutions: [{
+        sourceId: `${parent.id}-one`, generation: 2 as const, title: 'Adaptive experience',
+        description: 'Grounded evolution.', userValue: 'Better outcomes.',
+      }] })),
+    };
+
+    const partial = mergeAvailableRepositoryProductExpansionResults(rootResult, [batch]);
+    const expandedIds = new Set(stage.parents.map(parent => parent.id));
+    expect(partial.productIntelligence?.opportunities
+      .filter(item => expandedIds.has(item.id)).every(item => item.futureEvolutions.length === 1)).toBe(true);
+    expect(partial.productIntelligence?.opportunities
+      .filter(item => !expandedIds.has(item.id)).every(item => item.futureEvolutions.length === 0)).toBe(true);
   });
 
   it('authorizes every canonical expansion batch against analysis identity despite a different provider transmission identity', () => {
@@ -382,6 +405,28 @@ describe('staged Product Intelligence', () => {
     expect(calls.filter(call => call === 'roots')).toHaveLength(1);
     expect(new Set(calls)).toEqual(new Set(['roots', 'batch-0', 'batch-1', 'batch-2', 'batch-3']));
     if (duplicate.state === 'enhanced') expect(duplicate.diagnostics.duplicateSuppressed).toBe(true);
+  });
+
+  it('publishes validated root directions and then each available expansion batch', async () => {
+    const partials: Array<{ expanded: number; completed: number }> = [];
+    const fetcher = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { productFinalization?: unknown; productStage: { kind: 'roots' | 'expansion'; fingerprint: string; batchIndex?: number; totalBatches?: number; parents?: typeof opportunities } };
+      if (isFinalization(body)) return enhancedComplete();
+      return body.productStage.kind === 'roots' ? enhancedRoots() : enhancedBatch(body.productStage);
+    });
+
+    const result = await requestRepositoryProductIntelligenceStaged(request, {
+      fetcher: fetcher as typeof fetch,
+      onPartialResult: (partial, progress) => partials.push({
+        expanded: partial.opportunities.filter(item => item.futureEvolutions.length > 0).length,
+        completed: progress.completedBatches,
+      }),
+    });
+
+    expect(result.state).toBe('enhanced');
+    expect(partials[0]).toEqual({ expanded: 0, completed: 0 });
+    expect(partials.at(-1)).toEqual({ expanded: 7, completed: 4 });
+    expect(partials.map(item => item.completed)).toEqual([0, 1, 2, 3, 4]);
   });
 
   it('carries an owner-scoped recovery operation ID outside the immutable analysis fingerprint', async () => {

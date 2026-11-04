@@ -101,7 +101,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     ? inspectRepositoryFutureDependencyImpact(draft, focus.id)
     : undefined;
   const productIntelligenceState = productIntelligence?.opportunities.length
-    ? 'enhanced' as const
+    ? providerStatus?.state === 'preparing' ? 'initial' as const : 'enhanced' as const
     : providerStatus?.state === 'preparing'
       ? 'analysing' as const
       : providerStatus?.state === 'fallback' || providerStatus?.state === 'cancelled'
@@ -110,18 +110,35 @@ export default function RepositoryFuturePathways({ report, universe, productInte
 
   useEffect(() => {
     const graphChanged = previousGraphFingerprintRef.current !== graph.fingerprint;
-    const replacedExistingDraft = graphChanged && Boolean(draftRef.current);
     previousGraphFingerprintRef.current = graph.fingerprint;
-    setDraft(undefined);
-    setFocus(null);
-    setTracePreviewId(undefined);
-    setTracePinnedId(undefined);
-    setNotice(replacedExistingDraft
-      ? 'Available Futures changed with new repository intelligence. The previous draft was cleared so ShipSeal does not silently reinterpret your selections.'
-      : '');
+    if (!graphChanged) return;
+    const existing = draftRef.current;
+    if (!existing) return;
+    let rebased = synthesizeRepositoryFutureDraft(graph, {
+      sourceGraphFingerprint: graph.fingerprint,
+      primaryGoalIds: [existing.primaryGoal.goalId],
+      supportingGoalIds: existing.supportingGoals.map(goal => goal.goalId),
+    });
+    if (rebased.ok) {
+      for (const savedGoalId of existing.savedGoalIds) {
+        const saved = saveRepositoryFutureAlternative(graph, rebased.draft, savedGoalId);
+        if (saved.ok) rebased = saved;
+      }
+      setDraft(rebased.draft);
+      setFocus(current => current && graph.nodes.some(node => node.id === current.id) ? current : null);
+      setTracePreviewId(current => current && graph.nodes.some(node => node.id === current) ? current : undefined);
+      setTracePinnedId(current => current && graph.nodes.some(node => node.id === current) ? current : undefined);
+      setNotice('New validated Futures joined the map. Your selected path was preserved.');
+    } else {
+      setDraft(undefined);
+      setFocus(null);
+      setTracePreviewId(undefined);
+      setTracePinnedId(undefined);
+      setNotice('Available Futures changed and the previous selection no longer validates against the updated graph.');
+    }
     setReplaceSupportGoalId(undefined);
     setPlanOpen(false);
-  }, [graph.fingerprint]);
+  }, [graph]);
 
   const acceptResult = useCallback((result: RepositoryFutureSynthesisResult, successNotice: string) => {
     if (result.ok) {
