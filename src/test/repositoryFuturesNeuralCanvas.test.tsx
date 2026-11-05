@@ -177,6 +177,11 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-semantic-zoom');
     expect(screen.getByRole('button', { name: /Required dependency: Human review/i })).toBeInTheDocument();
     expect(container.querySelectorAll('[data-selected-route="true"]').length).toBeGreaterThan(0);
+    const routeSignals = [...container.querySelectorAll('[data-route-signal="selected-primary"]')];
+    expect(routeSignals.length).toBeGreaterThan(0);
+    expect(routeSignals.every(path => path.getAttribute('data-corridor-level') === 'primary')).toBe(true);
+    expect(routeSignals.every(path => path.getAttribute('data-future-edge') !== 'selected-path')).toBe(true);
+    expect(goal).toHaveAttribute('data-route-connected', 'primary');
 
     fireEvent.click(goal);
     expect(value.onCandidateFocus).toHaveBeenCalledWith('goal:future');
@@ -535,6 +540,9 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(edge).toHaveAttribute('data-corridor-transition', 'semantic-emphasis');
     expect(edge).toHaveAttribute('data-route-resolution', 'primary');
     expect((edge as SVGPathElement).style.getPropertyValue('--future-route-delay')).toMatch(/ms$/);
+    const signal = container.querySelector('[data-edge-layer="route-signal"][data-future-edge-id="grounding:goal:future"]');
+    expect(signal).toHaveAttribute('data-route-signal', 'selected-primary');
+    expect((signal as SVGPathElement).style.getPropertyValue('--future-signal-delay')).toMatch(/ms$/);
     expect(container.querySelector('animate')).not.toBeInTheDocument();
 
     rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({
@@ -544,6 +552,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const updatedEdge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:future"]');
     expect(updatedEdge).toBe(edge);
     expect(updatedEdge).not.toHaveAttribute('data-selected-route');
+    expect(container.querySelector('[data-edge-layer="route-signal"][data-future-edge-id="grounding:goal:future"]')).not.toBeInTheDocument();
   });
 
   it('keeps selected supports and a focused minor node identifiable at overview zoom', () => {
@@ -729,9 +738,13 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-reveal-motion', 'static');
     expect(screen.getByTestId('repository-futures-neural-canvas')).toHaveAttribute('data-corridor-motion', 'static');
     expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveAttribute('data-primary-alive', 'static');
+    expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveAttribute('data-route-connected', 'primary');
     expect(container.querySelectorAll('[data-future-edge]').length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-route-signal]')).not.toBeInTheDocument();
     expect(container.querySelector('.future-canvas-node-reveal')).not.toBeInTheDocument();
     expect(container.querySelector('animate')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Primary future goal/i }));
+    expect(screen.getByRole('button', { name: /Primary future goal/i })).toHaveAttribute('data-focus-motion', 'static');
     fireEvent.click(screen.getByRole('button', { name: 'Fit all futures' }));
     expect(screen.getByTestId('repository-futures-camera')).not.toHaveClass('transition-transform');
     unmount();
@@ -940,6 +953,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(screen.getByRole('button', { name: /Candidate future goal/i })).toHaveAttribute('data-motion-event', 'node-hover');
     expect(container.querySelector('[data-motion-trace="hover-direct"]')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal/i }));
+    expect(screen.getByRole('button', { name: /Candidate future goal/i })).toHaveAttribute('data-focus-motion', 'settle');
     expect(value.onCandidateSelect).not.toHaveBeenCalled();
     expect(value.onCandidateAddSupport).not.toHaveBeenCalled();
     expect(fetchSpy).not.toHaveBeenCalled();

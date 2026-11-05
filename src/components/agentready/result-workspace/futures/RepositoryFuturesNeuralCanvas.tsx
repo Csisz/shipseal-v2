@@ -695,6 +695,24 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
                       '--future-route-delay': `${routeResolutionDelay}ms`,
                     } as React.CSSProperties}
                   />
+                  {!reducedMotion && edge.selected && corridorLevel === 'primary' && edge.kind !== 'selected-path' && (
+                    <path
+                      data-future-edge-id={edge.id}
+                      data-future-edge={edge.kind}
+                      data-edge-layer="route-signal"
+                      data-route-signal="selected-primary"
+                      data-corridor-level={corridorLevel}
+                      d={path}
+                      fill="none"
+                      stroke="hsl(var(--futures-selected))"
+                      strokeWidth="1.35"
+                      opacity="0.72"
+                      pathLength="1"
+                      strokeLinecap="round"
+                      className="future-canvas-edge-signal"
+                      style={{ '--future-signal-delay': `${routeResolutionDelay + 260}ms` } as React.CSSProperties}
+                    />
+                  )}
                 </g>
               );
             })}
@@ -753,6 +771,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
                 data-motion-event={pinnedId === node.id ? 'node-pin' : hoveredId === node.id ? 'node-hover' : undefined}
                 data-plan-motion-event={node.role === 'primary' ? 'primary-selected' : node.role === 'supporting' ? 'support-selected' : undefined}
                 data-primary-alive={node.role === 'primary' ? reducedMotion ? 'static' : 'subtle-halo' : undefined}
+                data-route-connected={corridorLevel === 'primary' ? 'primary' : corridorLevel === 'supporting' ? 'supporting' : undefined}
+                data-focus-motion={pinnedId === node.id ? reducedMotion ? 'static' : 'settle' : undefined}
                 aria-pressed={pinnedId === node.id}
                 aria-label={nodeAriaLabel(node)}
                 onClick={event => {

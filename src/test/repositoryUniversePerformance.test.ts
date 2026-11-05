@@ -4,6 +4,7 @@ import { buildRepositoryUniverseModel, buildWorkspaceStory } from '@/lib/workspa
 import { selectRepositoryFrictions } from '@/components/agentready/result-dashboard/repositoryFrictions';
 import { buildRepositoryFuturePathwaysGraph } from '@/components/agentready/result-workspace/futures/repositoryFuturePathwaysGraph';
 import { buildFutureFieldLayout } from '@/components/agentready/result-workspace/futures/futurePathwaysLayout';
+import { buildRepositoryFuturesCanvasModel } from '@/components/agentready/result-workspace/futures/repositoryFuturesCanvasModel';
 
 function largeRepositoryReport(fileCount = 600) {
   const files = Array.from({ length: fileCount }, (_unused, index) => ({
@@ -70,6 +71,54 @@ describe('post-scan pure builder performance architecture', () => {
       })),
     });
     const layoutDurationMs = performance.now() - layoutStarted;
+    const canvasStarted = performance.now();
+    const canvas = buildRepositoryFuturesCanvasModel('large-performance-fixture', {
+      mode: 'deep',
+      productIntelligenceState: 'enhanced',
+      candidates: futureGraph.candidates.slice(0, 7).map((candidate, index) => ({
+        goalId: `goal:${candidate.id}`,
+        title: candidate.title,
+        fit: candidate.fit,
+        role: index === 0 ? 'primary' as const : 'candidate' as const,
+        origin: candidate.origin,
+        capabilityId: candidate.targetCapabilityId,
+        confidence: candidate.confidence,
+        compatibility: candidate.eligibility,
+        humanReviewRequired: candidate.humanReviewState === 'required',
+        evidenceCount: candidate.evidence.length,
+        mappedEvidenceCount: candidate.universeMappings.length,
+        universeNodeIds: candidate.universeMappings.map(mapping => mapping.universeNodeId),
+      })),
+      dependencies: futureGraph.dependencies.slice(0, 8).map((dependency, index) => ({
+        id: dependency.id,
+        title: dependency.title,
+        state: dependency.state,
+        dependentCount: dependency.dependentGoalIds.length,
+        dependentGoalIds: dependency.dependentGoalIds.map(goalId => `goal:${goalId}`),
+        executionOrder: index,
+        humanReviewRequired: dependency.humanReviewState === 'required',
+      })),
+      projections: futureGraph.candidates.slice(0, 7).flatMap(candidate => [{
+        id: `evolution:${candidate.id}:next`,
+        goalId: `goal:${candidate.id}`,
+        kind: 'evolution' as const,
+        title: `${candidate.title} next evolution`,
+        sourceId: `goal:${candidate.id}`,
+        order: 0,
+        humanReviewRequired: candidate.humanReviewState === 'required',
+        generation: 2 as const,
+      }, {
+        id: `evolution:${candidate.id}:later`,
+        goalId: `goal:${candidate.id}`,
+        kind: 'evolution' as const,
+        title: `${candidate.title} later possibility`,
+        sourceId: `evolution:${candidate.id}:next`,
+        order: 1,
+        humanReviewRequired: candidate.humanReviewState === 'required',
+        generation: 3 as const,
+      }]),
+    }, 'horizontal', 'desktop');
+    const canvasDurationMs = performance.now() - canvasStarted;
 
     // Safe diagnostic counts only: no repository paths, excerpts, evidence IDs, or content.
     console.info(JSON.stringify({
@@ -80,10 +129,13 @@ describe('post-scan pure builder performance architecture', () => {
       frictionDurationMs: Number(frictionDurationMs.toFixed(2)),
       futureGraphDurationMs: Number(futureGraphDurationMs.toFixed(2)),
       futureLayoutDurationMs: Number(layoutDurationMs.toFixed(2)),
+      futuresCanvasModelDurationMs: Number(canvasDurationMs.toFixed(2)),
       universeNodes: universe.nodes.length,
       universeEdges: universe.edges.length,
       futureCandidates: futureGraph.candidates.length,
       futureLayoutNodes: layout.nodes.length,
+      futuresCanvasNodes: canvas.nodes.length,
+      futuresCanvasEdges: canvas.edges.length,
     }));
 
     expect(story.chapters.length).toBeGreaterThan(0);
@@ -94,6 +146,7 @@ describe('post-scan pure builder performance architecture', () => {
     expect(storyDurationMs).toBeLessThan(5_000);
     expect(universeDurationMs).toBeLessThan(5_000);
     expect(futureGraphDurationMs).toBeLessThan(5_000);
+    expect(canvasDurationMs).toBeLessThan(5_000);
     expect(buildRepositoryUniverseModel(report)).toEqual(universe);
   });
 });
