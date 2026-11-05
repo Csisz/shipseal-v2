@@ -1,7 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { consumeOAuthState, createAccountSession, revokeAccountSession } from '../../_lib/accountSession.js';
+import { consumeOAuthState, createAccountSession, readAccountSession, revokeAccountSession } from '../../_lib/accountSession.js';
 import { getAccountPersistenceStore } from '../../_lib/accountPersistence.js';
 import { AuthConfigurationError, getAccountOAuthConfig, safeAuthDiagnostic, validateAccountRequestOrigin } from '../../_lib/authConfig.js';
+import { clearGitHubConnectionSession } from '../../_lib/githubConnectionSession.js';
 
 interface GitHubUser { id?: number; login?: string; name?: string | null; email?: string | null; avatar_url?: string | null }
 
@@ -24,11 +25,13 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const githubUser = await userResponse.json() as GitHubUser;
     if (!userResponse.ok || !githubUser.id || !githubUser.login) throw new Error('GitHub identity could not be loaded.');
     const store = getAccountPersistenceStore();
+    const previousSession = await readAccountSession(req, store);
     const user = await store.upsertOAuthUser({
       providerSubject: String(githubUser.id), email: githubUser.email || null,
       displayName: githubUser.name || githubUser.login, avatarUrl: githubUser.avatar_url || null,
     });
     await revokeAccountSession(req, res, store);
+    if (!previousSession || previousSession.user.id !== user.id) clearGitHubConnectionSession(req, res);
     await createAccountSession(req, res, user.id, store);
     res.statusCode = 302;
     res.setHeader('Location', consumed.returnTo);

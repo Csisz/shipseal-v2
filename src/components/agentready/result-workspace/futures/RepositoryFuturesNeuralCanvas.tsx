@@ -34,7 +34,7 @@ import {
   type RepositoryFuturesCamera,
   type RepositoryFuturesInspectorPresentation,
 } from './repositoryFuturesCamera';
-import { resolveRepositoryFutureNodeActions, type RepositoryFutureNodeAction } from './repositoryFutureNodeActions';
+import { repositoryFutureExplorationGuidance, resolveRepositoryFutureNodeActions, type RepositoryFutureNodeAction } from './repositoryFutureNodeActions';
 import { RepositoryFutureSemanticIcon } from './RepositoryFutureSemanticIcon';
 import {
   repositoryFutureSemanticStyle,
@@ -117,6 +117,19 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
     });
     return ids;
   }, [activeId, model.edges]);
+  const idleEvidenceEdgeIds = useMemo(() => new Set(model.edges
+    .filter(edge => edge.kind === 'grounding' && (nodeById.get(edge.targetId)?.candidate?.evidenceCount || 0) > 0)
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .slice(0, 2)
+    .map(edge => edge.id)), [model.edges, nodeById]);
+  const idleAliveNodeIds = useMemo(() => {
+    const ids = new Set(model.nodes.filter(node => node.kind === 'repository').map(node => node.id));
+    model.edges.forEach(edge => {
+      if (idleEvidenceEdgeIds.has(edge.id)) ids.add(edge.targetId);
+    });
+    return ids;
+  }, [idleEvidenceEdgeIds, model.edges, model.nodes]);
+  const idleNetworkActive = !primary && !activeId;
   const pinnedNeighborhoodBounds = useMemo(() => {
     if (!pinnedId) return undefined;
     return repositoryFuturesBounds(model.nodes
@@ -511,6 +524,7 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
         data-reveal-motion={reducedMotion ? 'static' : entryMotion}
         data-motion-event={reducedMotion ? 'static' : repositoryFutureEntryEvent(entryMotion)}
         data-corridor-motion={reducedMotion ? 'static' : 'semantic-transition'}
+        data-network-motion={reducedMotion ? 'static' : idleNetworkActive ? 'idle-evidence' : hoveredId ? 'hover-trace' : primary ? 'selected-route' : 'focused-route'}
         data-product-intelligence-state={overlay.productIntelligenceState}
         data-field-density="breathable-layered-neural"
         data-visual-language="semantic-future-map"
@@ -705,12 +719,29 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
                       d={path}
                       fill="none"
                       stroke="hsl(var(--futures-selected))"
-                      strokeWidth="1.35"
-                      opacity="0.72"
+                      strokeWidth="1.7"
+                      opacity="0.86"
                       pathLength="1"
                       strokeLinecap="round"
                       className="future-canvas-edge-signal"
                       style={{ '--future-signal-delay': `${routeResolutionDelay + 260}ms` } as React.CSSProperties}
+                    />
+                  )}
+                  {!reducedMotion && idleNetworkActive && idleEvidenceEdgeIds.has(edge.id) && (
+                    <path
+                      data-future-edge-id={edge.id}
+                      data-future-edge={edge.kind}
+                      data-edge-layer="idle-signal"
+                      data-route-signal="idle-evidence"
+                      d={path}
+                      fill="none"
+                      stroke="hsl(var(--futures-atmosphere))"
+                      strokeWidth="1.15"
+                      opacity="0.42"
+                      pathLength="1"
+                      strokeLinecap="round"
+                      className="future-canvas-edge-idle-signal"
+                      style={{ '--future-idle-delay': `${routeResolutionDelay + [...idleEvidenceEdgeIds].indexOf(edge.id) * 2600}ms` } as React.CSSProperties}
                     />
                   )}
                 </g>
@@ -771,6 +802,8 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
                 data-motion-event={pinnedId === node.id ? 'node-pin' : hoveredId === node.id ? 'node-hover' : undefined}
                 data-plan-motion-event={node.role === 'primary' ? 'primary-selected' : node.role === 'supporting' ? 'support-selected' : undefined}
                 data-primary-alive={node.role === 'primary' ? reducedMotion ? 'static' : 'subtle-halo' : undefined}
+                data-idle-alive={!reducedMotion && idleNetworkActive && idleAliveNodeIds.has(node.id) ? 'evidence-anchor' : undefined}
+                data-hover-connected={hoveredId && (node.id === hoveredId || directNeighborNodeIds.has(node.id)) ? 'direct' : undefined}
                 data-route-connected={corridorLevel === 'primary' ? 'primary' : corridorLevel === 'supporting' ? 'supporting' : undefined}
                 data-focus-motion={pinnedId === node.id ? reducedMotion ? 'static' : 'settle' : undefined}
                 aria-pressed={pinnedId === node.id}
@@ -870,6 +903,9 @@ function NeuralInspector({ inspectorRef, presentation, node, semantic, overlay, 
   const [replacementOpen, setReplacementOpen] = useState(false);
   const hasPrimary = overlay.candidates.some(item => item.role === 'primary');
   const actions = candidate ? resolveRepositoryFutureNodeActions({ candidate, hasPrimary, supportCount: overlay.supportCount }) : [];
+  const exploration = candidate ? repositoryFutureExplorationGuidance(candidate) : undefined;
+  const exploratorySave = exploration ? actions.find(action => action.id === 'save-for-later') : undefined;
+  const selectionActions = exploratorySave ? actions.filter(action => action !== exploratorySave) : actions;
   const canBuildCandidate = Boolean(candidate?.eligibleAsPrimary
     && !['blocked', 'incompatible'].includes(candidate.compatibility)
     && overlay.onCandidateBuild);
@@ -902,13 +938,14 @@ function NeuralInspector({ inspectorRef, presentation, node, semantic, overlay, 
         </dl>
         {candidate.compatibility === 'compatible-with-review' && <p role="status" className="mt-3 flex items-start gap-2 rounded-xl border border-warning/30 bg-warning/[0.07] p-2.5 text-xs text-foreground"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" />This direction is actionable, but the resulting plan requires human review.</p>}
         {['blocked', 'incompatible'].includes(candidate.compatibility) && <div className="mt-3 rounded-xl border border-warning/30 bg-warning/[0.06] p-3 text-xs"><div className="flex items-center gap-2 font-medium text-foreground"><LockKeyhole className="h-3.5 w-3.5 text-warning" />Cannot join as support</div><p className="mt-1 text-muted-foreground">{candidate.compatibilityReasons?.[0] || 'This direction is not compatible with the current selected plan.'}</p></div>}
+        {exploration && <div data-exploratory-guidance className="mt-3 rounded-xl border border-primary/25 bg-primary/[0.045] p-3 text-xs"><div className="flex items-center gap-2 font-medium text-foreground"><AlertTriangle className="h-3.5 w-3.5 text-primary" />Exploratory — not plan-ready</div><p className="mt-2 text-muted-foreground"><span className="font-medium text-foreground">Evidence gap:</span> {exploration.evidenceGap}</p><p className="mt-2 text-muted-foreground"><span className="font-medium text-foreground">To become eligible:</span> {exploration.requirement}</p><p className="mt-2 text-muted-foreground">Saving keeps this as an idea to revisit; it does not add it to the implementation plan.</p>{exploratorySave && <button type="button" aria-label="Save for later" onClick={() => execute(exploratorySave)} className="mt-3 min-h-10 rounded-full border border-primary/35 bg-background/45 px-3 text-xs font-medium text-foreground hover:bg-primary/[0.08] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"><Bookmark className="mr-1.5 inline h-3.5 w-3.5" />Save exploratory idea</button>}</div>}
         {canBuildCandidate && <button type="button" onClick={() => overlay.onCandidateBuild?.(candidate.goalId)} data-fast-path-action="build-future" className="mt-4 flex min-h-12 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">Build this future <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" /></button>}
-        <details className="mt-3 rounded-xl border border-border/45 bg-background/25 p-3">
+        {selectionActions.length > 0 && <details className="mt-3 rounded-xl border border-border/45 bg-background/25 p-3">
           <summary className="cursor-pointer select-none text-xs font-medium text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Selection options</summary>
         <div className="mt-3 flex flex-wrap gap-2">
-          {actions.map(action => <button key={action.id} type="button" onClick={() => execute(action)} data-action-emphasis="secondary" className="min-h-10 rounded-full border border-border/60 bg-background/30 px-3 text-xs font-medium text-foreground hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{action.id === 'save-for-later' && <Bookmark className="mr-1.5 inline h-3.5 w-3.5" />}{action.label}{action.reviewRequired && action.id !== 'save-for-later' ? ' · Review' : ''}</button>)}
+          {selectionActions.map(action => <button key={action.id} type="button" onClick={() => execute(action)} data-action-emphasis="secondary" className="min-h-10 rounded-full border border-border/60 bg-background/30 px-3 text-xs font-medium text-foreground hover:border-primary/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{action.id === 'save-for-later' && <Bookmark className="mr-1.5 inline h-3.5 w-3.5" />}{action.label}{action.reviewRequired && action.id !== 'save-for-later' ? ' · Review' : ''}</button>)}
         </div>
-        </details>
+        </details>}
         {actions.some(action => action.id === 'replace-support') && <p className="mt-2 text-xs text-muted-foreground">The plan already has two supporting Futures. Choose one bounded replacement; a third support cannot be added.</p>}
         {replacementOpen && <section aria-label="Choose supporting Future to replace" className="mt-3 rounded-xl border border-primary/25 bg-primary/[0.05] p-3"><div className="text-xs font-medium">Replace which support?</div><div className="mt-2 grid gap-2">{actions.find(action => action.id === 'replace-support')?.replacementGoalIds.map(goalId => {
           const support = overlay.candidates.find(item => item.goalId === goalId);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FolderGit2, LogIn, LogOut, RefreshCw, Trash2 } from 'lucide-react';
+import { FolderGit2, Github, LogIn, LogOut, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import { Nav } from '@/components/agentready/Nav';
 import { Button } from '@/components/ui/button';
 import { useAccount } from '@/components/account/accountContext';
@@ -13,6 +13,7 @@ export default function Projects() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
   const [confirmAccountDelete, setConfirmAccountDelete] = useState(false);
   const [accountDeleteError, setAccountDeleteError] = useState('');
+  const [githubIdentity, setGitHubIdentity] = useState<{ status: 'loading' | 'connected' | 'disconnected'; login?: string }>({ status: 'loading' });
 
   const load = useCallback(async () => {
     if (!account.user) return;
@@ -20,6 +21,25 @@ export default function Projects() {
     try { setProjects(await listProjects()); setStatus('ready'); } catch { setStatus('failed'); }
   }, [account.user]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let active = true;
+    if (!account.user) {
+      setGitHubIdentity({ status: 'disconnected' });
+      return () => { active = false; };
+    }
+    setGitHubIdentity({ status: 'loading' });
+    void fetch('/api/github-app/connection', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+      .then(async response => {
+        const body = await response.json().catch(() => null) as { connection?: { githubLogin?: unknown } } | null;
+        if (!active) return;
+        const login = body?.connection?.githubLogin;
+        setGitHubIdentity(response.ok && typeof login === 'string' && login.trim()
+          ? { status: 'connected', login: login.trim() }
+          : { status: 'disconnected' });
+      })
+      .catch(() => { if (active) setGitHubIdentity({ status: 'disconnected' }); });
+    return () => { active = false; };
+  }, [account.user]);
 
   const removeAccount = async () => {
     try {
@@ -44,6 +64,8 @@ export default function Projects() {
         </div>
 
         {account.user && <AccountUsageCard />}
+
+        {account.user && <section aria-label="Identity boundary" className="mt-5 rounded-2xl border border-border/55 bg-secondary/10 p-4"><div className="flex items-start gap-3"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><div className="min-w-0"><h2 className="text-sm font-semibold">Identity boundary</h2><div className="mt-2 grid gap-2 text-xs sm:grid-cols-2"><div className="rounded-xl border border-border/40 bg-background/30 p-3"><div className="font-mono uppercase tracking-wider text-muted-foreground">ShipSeal account</div><div className="mt-1 break-words font-medium text-foreground">{account.user.displayName || account.user.email || 'Signed-in account'}</div>{account.user.email && account.user.displayName && <div className="mt-0.5 break-all text-muted-foreground">{account.user.email}</div>}</div><div className="rounded-xl border border-border/40 bg-background/30 p-3"><div className="flex items-center gap-1.5 font-mono uppercase tracking-wider text-muted-foreground"><Github className="h-3.5 w-3.5" aria-hidden="true" />Connected GitHub</div><div className="mt-1 font-medium text-foreground">{githubIdentity.status === 'loading' ? 'Checking connection…' : githubIdentity.status === 'connected' ? `@${githubIdentity.login}` : 'Not connected'}</div></div></div><p className="mt-2 text-xs leading-relaxed text-muted-foreground">Projects belong to this ShipSeal account and may come from more than one GitHub identity. The connected GitHub identity controls fresh repository access and GitHub changes; it does not change project ownership.</p></div></div></section>}
 
         {account.status === 'loading' && <SurfaceState className="mt-8" tone="loading" title="Checking your session" description="Preparing private project access." />}
         {(account.status === 'anonymous' || account.status === 'unavailable') && (

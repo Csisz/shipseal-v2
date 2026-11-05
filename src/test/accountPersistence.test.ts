@@ -90,7 +90,10 @@ describe('Omega 18.1 account sessions', () => {
     await logoutHandler(request(user.cookie, 'POST', {}) as never, res as never);
     expect(res.statusCode).toBe(200);
     expect(await store.getSession(hashSessionToken(user.token), new Date().toISOString())).toBeNull();
-    expect((res.getHeader('Set-Cookie') as string[]).join(';')).toContain('Max-Age=0');
+    const clearedCookies = (res.getHeader('Set-Cookie') as string[]).join(';');
+    expect(clearedCookies).toContain('Max-Age=0');
+    expect(clearedCookies).toContain('shipseal_github_connection=');
+    expect(clearedCookies).toContain('shipseal_github_user_token=');
   });
 });
 

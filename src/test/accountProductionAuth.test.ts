@@ -185,6 +185,8 @@ describe('ShipSeal Production account configuration', () => {
     const setCookies = callbackResponse.getHeader('Set-Cookie') as string[];
     const sessionCookie = setCookies.filter(value => value.startsWith(`${ACCOUNT_SESSION_COOKIE}=`)).at(-1);
     expect(sessionCookie).toBeDefined();
+    expect(setCookies.some(value => value.startsWith('__Host-shipseal_github_connection=') && value.includes('Max-Age=0'))).toBe(true);
+    expect(setCookies.some(value => value.startsWith('__Host-shipseal_github_user_token=') && value.includes('Max-Age=0'))).toBe(true);
     expect(callbackResponse.body).not.toContain('temporary-oauth-token');
 
     const sessionResponse = response();

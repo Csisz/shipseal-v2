@@ -12,6 +12,7 @@ export interface RepositoryFutureStageCandidate {
   confidence: string;
   compatibility: string;
   compatibilityReasons?: string[];
+  eligibility?: 'eligible' | 'exploratory' | 'blocked' | 'unsupported';
   eligibleAsPrimary?: boolean;
   savedForLater?: boolean;
   humanReviewRequired: boolean;

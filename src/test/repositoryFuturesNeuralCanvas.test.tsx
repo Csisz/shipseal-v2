@@ -193,6 +193,30 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(value.onTraceClear).toHaveBeenCalled();
   });
 
+  it('animates only a bounded evidence-backed subset while idle and switches to immediate hover tracing', () => {
+    const base = overlay();
+    const value = overlay({
+      phase: 'possibility',
+      draftFingerprint: undefined,
+      candidates: [{ ...base.candidates[1], eligibility: 'eligible', role: 'candidate' }],
+      dependencies: [],
+      supportCount: 0,
+    });
+    const { container } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    const stage = screen.getByTestId('repository-futures-neural-canvas');
+    const candidateNode = screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i });
+
+    expect(stage).toHaveAttribute('data-network-motion', 'idle-evidence');
+    expect(container.querySelectorAll('[data-route-signal="idle-evidence"]')).toHaveLength(1);
+    expect(candidateNode).toHaveAttribute('data-idle-alive', 'evidence-anchor');
+
+    fireEvent.mouseEnter(candidateNode);
+    expect(stage).toHaveAttribute('data-network-motion', 'hover-trace');
+    expect(container.querySelector('[data-route-signal="idle-evidence"]')).not.toBeInTheDocument();
+    expect(candidateNode).toHaveAttribute('data-hover-connected', 'direct');
+    expect(container.querySelectorAll('[data-hover-trace="real-relationship"]').length).toBeGreaterThan(0);
+  });
+
   it('keeps camera controls above an open responsive inspector drawer', () => {
     const originalMatchMedia = window.matchMedia;
     const originalInnerWidth = window.innerWidth;
@@ -767,6 +791,29 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add as support/i }));
     expect(value.onCandidateAddSupport).toHaveBeenCalledWith('goal:alternative');
     fireEvent.click(screen.getByRole('button', { name: 'Save for later' }));
+    expect(value.onCandidateSave).toHaveBeenCalledWith('goal:alternative');
+  });
+
+  it('keeps an exploratory Future inspectable and saveable without offering implementation-plan actions', () => {
+    const base = overlay();
+    const value = overlay({
+      candidates: [base.candidates[0], {
+        ...base.candidates[1],
+        eligibility: 'exploratory',
+        eligibleAsPrimary: false,
+        opportunityOrigin: 'exploratory',
+        limitations: ['No repository-owned authentication flow is present.'],
+      }],
+    });
+    render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={value} />);
+    fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
+    const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
+
+    expect(inspector).toHaveTextContent('Exploratory — not plan-ready');
+    expect(inspector).toHaveTextContent('No repository-owned authentication flow is present.');
+    expect(inspector).toHaveTextContent(/does not add it to the implementation plan/i);
+    expect(within(inspector).queryByRole('button', { name: /Build this future|Replace primary|Add as support/i })).not.toBeInTheDocument();
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Save for later' }));
     expect(value.onCandidateSave).toHaveBeenCalledWith('goal:alternative');
   });
 

@@ -322,6 +322,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         confidence: candidate.confidence,
         compatibility: compatibilityFor(goalId),
         compatibilityReasons: draft?.compatibilityMatrix.find(item => item.goalId === goalId)?.reasons || [],
+        eligibility: candidate.eligibility,
         eligibleAsPrimary: candidate.eligibility === 'eligible',
         savedForLater: savedGoalIds.has(goalId),
         humanReviewRequired: candidate.humanReviewState === 'required',

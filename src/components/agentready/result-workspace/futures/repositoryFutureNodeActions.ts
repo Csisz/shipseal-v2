@@ -15,6 +15,18 @@ export interface RepositoryFutureNodeAction {
   replacementGoalIds: string[];
 }
 
+export function repositoryFutureExplorationGuidance(candidate: RepositoryFutureStageCandidate) {
+  if (candidate.eligibility !== 'exploratory') return undefined;
+  const recordedGap = candidate.limitations?.find(Boolean)
+    || candidate.compatibilityReasons?.find(Boolean);
+  return {
+    evidenceGap: recordedGap || 'The current scan does not contain enough direct repository evidence to treat this direction as implementation-ready.',
+    requirement: recordedGap
+      ? 'Resolve the recorded evidence gap, then rescan so eligibility and compatibility can be evaluated again.'
+      : 'Add direct repository evidence for this capability, then rescan for a fresh eligibility and compatibility evaluation.',
+  };
+}
+
 /** Presentation-only resolver. Domain commands still validate every mutation. */
 export function resolveRepositoryFutureNodeActions(input: {
   candidate: RepositoryFutureStageCandidate;
@@ -40,8 +52,9 @@ export function resolveRepositoryFutureNodeActions(input: {
   }
 
   const actions: RepositoryFutureNodeAction[] = [];
+  const planEligible = candidate.eligibility === undefined || candidate.eligibility === 'eligible';
   if (candidate.eligibleAsPrimary) actions.push(action('make-primary', hasPrimary ? 'Replace primary' : 'Make primary'));
-  if (hasPrimary) {
+  if (hasPrimary && planEligible) {
     if (supportCount >= 2 && candidate.replaceableSupportGoalIds?.length) {
       actions.push(action('replace-support', 'Replace a support', candidate.replaceableSupportGoalIds));
     } else if (supportCount < 2 && ['compatible', 'compatible-with-review'].includes(candidate.compatibility)) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveRepositoryFutureNodeActions } from '@/components/agentready/result-workspace/futures/repositoryFutureNodeActions';
+import { repositoryFutureExplorationGuidance, resolveRepositoryFutureNodeActions } from '@/components/agentready/result-workspace/futures/repositoryFutureNodeActions';
 import type { RepositoryFutureStageCandidate } from '@/components/agentready/result-workspace/futures/futurePathwaysPresentation';
 
 function candidate(overrides: Partial<RepositoryFutureStageCandidate> = {}): RepositoryFutureStageCandidate {
@@ -73,5 +73,18 @@ describe('Omega 18.5-V5 Future node action resolver', () => {
     });
     expect(actions).not.toHaveLength(0);
     expect(actions.every(action => action.reviewRequired)).toBe(true);
+  });
+
+  it('keeps exploratory ideas out of plan actions while explaining a safe saved alternative', () => {
+    const exploratory = candidate({
+      eligibility: 'exploratory',
+      eligibleAsPrimary: false,
+      limitations: ['No repository-owned authentication flow is present.'],
+    });
+    expect(ids(exploratory, true, 0)).toEqual(['save-for-later']);
+    expect(repositoryFutureExplorationGuidance(exploratory)).toEqual({
+      evidenceGap: 'No repository-owned authentication flow is present.',
+      requirement: 'Resolve the recorded evidence gap, then rescan so eligibility and compatibility can be evaluated again.',
+    });
   });
 });

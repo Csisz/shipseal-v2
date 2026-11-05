@@ -111,12 +111,19 @@ describe('Omega 18.1 account and persistence UI', () => {
   });
 
   it('renders a calm project list and account deletion confirmation without a score dashboard', async () => {
-    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => String(input) === '/api/account/session' ? json({ user }) : json({ projects: [project] })));
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      if (String(input) === '/api/account/session') return json({ user });
+      if (String(input) === '/api/github-app/connection') return json({ status: 'connected', connection: { githubLogin: 'source-owner' } });
+      return json({ projects: [project] });
+    }));
     render(<MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}><AccountProvider><Projects /></AccountProvider></MemoryRouter>);
     expect(await screen.findByRole('heading', { name: 'My Projects' })).toBeInTheDocument();
     expect(await screen.findByText('Csisz/shipseal-v2')).toBeInTheDocument();
     expect(screen.getByText('1 scan')).toBeInTheDocument();
     expect(screen.getByText('Latest completed')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Identity boundary' })).toHaveTextContent('Repository Owner');
+    expect(screen.getByRole('region', { name: 'Identity boundary' })).toHaveTextContent('@source-owner');
+    expect(screen.getByRole('region', { name: 'Identity boundary' })).toHaveTextContent(/does not change project ownership/i);
     expect(screen.queryByText(/readiness score/i)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Delete account' }));
     expect(screen.getByRole('button', { name: 'Delete my ShipSeal account' })).toBeInTheDocument();
