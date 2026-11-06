@@ -18,6 +18,12 @@ ShipSeal can be deployed as a React/Vite application on Vercel. Netlify/static-o
 6. Keep all provider and GitHub credentials server-side. Never use a `VITE_` prefix for private keys.
 7. Deploy.
 
+### Production and Preview domains
+
+`getshipseal.com` is a production custom domain. Vercel Preview deployments use their generated `*.vercel.app` deployment URLs by default and should not automatically reuse or replace the production domain. This separation is expected behavior, not a preview defect.
+
+If a stable preview hostname is needed, configure a dedicated custom domain such as `preview.getshipseal.com` or `beta.getshipseal.com` in Vercel and assign it only to the intended preview branch or environment. Register separate OAuth callback URLs and Preview-scoped environment variables for that hostname before enabling account or GitHub authentication there. Do not copy production OAuth credentials into Preview, and do not change the production domain assignment as part of preview setup.
+
 ## Netlify
 
 1. Import the repository into Netlify.

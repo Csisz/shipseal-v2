@@ -129,6 +129,25 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
     });
     return ids;
   }, [idleEvidenceEdgeIds, model.edges, model.nodes]);
+  const selectedParticleEdgeIds = useMemo(() => {
+    if (!primary) return new Set<string>();
+    const routeEdges = model.edges
+      .filter(edge => edge.selected && edge.kind !== 'selected-path' && edge.goalIds.includes(primary.goalId))
+      .sort((left, right) => left.id.localeCompare(right.id));
+    const grounding = routeEdges.find(edge => edge.kind === 'grounding');
+    const requirement = routeEdges.find(edge => edge.kind === 'requirement');
+    const expansionByDepth = new Map<number, string>();
+    routeEdges.forEach(edge => {
+      if (edge.kind !== 'expansion') return;
+      const depth = nodeById.get(edge.targetId)?.depth || 2;
+      if (!expansionByDepth.has(depth)) expansionByDepth.set(depth, edge.id);
+    });
+    return new Set([
+      grounding?.id,
+      requirement?.id,
+      ...[...expansionByDepth.entries()].sort(([left], [right]) => left - right).map(([, id]) => id),
+    ].filter((id): id is string => Boolean(id)));
+  }, [model.edges, nodeById, primary]);
   const idleNetworkActive = !primary && !activeId;
   const pinnedNeighborhoodBounds = useMemo(() => {
     if (!pinnedId) return undefined;
@@ -709,40 +728,57 @@ export function RepositoryFuturesNeuralCanvas({ repositoryName, overlay, entryMo
                       '--future-route-delay': `${routeResolutionDelay}ms`,
                     } as React.CSSProperties}
                   />
-                  {!reducedMotion && edge.selected && corridorLevel === 'primary' && edge.kind !== 'selected-path' && (
-                    <path
+                  {!reducedMotion && edge.selected && corridorLevel === 'primary' && selectedParticleEdgeIds.has(edge.id) && (
+                    <g
                       data-future-edge-id={edge.id}
                       data-future-edge={edge.kind}
-                      data-edge-layer="route-signal"
+                      data-edge-layer="route-particle"
                       data-route-signal="selected-primary"
+                      data-route-particle="selected"
                       data-corridor-level={corridorLevel}
-                      d={path}
-                      fill="none"
-                      stroke="hsl(var(--futures-selected))"
-                      strokeWidth="1.7"
-                      opacity="0.86"
-                      pathLength="1"
-                      strokeLinecap="round"
-                      className="future-canvas-edge-signal"
-                      style={{ '--future-signal-delay': `${routeResolutionDelay + 260}ms` } as React.CSSProperties}
-                    />
+                      opacity="0"
+                      className="future-canvas-route-particle"
+                    >
+                      <ellipse cx="-4.2" rx="5.2" ry="1.45" className="future-canvas-route-particle-trail" />
+                      <circle r="6.5" className="future-canvas-route-particle-glow" />
+                      <circle r="2.65" className="future-canvas-route-particle-core" />
+                      <animate attributeName="opacity" values="0;1" dur="1ms" begin={`${routeResolutionDelay + 260}ms`} fill="freeze" />
+                      <animateMotion path={path} dur="4.8s" begin={`${routeResolutionDelay + 260}ms`} repeatCount="indefinite" rotate="auto" />
+                    </g>
                   )}
                   {!reducedMotion && idleNetworkActive && idleEvidenceEdgeIds.has(edge.id) && (
-                    <path
+                    <g
                       data-future-edge-id={edge.id}
                       data-future-edge={edge.kind}
-                      data-edge-layer="idle-signal"
+                      data-edge-layer="route-particle"
                       data-route-signal="idle-evidence"
-                      d={path}
-                      fill="none"
-                      stroke="hsl(var(--futures-atmosphere))"
-                      strokeWidth="1.15"
-                      opacity="0.42"
-                      pathLength="1"
-                      strokeLinecap="round"
-                      className="future-canvas-edge-idle-signal"
-                      style={{ '--future-idle-delay': `${routeResolutionDelay + [...idleEvidenceEdgeIds].indexOf(edge.id) * 2600}ms` } as React.CSSProperties}
-                    />
+                      data-route-particle="idle"
+                      opacity="0"
+                      className="future-canvas-route-particle"
+                    >
+                      <ellipse cx="-2.8" rx="3.4" ry="0.9" className="future-canvas-route-particle-trail" />
+                      <circle r="4.5" className="future-canvas-route-particle-glow" />
+                      <circle r="1.8" className="future-canvas-route-particle-core" />
+                      <animate attributeName="opacity" values="0;1" dur="1ms" begin={`${routeResolutionDelay + [...idleEvidenceEdgeIds].indexOf(edge.id) * 2600}ms`} fill="freeze" />
+                      <animateMotion path={path} dur="11.5s" begin={`${routeResolutionDelay + [...idleEvidenceEdgeIds].indexOf(edge.id) * 2600}ms`} repeatCount="indefinite" rotate="auto" />
+                    </g>
+                  )}
+                  {!reducedMotion && hoverTraced && !(edge.selected && corridorLevel === 'primary') && (
+                    <g
+                      data-future-edge-id={edge.id}
+                      data-future-edge={edge.kind}
+                      data-edge-layer="route-particle"
+                      data-route-signal="hover-direct"
+                      data-route-particle="hover"
+                      opacity="0"
+                      className="future-canvas-route-particle"
+                    >
+                      <ellipse cx="-3.4" rx="4.2" ry="1.1" className="future-canvas-route-particle-trail" />
+                      <circle r="5.5" className="future-canvas-route-particle-glow" />
+                      <circle r="2.25" className="future-canvas-route-particle-core" />
+                      <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.72;1" dur="720ms" fill="freeze" />
+                      <animateMotion path={path} dur="720ms" repeatCount="1" rotate="auto" fill="freeze" />
+                    </g>
                   )}
                 </g>
               );

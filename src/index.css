@@ -509,10 +509,6 @@
   from { stroke-dashoffset: 1; opacity: 0.4; }
 }
 
-@keyframes future-route-signal {
-  to { stroke-dashoffset: -1; }
-}
-
 @keyframes future-content-disclose {
   from { opacity: 0; transform: scale(0.985); }
 }
@@ -554,20 +550,44 @@
   filter: drop-shadow(0 0 2.5px hsl(var(--futures-selected) / 0.22));
 }
 
-.future-canvas-edge-signal {
+.future-canvas-route-particle {
   pointer-events: none;
-  stroke-dasharray: 0.11 0.89;
-  stroke-dashoffset: 0;
-  filter: drop-shadow(0 0 3px hsl(var(--futures-selected) / 0.42));
-  animation: future-route-signal 4.8s linear var(--future-signal-delay, 0ms) infinite;
 }
 
-.future-canvas-edge-idle-signal {
-  pointer-events: none;
-  stroke-dasharray: 0.045 0.955;
-  stroke-dashoffset: 0;
-  filter: drop-shadow(0 0 2px hsl(var(--futures-atmosphere) / 0.26));
-  animation: future-route-signal 11.5s linear var(--future-idle-delay, 0ms) infinite;
+.future-canvas-route-particle-core {
+  paint-order: stroke;
+  stroke: hsl(var(--futures-field-bg) / 0.88);
+  stroke-width: 0.75px;
+}
+
+.future-canvas-route-particle[data-route-particle='selected'] .future-canvas-route-particle-core,
+.future-canvas-route-particle[data-route-particle='hover'] .future-canvas-route-particle-core {
+  fill: hsl(var(--primary-glow));
+  filter: drop-shadow(0 0 2.5px hsl(var(--futures-selected) / 0.88));
+}
+
+.future-canvas-route-particle[data-route-particle='selected'] .future-canvas-route-particle-glow,
+.future-canvas-route-particle[data-route-particle='hover'] .future-canvas-route-particle-glow {
+  fill: hsl(var(--futures-selected) / 0.3);
+  filter: drop-shadow(0 0 4px hsl(var(--futures-selected) / 0.52));
+}
+
+.future-canvas-route-particle[data-route-particle='selected'] .future-canvas-route-particle-trail,
+.future-canvas-route-particle[data-route-particle='hover'] .future-canvas-route-particle-trail {
+  fill: hsl(var(--futures-selected) / 0.34);
+}
+
+.future-canvas-route-particle[data-route-particle='idle'] .future-canvas-route-particle-core {
+  fill: hsl(var(--futures-atmosphere));
+  filter: drop-shadow(0 0 1.5px hsl(var(--futures-atmosphere) / 0.6));
+}
+
+.future-canvas-route-particle[data-route-particle='idle'] .future-canvas-route-particle-glow {
+  fill: hsl(var(--futures-atmosphere) / 0.18);
+}
+
+.future-canvas-route-particle[data-route-particle='idle'] .future-canvas-route-particle-trail {
+  fill: hsl(var(--futures-atmosphere) / 0.18);
 }
 
 .future-canvas-edge-semantic[data-motion-trace='hover-direct'],
@@ -990,13 +1010,16 @@
   .future-field-node[data-primary-alive]::before,
   .future-field-node[data-idle-alive]::before,
   .future-field-node[data-focus-motion],
-  .future-canvas-edge-signal,
-  .future-canvas-edge-idle-signal,
+  .future-canvas-route-particle,
   .future-canvas-edge-semantic[data-motion-trace],
   .future-canvas-edge-semantic[data-route-resolution],
   [data-node-disclosure-content],
   .future-neural-inspector {
     animation: none !important;
+  }
+
+  .future-canvas-route-particle {
+    display: none !important;
   }
 
   .repository-universe-intelligence-reveal {

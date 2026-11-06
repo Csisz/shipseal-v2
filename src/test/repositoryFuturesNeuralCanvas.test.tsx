@@ -179,8 +179,16 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(container.querySelectorAll('[data-selected-route="true"]').length).toBeGreaterThan(0);
     const routeSignals = [...container.querySelectorAll('[data-route-signal="selected-primary"]')];
     expect(routeSignals.length).toBeGreaterThan(0);
+    expect(routeSignals.length).toBeLessThanOrEqual(4);
     expect(routeSignals.every(path => path.getAttribute('data-corridor-level') === 'primary')).toBe(true);
     expect(routeSignals.every(path => path.getAttribute('data-future-edge') !== 'selected-path')).toBe(true);
+    expect(routeSignals.every(signal => signal.getAttribute('data-route-particle') === 'selected')).toBe(true);
+    expect(routeSignals.every(signal => signal.querySelector('.future-canvas-route-particle-core'))).toBe(true);
+    expect(routeSignals.every(signal => signal.querySelector('animateMotion'))).toBe(true);
+    const signalKinds = new Set(routeSignals.map(signal => signal.getAttribute('data-future-edge')));
+    expect(signalKinds).toContain('grounding');
+    expect(signalKinds).toContain('requirement');
+    if (container.querySelector('[data-future-edge="expansion"][data-selected-route="true"]')) expect(signalKinds).toContain('expansion');
     expect(goal).toHaveAttribute('data-route-connected', 'primary');
 
     fireEvent.click(goal);
@@ -208,6 +216,8 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
 
     expect(stage).toHaveAttribute('data-network-motion', 'idle-evidence');
     expect(container.querySelectorAll('[data-route-signal="idle-evidence"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-route-signal="idle-evidence"]').length).toBeLessThanOrEqual(2);
+    expect(container.querySelector('[data-route-signal="idle-evidence"] animateMotion')).toHaveAttribute('dur', '11.5s');
     expect(candidateNode).toHaveAttribute('data-idle-alive', 'evidence-anchor');
 
     fireEvent.mouseEnter(candidateNode);
@@ -215,6 +225,8 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(container.querySelector('[data-route-signal="idle-evidence"]')).not.toBeInTheDocument();
     expect(candidateNode).toHaveAttribute('data-hover-connected', 'direct');
     expect(container.querySelectorAll('[data-hover-trace="real-relationship"]').length).toBeGreaterThan(0);
+    expect(container.querySelector('[data-route-signal="hover-direct"]')).toHaveAttribute('data-route-particle', 'hover');
+    expect(container.querySelector('[data-route-signal="hover-direct"] animateMotion')).toHaveAttribute('repeatCount', '1');
   });
 
   it('keeps camera controls above an open responsive inspector drawer', () => {
@@ -555,7 +567,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(later).toHaveAttribute('data-label-detail', 'compact');
   });
 
-  it('transitions selected corridors on stable real edge elements without replaying path animation', () => {
+  it('transitions selected corridors on stable real edges with native moving-point motion', () => {
     const base = overlay();
     const { container, rerender } = render(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={base} />);
     const edge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:future"]');
@@ -564,10 +576,14 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(edge).toHaveAttribute('data-corridor-transition', 'semantic-emphasis');
     expect(edge).toHaveAttribute('data-route-resolution', 'primary');
     expect((edge as SVGPathElement).style.getPropertyValue('--future-route-delay')).toMatch(/ms$/);
-    const signal = container.querySelector('[data-edge-layer="route-signal"][data-future-edge-id="grounding:goal:future"]');
+    const signal = container.querySelector('[data-edge-layer="route-particle"][data-route-signal="selected-primary"][data-future-edge-id="grounding:goal:future"]');
     expect(signal).toHaveAttribute('data-route-signal', 'selected-primary');
-    expect((signal as SVGPathElement).style.getPropertyValue('--future-signal-delay')).toMatch(/ms$/);
-    expect(container.querySelector('animate')).not.toBeInTheDocument();
+    expect(signal).toHaveAttribute('data-route-particle', 'selected');
+    expect(signal?.querySelector('.future-canvas-route-particle-glow')).toBeInTheDocument();
+    expect(signal?.querySelector('.future-canvas-route-particle-trail')).toBeInTheDocument();
+    expect(signal?.querySelector('animateMotion')).toHaveAttribute('dur', '4.8s');
+    expect(signal?.querySelector('animateMotion')).toHaveAttribute('repeatCount', 'indefinite');
+    expect(signal?.querySelector('animateMotion')).toHaveAttribute('rotate', 'auto');
 
     rerender(<RepositoryFuturesNeuralCanvas repositoryName="shipseal" overlay={overlay({
       candidates: base.candidates.map(candidate => candidate.goalId === 'goal:future' ? { ...candidate, role: 'candidate' } : candidate),
@@ -576,7 +592,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     const updatedEdge = container.querySelector('[data-edge-layer="semantic"][data-future-edge-id="grounding:goal:future"]');
     expect(updatedEdge).toBe(edge);
     expect(updatedEdge).not.toHaveAttribute('data-selected-route');
-    expect(container.querySelector('[data-edge-layer="route-signal"][data-future-edge-id="grounding:goal:future"]')).not.toBeInTheDocument();
+    expect(container.querySelector('[data-route-signal="selected-primary"][data-future-edge-id="grounding:goal:future"]')).not.toBeInTheDocument();
   });
 
   it('keeps selected supports and a focused minor node identifiable at overview zoom', () => {
