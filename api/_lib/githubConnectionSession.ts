@@ -214,8 +214,11 @@ export function clearGitHubConnectionSession(
   res: ServerResponse,
   env: NodeJS.ProcessEnv = process.env,
 ) {
-  appendCookie(res, serializeCookie(req, cookieNames(req, env).connection, '', 0, env));
-  appendCookie(res, serializeCookie(req, cookieNames(req, env).userToken, '', 0, env));
+  const names = cookieNames(req, env);
+  appendCookie(res, serializeCookie(req, names.connection, '', 0, env));
+  appendCookie(res, serializeCookie(req, names.userToken, '', 0, env));
+  appendCookie(res, serializeCookie(req, names.oauthState, '', 0, env));
+  appendCookie(res, serializeCookie(req, names.setupState, '', 0, env));
 }
 
 export function writeGitHubConnectionSession(

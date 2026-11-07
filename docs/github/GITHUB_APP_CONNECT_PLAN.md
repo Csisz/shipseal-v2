@@ -39,11 +39,11 @@ Minimum planned permissions:
 - Contents: read/write
 - Pull requests: read/write
 
-Optional permission:
+Conditional permission used by the current reviewed PR workflow:
 
-- Workflows: read/write, only if ShipSeal writes `.github/workflows/ci.yml`
+- Workflows: read/write, required only when a user explicitly enables the disabled-by-default option to write `.github/workflows/ci.yml`
 
-Workflow writes should stay visibly warned in the UI because CI workflow files are sensitive repository automation.
+Workflow writes stay visibly warned and disabled by default because CI workflow files are sensitive repository automation. If that active-workflow option is removed, remove Workflows permission from the GitHub App as well; the default documentation-only workflow example does not require it.
 
 ## Planned Flow
 
@@ -121,7 +121,7 @@ Use GitHub Developer settings to create a demo app:
    - Metadata: read
    - Contents: read/write
    - Pull requests: read/write
-   - Workflows: read/write, optional and only needed if ShipSeal writes CI workflow files
+   - Workflows: read/write, only while the explicit active-workflow PR option remains supported
 7. Install only on selected repositories.
 8. Copy the exact app slug into server-side `GITHUB_APP_SLUG`.
 9. Optionally set server-side `GITHUB_APP_INSTALL_URL` to the canonical `/apps/{slug}/installations/new` URL.

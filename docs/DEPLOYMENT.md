@@ -24,6 +24,14 @@ ShipSeal can be deployed as a React/Vite application on Vercel. Netlify/static-o
 
 If a stable preview hostname is needed, configure a dedicated custom domain such as `preview.getshipseal.com` or `beta.getshipseal.com` in Vercel and assign it only to the intended preview branch or environment. Register separate OAuth callback URLs and Preview-scoped environment variables for that hostname before enabling account or GitHub authentication there. Do not copy production OAuth credentials into Preview, and do not change the production domain assignment as part of preview setup.
 
+### Production and Preview environment isolation
+
+Scope the following values to **Production only** in Vercel: the production `DATABASE_URL`; `SHIPSEAL_APP_ORIGIN` and `SHIPSEAL_ACCOUNT_GITHUB_*`; Stripe keys, webhook secret and price ids; production GitHub App credentials; production AI-provider keys; and `GITHUB_CONNECTION_SESSION_SECRET`. Remove Preview scope from any production value instead of relying on the generated Preview hostname to provide isolation.
+
+The safest default is to leave account sign-in, GitHub mutation, billing and paid AI disabled in Preview by omitting their server credentials. If those flows must be tested in Preview, use a dedicated Preview domain, a separate database, separate account OAuth and GitHub App registrations with Preview-only callbacks, separate Stripe test-mode credentials, a separate provider project/key with bounded limits, and a different connection-session secret. Preview must never read or mutate production accounts, projects, credits, subscriptions or AI-operation reservations.
+
+After changing scopes, redeploy both environments and verify the Production and Preview environment inventories by name and scope. Do not print or copy secret values into tickets or logs. Existing deployments retain their prior environment snapshot until redeployed.
+
 ## Netlify
 
 1. Import the repository into Netlify.
@@ -46,9 +54,11 @@ Omega 18.1 uses a dedicated GitHub OAuth App for identity and PostgreSQL for pri
 
 Sessions use opaque HTTP-only cookies; only token hashes are stored. Projects are owner-scoped and private by default. Saved snapshots contain derived validated results and safe metadata, not ZIP archives, raw provider bodies, provider keys, GitHub tokens, or environment values. Managed PostgreSQL backup retention can delay physical removal from old encrypted backups after live deletion; document the chosen provider's actual retention before launch. Full setup and migration guidance is in [Account and Project Persistence Architecture](implementation/ACCOUNT_PERSISTENCE_ARCHITECTURE.md).
 
+Set `GITHUB_CONNECTION_SESSION_SECRET` to an independent cryptographically random value of at least 32 bytes in Production. Generate it locally with a trusted password manager or `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"`, then enter the output directly in Vercel without logging it. It signs GitHub connection and pending-token cookies and must not be reused as an OAuth client secret. Rotating it immediately invalidates existing GitHub connection, setup-state and pending-token cookies, so schedule rotation as a reconnect event, update Production, redeploy, and tell active users to reconnect GitHub. Do not keep the old value in Preview as a compatibility key.
+
 ## Optional Deep-Intelligence Provider
 
-Deterministic Repository Intelligence is enabled without configuration and remains the fallback. To test the optional server provider under `vercel dev`, configure server-side values from `.env.example`: enable the provider, choose `openai-compatible`, set a model and API key, and optionally set an HTTPS base URL, bounded timeout/output/request/response limits and a non-secret environment label. Preview and production deployments use the same variables in the hosting environment; tests use mocked transport and deterministic-only development should leave the feature disabled.
+Deterministic Repository Intelligence is enabled without configuration and remains the fallback. To test the optional server provider under `vercel dev`, configure server-side values from `.env.example`: enable the provider, choose `openai-compatible`, set a model and API key, and optionally set an HTTPS base URL, bounded timeout/output/request/response limits and a non-secret environment label. Preview and Production must use separately scoped provider credentials; tests use mocked transport and deterministic-only development should leave the feature disabled.
 
 The browser never receives the provider key or server adapter. `/api/repository-intelligence` accepts only the already bounded and redacted internal request. Provider failures return safe categories and leave deterministic artifacts ready for review. Do not configure the key as `VITE_*` or place it in frontend build settings.
 

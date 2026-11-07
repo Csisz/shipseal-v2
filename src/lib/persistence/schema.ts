@@ -254,7 +254,7 @@ export const saveProjectRequestSchema = z.object({
     verificationRelationship: verificationRelationshipInputSchema.optional(),
   }).strict(),
 }).strict().superRefine((value, context) => {
-  if (JSON.stringify(value).length > 5_000_000) context.addIssue({ code: z.ZodIssueCode.too_big, maximum: 5_000_000, inclusive: true, type: 'string', message: 'Persistence payload is too large.' });
+  if (JSON.stringify(value).length > 5_000_000) context.addIssue({ code: 'too_big', maximum: 5_000_000, inclusive: true, origin: 'string', message: 'Persistence payload is too large.' });
 });
 
 export type PersistedUser = z.infer<typeof persistedUserSchema>;

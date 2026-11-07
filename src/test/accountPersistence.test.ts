@@ -4,10 +4,17 @@ import sessionHandler from '../../api/_routes/account/session';
 import projectsHandler from '../../api/_routes/projects/index';
 import projectHandler from '../../api/_routes/projects/[projectId]';
 import scanHandler from '../../api/_routes/scans/[scanId]';
+import deleteAccountHandler from '../../api/_routes/account/delete';
 import logoutHandler from '../../api/_routes/account/logout';
 import { InMemoryAccountPersistenceStore } from '../../api/_lib/inMemoryAccountPersistence';
-import { createAccountSession, hashSessionToken } from '../../api/_lib/accountSession';
+import {
+  ACCOUNT_OAUTH_STATE_COOKIE,
+  ACCOUNT_RETURN_COOKIE,
+  createAccountSession,
+  hashSessionToken,
+} from '../../api/_lib/accountSession';
 import { serializeSafeDatabaseJson, setAccountPersistenceStoreForTests } from '../../api/_lib/accountPersistence';
+import { setBillingPersistenceStoreForTests } from '../../api/_lib/billingPersistence';
 import { buildSampleReport } from '@/lib/readiness';
 import { buildSaveProjectRequest } from '@/lib/persistence/buildSnapshot';
 import { saveProjectRequestSchema, scanSnapshotSchema } from '@/lib/persistence';
@@ -40,7 +47,10 @@ function saveFixture(idempotencyKey = `save_${'a'.repeat(32)}`) {
   return buildSaveProjectRequest({ report: buildSampleReport(), idempotencyKey });
 }
 
-afterEach(() => setAccountPersistenceStoreForTests(null));
+afterEach(() => {
+  setAccountPersistenceStoreForTests(null);
+  setBillingPersistenceStoreForTests(null);
+});
 
 describe('Omega 18.1 account sessions', () => {
   it('returns anonymous state without a cookie and an authenticated minimized user with a valid server session', async () => {
@@ -82,18 +92,66 @@ describe('Omega 18.1 account sessions', () => {
     expect(expired.json()).toMatchObject({ error: { code: 'authentication_required' } });
   });
 
-  it('logout revokes the server session and expires the browser cookie', async () => {
+  it('logout revokes the server session and expires all account and GitHub flow cookies', async () => {
     const store = new InMemoryAccountPersistenceStore();
     setAccountPersistenceStoreForTests(store);
     const user = await setupUser(store, 'logout');
     const res = response();
-    await logoutHandler(request(user.cookie, 'POST', {}) as never, res as never);
+    const cookies = [
+      user.cookie,
+      `${ACCOUNT_OAUTH_STATE_COOKIE}=pending-account-state`,
+      `${ACCOUNT_RETURN_COOKIE}=%2Fprojects`,
+      'shipseal_github_connection=connected',
+      'shipseal_github_user_token=pending-token',
+      'shipseal_github_oauth_state=pending-oauth-state',
+      'shipseal_github_setup_state=pending-setup-state',
+    ].join('; ');
+    await logoutHandler(request(cookies, 'POST', {}) as never, res as never);
     expect(res.statusCode).toBe(200);
     expect(await store.getSession(hashSessionToken(user.token), new Date().toISOString())).toBeNull();
     const clearedCookies = (res.getHeader('Set-Cookie') as string[]).join(';');
     expect(clearedCookies).toContain('Max-Age=0');
+    expect(clearedCookies).toContain(`${ACCOUNT_OAUTH_STATE_COOKIE}=`);
+    expect(clearedCookies).toContain(`${ACCOUNT_RETURN_COOKIE}=`);
     expect(clearedCookies).toContain('shipseal_github_connection=');
     expect(clearedCookies).toContain('shipseal_github_user_token=');
+    expect(clearedCookies).toContain('shipseal_github_oauth_state=');
+    expect(clearedCookies).toContain('shipseal_github_setup_state=');
+  });
+
+  it('account deletion expires all pending OAuth and GitHub setup state', async () => {
+    const store = new InMemoryAccountPersistenceStore();
+    setAccountPersistenceStoreForTests(store);
+    const user = await setupUser(store, 'delete-cookie-state');
+    const deleteBillingProfile = vi.fn(async () => undefined);
+    setBillingPersistenceStoreForTests({
+      getAccountBillingSummary: vi.fn(async () => ({
+        customerPortalAvailable: false,
+        cancelAtPeriodEnd: false,
+        stripeStatus: null,
+        currentPeriodEnd: null,
+      })),
+      deleteBillingProfile,
+    } as never);
+    const cookies = [
+      user.cookie,
+      `${ACCOUNT_OAUTH_STATE_COOKIE}=pending-account-state`,
+      `${ACCOUNT_RETURN_COOKIE}=%2Fprojects`,
+      'shipseal_github_oauth_state=pending-oauth-state',
+      'shipseal_github_setup_state=pending-setup-state',
+    ].join('; ');
+    const res = response();
+
+    await deleteAccountHandler(request(cookies, 'POST', { confirmation: 'DELETE MY SHIPSEAL ACCOUNT' }) as never, res as never);
+
+    expect(res.statusCode).toBe(200);
+    expect(deleteBillingProfile).toHaveBeenCalledWith(user.user.id);
+    const clearedCookies = res.getHeader('Set-Cookie') as string[];
+    expect(clearedCookies).toHaveLength(7);
+    expect(clearedCookies.every(value => value.includes('Max-Age=0'))).toBe(true);
+    expect(clearedCookies.some(value => value.startsWith(`${ACCOUNT_OAUTH_STATE_COOKIE}=`))).toBe(true);
+    expect(clearedCookies.some(value => value.startsWith('shipseal_github_oauth_state='))).toBe(true);
+    expect(clearedCookies.some(value => value.startsWith('shipseal_github_setup_state='))).toBe(true);
   });
 });
 

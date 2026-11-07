@@ -2,7 +2,7 @@ import type { ServerResponse } from 'node:http';
 import { z } from 'zod';
 import { getAccountPersistenceStore } from '../../_lib/accountPersistence.js';
 import { AccountRequestError, handleAccountRouteError, readJsonBody, requireAccount, sendAccountJson, type VercelAccountRequest } from '../../_lib/accountHttp.js';
-import { revokeAccountSession } from '../../_lib/accountSession.js';
+import { clearAccountOAuthState, revokeAccountSession } from '../../_lib/accountSession.js';
 import { getBillingPersistenceStore } from '../../_lib/billingPersistence.js';
 import { clearGitHubConnectionSession } from '../../_lib/githubConnectionSession.js';
 
@@ -22,6 +22,7 @@ export default async function handler(req: VercelAccountRequest, res: ServerResp
     await billingStore.deleteBillingProfile(session.user.id);
     await store.deleteAccount(session.user.id);
     await revokeAccountSession(req, res, store);
+    clearAccountOAuthState(req, res);
     clearGitHubConnectionSession(req, res);
     sendAccountJson(res, 200, { ok: true });
   } catch (error) { handleAccountRouteError(res, error); }

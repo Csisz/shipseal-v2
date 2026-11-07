@@ -50,12 +50,17 @@ export function createOAuthState(res: ServerResponse, req: IncomingMessage, retu
 export function consumeOAuthState(req: IncomingMessage, res: ServerResponse, receivedState: string) {
   const stored = cookies(req).get(ACCOUNT_OAUTH_STATE_COOKIE) || '';
   const valid = stored.length === receivedState.length && stored.length >= 20 && timingSafeEqual(Buffer.from(stored), Buffer.from(receivedState));
+  const returnTo = safeReturnPath(cookies(req).get(ACCOUNT_RETURN_COOKIE) || '/');
+  clearAccountOAuthState(req, res);
+  return { valid, returnTo };
+}
+
+export function clearAccountOAuthState(req: IncomingMessage, res: ServerResponse) {
   const production = isProductionRequest(req);
   appendSetCookies(res, [
     cookie(ACCOUNT_OAUTH_STATE_COOKIE, '', { maxAge: 0, production }),
     cookie(ACCOUNT_RETURN_COOKIE, '', { maxAge: 0, production }),
   ]);
-  return { valid, returnTo: safeReturnPath(cookies(req).get(ACCOUNT_RETURN_COOKIE) || '/') };
 }
 
 export function safeReturnPath(value: string) {
