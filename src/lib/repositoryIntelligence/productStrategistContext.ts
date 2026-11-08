@@ -40,6 +40,7 @@ const USER_SURFACE_RE = /(^|\/)(?:pages?|routes?|screens?|views?|features?|compo
 const DATA_SURFACE_RE = /(^|\/)(?:schema|schemas|models?|entities|database|db|storage|persistence|auth|accounts?)(?:\/|[._-])/i;
 const PRODUCT_FLOW_RE = /(?:generate|activity|worksheet|print|export|share|progress|history|lesson|learning|onboarding|checkout|upload|scan)/i;
 const TECHNICAL_NOISE_RE = /(^|\/)(?:\.github|\.circleci|scripts?|tooling|config|configs|infra|deployment|devops|migrations?)(?:\/|$)|(?:^|\/)(?:eslint|prettier|vite|vitest|jest|playwright|tsconfig|tailwind|postcss)\b/i;
+const MINIMUM_PRODUCT_ENTRY_POINT_CONFIDENCE = 0.85;
 
 export function prepareRepositoryProductStrategistContext(input: {
   scanInput: RepoScanInput;
@@ -54,11 +55,12 @@ export function prepareRepositoryProductStrategistContext(input: {
   };
   ranked.filter(file => /^readme(?:\.md)?$/i.test(file.path) || PRODUCT_DOC_RE.test(file.path)).slice(0, 2).forEach(add);
   const responsibilityGroups: RepositoryResponsibility[][] = [
-    ['route-or-page', 'layout'], ['ui-component'], ['api-route-or-request-handler'],
+    ['application-entry-point'], ['route-or-page', 'layout'], ['ui-component'], ['api-route-or-request-handler'],
     ['schema-or-model', 'repository-or-data-access-layer'], ['authentication-or-authorization-area'],
     ['state-management'], ['service', 'integration'], ['test-or-fixture'],
   ];
-  responsibilityGroups.forEach(group => add(ranked.find(file => group.includes(file.primaryResponsibility))));
+  responsibilityGroups.forEach(group => add(ranked.find(file => group.includes(file.primaryResponsibility)
+    && (file.primaryResponsibility !== 'application-entry-point' || isEligibleProductEntryPoint(file, input.scanInput)))));
   ranked.filter(file => productContextScore(file) >= 2_000).forEach(file => {
     if (priorityFiles.length < PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumSelectedFiles) add(file);
   });
@@ -156,7 +158,7 @@ function summarizeProductContextItem(item: RepositoryDeepIntelligenceRequest['co
     outline?.namedExports.length ? `Public feature surface: ${outline.namedExports.slice(0, 16).join(', ')}` : '',
     item.relatedSelectedFiles.length ? `Related selected product files: ${item.relatedSelectedFiles.slice(0, 12).join(', ')}` : '',
   ].filter(Boolean).join('\n');
-  const productFacing = ['route-or-page', 'layout', 'ui-component', 'api-route-or-request-handler', 'authentication-or-authorization-area', 'state-management', 'schema-or-model', 'repository-or-data-access-layer', 'service']
+  const productFacing = ['application-entry-point', 'route-or-page', 'layout', 'ui-component', 'api-route-or-request-handler', 'authentication-or-authorization-area', 'state-management', 'schema-or-model', 'repository-or-data-access-layer', 'service']
     .includes(item.responsibility.primary);
   const excerpt = productFacing && item.content ? item.content.slice(0, 1_800) : '';
   const content = `${summary}${excerpt ? `\n\nBounded product-relevant source excerpt:\n${excerpt}` : ''}`.slice(0, PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumCharactersPerFile);
@@ -173,6 +175,16 @@ function summarizeProductContextItem(item: RepositoryDeepIntelligenceRequest['co
     },
     limitations: sortedUnique([...item.limitations, ...(omitted > 0 ? ['Source was represented by a deterministic product summary and bounded excerpt.'] : [])]),
   };
+}
+
+function isEligibleProductEntryPoint(
+  file: RepositoryIntelligenceEvidenceModel['files'][number],
+  scanInput: RepoScanInput,
+) {
+  const content = scanInput.textContents[file.path];
+  return file.confidence >= MINIMUM_PRODUCT_ENTRY_POINT_CONFIDENCE
+    && typeof content === 'string'
+    && content.trim().length > 0;
 }
 
 function sortedUnique(values: string[]) {

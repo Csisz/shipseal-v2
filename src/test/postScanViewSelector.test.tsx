@@ -382,6 +382,40 @@ describe('premium post-scan view selector', () => {
     expect(start).toHaveBeenCalledTimes(1);
   });
 
+  it('explains deterministic evidence insufficiency without offering an unchanged retry', () => {
+    const reset = vi.fn();
+    const retry = vi.fn(async () => undefined);
+    render(<ResultWorkspace
+      report={reportWithIdentity('2026-08-11T10:01:42.750Z')}
+      history={[]}
+      onReset={reset}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{
+        state: 'fallback', deepState: 'rejected', category: 'evidence_validation_failed', retryable: false,
+        message: 'ShipSeal found your repository, but could not select enough product evidence to generate reliable Futures.',
+        diagnostics: {
+          costEstimate: 'unavailable',
+          validationCategory: 'insufficient-product-evidence',
+          operationalFailureCategory: 'evidence_validation_failed',
+          failureBoundary: 'request-preflight',
+          candidateFileCount: 0,
+          selectedEvidenceReferenceCount: 0,
+        },
+      }}
+      retryRepositoryProductIntelligence={retry}
+    />);
+
+    const recovery = screen.getByTestId('futures-evidence-recovery');
+    expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('could not select enough product evidence');
+    expect(recovery).toHaveTextContent('No Deep Analysis credit was used.');
+    expect(recovery).toHaveTextContent('recognized readable application entry point');
+    expect(screen.queryByRole('button', { name: 'Retry Future analysis' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Repository Futures unavailable' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Scan updated repository' }));
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(retry).not.toHaveBeenCalled();
+  });
+
   it('does not claim a consumed legacy analysis was returned when a new explicit start is required', () => {
     render(<ResultWorkspace
       report={reportWithIdentity('2026-08-11T10:01:43.000Z')}

@@ -74,6 +74,18 @@ function developerToolFixture(): RepoScanInput {
   return { repoName: 'traceforge-fixture', files: Object.entries(textContents).map(([path, content]) => ({ path, size: content.length })), textContents };
 }
 
+function smallRuntimeFixture(path: string, content: string, extra: Record<string, string> = {}): RepoScanInput {
+  const textContents = {
+    [path]: content,
+    ...extra,
+  };
+  return {
+    repoName: `small-runtime-${path.replace(/[^a-z0-9]+/gi, '-')}`,
+    files: Object.entries(textContents).map(([filePath, fileContent]) => ({ path: filePath, size: fileContent.length })),
+    textContents,
+  };
+}
+
 function preparedProductStrategistFixture(scanInput: RepoScanInput) {
   const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);
   const contextBundle = prepareRepositoryProductStrategistContext({ scanInput, evidenceResult });
@@ -97,6 +109,69 @@ function productProjection(scanInput: RepoScanInput) {
 }
 
 describe('focused Product Strategist context', () => {
+  it('selects bounded evidence from a three-file Streamlit application entry point', () => {
+    const scanInput = smallRuntimeFixture(
+      'app.py',
+      `${'import streamlit as st\n'}${'st.title("Image prompt studio")\n'}${'def generate_prompt(image):\n    return "Describe the uploaded image"\n'}${'st.file_uploader("Upload an image")\n'.repeat(120)}`,
+      {
+        'requirements.txt': 'streamlit==1.40.0\nPillow==10.4.0',
+        '.gitignore': '.venv\n__pycache__\n.env',
+      },
+    );
+    const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);
+    const context = prepareRepositoryProductStrategistContext({ scanInput, evidenceResult });
+    const request = buildRepositoryProductStrategistRequest({ contextBundle: context, evidenceResult });
+    const app = request.contextItems.find(item => item.path === 'app.py');
+
+    expect(evidenceResult.files.find(item => item.path === 'app.py')).toMatchObject({
+      primaryResponsibility: 'application-entry-point',
+      confidence: 0.85,
+    });
+    expect(context.items.map(item => item.path)).toContain('app.py');
+    expect(app?.content).toContain('Bounded product-relevant source excerpt');
+    expect(app?.content).toContain('import streamlit as st');
+    expect(app?.includedCharacters).toBeLessThanOrEqual(PRODUCT_STRATEGIST_CONTEXT_POLICY.maximumCharactersPerFile);
+    expect(app?.truncation.truncated).toBe(true);
+    expect(request.evidenceReferences.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    ['Python', 'app.py', 'from flask import Flask\napp = Flask(__name__)\n'],
+    ['JavaScript', 'src/main.js', 'export function main() { document.body.textContent = "Product"; }\n'],
+    ['Go', 'cmd/server/main.go', 'package main\nfunc main() {}\n'],
+  ])('includes a recognized readable %s runtime entry point without lowering the global score threshold', (_stack, path, content) => {
+    const scanInput = smallRuntimeFixture(path, content);
+    const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);
+    const context = prepareRepositoryProductStrategistContext({ scanInput, evidenceResult });
+
+    expect(evidenceResult.files.find(item => item.path === path)).toMatchObject({
+      primaryResponsibility: 'application-entry-point',
+      confidence: expect.any(Number),
+    });
+    expect(context.items.map(item => item.path)).toContain(path);
+  });
+
+  it('does not priority-select an unreadable entry point or bypass sensitive and generated-file exclusions', () => {
+    const scanInput: RepoScanInput = {
+      repoName: 'entry-point-safety-fixture',
+      files: [
+        { path: 'app.py', size: 200 },
+        { path: '.env', size: 40, ignored: true, ignoredReason: 'unsafe-path' },
+        { path: 'vendor/main.js', size: 80, ignored: true, ignoredReason: 'generated-vendor' },
+      ],
+      textContents: {
+        '.env': 'API_KEY=never-transmit-value',
+        'vendor/main.js': 'export function main() { return "vendor"; }',
+      },
+    };
+    const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);
+    const context = prepareRepositoryProductStrategistContext({ scanInput, evidenceResult });
+
+    expect(context.items).toHaveLength(0);
+    expect(JSON.stringify(context)).not.toContain('never-transmit-value');
+    expect(JSON.stringify(context)).not.toContain('return \\"vendor\\"');
+  });
+
   it('ranks product documentation and user-facing workflows ahead of technical noise deterministically', () => {
     const scanInput = educationalProductFixture();
     const evidenceResult = buildRepositoryIntelligenceEvidence(scanInput);

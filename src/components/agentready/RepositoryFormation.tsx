@@ -20,9 +20,11 @@ interface RepositoryFormationProps {
   onCancel?: () => void;
   failure?: {
     message: string;
+    secondaryMessage?: string;
     reference?: string | null;
     onRetry?: () => void;
     onReturn?: () => void;
+    returnLabel?: string;
   };
 }
 
@@ -83,6 +85,7 @@ export function RepositoryFormation({
         <p className="mt-2 max-w-lg text-sm leading-relaxed text-muted-foreground sm:text-base">
           {failure?.message || action}
         </p>
+        {failure?.secondaryMessage && <p className="mt-2 max-w-lg text-xs leading-relaxed text-muted-foreground">{failure.secondaryMessage}</p>}
         {failure?.reference && <p className="mt-2 font-mono text-xs text-muted-foreground">Reference: {failure.reference}</p>}
 
         <div className="repository-formation-bloom relative mt-6 size-44 sm:mt-7 sm:size-48" aria-hidden="true">
@@ -140,7 +143,7 @@ export function RepositoryFormation({
         {failure && (
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             {failure.onRetry && <Button type="button" onClick={failure.onRetry}>{/resume/i.test(failure.message) ? 'Resume Future analysis' : failure.message.includes('pathways') ? 'Retry incomplete pathways' : 'Retry Future analysis'}</Button>}
-            {failure.onReturn && <Button type="button" variant="outline" onClick={failure.onReturn}>Choose another source</Button>}
+            {failure.onReturn && <Button type="button" variant="outline" onClick={failure.onReturn}>{failure.returnLabel || 'Choose another source'}</Button>}
           </div>
         )}
         {safeProgress != null && (

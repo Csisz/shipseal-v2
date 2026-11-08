@@ -331,6 +331,7 @@ export function ResultWorkspace({
         futuresStatus={repositoryProductIntelligenceStatus}
         futureAvailability={futureAvailability}
         onRetryFutures={retryRepositoryProductIntelligence && (futuresCanRetry || futuresCanStart) ? handleFutureAction : undefined}
+        onRecoverEvidence={onReset}
         persistenceControl={persistenceControl}
         onSelect={handleEntryViewSelect}
       />

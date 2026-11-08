@@ -46,6 +46,7 @@ import type { RepoScanInput } from '@/lib/types';
 import { RepositoryIntelligenceEnhancementSingleFlight } from '@/lib/repositoryIntelligence/deepIntelligenceClient';
 import { buildRepositoryProductExpansionStages, buildRepositoryProductRootStage } from '@/lib/repositoryIntelligence/stagedProductIntelligence';
 import type { RepositoryProductProviderStage } from '@/lib/repositoryIntelligence/productionProviderContract';
+import type { AiUsageAuthorizationService } from '../../api/_lib/aiUsage';
 
 function fixtureRequest(
   requestedCapabilities: Parameters<typeof buildRepositoryDeepIntelligenceRequest>[0]['requestedCapabilities'] = ['architecture-analysis', 'structured-output'],
@@ -911,17 +912,38 @@ describe('production Repository Intelligence provider', () => {
     const { fingerprint: _fingerprint, ...withoutFingerprint } = changed;
     const request = { ...withoutFingerprint, fingerprint: stableContextFingerprint(withoutFingerprint) };
     const fetcher = vi.fn();
+    const logger = vi.fn();
+    const authorize = vi.fn();
     const result = await prepareProductionRepositoryIntelligence({ version: REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION, request }, {
       env: enabledEnv,
       fetcher: fetcher as unknown as typeof fetch,
-      logger: vi.fn(),
+      logger,
+      aiAuthorization: {
+        userId: 'user-insufficient-evidence',
+        service: { authorize } as unknown as AiUsageAuthorizationService,
+      },
     });
     expect(fetcher).not.toHaveBeenCalled();
+    expect(authorize).not.toHaveBeenCalled();
+    expect(logger).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'repository_intelligence_provider',
+      outcome: 'failure',
+      statusCategory: 'evidence_validation_failed',
+      validationCategory: 'insufficient-product-evidence',
+      operationalFailureCategory: 'evidence_validation_failed',
+      failureBoundary: 'request-preflight',
+      candidateFileCount: request.contextItems.length,
+      selectedEvidenceReferenceCount: 0,
+    }));
     expect(result.body).toMatchObject({
       state: 'fallback',
       category: 'evidence_validation_failed',
       diagnostics: {
         validationCategory: 'insufficient-product-evidence',
+        operationalFailureCategory: 'evidence_validation_failed',
+        failureBoundary: 'request-preflight',
+        candidateFileCount: request.contextItems.length,
+        selectedEvidenceReferenceCount: 0,
         productUnderstandingAccepted: false,
         productUnderstandingRejectionReason: 'missing-understanding-evidence',
         parsedProductOpportunityCount: 0,

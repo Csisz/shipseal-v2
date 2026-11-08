@@ -821,10 +821,14 @@ export function useRepoScan(repositoryIntelligenceVerificationBaseline?: Reposit
           && response.category !== 'allowance_exhausted'
           && response.category !== 'upgrade_required'
           && response.category !== 'entitlement_inactive';
+        const insufficientProductEvidence = response.category === 'evidence_validation_failed'
+          && settledDiagnostics?.validationCategory === 'insufficient-product-evidence';
         const fallbackStatus: RepositoryIntelligenceProviderStatus = {
           state: 'fallback',
           deepState: response.deepState,
-          message: terminalWithoutCharge
+          message: insufficientProductEvidence
+            ? repositoryFutureFailureMessage(response.category, settledDiagnostics)
+            : terminalWithoutCharge
             ? 'Repository Futures could not be completed. Your Deep Analysis allowance was not used.'
             : response.category === 'request_timeout'
             ? 'ShipSeal can safely resume this Future analysis. Completed stages remain saved.'

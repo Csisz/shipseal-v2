@@ -853,14 +853,21 @@ const Index = () => {
   const productFailure = !sampleReport && productIntelligencePreparationState && ['fallback', 'cancelled'].includes(productIntelligencePreparationState)
     ? scan.repositoryProductIntelligenceStatus
     : null;
+  const insufficientProductEvidenceFailure = productFailure?.state === 'fallback'
+    && productFailure.category === 'evidence_validation_failed'
+    && productFailure.diagnostics?.validationCategory === 'insufficient-product-evidence';
   const formationFailure = productFailure || scan.repositoryIntelligenceReviewError || activeFuturePreparationState === 'failed'
     ? {
         message: productFailure?.message || scan.repositoryIntelligenceReviewError || futurePreparation.error || 'Future pathways could not be prepared.',
+        secondaryMessage: insufficientProductEvidenceFailure
+          ? 'No Deep Analysis credit was used. Add a short product README or a recognized readable application entry point, then scan the updated repository.'
+          : undefined,
         reference: productFailure && 'diagnostics' in productFailure
           ? operationSupportReference(productFailure.diagnostics?.publicOperationId)
           : null,
-        onRetry: productFailure || activeFuturePreparationState === 'failed' ? retryFutureAnalysis : undefined,
+        onRetry: productFailure?.retryable || activeFuturePreparationState === 'failed' ? retryFutureAnalysis : undefined,
         onReturn: reset,
+        returnLabel: insufficientProductEvidenceFailure ? 'Scan updated repository' : undefined,
       }
     : undefined;
   const scanCountLine = scan.discoveredFileCount == null

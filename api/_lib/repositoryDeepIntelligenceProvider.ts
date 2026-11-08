@@ -123,6 +123,8 @@ export type ProductionProviderLogEvent = {
   responseBudgetRequiredTokens?: number;
   responseBudgetFitsConfiguredCap?: boolean;
   selectedFileCount?: number;
+  candidateFileCount?: number;
+  selectedEvidenceReferenceCount?: number;
   providerHttpContentType?: string;
   providerOuterJsonParsed?: boolean;
   providerChoicesCount?: number;

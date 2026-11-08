@@ -198,6 +198,30 @@ export async function prepareProductionRepositoryIntelligence(
   if (preparedContext.request.executionProfile === 'product-strategist') {
     const productPayload = buildProductStrategistProviderPayload(preparedContext.request);
     if (!productPayload.evidenceIndex.length) {
+      const candidateFileCount = preparedContext.request.contextItems.length;
+      const selectedEvidenceReferenceCount = productPayload.evidenceIndex.length;
+      logger({
+        event: 'repository_intelligence_provider',
+        requestId,
+        providerId: config.provider,
+        modelId: config.model,
+        outcome: 'failure',
+        durationMs: contextPreparationMs,
+        requestBytes: preparedContext.budget.requestBytes,
+        retryCount: 0,
+        statusCategory: 'evidence_validation_failed',
+        validationCategory: 'insufficient-product-evidence',
+        repositoryIdentityHash: stableContextFingerprint(preparedContext.request.repository),
+        requestFingerprint: productStage?.fingerprint || preparedContext.request.fingerprint,
+        productStage: productStage?.kind,
+        stageFingerprint: productStage?.fingerprint,
+        executionProfile: 'product-strategist',
+        selectedFileCount: preparedContext.request.contextItems.length,
+        candidateFileCount,
+        selectedEvidenceReferenceCount,
+        operationalFailureCategory: 'evidence_validation_failed',
+        failureBoundary: 'request-preflight',
+      });
       return fallback(200, 'evidence_validation_failed', false, diagnosticsFor(preparedContext.budget, preparedContext.redaction, {
         ...fingerprintDiagnostics,
         requestId,
@@ -214,6 +238,11 @@ export async function prepareProductionRepositoryIntelligence(
         compactCapabilityReferenceRejectedCount: 0,
         compactPathReferenceRejectedCount: 0,
         compactSupportReferenceRejectedCount: 0,
+        selectedFileCount: preparedContext.request.contextItems.length,
+        candidateFileCount,
+        selectedEvidenceReferenceCount,
+        operationalFailureCategory: 'evidence_validation_failed',
+        failureBoundary: 'request-preflight',
       }));
     }
   }

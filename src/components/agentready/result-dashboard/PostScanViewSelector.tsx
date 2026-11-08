@@ -22,6 +22,7 @@ export function PostScanViewSelector({
   futuresStatus,
   futureAvailability: suppliedFutureAvailability,
   onRetryFutures,
+  onRecoverEvidence,
   persistenceControl,
   onSelect,
 }: {
@@ -31,6 +32,7 @@ export function PostScanViewSelector({
   futuresStatus?: RepositoryIntelligenceProviderStatus;
   futureAvailability?: RepositoryFutureAvailability;
   onRetryFutures?: () => void;
+  onRecoverEvidence?: () => void;
   persistenceControl?: ReactNode;
   onSelect: (view: PostScanEntryView) => void;
 }) {
@@ -61,6 +63,9 @@ export function PostScanViewSelector({
   const operationActive = futureAvailability === 'running';
   const operationResumable = futureAvailability === 'resumable';
   const temporarilyUnavailable = futureAvailability === 'temporarily-unavailable';
+  const insufficientProductEvidence = futuresStatus?.state === 'fallback'
+    && futuresStatus.category === 'evidence_validation_failed'
+    && futuresStatus.diagnostics?.validationCategory === 'insufficient-product-evidence';
   const priorAnalysisReturned = futuresStatus && 'diagnostics' in futuresStatus
     && (futuresStatus.diagnostics?.operationUserUnitState === 'released'
       || futuresStatus.diagnostics?.operationCompletionState === 'refunded');
@@ -148,9 +153,20 @@ export function PostScanViewSelector({
                   : futuresStatus?.message || 'Future pathways can be retried without scanning the repository again.'}
                 {!futuresRetrying && rateLimitWaiting ? ` Retry available in ${cooldownSeconds} seconds.` : ''}
               </p>
+              {insufficientProductEvidence && (
+                <div className="mt-2 space-y-1 text-xs text-muted-foreground" data-testid="futures-evidence-recovery">
+                  <p className="font-medium text-foreground">No Deep Analysis credit was used.</p>
+                  <p>Add a short product README or a recognized readable application entry point, then scan the updated repository.</p>
+                </div>
+              )}
               {supportReference && <p className="mt-2 font-mono text-xs text-muted-foreground">Reference: {supportReference}</p>}
               {upgrade.state === 'error' && <p role="alert" className="mt-2 text-xs text-destructive">{upgrade.message}</p>}
             </div>
+            {insufficientProductEvidence && onRecoverEvidence && (
+              <button type="button" onClick={onRecoverEvidence} className="min-h-10 shrink-0 rounded-full border border-primary/30 bg-primary/[0.08] px-4 text-xs font-medium text-primary transition-colors hover:bg-primary/[0.12] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none">
+                Scan updated repository
+              </button>
+            )}
           </aside>
         )}
 

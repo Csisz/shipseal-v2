@@ -167,6 +167,41 @@ describe('report-scoped Product Intelligence lifecycle', () => {
       .toBe('ShipSeal can safely resume this Future analysis. Completed stages remain saved.');
   });
 
+  it('preserves the actionable no-evidence reason instead of replacing it with a generic no-charge failure', async () => {
+    lifecycleMocks.request.mockResolvedValueOnce({
+      version: 'shipseal.repository-intelligence-provider.v1',
+      state: 'fallback',
+      category: 'evidence_validation_failed',
+      retryable: false,
+      message: 'Deep analysis is unavailable.',
+      deepState: 'rejected',
+      diagnostics: {
+        costEstimate: 'unavailable',
+        validationCategory: 'insufficient-product-evidence',
+        operationalFailureCategory: 'evidence_validation_failed',
+        failureBoundary: 'request-preflight',
+        candidateFileCount: 0,
+        selectedEvidenceReferenceCount: 0,
+      },
+    });
+    const { result } = renderHook(() => useRepoScan());
+
+    await act(async () => { await result.current.startScan(new File(['zip'], 'insufficient.zip')); });
+    await act(async () => { await result.current.prepareRepositoryProductIntelligence(); });
+
+    await waitFor(() => expect(result.current.repositoryProductIntelligenceStatus).toMatchObject({
+      state: 'fallback',
+      retryable: false,
+      category: 'evidence_validation_failed',
+      message: 'ShipSeal found your repository, but could not select enough product evidence to generate reliable Futures.',
+      diagnostics: {
+        validationCategory: 'insufficient-product-evidence',
+        candidateFileCount: 0,
+        selectedEvidenceReferenceCount: 0,
+      },
+    }));
+  });
+
   it('uses the settled operation state when a concurrent stage released the unit', async () => {
     lifecycleMocks.request.mockResolvedValueOnce({
       ...timeoutResponse(),

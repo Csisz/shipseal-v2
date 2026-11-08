@@ -189,6 +189,8 @@ export interface RepositoryIntelligenceSafeDiagnostics {
   responseBudgetRequiredTokens?: number;
   responseBudgetFitsConfiguredCap?: boolean;
   selectedFileCount?: number;
+  candidateFileCount?: number;
+  selectedEvidenceReferenceCount?: number;
   productUnderstandingAccepted?: boolean;
   productUnderstandingRejectionReason?: RepositoryProductUnderstandingRejectionReason;
   parsedProductOpportunityCount?: number;
@@ -425,6 +427,9 @@ export function repositoryFutureFailureMessage(
   if (operational === 'configuration_invalid' || operational === 'credentials_missing'
     || category === 'configuration_invalid' || category === 'credentials_missing' || category === 'provider_disabled') {
     return 'Future analysis is not available in this environment.';
+  }
+  if (category === 'evidence_validation_failed' && diagnostics?.validationCategory === 'insufficient-product-evidence') {
+    return 'ShipSeal found your repository, but could not select enough product evidence to generate reliable Futures.';
   }
   if (operational === 'cancelled' || category === 'request_cancelled') return 'Future analysis was cancelled.';
   if (operational === 'merge_incomplete') return 'Some future pathways could not be completed.';
