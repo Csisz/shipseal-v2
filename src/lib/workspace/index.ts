@@ -107,7 +107,10 @@ export {
   EXECUTABLE_FUTURE_HANDOFF_VERSION,
   EXECUTABLE_FUTURE_PLAN_VERSION,
   buildExecutableFuturePlan,
+  executableFutureAgentLabel,
   executableFuturePlanMarkdownFilename,
+  executableFuturePromptMarkdownFilename,
+  renderAgentFuturePlanPrompt,
   renderClaudeCodeFuturePlanPrompt,
   renderCodexFuturePlanPrompt,
   renderExecutableFuturePlanMarkdown,
@@ -279,6 +282,7 @@ export type {
 export type {
   BuildExecutableFuturePlanInput,
   ExecutableFutureAgentHandoffs,
+  ExecutableFutureAgentTarget,
   ExecutableFuturePlan,
   ExecutableFuturePlanArea,
   ExecutableFuturePlanAreaKind,

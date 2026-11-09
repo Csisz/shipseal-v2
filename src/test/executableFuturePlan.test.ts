@@ -3,6 +3,7 @@ import { futuresQaProductIntelligence, futuresQaReport } from '@/dev/RepositoryF
 import {
   buildExecutableFuturePlan,
   buildRepositoryUniverseModel,
+  renderAgentFuturePlanPrompt,
   renderClaudeCodeFuturePlanPrompt,
   renderCodexFuturePlanPrompt,
   renderExecutableFuturePlanMarkdown,
@@ -170,6 +171,32 @@ describe('V12 deterministic Executable Future Plan', () => {
     expect(draft).toEqual(draftBefore);
     expect(productIntelligence).toEqual(intelligenceBefore);
     fetchSpy.mockRestore();
+  });
+
+  it('adapts one canonical plan for every agent and operating mode without inventing access or dropping safety gates', () => {
+    const { graph, draft, productIntelligence } = fixture(true);
+    const plan = planFrom(graph, draft, productIntelligence);
+    const targets = ['chatgpt', 'codex', 'claude', 'claude-code', 'cursor', 'generic'] as const;
+    const prompts = targets.map(target => renderAgentFuturePlanPrompt(plan, target, 'balanced-productivity'));
+
+    prompts.forEach(prompt => {
+      expect(prompt).toContain(plan.primaryFuture.title);
+      expect(prompt).toContain('Human-review requirements');
+      expect(prompt).toContain('qualified reviewer explicitly approves continuation');
+      expect(prompt).toContain('Do not invent repository paths, capabilities, tests, evidence, or verification outcomes.');
+    });
+    expect(prompts[0]).toContain('No direct repository access is assumed.');
+    expect(prompts[0]).toContain('Required attachments:');
+    expect(prompts[1]).toContain('Repository-aware coding environment');
+
+    const tokenSaver = renderAgentFuturePlanPrompt(plan, 'codex', 'token-saver');
+    const reliability = renderAgentFuturePlanPrompt(plan, 'codex', 'maximum-reliability');
+    expect(tokenSaver).toContain('Operating mode: Token Saver');
+    expect(tokenSaver).toContain('Do not scan the whole repository unless needed.');
+    expect(tokenSaver).toContain('Stop before execution across this boundary');
+    expect(reliability).toContain('Operating mode: Maximum Reliability');
+    expect(reliability).toContain('Run full test/build commands when the change touches shared logic');
+    expect(reliability).not.toBe(tokenSaver);
   });
 
   it('preserves canonical semantic prose beyond the former compact boundaries through plan and agent exports', () => {

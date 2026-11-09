@@ -44,6 +44,7 @@ import {
 } from '@/lib/workspace';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type {
   RepositoryFuturePathwaysMode,
   RepositoryFutureStageOverlay,
@@ -75,6 +76,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
   const [mode, setMode] = useState<RepositoryFuturePathwaysMode>('quick');
   const [draft, setDraft] = useState<RepositoryFutureDraft>();
   const [focus, setFocus] = useState<Focus>(null);
+  const [routePreviewGoalId, setRoutePreviewGoalId] = useState<string>();
   const [tracePreviewId, setTracePreviewId] = useState<string>();
   const [tracePinnedId, setTracePinnedId] = useState<string>();
   const [notice, setNotice] = useState('');
@@ -128,12 +130,14 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       setFocus(current => current && graph.nodes.some(node => node.id === current.id) ? current : null);
       setTracePreviewId(current => current && graph.nodes.some(node => node.id === current) ? current : undefined);
       setTracePinnedId(current => current && graph.nodes.some(node => node.id === current) ? current : undefined);
+      setRoutePreviewGoalId(current => current && graph.nodes.some(node => node.id === current) ? current : undefined);
       setNotice('New validated Futures joined the map. Your selected path was preserved.');
     } else {
       setDraft(undefined);
       setFocus(null);
       setTracePreviewId(undefined);
       setTracePinnedId(undefined);
+      setRoutePreviewGoalId(undefined);
       setNotice('Available Futures changed and the previous selection no longer validates against the updated graph.');
     }
     setReplaceSupportGoalId(undefined);
@@ -174,7 +178,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     return accepted;
   }, [acceptResult, draft, graph]);
 
-  const buildSelectedFuture = useCallback((goalId: string) => {
+  const prepareSelectedFuture = useCallback((goalId: string) => {
     if (choosePrimary(goalId)) {
       setPlanOpen(true);
       recordOutcome('future_opened', 'executable_plan', { premiumValue: true, prompt: true });
@@ -385,6 +389,15 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     }));
     return evolutions.length ? evolutions : [capability, ...artifacts];
   }), [stageCandidates]);
+  const activeRouteDraft = useMemo(() => {
+    if (!routePreviewGoalId || draft?.primaryGoal.goalId === routePreviewGoalId) return draft;
+    const preview = synthesizeRepositoryFutureDraft(graph, {
+      sourceGraphFingerprint: graph.fingerprint,
+      primaryGoalIds: [routePreviewGoalId],
+      supportingGoalIds: [],
+    });
+    return preview.ok ? preview.draft : draft;
+  }, [draft, graph, routePreviewGoalId]);
 
   const overlay = useMemo<RepositoryFutureStageOverlay>(() => ({
     active: true,
@@ -395,7 +408,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     universeProjection,
     candidates: stageCandidates,
     projections: stageProjections,
-    dependencies: (draft?.dependencies || []).map(dependency => ({
+    dependencies: (activeRouteDraft?.dependencies || []).map(dependency => ({
       id: dependency.id,
       title: dependency.title,
       state: dependency.state,
@@ -407,9 +420,9 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       evidencePaths: dependency.evidenceIds,
       limitations: dependency.limitations,
     })),
-    artifactCount: draft?.artifacts.length || 0,
-    gateCount: draft?.gates.length || 0,
-    conflictCount: draft?.conflicts.length || 0,
+    artifactCount: activeRouteDraft?.artifacts.length || 0,
+    gateCount: activeRouteDraft?.gates.length || 0,
+    conflictCount: activeRouteDraft?.conflicts.length || 0,
     limited: graph.summary.limited,
     focusedId: focus?.id,
     activeTraceId: tracePreviewId || tracePinnedId,
@@ -421,8 +434,11 @@ export default function RepositoryFuturePathways({ report, universe, productInte
       setMode(nextMode);
       if (nextMode === 'deep' && composerRef.current) composerRef.current.open = true;
     },
-    onCandidateFocus: goalId => setFocus({ kind: 'goal', id: goalId }),
-    onCandidateBuild: buildSelectedFuture,
+    onCandidateFocus: goalId => {
+      setFocus({ kind: 'goal', id: goalId });
+      setRoutePreviewGoalId(goalId);
+    },
+    onCandidateBuild: prepareSelectedFuture,
     onCandidateSelect: choosePrimary,
     onCandidateAddSupport: addSupport,
     onCandidateRemoveSupport: removeSupport,
@@ -434,6 +450,8 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     onTracePin: id => {
       setTracePinnedId(id);
       const projection = stageProjections.find(item => item.id === id);
+      const routeGoalId = stageCandidates.some(candidate => candidate.goalId === id) ? id : projection?.goalId;
+      if (routeGoalId) setRoutePreviewGoalId(routeGoalId);
       setFocus(stageCandidates.some(candidate => candidate.goalId === id)
         ? { kind: 'goal', id }
         : projection
@@ -443,20 +461,21 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     onTraceClear: () => {
       setTracePreviewId(undefined);
       setTracePinnedId(undefined);
+      setRoutePreviewGoalId(undefined);
       setFocus(null);
     },
     onOpenDomControls: () => {
       if (composerRef.current) composerRef.current.open = true;
       composerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     },
-  }), [addSupport, buildSelectedFuture, choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, notice, productIntelligenceState, removeSupport, replaceSupportDirect, restoreOption, saveForLater, stageCandidates, stageProjections, tracePinnedId, tracePreviewId, universeProjection]);
+  }), [activeRouteDraft, addSupport, choosePrimary, draft, focus, graph.fingerprint, graph.summary.limited, mode, notice, prepareSelectedFuture, productIntelligenceState, removeSupport, replaceSupportDirect, restoreOption, saveForLater, stageCandidates, stageProjections, tracePinnedId, tracePreviewId, universeProjection]);
 
   useEffect(() => {
-    if (focus?.kind !== 'dependency' || !draft || draft.dependencies.some(dependency => dependency.id === focus.id)) return;
+    if (focus?.kind !== 'dependency' || !activeRouteDraft || activeRouteDraft.dependencies.some(dependency => dependency.id === focus.id)) return;
     setFocus(null);
     setTracePreviewId(undefined);
     setTracePinnedId(undefined);
-  }, [draft, focus]);
+  }, [activeRouteDraft, focus]);
 
   useEffect(() => onStageOverlayChange?.(overlay), [onStageOverlayChange, overlay]);
   useEffect(() => () => onStageOverlayChange?.(null), [onStageOverlayChange]);
@@ -475,9 +494,16 @@ export default function RepositoryFuturePathways({ report, universe, productInte
     ? buildExecutableFuturePlan({ report, graph, draft, productIntelligence })
     : undefined, [draft, graph, productIntelligence, report]);
 
-  if (planOpen && executablePlan) {
-    return <ExecutableFuturePlanView plan={executablePlan} onBack={() => setPlanOpen(false)} />;
-  }
+  const prepareFocusedFuture = () => {
+    if (focus?.kind === 'goal' && draft?.primaryGoal.goalId !== focus.id) {
+      prepareSelectedFuture(focus.id);
+      return;
+    }
+    if (executablePlan) {
+      setPlanOpen(true);
+      recordOutcome('future_opened', 'executable_plan', { premiumValue: true, prompt: true });
+    }
+  };
 
   return (
     <section ref={rootRef} aria-label="Repository Future pathways" className="scroll-mt-20" data-futures-composition="canvas-first">
@@ -485,7 +511,7 @@ export default function RepositoryFuturePathways({ report, universe, productInte
         <RepositoryFuturesNeuralCanvas repositoryName={report.repoName} overlay={overlay} entryMotion={entryMotion} />
       </div>
 
-      <ExecutableFuturePlanEntry plan={executablePlan} onOpen={() => { setPlanOpen(true); recordOutcome('future_opened', 'executable_plan', { premiumValue: true, prompt: true }); }} />
+      <ExecutableFuturePlanEntry plan={executablePlan} selectedTitle={focusedCandidate?.title} onOpen={prepareFocusedFuture} />
 
       <details ref={composerRef} data-secondary-surface="configure-path" className="group mt-4 scroll-mt-20 border-t border-border/40 bg-transparent">
         <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-2 py-2 text-sm font-medium text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:px-3">
@@ -559,6 +585,16 @@ export default function RepositoryFuturePathways({ report, universe, productInte
           </div>
         </div>
       </details>
+
+      <Dialog open={Boolean(planOpen && executablePlan)} onOpenChange={open => { if (!open) setPlanOpen(false); }}>
+        <DialogContent className="max-h-[calc(100dvh-1rem)] w-[calc(100%-1rem)] max-w-6xl overflow-y-auto rounded-2xl bg-background p-0 shadow-[var(--shadow-lg-semantic)] motion-reduce:animate-none sm:w-[calc(100%-2rem)]">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Prepare {executablePlan?.primaryFuture.title || 'selected Future'} for an agent</DialogTitle>
+            <DialogDescription>Choose an agent and operating mode, then copy or download the repository-grounded implementation prompt.</DialogDescription>
+          </DialogHeader>
+          {executablePlan && <ExecutableFuturePlanView plan={executablePlan} onBack={() => setPlanOpen(false)} />}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
