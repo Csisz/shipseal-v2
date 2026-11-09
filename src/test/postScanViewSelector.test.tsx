@@ -137,7 +137,29 @@ describe('premium post-scan view selector', () => {
     expect(await screen.findByTestId('futures-experience')).toBeInTheDocument();
   });
 
-  it('keeps Universe usable while Futures resumes and auto-enters after the explicitly requested analysis becomes ready', async () => {
+  it('shows milestone-backed readiness on the tile and opens a stable waiting view while Futures are running', () => {
+    render(<ResultWorkspace
+      report={reportWithIdentity('2026-08-11T10:01:20.000Z')}
+      history={[]}
+      onReset={vi.fn()}
+      onClearHistory={vi.fn()}
+      repositoryProductIntelligenceStatus={{
+        state: 'preparing', deepState: 'pending', retryable: false, productStage: 'merging',
+        completedBatches: 3, totalBatches: 3, message: 'Validating the complete Future map.',
+      }}
+    />);
+
+    expect(screen.getByTestId('post-scan-view-selector')).toBeInTheDocument();
+    expect(screen.getByTestId('repository-futures-tile-status')).toHaveTextContent('Validating compatible futures');
+    expect(screen.getByTestId('repository-futures-readiness-indicator')).toHaveAttribute('data-progress-basis', 'confirmed-milestones');
+    const progressAction = screen.getByRole('button', { name: 'View Future analysis progress' });
+    expect(progressAction).toBeEnabled();
+    fireEvent.click(progressAction);
+    expect(screen.getByTestId('repository-formation')).toHaveTextContent('Validating compatible futures');
+    expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
+  });
+
+  it('keeps the requested Futures view stable while analysis resumes and exposes confirmed milestone progress', async () => {
     const report = reportWithIdentity('2026-08-11T10:01:30.000Z');
     const retry = vi.fn(async () => undefined);
     const onReset = vi.fn();
@@ -161,13 +183,15 @@ describe('premium post-scan view selector', () => {
       retryRepositoryProductIntelligence={retry}
     />);
 
-    expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('Project Universe is ready');
+    expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('Future analysis could not complete');
     expect(screen.getByRole('button', { name: 'Open Project Universe' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Resume Future analysis' })).toBeEnabled();
     expect(screen.queryByTestId('futures-experience')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Resume Future analysis' }));
     expect(retry).toHaveBeenCalledTimes(1);
     expect(onReset).not.toHaveBeenCalled();
+    expect(screen.getByTestId('repository-formation')).toBeInTheDocument();
+    expect(screen.queryByTestId('post-scan-view-selector')).not.toBeInTheDocument();
 
     rerender(<ResultWorkspace
       report={report}
@@ -177,8 +201,11 @@ describe('premium post-scan view selector', () => {
       repositoryProductIntelligenceStatus={{ state: 'preparing', deepState: 'pending', retryable: false, productStage: 'expansion', completedBatches: 2, totalBatches: 3, message: 'Building future pathways · 2 of 3 pathway groups complete.' }}
       retryRepositoryProductIntelligence={retry}
     />);
-    expect(screen.getByTestId('futures-degraded-status')).toHaveTextContent('2 of 3 pathway groups complete');
-    expect(screen.getByRole('button', { name: 'Future analysis in progress' })).toBeDisabled();
+    expect(screen.getByTestId('repository-formation')).toHaveTextContent('Synthesizing future paths');
+    expect(screen.getByTestId('repository-formation')).toHaveTextContent('2 of 3 pathway groups complete');
+    expect(screen.getByTestId('repository-futures-readiness-indicator')).toHaveAttribute('data-progress-basis', 'confirmed-milestones');
+    fireEvent.click(screen.getByRole('button', { name: /Change view/i }));
+    expect(screen.getByRole('button', { name: 'View Future analysis progress' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Open Project Universe' }));
     expect(screen.getByTestId('universe-experience')).toBeInTheDocument();
 
