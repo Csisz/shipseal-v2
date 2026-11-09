@@ -331,7 +331,7 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     const plan = screen.getByTestId('executable-future-plan');
     expect(plan).toHaveAttribute('data-agent-target', 'codex');
     expect(plan).toHaveAttribute('data-operating-mode', 'balanced-productivity');
-    expect(within(plan).getByText('Implementation prompt')).toBeInTheDocument();
+    expect(within(plan).getByText('Action-ready prompt')).toBeInTheDocument();
     expect(within(plan).getByText('Implementation-plan details').closest('details')).not.toHaveAttribute('open');
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
@@ -367,7 +367,7 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     expect(preview).toHaveTextContent('OpenAI Codex');
     expect(preview).toHaveClass('whitespace-pre-wrap', 'break-words');
     fireEvent.click(within(handoffDialog).getByRole('button', { name: 'Copy Prompt' }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Use repository-native inspection and editing tools.')));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Use repository-native search')));
 
     const agentSelector = within(handoffDialog).getByTestId('future-agent-selector');
     for (const label of ['ChatGPT', 'OpenAI Codex', 'Claude', 'Claude Code', 'Cursor', 'Other / Generic Agent']) {
@@ -378,7 +378,7 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     fireEvent.click(within(handoffDialog).getByRole('radio', { name: /Maximum Reliability/ }));
     expect(preview).toHaveTextContent('Operating mode: Maximum Reliability');
     fireEvent.click(within(handoffDialog).getByRole('button', { name: 'Copy Prompt' }));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Read repository guidance files before editing')));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Read CLAUDE.md and applicable AGENTS.md files before editing')));
 
     fireEvent.click(within(handoffDialog).getByRole('button', { name: 'Download Markdown' }));
     fireEvent.click(within(handoffDialog).getByText('Implementation-plan details'));

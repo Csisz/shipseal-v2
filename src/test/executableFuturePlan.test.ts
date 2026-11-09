@@ -53,6 +53,49 @@ function addSupport(graph: RepositoryFutureGraph, draft: RepositoryFutureDraft, 
   return result.draft;
 }
 
+function wasteNotBenchmarkPlan() {
+  const selectedTitle = 'Small business waste and cost analytics dashboard';
+  const selectedSourceId = futuresQaProductIntelligence.opportunities[0].id;
+  const productIntelligence = {
+    ...futuresQaProductIntelligence,
+    fingerprint: 'product-intelligence:wastenot-agent-prompt-benchmark',
+    humanReviewRequired: true,
+    opportunities: futuresQaProductIntelligence.opportunities.map(opportunity => opportunity.id === selectedSourceId
+      ? {
+          ...opportunity,
+          title: selectedTitle,
+          opportunityStatement: `Add a repository-grounded ${selectedTitle}.`,
+          userValue: 'Small businesses can understand waste patterns and their cost impact without losing the evidence behind each metric.',
+          whyItFits: 'The selected Future extends repository capabilities represented by the scan without asserting unverified implementation paths.',
+          strategicRationale: 'Waste and cost signals become actionable when they are joined in one evidence-backed decision surface.',
+          verificationConcept: 'Verify that waste and cost analytics remain traceable to repository-supported inputs and preserve existing behavior.',
+          humanReviewRequirements: ['Data handling and client-facing analytics claims require qualified human approval before production verification.'],
+        }
+      : opportunity),
+  };
+  const graph = buildRepositoryFuturePathwaysGraph(
+    futuresQaReport,
+    buildRepositoryUniverseModel(futuresQaReport),
+    productIntelligence,
+  );
+  const primary = graph.nodes.find(node => node.kind === 'future-goal'
+    && graph.candidates.find(candidate => candidate.id === node.candidateId)?.sourceId === selectedSourceId);
+  const support = graph.nodes.find(node => node.kind === 'future-goal'
+    && graph.candidates.find(candidate => candidate.id === node.candidateId)?.candidateClass === 'product-opportunity'
+    && node.id !== primary?.id);
+  const initial = synthesizeRepositoryFutureDraft(graph, {
+    sourceGraphFingerprint: graph.fingerprint,
+    primaryGoalIds: [primary!.id],
+    supportingGoalIds: [],
+  });
+  if (!initial.ok) throw new Error('Expected canonical WasteNot benchmark synthesis to succeed.');
+  const plan = planFrom(graph, addSupport(graph, initial.draft, support!.id), productIntelligence);
+  return {
+    ...plan,
+    repository: { ...plan.repository, name: 'Csisz/wastenot', branch: 'master' },
+  };
+}
+
 describe('V12 deterministic Executable Future Plan', () => {
   it('produces stable identity without timestamps and changes for Primary, Support, or source-intelligence changes', () => {
     const { graph, draft, productIntelligence, productGoals } = fixture();
@@ -163,8 +206,10 @@ describe('V12 deterministic Executable Future Plan', () => {
       expect(value).not.toContain('undefined');
     }
     expect([codex, claude, markdown].some(value => value.includes('Repository path:'))).toBe(true);
-    expect(codex).toContain('Use repository-native inspection and editing tools.');
-    expect(claude).toContain('Read repository guidance files before editing');
+    expect(codex).toContain('# OpenAI Codex execution task');
+    expect(codex).toContain('Use repository-native search');
+    expect(claude).toContain('# Claude Code repository task');
+    expect(claude).toContain('Read CLAUDE.md and applicable AGENTS.md files before editing');
     expect(markdown).toContain('does not execute an agent, mutate the repository');
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(graph).toEqual(graphBefore);
@@ -181,22 +226,80 @@ describe('V12 deterministic Executable Future Plan', () => {
 
     prompts.forEach(prompt => {
       expect(prompt).toContain(plan.primaryFuture.title);
-      expect(prompt).toContain('Human-review requirements');
-      expect(prompt).toContain('qualified reviewer explicitly approves continuation');
+      expect(prompt).toContain(plan.reviewGates[0].reason);
+      expect(prompt).toContain('qualified reviewer');
       expect(prompt).toContain('Do not invent repository paths, capabilities, tests, evidence, or verification outcomes.');
     });
     expect(prompts[0]).toContain('No direct repository access is assumed.');
     expect(prompts[0]).toContain('Required attachments:');
-    expect(prompts[1]).toContain('Repository-aware coding environment');
+    expect(prompts[1]).toContain('Verify the active repository and branch/ref');
 
     const tokenSaver = renderAgentFuturePlanPrompt(plan, 'codex', 'token-saver');
     const reliability = renderAgentFuturePlanPrompt(plan, 'codex', 'maximum-reliability');
     expect(tokenSaver).toContain('Operating mode: Token Saver');
     expect(tokenSaver).toContain('Do not scan the whole repository unless needed.');
-    expect(tokenSaver).toContain('Stop before execution across this boundary');
+    expect(tokenSaver).toContain('A qualified reviewer must explicitly approve continuation.');
     expect(reliability).toContain('Operating mode: Maximum Reliability');
     expect(reliability).toContain('Run full test/build commands when the change touches shared logic');
     expect(reliability).not.toBe(tokenSaver);
+  });
+
+  it('produces deterministic and operationally distinct WasteNot prompts for all six agents and three operating modes', () => {
+    const plan = wasteNotBenchmarkPlan();
+    const targets = ['chatgpt', 'codex', 'claude', 'claude-code', 'cursor', 'generic'] as const;
+    const modes = ['balanced-productivity', 'token-saver', 'maximum-reliability'] as const;
+    const structuralMarkers = {
+      chatgpt: ['# ChatGPT collaborative implementation brief', '## Collaborative workflow', 'Patch-ready edits or change specification'],
+      codex: ['# OpenAI Codex execution task', '## Inspect before editing', '## Execute in dependency order'],
+      claude: ['# Claude structured implementation analysis', '## Evidence and assumptions ledger', '## Verification argument'],
+      'claude-code': ['# Claude Code repository task', '## Repository startup protocol', '## Checkpointed implementation'],
+      cursor: ['# Cursor targeted editing brief', '## Open and locate', '## Incremental edit passes'],
+      generic: ['# Portable implementation specification', '## Required capabilities and inputs', '## Universal constraints'],
+    } as const;
+
+    const prompts = new Map<string, string>();
+    for (const target of targets) {
+      for (const mode of modes) {
+        const key = `${target}:${mode}`;
+        const prompt = renderAgentFuturePlanPrompt(plan, target, mode);
+        prompts.set(key, prompt);
+        expect(renderAgentFuturePlanPrompt(plan, target, mode)).toBe(prompt);
+        expect(prompt).toContain('Csisz/wastenot');
+        expect(prompt).toContain('Small business waste and cost analytics dashboard');
+        plan.supportingFutures.forEach(future => expect(prompt).toContain(future.title));
+        plan.requiredCapabilities.forEach(capability => {
+          expect(prompt).toContain(capability.title);
+          expect(prompt).toContain(capability.rationale);
+        });
+        plan.affectedRepositoryAreas.filter(area => area.path).forEach(area => expect(prompt).toContain(area.path!));
+        plan.evidence.filter(item => item.path).forEach(item => expect(prompt).toContain(item.path!));
+        plan.reviewGates.forEach(gate => expect(prompt).toContain(gate.reason));
+        plan.verificationPlan.checks.forEach(check => {
+          expect(prompt).toContain(check.title);
+          if (check.command) expect(prompt).toContain(check.command);
+        });
+        expect(prompt).toContain('Do not create or update branches, commits, pushes, pull requests, merges, releases, or deployments without explicit authorization.');
+        expect(prompt).toContain('This is not legal advice.');
+        expect(prompt).not.toContain('## 1. Repository identity and scan context');
+        expect(prompt).not.toContain('[object Object]');
+        expect(prompt).not.toContain('undefined');
+      }
+
+      structuralMarkers[target].forEach(marker => expect(prompts.get(`${target}:balanced-productivity`)).toContain(marker));
+      expect(prompts.get(`${target}:token-saver`)!.length).toBeLessThan(prompts.get(`${target}:balanced-productivity`)!.length * 0.92);
+      expect(prompts.get(`${target}:maximum-reliability`)!.length).toBeGreaterThan(prompts.get(`${target}:balanced-productivity`)!.length);
+      expect(prompts.get(`${target}:maximum-reliability`)).toContain(plan.repository.sourceScanFingerprint);
+    }
+
+    const balancedPrompts = targets.map(target => prompts.get(`${target}:balanced-productivity`)!);
+    expect(new Set(balancedPrompts).size).toBe(targets.length);
+    expect(prompts.get('chatgpt:balanced-productivity')).toContain('No direct repository access is assumed.');
+    expect(prompts.get('chatgpt:balanced-productivity')).toContain('Required attachments:');
+    expect(prompts.get('claude:balanced-productivity')).toContain('Classify every implementation claim as verified, inferred, or blocked by missing context.');
+    expect(prompts.get('codex:balanced-productivity')).toContain('Use repository-native search');
+    expect(prompts.get('claude-code:balanced-productivity')).toContain('Read CLAUDE.md and applicable AGENTS.md');
+    expect(prompts.get('cursor:balanced-productivity')).toContain('symbol/reference search');
+    expect(prompts.get('generic:balanced-productivity')).toContain('declare available capabilities');
   });
 
   it('preserves canonical semantic prose beyond the former compact boundaries through plan and agent exports', () => {

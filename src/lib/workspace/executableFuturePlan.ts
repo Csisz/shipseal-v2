@@ -1,6 +1,6 @@
 import type { RepositoryProductIntelligenceResult } from '../repositoryIntelligence/index.js';
 import type { AgentOperatingModeId, ReadinessReport } from '../types.js';
-import { DEFAULT_AGENT_OPERATING_MODE, getAgentOperatingMode } from '../agentOperatingMode.js';
+import { DEFAULT_AGENT_OPERATING_MODE } from '../agentOperatingMode.js';
 import type {
   RepositoryFutureDraft,
   RepositoryFutureDraftDependency,
@@ -15,6 +15,10 @@ import {
   sortedUnique,
 } from './repositoryFutures/identity.js';
 import { presentEvidenceReferences, renderEvidenceReferenceList } from './evidencePresentation.js';
+import {
+  executableFuturePromptAgentLabel,
+  renderExecutableFutureAgentPrompt,
+} from './executableFuturePromptAdapters.js';
 
 export const EXECUTABLE_FUTURE_PLAN_VERSION = 'shipseal.executable-future-plan.omega18.5.v12' as const;
 export const EXECUTABLE_FUTURE_HANDOFF_VERSION = 'shipseal.future-agent-handoff.v1' as const;
@@ -786,69 +790,8 @@ export function renderClaudeCodeFuturePlanPrompt(plan: ExecutableFuturePlan) {
   return renderAgentFuturePlanPrompt(plan, 'claude-code');
 }
 
-const AGENT_ADAPTERS: Record<ExecutableFutureAgentTarget, {
-  label: string;
-  repositoryAware: boolean;
-  guidance: string[];
-}> = {
-  chatgpt: {
-    label: 'ChatGPT',
-    repositoryAware: false,
-    guidance: [
-      'Do not assume direct repository access. Work only from the attached files and context supplied in this prompt.',
-      'Before proposing exact edits, request any referenced source, configuration, instruction, or test file that has not been attached.',
-      'Return patch-ready changes and clearly separate verified repository facts from suggestions.',
-    ],
-  },
-  codex: {
-    label: 'OpenAI Codex',
-    repositoryAware: true,
-    guidance: [
-      'Use repository-native inspection and editing tools.',
-      'Read applicable AGENTS.md files and repository guidance before editing.',
-      'Keep changes small and reviewable, and run the listed checks after meaningful edits.',
-    ],
-  },
-  claude: {
-    label: 'Claude',
-    repositoryAware: false,
-    guidance: [
-      'Do not assume direct repository access. Treat this prompt and explicitly supplied attachments as the complete working context.',
-      'Ask for missing referenced files before asserting exact implementation details.',
-      'Produce a scoped implementation proposal or patch-ready edits, preserving every review gate.',
-    ],
-  },
-  'claude-code': {
-    label: 'Claude Code',
-    repositoryAware: true,
-    guidance: [
-      'Read repository guidance files before editing and maintain a concise implementation checklist.',
-      'Inspect related call sites before changing a shared contract.',
-      'Use the repository working tree as the authority when it differs from this scan-derived plan.',
-    ],
-  },
-  cursor: {
-    label: 'Cursor',
-    repositoryAware: true,
-    guidance: [
-      'Open the named repository and inspect applicable project rules before editing.',
-      'Limit indexed context and edits to the affected areas and their direct call sites unless evidence requires expanding scope.',
-      'Use repository search to confirm symbols and paths before applying changes.',
-    ],
-  },
-  generic: {
-    label: 'Other / Generic Agent',
-    repositoryAware: false,
-    guidance: [
-      'First establish whether repository tools are available; do not imply access that has not been provided.',
-      'If repository access is unavailable, request the referenced files and repository guidance as attachments before producing exact edits.',
-      'Keep all output bounded to the canonical plan and label any unverified assumption.',
-    ],
-  },
-};
-
 export function executableFutureAgentLabel(target: ExecutableFutureAgentTarget) {
-  return AGENT_ADAPTERS[target].label;
+  return executableFuturePromptAgentLabel(target);
 }
 
 export function renderAgentFuturePlanPrompt(
@@ -856,131 +799,7 @@ export function renderAgentFuturePlanPrompt(
   target: ExecutableFutureAgentTarget,
   modeId: AgentOperatingModeId = DEFAULT_AGENT_OPERATING_MODE,
 ) {
-  const adapter = AGENT_ADAPTERS[target];
-  const mode = getAgentOperatingMode(modeId);
-  const existingCapabilities = plan.requiredCapabilities.filter(item => item.state === 'satisfied');
-  const unresolvedCapabilities = plan.requiredCapabilities.filter(item => item.state !== 'satisfied');
-  const existingAreas = plan.affectedRepositoryAreas.filter(area => area.kind === 'existing-repository-area');
-  const likelyAreas = plan.affectedRepositoryAreas.filter(area => area.kind === 'likely-new-responsibility');
-  const operatingModeLabel = modeId === 'balanced-productivity'
-    ? 'Balanced Productivity'
-    : modeId === 'token-saver'
-      ? 'Token Saver'
-      : 'Maximum Reliability';
-  const lines = [
-    `# ${adapter.label} — ShipSeal agent implementation prompt`,
-    '',
-    'Implement the canonical, repository-grounded Future Plan below. ShipSeal prepared this prompt without mutating the repository or claiming that any review gate has been approved.',
-    '',
-    '## 1. Repository identity and scan context',
-    '',
-    `- Name: ${plan.repository.name}`,
-    ...(plan.repository.branch ? [`- Branch or ref: ${plan.repository.branch}`] : []),
-    `- Detected stack: ${plan.repository.detectedStack}`,
-    ...(plan.repository.packageManager ? [`- Detected package manager: ${plan.repository.packageManager}`] : []),
-    `- Plan fingerprint: ${plan.fingerprint}`,
-    `- Source scan fingerprint: ${plan.repository.sourceScanFingerprint}`,
-    `- Source intelligence fingerprint: ${plan.repository.sourceIntelligenceFingerprint}`,
-    '',
-    '## 2. Selected primary Future',
-    '',
-    plan.objective,
-    '',
-    `- Primary Future: ${plan.primaryFuture.title}`,
-    `- Primary user value: ${plan.primaryFuture.userValue}`,
-    '',
-    '## 3. Selected compatible supporting Futures',
-    '',
-    ...bullets(plan.supportingFutures.length
-      ? plan.supportingFutures.map(goal => `${goal.title} — ${goal.userValue}`)
-      : ['None selected. Do not add supporting scope unless the repository owner explicitly changes the plan.']),
-    '',
-    '## 4. Verified prerequisites and unresolved dependencies',
-    '',
-    ...numberedOrNone(plan.requiredCapabilities.map(item => `${item.title} (${item.state}) — ${item.rationale}`)),
-    '',
-    `Unresolved or review-bound dependencies: ${unresolvedCapabilities.length ? unresolvedCapabilities.map(item => item.title).join('; ') : 'None represented by the current plan.'}`,
-    '',
-    '## 5. Relevant existing repository capabilities',
-    '',
-    ...bullets(existingCapabilities.length
-      ? existingCapabilities.map(item => `${item.title} — represented as satisfied by the scan-derived graph.`)
-      : ['No prerequisite capability is asserted as already satisfied. Inspect before assuming one exists.']),
-    '',
-    '## 6. Likely affected repository areas and confidence boundaries',
-    '',
-    ...bullets([
-      ...existingAreas.map(area => `Evidence-backed existing area: ${area.path} (${area.label}).`),
-      ...likelyAreas.map(area => `Likely new responsibility: ${area.label}. No validated current path is asserted.`),
-      ...(!plan.affectedRepositoryAreas.length ? ['No affected path is asserted; inspect the repository before proposing one.'] : []),
-    ]),
-    '',
-    '## 7. Ordered implementation instructions',
-    '',
-    ...plan.implementationStages.flatMap(stage => [
-      `${stage.order}. ${stage.title}`,
-      `   Purpose: ${stage.purpose}`,
-      `   Why now: ${stage.whyNow}`,
-      `   Changes: ${stage.changes.join(' ')}`,
-      `   Areas: ${stage.repositoryAreaIds.length ? stage.repositoryAreaIds.map(id => areaMarkdown(plan.affectedRepositoryAreas.find(area => area.id === id)!)).join('; ') : 'No asserted path'}`,
-      `   Complete when: ${stage.completionCriteria.join(' ')}`,
-      `   Evidence: ${renderEvidenceReferenceList(stage.evidenceIds, plan.evidence)}`,
-    ]),
-    '',
-    '## 8. Explicit non-goals and scope restrictions',
-    '',
-    ...bullets([
-      'Do not change graph topology, dependency relationships, scan/scoring behavior, export contracts, GitHub permissions, or mutation boundaries unless a stage explicitly requires it.',
-      'Do not invent repository paths, capabilities, tests, evidence, or verification outcomes.',
-      'Do not treat a generated prompt or plan as authorization to deploy, merge, push, or approve a sensitive change.',
-      'Do not expand beyond the Primary Future and selected compatible supporting Futures.',
-    ]),
-    '',
-    '## 9. Security and compatibility guardrails',
-    '',
-    ...bullets([
-      ...plan.agentHandoffs.sharedRules,
-      'Preserve authentication, security, privacy, billing, compliance, deployment, data-handling, and legal boundaries.',
-      'This is not legal advice.',
-    ]),
-    '',
-    '## 10. Verification and acceptance criteria',
-    '',
-    ...bullets(plan.verificationPlan.checks.map(check => `${check.title}${check.command ? ` — ${check.command}` : ''}: ${check.rationale}`)),
-    '',
-    plan.verificationPlan.completionStatement,
-    '',
-    '## 11. Human-review requirements',
-    '',
-    ...bullets(plan.reviewGates.length
-      ? plan.reviewGates.map(gate => `${gate.title}: ${gate.reason} Stop before execution across this boundary until a qualified reviewer explicitly approves continuation.`)
-      : ['No explicit sensitive gate is represented, but ordinary code review is still required.']),
-    '',
-    '## 12. Selected agent-specific execution guidance',
-    '',
-    `- Selected agent: ${adapter.label}`,
-    `- Repository access assumption: ${adapter.repositoryAware ? 'Repository-aware coding environment; verify the active working tree before editing.' : 'No direct repository access is assumed.'}`,
-    `- Operating mode: ${operatingModeLabel}`,
-    '',
-    ...bullets([...adapter.guidance, ...mode.rules, ...mode.verification]),
-    '',
-    '## Repository evidence available to this handoff',
-    '',
-    ...bullets(presentEvidenceReferences(plan.evidence.map(item => item.id), plan.evidence).map(item => item.label)),
-    '',
-    '## Risks, assumptions, and attachments',
-    '',
-    ...bullets(plan.risks.length ? plan.risks.map(risk => risk.statement) : ['No additional grounded risk is represented by the selected intelligence.']),
-    ...bullets(plan.limitations.length ? plan.limitations : ['No additional limitation was declared by the selected intelligence.']),
-    ...(!adapter.repositoryAware ? bullets([
-      'Required attachments: applicable repository instruction files plus every referenced existing source, configuration, and test file needed for the selected stages.',
-      'If an attachment is missing, ask for it instead of guessing its contents.',
-    ]) : []),
-    '',
-    'Do not begin by assuming paths or implementation details beyond this plan. Inspect the current repository, then work stage-by-stage. Stop and report if evidence contradicts the plan or a human-review gate is reached.',
-    '',
-  ];
-  return lines.join('\n');
+  return renderExecutableFutureAgentPrompt(plan, target, modeId);
 }
 
 export function executableFuturePromptMarkdownFilename(

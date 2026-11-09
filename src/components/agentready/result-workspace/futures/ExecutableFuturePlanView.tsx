@@ -146,7 +146,7 @@ export default function ExecutableFuturePlanView({ plan, onBack }: { plan: Execu
 
         <main className="min-w-0 p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><h2 className="font-display text-lg font-semibold">Implementation prompt</h2><p className="mt-1 text-xs text-muted-foreground">Same canonical plan, adapted for {executableFutureAgentLabel(agentTarget)} and {OPERATING_MODES.find(mode => mode.id === operatingMode)?.label}.</p></div>
+            <div><h2 className="font-display text-lg font-semibold">Action-ready prompt</h2><p className="mt-1 text-xs text-muted-foreground">Purpose-built for {executableFutureAgentLabel(agentTarget)} in {OPERATING_MODES.find(mode => mode.id === operatingMode)?.label} mode. The complete canonical plan remains available below.</p></div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" onClick={copyPrompt}><Clipboard data-icon="inline-start" aria-hidden="true" />Copy Prompt</Button>
               <Button type="button" variant="outline" onClick={() => download(prompt, executableFuturePromptMarkdownFilename(plan, agentTarget))}><Download data-icon="inline-start" aria-hidden="true" />Download Markdown</Button>
