@@ -57,10 +57,12 @@ export {
   REPOSITORY_INTELLIGENCE_PROVIDER_API_VERSION,
   repositoryFutureFailureMessage,
 } from './productionProviderContract';
-export { resolveRepositoryFutureAvailability } from './futureAvailability';
+export { resolveRepositoryFutureAvailability, resolveRepositoryFutureReadiness } from './futureAvailability';
 export type {
   RepositoryFutureAvailability,
   RepositoryFutureAvailabilityOperationState,
+  RepositoryFutureReadiness,
+  RepositoryFutureReadinessState,
 } from './futureAvailability';
 
 export {

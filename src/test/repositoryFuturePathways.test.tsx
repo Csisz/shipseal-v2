@@ -369,8 +369,11 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     fireEvent.click(within(handoffDialog).getByRole('button', { name: 'Copy Prompt' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Use repository-native inspection and editing tools.')));
 
-    fireEvent.click(within(handoffDialog).getByRole('combobox', { name: 'Agent' }));
-    fireEvent.click(screen.getByRole('option', { name: 'Claude Code' }));
+    const agentSelector = within(handoffDialog).getByTestId('future-agent-selector');
+    for (const label of ['ChatGPT', 'OpenAI Codex', 'Claude', 'Claude Code', 'Cursor', 'Other / Generic Agent']) {
+      expect(within(agentSelector).getByText(label)).toBeVisible();
+    }
+    fireEvent.click(within(agentSelector).getByRole('radio', { name: /Claude Code/ }));
     expect(preview).toHaveTextContent('Claude Code');
     fireEvent.click(within(handoffDialog).getByRole('radio', { name: /Maximum Reliability/ }));
     expect(preview).toHaveTextContent('Operating mode: Maximum Reliability');

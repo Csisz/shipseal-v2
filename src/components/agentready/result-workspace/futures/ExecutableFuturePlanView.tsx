@@ -14,12 +14,19 @@ import {
 import { presentEvidenceReferences } from '@/lib/workspace/evidencePresentation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { buildFuturePlanFastPathSummary } from '../fastPathPresentation';
 import { useFeedback } from '@/components/feedback/feedbackContext';
 
 const AGENT_TARGETS: ExecutableFutureAgentTarget[] = ['chatgpt', 'codex', 'claude', 'claude-code', 'cursor', 'generic'];
+const AGENT_TARGET_SUMMARIES: Record<ExecutableFutureAgentTarget, string> = {
+  chatgpt: 'Self-contained chat handoff',
+  codex: 'Repository-aware coding agent',
+  claude: 'Self-contained chat handoff',
+  'claude-code': 'Repository-aware coding agent',
+  cursor: 'Repository-aware editor agent',
+  generic: 'Portable, access-neutral handoff',
+};
 const OPERATING_MODES: Array<{ id: AgentOperatingModeId; label: string; summary: string }> = [
   { id: 'balanced-productivity', label: 'Balanced Productivity', summary: 'Scoped context and proportional verification.' },
   { id: 'token-saver', label: 'Token Saver', summary: 'Narrow context without dropping safety checks.' },
@@ -99,11 +106,26 @@ export default function ExecutableFuturePlanView({ plan, onBack }: { plan: Execu
 
       <div className="grid min-h-0 gap-0 lg:grid-cols-[19rem_minmax(0,1fr)]">
         <aside className="border-b border-border/45 p-4 sm:p-5 lg:border-b-0 lg:border-r" aria-label="Agent prompt settings">
-          <label className="text-sm font-medium" htmlFor="future-agent-select">Agent</label>
-          <Select value={agentTarget} onValueChange={value => setAgentTarget(value as ExecutableFutureAgentTarget)}>
-            <SelectTrigger id="future-agent-select" className="mt-2" aria-label="Agent"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectGroup>{AGENT_TARGETS.map(target => <SelectItem key={target} value={target}>{executableFutureAgentLabel(target)}</SelectItem>)}</SelectGroup></SelectContent>
-          </Select>
+          <div className="text-sm font-medium" id="future-agent-label">Agent</div>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">Choose the environment that will receive this canonical plan.</p>
+          <ToggleGroup
+            type="single"
+            value={agentTarget}
+            onValueChange={value => { if (value) setAgentTarget(value as ExecutableFutureAgentTarget); }}
+            variant="outline"
+            className="mt-3 grid grid-cols-2 items-stretch gap-2"
+            aria-labelledby="future-agent-label"
+            data-testid="future-agent-selector"
+          >
+            {AGENT_TARGETS.map(target => (
+              <ToggleGroupItem key={target} value={target} className="h-auto min-h-16 min-w-0 justify-start px-3 py-2 text-left">
+                <span className="min-w-0">
+                  <span className="block text-xs font-medium leading-snug">{executableFutureAgentLabel(target)}</span>
+                  <span className="mt-0.5 block text-[9px] font-normal leading-snug text-muted-foreground">{AGENT_TARGET_SUMMARIES[target]}</span>
+                </span>
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
 
           <div className="mt-5 text-sm font-medium" id="operating-mode-label">Operating mode</div>
           <ToggleGroup type="single" value={operatingMode} onValueChange={value => { if (value) setOperatingMode(value as AgentOperatingModeId); }} variant="outline" className="mt-2 flex-col items-stretch" aria-labelledby="operating-mode-label">

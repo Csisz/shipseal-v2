@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveRepositoryFutureAvailability,
+  resolveRepositoryFutureReadiness,
   type RepositoryIntelligenceProviderStatus,
 } from '@/lib/repositoryIntelligence';
 import { selectRepositoryFutureRecoveryOperationId } from '@/lib/aiOperationRecovery';
@@ -74,5 +75,24 @@ describe('Repository Future availability', () => {
       publicOperationId: `op_${'a'.repeat(24)}`,
       recoveryAction: 'retry_stage',
     })).toBe(`op_${'a'.repeat(24)}`);
+  });
+
+  it.each([
+    [{ state: 'deterministic', retryable: false, message: 'Ready to start' } as const, 'not-started', 'Not started'],
+    [{ state: 'preparing', retryable: false, message: 'Waiting' } as const, 'queued', 'Queued'],
+    [{ state: 'preparing', retryable: false, message: 'Roots', productStage: 'roots' } as const, 'analyzing', 'Analyzing repository futures'],
+    [{ state: 'preparing', retryable: false, message: 'Expansion', productStage: 'expansion', completedBatches: 2, totalBatches: 4 } as const, 'synthesizing', 'Synthesizing future paths'],
+    [{ state: 'preparing', retryable: false, message: 'Merge', productStage: 'merging' } as const, 'validating', 'Validating compatible futures'],
+    [{ state: 'enhanced', retryable: false, message: 'Ready', providerId: 'fixture' } as const, 'ready', 'Ready'],
+    [{ state: 'fallback', deepState: 'failed', category: 'request_timeout', retryable: true, message: 'Timed out' } as const, 'failed', 'Future analysis could not complete'],
+  ])('maps provider milestones to honest readiness for %s', (status, expectedState, expectedLabel) => {
+    expect(resolveRepositoryFutureReadiness(status)).toMatchObject({ state: expectedState, label: expectedLabel });
+  });
+
+  it('only advances expansion progress from server-confirmed batches', () => {
+    const started = resolveRepositoryFutureReadiness({ state: 'preparing', retryable: false, message: 'Expansion', productStage: 'expansion', completedBatches: 0, totalBatches: 4 });
+    const confirmed = resolveRepositoryFutureReadiness({ state: 'preparing', retryable: false, message: 'Expansion', productStage: 'expansion', completedBatches: 2, totalBatches: 4 });
+    expect(started.milestoneProgress).toBe(0.45);
+    expect(confirmed.milestoneProgress).toBe(0.6);
   });
 });

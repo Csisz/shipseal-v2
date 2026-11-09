@@ -137,7 +137,6 @@ export function ResultWorkspace({
   const [packagePrepared, setPackagePrepared] = useState(false);
   const [prCreated, setPrCreated] = useState(false);
   const [workspaceReportIdentity, setWorkspaceReportIdentity] = useState(reportIdentity);
-  const [futureDegradedAccess, setFutureDegradedAccess] = useState(false);
   const [futureEntryIntent, setFutureEntryIntent] = useState<FutureEntryIntent | null>(null);
   const [futureEntryMotion, setFutureEntryMotion] = useState<RepositoryFuturesEntryMotion>('cached-result');
   const billingFutureFocusConsumed = useRef(false);
@@ -168,7 +167,6 @@ export function ResultWorkspace({
     setPlanReviewed(false);
     setPackagePrepared(false);
     setPrCreated(false);
-    setFutureDegradedAccess(false);
     setFutureEntryIntent(null);
     setFutureEntryMotion('cached-result');
   }, [initialIntake, intakeSkipped, reportIdentity, workspaceReportIdentity]);
@@ -263,6 +261,9 @@ export function ResultWorkspace({
 
   const handleFutureAction = useCallback(() => {
     if (!retryRepositoryProductIntelligence) return;
+    setFutureEntryMotion('new-result');
+    runRepositoryPerspectiveTransition(() => setEntryView('futures'));
+    setPendingDashboardFocus(null);
     setFutureEntryIntent({
       mode: futuresCanStart ? 'generate-and-open' : 'resume-and-open',
       observedRunning: false,
@@ -301,27 +302,6 @@ export function ResultWorkspace({
     handleResultChapterChange('improve');
   }, [futuresBrowsable, handleResultChapterChange]);
 
-  useEffect(() => {
-    if (futureTerminalFailure) setFutureDegradedAccess(true);
-  }, [futureTerminalFailure]);
-
-  useEffect(() => {
-    if (effectiveEntryView === 'futures' && !futuresBrowsable) setEntryView(null);
-  }, [effectiveEntryView, futuresBrowsable]);
-
-  const selectorReady = futureAvailability !== 'running' || initialFuturesReady || futureDegradedAccess || futureTerminalFailure;
-
-  if (!effectiveEntryView && !selectorReady) {
-    return (
-      <RepositoryFuturesAnalysisStatus
-        status={repositoryProductIntelligenceStatus}
-        hasInitialDirections={false}
-        repositoryName={report.repoName}
-        fullScreen
-      />
-    );
-  }
-
   if (!effectiveEntryView) {
     return (
       <PostScanViewSelector
@@ -335,6 +315,24 @@ export function ResultWorkspace({
         persistenceControl={persistenceControl}
         onSelect={handleEntryViewSelect}
       />
+    );
+  }
+
+  if (effectiveEntryView === 'futures' && repositoryUniverse && !futuresBrowsable) {
+    return (
+      <section data-view-transition="selector-to-futures" data-experience-shell="futures" data-motion-event="future-progress" className="repository-perspective-surface w-full bg-workspace futures-surface-enter motion-reduce:animate-none">
+        <div className="dashboard-print-warning">
+          For a client-ready PDF, use the print-ready report export instead of printing this dashboard.
+        </div>
+        <ChangeViewControl currentView="Repository Futures" repositoryName={report.repoName} onChange={() => runRepositoryPerspectiveTransition(() => setEntryView(null))} />
+        <RepositoryFuturesAnalysisStatus
+          status={repositoryProductIntelligenceStatus}
+          hasInitialDirections={false}
+          repositoryName={report.repoName}
+          fullScreen
+          onResume={retryRepositoryProductIntelligence && (futuresCanRetry || futuresCanStart) ? handleFutureAction : undefined}
+        />
+      </section>
     );
   }
 

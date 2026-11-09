@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowUpRight, GitFork, Orbit, Sparkles } from 'lucide-react';
+import { ArrowUpRight, Orbit, Sparkles } from 'lucide-react';
 import type { ReadinessReport } from '@/lib/types';
 import {
   resolveRepositoryFutureAvailability,
+  resolveRepositoryFutureReadiness,
   type RepositoryFutureAvailability,
   type RepositoryIntelligenceProviderStatus,
 } from '@/lib/repositoryIntelligence';
@@ -12,6 +13,7 @@ import { useUpgradeToProAction } from '@/components/billing/useUpgradeToProActio
 import { operationSupportReference } from '@/lib/supportReference';
 import { ScanCoverageDisclosure } from './ScanCoverageDisclosure';
 import { useOptionalAccount } from '@/components/account/accountContext';
+import { RepositoryFuturesReadinessIndicator } from '../result-workspace/futures/RepositoryFuturesReadinessIndicator';
 
 export type PostScanEntryView = 'universe' | 'futures';
 
@@ -72,6 +74,12 @@ export function PostScanViewSelector({
   const legacyAnalysisNeedsReplacement = recoveryAction === 'start_new_analysis'
     && futuresStatus && 'diagnostics' in futuresStatus
     && futuresStatus.diagnostics?.operationUserUnitState === 'consumed';
+  const futureReadiness = resolveRepositoryFutureReadiness(futuresStatus, futuresAvailable);
+  const futureReadinessDetail = futureReadiness.state === 'failed'
+    ? 'Recovery details are shown above; retry is offered only when the analysis contract allows it.'
+    : futureReadiness.busy
+      ? 'Progress follows confirmed analysis milestones, not an estimated percentage.'
+      : futureReadiness.description;
   const retryLabel = analysisStartable
     ? 'Generate Future analysis'
     : recoveryAction === 'open_result'
@@ -90,18 +98,18 @@ export function PostScanViewSelector({
         : operationResumable
           ? 'Resume Future analysis'
           : operationActive
-            ? 'Future analysis in progress'
+            ? 'View Future analysis progress'
             : temporarilyUnavailable && rateLimitWaiting
               ? `Retry available in ${cooldownSeconds}s`
               : temporarilyUnavailable && onRetryFutures
                 ? retryLabel
                 : 'Repository Futures unavailable';
-  const futureCardDisabled = operationActive
-    || temporarilyUnavailable && rateLimitWaiting
-    || !futuresAvailable && !upgradeRequired && !analysisStartable && !operationResumable && !(temporarilyUnavailable && onRetryFutures)
+  const futureCardDisabled = temporarilyUnavailable && rateLimitWaiting
+    || !futuresAvailable && !operationActive && !upgradeRequired && !analysisStartable && !operationResumable && !(temporarilyUnavailable && onRetryFutures)
     || upgrade.state === 'loading';
   const activateFutureCard = () => {
     if (futuresAvailable) { onSelect('futures'); return; }
+    if (operationActive) { onSelect('futures'); return; }
     if (upgradeRequired) { void upgrade.start(); return; }
     if ((analysisStartable || operationResumable || temporarilyUnavailable) && onRetryFutures) onRetryFutures();
   };
@@ -138,12 +146,13 @@ export function PostScanViewSelector({
         {showAttentionStatus && (
           <aside className={cn(
             'mx-auto mb-5 flex w-full max-w-3xl flex-col items-start gap-3 rounded-2xl px-4 py-4 text-left sm:flex-row sm:items-center sm:justify-between',
-            upgradeRequired ? 'border border-primary/25 bg-primary/[0.06]' : 'border border-amber-500/25 bg-amber-500/[0.06]',
+            upgradeRequired || operationActive ? 'border border-primary/25 bg-primary/[0.06]' : 'border border-amber-500/25 bg-amber-500/[0.06]',
           )} role="status" data-testid="futures-degraded-status" data-future-availability={futureAvailability}>
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="text-sm font-medium text-foreground">{upgradeRequired ? 'Repository Futures' : 'Project Universe is ready'}</div>
+                <div className="text-sm font-medium text-foreground">{upgradeRequired ? 'Repository Futures' : futureReadiness.state === 'failed' ? 'Future analysis could not complete' : 'Project Universe is ready'}</div>
                 {upgradeRequired && <Badge variant="secondary">Pro AI analysis</Badge>}
+                {operationActive && <Badge variant="secondary">{futureReadiness.label}</Badge>}
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
                 {upgradeRequired
@@ -187,14 +196,20 @@ export function PostScanViewSelector({
             index="02"
             overline="Projected state"
             title="Repository Futures"
-            description={futuresAvailable ? 'Explore product directions, future pathways and what this project could become.' : analysisStartable ? priorAnalysisReturned ? 'A previous incomplete analysis was returned to your allowance. Generate a fresh evidence-backed Future Path when you are ready.' : legacyAnalysisNeedsReplacement ? 'This saved Future used a legacy compact contract and contains clipped text. Generate a complete replacement explicitly when you are ready.' : 'Generate validated product directions, implementation pathways and an executable Future Path when you are ready.' : upgradeRequired ? 'Discover validated product directions, implementation pathways and executable plans with Pro.' : operationResumable ? 'Continue the existing evidence-backed analysis from its last durable stage.' : 'Validated Product Futures are unavailable until Future analysis completes successfully.'}
+            description={futuresAvailable ? 'Explore product directions, future pathways and what this project could become.' : analysisStartable ? priorAnalysisReturned ? 'A previous incomplete analysis was returned to your allowance. Generate a fresh evidence-backed Future Path when you are ready.' : legacyAnalysisNeedsReplacement ? 'This saved Future used a legacy compact contract and contains clipped text. Generate a complete replacement explicitly when you are ready.' : 'Generate validated product directions, implementation pathways and an executable Future Path when you are ready.' : upgradeRequired ? 'Discover validated product directions, implementation pathways and executable plans with Pro.' : operationActive ? 'Repository understanding is complete. Future paths are still being prepared; open this view to follow confirmed analysis milestones.' : operationResumable || temporarilyUnavailable ? 'Future analysis could not complete. Retry or resume from the last safe server-confirmed state.' : 'Validated Product Futures are unavailable until Future analysis completes successfully.'}
             action={futureCardAction}
             metadata={futuresAvailable
               ? [opportunityCount ? `${opportunityCount.toLocaleString()} product directions` : 'Evidence-led directions', 'Neural future pathways']
-              : analysisStartable ? ['Explicit start', earlyAccess ? 'Completion-counted' : 'Completion-billed'] : upgradeRequired ? ['Pro feature', 'Evidence-backed AI'] : ['No incomplete Futures shown', futuresRetrying ? rateLimitWaiting ? 'Capacity cooldown' : 'Analysis running' : rateLimitWaiting ? 'Retry cooling down' : operationResumable ? 'Resume saved stages' : 'Unavailable']}
+              : analysisStartable ? ['Explicit start', earlyAccess ? 'Completion-counted' : 'Completion-billed'] : upgradeRequired ? ['Pro feature', 'Evidence-backed AI'] : ['Repository understanding complete', futuresRetrying ? rateLimitWaiting ? 'Capacity cooldown' : 'Futures preparing' : rateLimitWaiting ? 'Retry cooling down' : operationResumable ? 'Resume saved stages' : 'Unavailable']}
             badge={!futuresAvailable && (analysisStartable || upgradeRequired || operationResumable) ? earlyAccess ? 'Early Access AI' : 'Pro AI analysis' : undefined}
             footnote={analysisStartable ? earlyAccess ? 'Uses 1 Deep Analysis · counted only on durable completion' : 'Uses 1 Deep Analysis · charged only on completion' : operationResumable ? 'Resumes the existing analysis · no second reservation' : undefined}
-            motif={<FuturesMotif />}
+            motif={<FuturesMotif readiness={futureReadiness} />}
+            status={(
+              <div className="mt-3" data-testid="repository-futures-tile-status" data-readiness-state={futureReadiness.state}>
+                <div className="flex items-center gap-2 text-xs font-medium text-foreground"><span className={cn('size-1.5 rounded-full', futureReadiness.state === 'failed' ? 'bg-destructive' : futureReadiness.state === 'ready' ? 'bg-primary' : 'bg-primary-glow')} />{futureReadiness.label}</div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{futureReadinessDetail}</p>
+              </div>
+            )}
             onActivate={activateFutureCard}
             disabled={futureCardDisabled}
           />
@@ -235,6 +250,7 @@ function ViewChoice({
   badge,
   footnote,
   motif,
+  status,
   onActivate,
   disabled = false,
 }: {
@@ -248,6 +264,7 @@ function ViewChoice({
   badge?: string;
   footnote?: string;
   motif: ReactNode;
+  status?: ReactNode;
   onActivate: () => void;
   disabled?: boolean;
 }) {
@@ -280,6 +297,7 @@ function ViewChoice({
           {badge && <Badge variant="secondary">{badge}</Badge>}
         </div>
         <p className="mt-3 max-w-md text-sm leading-relaxed text-muted-foreground sm:text-base">{description}</p>
+        {status}
         <span className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 text-sm font-medium text-foreground transition-colors group-hover:border-primary/55 group-hover:bg-primary/15 group-focus-visible:border-primary/55 motion-reduce:transition-none">
           {action}<ArrowUpRight className="h-4 w-4" aria-hidden="true" />
         </span>
@@ -316,14 +334,16 @@ function UniverseMotif() {
   );
 }
 
-function FuturesMotif() {
+function FuturesMotif({ readiness }: { readiness: ReturnType<typeof resolveRepositoryFutureReadiness> }) {
   const nodes = [
     { x: 12, y: 51, size: 7 }, { x: 31, y: 28, size: 10 }, { x: 35, y: 72, size: 6 },
     { x: 58, y: 47, size: 13 }, { x: 78, y: 24, size: 7 }, { x: 86, y: 70, size: 9 },
   ];
   return (
     <div className="relative h-44 w-full max-w-sm motion-safe:animate-scale-in motion-reduce:animate-none sm:h-52">
-      <GitFork className="absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2 text-primary-glow/50" />
+      <div className="absolute left-1/2 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2">
+        <RepositoryFuturesReadinessIndicator readiness={readiness} size="large" />
+      </div>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full text-primary-glow/35" fill="none">
         <path d="M12 51 C22 51 22 28 31 28 S46 47 58 47 S68 24 78 24" stroke="currentColor" strokeWidth="0.65" />
         <path d="M12 51 C22 51 23 72 35 72 S47 47 58 47 S73 70 86 70" stroke="currentColor" strokeWidth="0.65" />
