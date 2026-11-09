@@ -828,7 +828,7 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
     expect(inspector).toHaveTextContent('Exploratory — not plan-ready');
     expect(inspector).toHaveTextContent('No repository-owned authentication flow is present.');
     expect(inspector).toHaveTextContent(/does not add it to the implementation plan/i);
-    expect(within(inspector).queryByRole('button', { name: /Build this future|Replace primary|Add as support/i })).not.toBeInTheDocument();
+    expect(within(inspector).queryByRole('button', { name: /Prepare for agent|Replace primary|Add as support/i })).not.toBeInTheDocument();
     fireEvent.click(within(inspector).getByRole('button', { name: 'Save for later' }));
     expect(value.onCandidateSave).toHaveBeenCalledWith('goal:alternative');
   });
@@ -961,8 +961,8 @@ describe('Omega 18.5-V5 graph-native Repository Futures composer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Candidate future goal: Repository evidence assistant/i }));
     const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
-    const build = within(inspector).getByRole('button', { name: /Build this future/i });
-    expect(build).toHaveAttribute('data-fast-path-action', 'build-future');
+    const build = within(inspector).getByRole('button', { name: /Prepare for agent/i });
+    expect(build).toHaveAttribute('data-fast-path-action', 'prepare-for-agent');
     fireEvent.click(build);
     expect(value.onCandidateBuild).toHaveBeenCalledWith('goal:alternative');
     expect(within(inspector).getByText('Selection options').closest('details')).not.toHaveAttribute('open');

@@ -320,36 +320,36 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
   it('keeps plan creation unavailable until a Primary exists, then opens one deterministic executable plan without a provider call', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await renderPathways();
-    expect(screen.queryByRole('button', { name: 'Open plan' })).not.toBeInTheDocument();
-    expect(screen.getByText('Select a Future to see what building it takes.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Prepare for agent' })).not.toBeInTheDocument();
+    expect(screen.getByText('Visualize a path before preparing an agent.')).toBeInTheDocument();
 
     chooseFirstPrimary();
-    const buildButton = await screen.findByRole('button', { name: 'Open plan' });
+    const buildButton = await screen.findByRole('button', { name: 'Prepare for agent' });
     expect(buildButton).toBeEnabled();
     fireEvent.click(buildButton);
 
     const plan = screen.getByTestId('executable-future-plan');
-    expect(plan).toHaveAttribute('data-review-phase', 'draft');
-    expect(within(plan).getByText('Ready to build')).toBeInTheDocument();
-    expect(within(plan).getByRole('button', { name: 'Prepare for agent' })).toBeInTheDocument();
-    expect(within(plan).getByText('Advanced plan').closest('details')).not.toHaveAttribute('open');
+    expect(plan).toHaveAttribute('data-agent-target', 'codex');
+    expect(plan).toHaveAttribute('data-operating-mode', 'balanced-productivity');
+    expect(within(plan).getByText('Implementation prompt')).toBeInTheDocument();
+    expect(within(plan).getByText('Implementation-plan details').closest('details')).not.toHaveAttribute('open');
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
 
-  it('turns an inspected candidate into the Primary and opens its plan through one Build action', async () => {
+  it('turns an inspected candidate into the Primary and opens its prompt through one Prepare action', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await renderPathways();
     fireEvent.click(screen.getAllByRole('button', { name: /Candidate future goal/i })[0]);
     const inspector = screen.getByRole('complementary', { name: 'Neural Futures inspector' });
-    fireEvent.click(within(inspector).getByRole('button', { name: 'Build this future' }));
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Prepare for agent' }));
 
     expect(screen.getByTestId('executable-future-plan')).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
   });
 
-  it('reviews, copies both canonical agent handoffs, and downloads Markdown without executing or mutating the repository', async () => {
+  it('switches agent and operating-mode adapters, copies the prompt, and preserves both Markdown exports without mutation', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
     const createObjectURL = vi.fn().mockReturnValue('blob:future-plan');
@@ -360,32 +360,28 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await renderPathways();
     chooseFirstPrimary();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open plan' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare for agent' }));
 
-    fireEvent.click(screen.getByText('Advanced plan'));
-    fireEvent.click(screen.getByRole('button', { name: 'Review plan' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark ready for agent' }));
-    expect(screen.getByTestId('executable-future-plan')).toHaveAttribute('data-review-phase', 'ready');
-
-    fireEvent.click(screen.getByRole('button', { name: 'Copy for Codex' }));
-    const codexDialog = screen.getByRole('dialog');
-    const codexPreview = within(codexDialog).getByTestId('agent-prompt-preview');
-    expect(codexPreview).toHaveTextContent('Codex — ShipSeal Executable Future Plan');
-    expect(codexPreview).toHaveClass('whitespace-pre-wrap', 'break-words');
-    fireEvent.click(within(codexDialog).getByRole('button', { name: 'Copy for Codex' }));
+    const handoffDialog = screen.getByRole('dialog');
+    const preview = within(handoffDialog).getByTestId('agent-prompt-preview');
+    expect(preview).toHaveTextContent('OpenAI Codex');
+    expect(preview).toHaveClass('whitespace-pre-wrap', 'break-words');
+    fireEvent.click(within(handoffDialog).getByRole('button', { name: 'Copy Prompt' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Use repository-native inspection and editing tools.')));
-    fireEvent.click(within(codexDialog).getByRole('button', { name: 'Close' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Copy for Claude Code' }));
-    const claudeDialog = screen.getByRole('dialog');
-    expect(within(claudeDialog).getByTestId('agent-prompt-preview')).toHaveTextContent('Claude Code — ShipSeal Executable Future Plan');
-    fireEvent.click(within(claudeDialog).getByRole('button', { name: 'Copy for Claude Code' }));
+    fireEvent.click(within(handoffDialog).getByRole('combobox', { name: 'Agent' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Claude Code' }));
+    expect(preview).toHaveTextContent('Claude Code');
+    fireEvent.click(within(handoffDialog).getByRole('radio', { name: /Maximum Reliability/ }));
+    expect(preview).toHaveTextContent('Operating mode: Maximum Reliability');
+    fireEvent.click(within(handoffDialog).getByRole('button', { name: 'Copy Prompt' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Read repository guidance files before editing')));
-    fireEvent.click(within(claudeDialog).getByRole('button', { name: 'Close' }));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Download plan' }));
+    fireEvent.click(within(handoffDialog).getByRole('button', { name: 'Download Markdown' }));
+    fireEvent.click(within(handoffDialog).getByText('Implementation-plan details'));
+    fireEvent.click(within(handoffDialog).getByRole('button', { name: 'Download canonical plan' }));
     expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
-    expect(anchorClick).toHaveBeenCalledOnce();
+    expect(anchorClick).toHaveBeenCalledTimes(2);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:future-plan');
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
@@ -398,18 +394,18 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     await renderPathways();
     chooseFirstPrimary();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open plan' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare for agent' }));
     const firstFingerprint = screen.getByTestId('executable-future-plan').getAttribute('data-plan-fingerprint');
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Futures' }));
     fireEvent.click(screen.getByRole('button', { name: 'Deep Configuration' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open plan' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare for agent' }));
     expect(screen.getByTestId('executable-future-plan')).toHaveAttribute('data-plan-fingerprint', firstFingerprint);
 
     fireEvent.click(screen.getByRole('button', { name: 'Back to Futures' }));
     const replacement = screen.getAllByRole('button', { name: 'Make primary' })[0];
     fireEvent.click(replacement);
-    fireEvent.click(screen.getByRole('button', { name: 'Open plan' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare for agent' }));
     expect(screen.getByTestId('executable-future-plan').getAttribute('data-plan-fingerprint')).not.toBe(firstFingerprint);
     expect(fetchSpy).not.toHaveBeenCalled();
     fetchSpy.mockRestore();
@@ -418,11 +414,11 @@ describe('Omega 18.5d.6 neural Repository Future Pathways composer', () => {
   it('uses a single-column-safe document surface and disables convergence motion under reduced-motion preferences', async () => {
     await renderPathways();
     chooseFirstPrimary();
-    fireEvent.click(await screen.findByRole('button', { name: 'Open plan' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Prepare for agent' }));
     const plan = screen.getByTestId('executable-future-plan');
-    expect(plan).toHaveClass('overflow-hidden', 'motion-reduce:animate-none');
-    fireEvent.click(within(plan).getByText('Advanced plan'));
-    expect(within(plan).getByRole('button', { name: 'Download plan' })).toHaveClass('w-full');
-    expect(plan.querySelectorAll('[data-plan-stage-kind]').length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByRole('dialog')).toHaveClass('motion-reduce:animate-none');
+    fireEvent.click(within(plan).getByText('Implementation-plan details'));
+    expect(within(plan).getByRole('button', { name: 'Download canonical plan' })).toBeInTheDocument();
+    expect(within(plan).getAllByRole('listitem').length).toBeGreaterThanOrEqual(3);
   });
 });
